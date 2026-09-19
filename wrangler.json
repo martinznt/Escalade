@@ -5,5 +5,5 @@
   "compatibility_date":"2026-09-19",
   "assets":{"directory":"./","binding":"ASSETS","run_worker_first":true},
   "d1_databases":[{"binding":"DB","database_name":"escalade-et-renforcement-db","database_id":"A_REMPLACER_AVEC_ID_D1"}],
-  "kv_namespaces":[{"binding":"SEANCES_KV","id":"A_REMPLACER_AVEC_TON_ID_KV"}]
+  "kv_namespaces":[{"binding":"SEANCES_KV","id":"31069536a98340b08806589d340ae9c8"}]
 }
