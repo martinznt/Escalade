@@ -343,8 +343,9 @@ let pendingEditAction=null;
 let dragSrcId=null;
 
 let syncTimer=null;
+function lsKey(){return 'renfo-app-v3-'+(currentUser&&currentUser.id?currentUser.id:'anon')}
 function saveAll(){
-  try{ localStorage.setItem('renfo-app-v2', JSON.stringify(seances)) }catch(e){}
+  try{ localStorage.setItem(lsKey(), JSON.stringify(seances)) }catch(e){}
   // Synchronise avec le serveur (Cloudflare KV) — best-effort, ne bloque jamais l'app hors-ligne
   clearTimeout(syncTimer);
   syncTimer=setTimeout(()=>{
@@ -361,21 +362,21 @@ async function loadAll(){
     if(res.ok){
       const remote = await res.json();
       if(Array.isArray(remote) && remote.length){
-        try{ localStorage.setItem('renfo-app-v2', JSON.stringify(remote)) }catch(e){}
+        try{ localStorage.setItem(lsKey(), JSON.stringify(remote)) }catch(e){}
         return remote;
       }
     }
   }catch(e){ /* hors-ligne : on utilise la copie locale */ }
   try{
-    const raw=localStorage.getItem('renfo-app-v2');
+    const raw=localStorage.getItem(lsKey());
     if(raw){ const p=JSON.parse(raw); if(Array.isArray(p) && p.length) return p; }
   }catch(e){}
   return defaultSeances();
 }
 
 /* ============ HELPERS ============ */
-function escAttr(s){return (s||'').replace(/"/g,'&quot;')}
-function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+function escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
 /* ============ CODE DE MODIFICATION ============ */
 async function checkEditStatus(){
@@ -702,7 +703,7 @@ function renderEditor(){
     card.innerHTML=`
       <div class="ex-head">
         <span class="drag-handle">⠿</span>
-        <div class="ex-emoji" onclick="cycleEmoji('${ex.id}')" title="Changer l'icône">${ex.emoji}</div>
+        <div class="ex-emoji" onclick="cycleEmoji('${ex.id}')" title="Changer l'icône">${escHtml(String(ex.emoji||''))}</div>
         <input class="ex-name" value="${escAttr(ex.name)}" oninput="updateField('${ex.id}','name',this.value)" placeholder="Nom de l'exercice">
         ${reorderExtras}
         <button class="icon-btn danger" onclick="removeExercise('${ex.id}')">✕</button>
@@ -713,7 +714,7 @@ function renderEditor(){
       </div>
       <div class="sliders">
         <div class="slider-box">
-          <label>${isTime?'Durée (sec)':'Répétitions'} <span>${ex.amount}${isTime?'s':''}</span></label>
+          <label>${isTime?'Durée (sec)':'Répétitions'} <span>${Number(ex.amount)||0}${isTime?'s':''}</span></label>
           <input type="range" min="${isTime?5:1}" max="${isTime?180:30}" step="${isTime?5:1}" value="${ex.amount}" oninput="updateField('${ex.id}','amount',+this.value,true)">
         </div>
         <div class="slider-box">
@@ -727,10 +728,10 @@ function renderEditor(){
       </div>
       <div class="tips">
         <div class="tipcol ok"><div class="tiplabel">✅ À faire</div>
-          <textarea oninput="updateField('${ex.id}','ok',this.value.split('\\n'))" placeholder="Un conseil par ligne">${ex.ok.join('\n')}</textarea>
+          <textarea oninput="updateField('${ex.id}','ok',this.value.split('\\n'))" placeholder="Un conseil par ligne">${escHtml(ex.ok.join('\n'))}</textarea>
         </div>
         <div class="tipcol bad"><div class="tiplabel">❌ À éviter</div>
-          <textarea oninput="updateField('${ex.id}','bad',this.value.split('\\n'))" placeholder="Une erreur par ligne">${ex.bad.join('\n')}</textarea>
+          <textarea oninput="updateField('${ex.id}','bad',this.value.split('\\n'))" placeholder="Une erreur par ligne">${escHtml(ex.bad.join('\n'))}</textarea>
         </div>
       </div>`;
     list.appendChild(card);
@@ -992,7 +993,7 @@ function switchAuth(mode){document.getElementById('login-form').style.display=mo
 async function authBootstrap(){try{const d=await api('/api/auth/me');currentUser=d.user;return true}catch{return false}}
 async function loginAccount(e){e.preventDefault();const box=document.getElementById('login-error');box.textContent='';try{const d=await api('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:document.getElementById('login-id').value,password:document.getElementById('login-password').value})});currentUser=d.user;await enterApp()}catch(x){box.textContent=x.message}}
 async function registerAccount(e){e.preventDefault();const box=document.getElementById('register-error');box.textContent='';if(document.getElementById('reg-password').value!==document.getElementById('reg-password2').value){box.textContent='Les mots de passe ne correspondent pas.';return}try{const d=await api('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:document.getElementById('reg-user').value,email:document.getElementById('reg-email').value,password:document.getElementById('reg-password').value})});currentUser=d.user;await enterApp()}catch(x){box.textContent=x.message}}
-async function enterApp(){document.getElementById('auth-gate').classList.add('hidden');document.getElementById('main-nav').style.display='grid';currentSettings=await api('/api/settings').catch(()=>currentSettings);seances=await loadAll();renderHome();document.getElementById('app-user').textContent='Connecté en tant que '+currentUser.username;applyTheme(currentSettings.theme||'system');maybeShowInstall();showV3('home')}
+async function enterApp(){document.getElementById('auth-gate').classList.add('hidden');document.getElementById('main-nav').style.display='grid';currentSettings=await api('/api/settings').catch(()=>currentSettings);seances=await loadAll();renderHome();checkEditStatus();document.getElementById('app-user').textContent='Connecté en tant que '+currentUser.username;applyTheme(currentSettings.theme||'system');maybeShowInstall();showV3('home')}
 async function logoutAccount(){await api('/api/auth/logout',{method:'POST'}).catch(()=>{});location.reload()}
 async function saveSettings(){await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(currentSettings)}).catch(()=>{})}
 function applyTheme(t){currentSettings.theme=t;if(t==='system')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('theme-preference',t)}catch{}}
