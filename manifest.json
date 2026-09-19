@@ -1,15 +1,1 @@
-{
-  "name": "Mes séances d'entraînement",
-  "short_name": "Séances",
-  "description": "Configure, combine et lance tes séances d'entraînement, avec chronos intégrés.",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0b0906",
-  "theme_color": "#c99a3d",
-  "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-  ]
-}
+{"name":"Escalade & Renforcement","short_name":"Escalade & Renfo","description":"Planifie, crée et lance tes séances d'escalade et de renforcement.","start_url":"/","scope":"/","display":"standalone","orientation":"portrait","background_color":"#0b0906","theme_color":"#c99a3d","icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}

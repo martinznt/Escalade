@@ -1,160 +1,25 @@
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-
-    // ---- 1. Protection par mot de passe (tout le site) ----
-    const gate = await checkSitePassword(request, env);
-    if (gate) return gate;
-
-    // ---- 2. Routes API ----
-    if (path === '/api/data') {
-      if (request.method === 'GET') return apiDataGet(env);
-      if (request.method === 'POST') return apiDataPost(request, env);
-    }
-    if (path === '/api/unlock-edit' && request.method === 'POST') {
-      return apiUnlockEdit(request, env);
-    }
-    if (path === '/api/edit-status' && request.method === 'GET') {
-      return apiEditStatus(request, env);
-    }
-    if (path === '/api/lock-edit' && request.method === 'POST') {
-      return apiLockEdit();
-    }
-
-    // ---- 3. Sinon, fichiers statiques (index.html, manifest, sw.js, icônes) ----
-    return env.ASSETS.fetch(request);
-  },
-};
-
-/* ============ Outils ============ */
-function getCookies(request) {
-  const header = request.headers.get('Cookie') || '';
-  return Object.fromEntries(
-    header.split(';').map((c) => c.trim().split('=')).filter((p) => p.length === 2)
-  );
-}
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-/* ============ Mot de passe du site ============ */
-async function checkSitePassword(request, env) {
-  const correct = env.SITE_PASSWORD;
-  if (!correct) return null; // pas de mot de passe configuré : accès libre
-
-  const cookies = getCookies(request);
-  if (cookies.site_auth === correct) return null; // déjà connecté
-
-  const url = new URL(request.url);
-  if (request.method === 'POST' && url.pathname === '/__login') {
-    const form = await request.formData();
-    const pwd = form.get('password') || '';
-    if (pwd === correct) {
-      const headers = new Headers();
-      headers.append(
-        'Set-Cookie',
-        `site_auth=${encodeURIComponent(pwd)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`
-      );
-      headers.append('Location', '/');
-      return new Response(null, { status: 302, headers });
-    }
-    return new Response(loginPage('Mot de passe incorrect.'), {
-      status: 401,
-      headers: { 'Content-Type': 'text/html; charset=UTF-8' },
-    });
-  }
-
-  return new Response(loginPage(), {
-    headers: { 'Content-Type': 'text/html; charset=UTF-8' },
-  });
-}
-
-function loginPage(error) {
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Connexion</title>
-<style>
-  body{font-family:-apple-system,Arial,sans-serif;background:#0b0906;color:#f3ece4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px}
-  form{background:#171310;padding:28px;border-radius:14px;border:1px solid #3d332a;width:100%;max-width:300px}
-  h1{font-size:19px;margin:0 0 16px;font-weight:900}
-  input{width:100%;padding:11px;border-radius:9px;border:1px solid #3d332a;background:#221c17;color:#f3ece4;margin-bottom:10px;box-sizing:border-box;font-size:14px}
-  button{width:100%;padding:12px;border:0;border-radius:9px;background:#c99a3d;color:#1c1305;font-weight:900;cursor:pointer;font-size:14px}
-  .err{color:#d9636f;font-size:13px;margin-bottom:10px}
-</style></head><body>
-  <form method="POST" action="/__login">
-    <h1>🔒 Accès protégé</h1>
-    ${error ? `<div class="err">${error}</div>` : ''}
-    <input type="password" name="password" placeholder="Mot de passe" autofocus required>
-    <button type="submit">Entrer</button>
-  </form>
-</body></html>`;
-}
-
-/* ============ API séances (KV) ============ */
-async function apiDataGet(env) {
-  if (!env.SEANCES_KV) {
-    return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
-  }
-  const raw = await env.SEANCES_KV.get('seances');
-  return new Response(raw || '[]', {
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-  });
-}
-async function apiDataPost(request, env) {
-  if (!env.SEANCES_KV) return json({ ok: false, error: 'KV non configuré' }, 500);
-
-  if (env.EDIT_CODE) {
-    const cookies = getCookies(request);
-    if (cookies.edit_auth !== env.EDIT_CODE) {
-      return json({ ok: false, error: 'Code de modification requis' }, 403);
-    }
-  }
-
-  const body = await request.text();
-  try {
-    JSON.parse(body);
-  } catch (e) {
-    return json({ ok: false, error: 'JSON invalide' }, 400);
-  }
-  await env.SEANCES_KV.put('seances', body);
-  return json({ ok: true });
-}
-
-/* ============ Code de modification ============ */
-async function apiUnlockEdit(request, env) {
-  const editCode = env.EDIT_CODE;
-  if (!editCode) return json({ ok: false, error: 'EDIT_CODE non configuré' }, 500);
-
-  let code = '';
-  try {
-    const body = await request.json();
-    code = body.code || '';
-  } catch (e) {
-    return json({ ok: false }, 400);
-  }
-
-  if (code === editCode) {
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    headers.append(
-      'Set-Cookie',
-      `edit_auth=${encodeURIComponent(code)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`
-    );
-    return new Response(JSON.stringify({ ok: true }), { headers });
-  }
-  return json({ ok: false }, 401);
-}
-async function apiEditStatus(request, env) {
-  const editCode = env.EDIT_CODE;
-  const cookies = getCookies(request);
-  const unlocked = !editCode || cookies.edit_auth === editCode;
-  return json({ unlocked });
-}
-function apiLockEdit() {
-  const headers = new Headers({ 'Content-Type': 'application/json' });
-  headers.append('Set-Cookie', 'edit_auth=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
-  return new Response(JSON.stringify({ ok: true }), { headers });
-}
+const SESSION_DAYS=30,PBKDF2_ITERATIONS=120000;
+export default {async fetch(request,env){const url=new URL(request.url);try{if(url.pathname.startsWith('/api/')){if(!env.DB)return json({ok:false,error:'Base D1 non configurée.'},500);if(['POST','PUT','PATCH','DELETE'].includes(request.method)&&!sameOrigin(request,url))return json({ok:false,error:'Origine non autorisée.'},403);return await routeApi(request,env,url.pathname)}return env.ASSETS.fetch(request)}catch(e){console.error(e);return json({ok:false,error:'Erreur serveur.'},500)}}};
+async function routeApi(r,e,p){if(p==='/api/auth/register'&&r.method==='POST')return register(r,e);if(p==='/api/auth/login'&&r.method==='POST')return login(r,e);if(p==='/api/auth/logout'&&r.method==='POST')return logout(r,e);if(p==='/api/auth/me'&&r.method==='GET')return me(r,e);if(p==='/api/auth/password'&&r.method==='POST')return changePassword(r,e);if(p==='/api/auth/delete'&&r.method==='POST')return deleteAccount(r,e);const u=await getUser(r,e);if(!u)return json({ok:false,error:'Connexion requise.'},401);if(p==='/api/data'&&r.method==='GET')return dataGet(u,e);if(p==='/api/data'&&r.method==='POST')return dataPost(r,u,e);if(p==='/api/settings'&&r.method==='GET')return settingsGet(u,e);if(p==='/api/settings'&&r.method==='POST')return settingsPost(r,u,e);if(p==='/api/calendar'&&r.method==='GET')return calendarGet(r,u,e);if(p==='/api/calendar'&&r.method==='POST')return calendarPost(r,u,e);if(p.startsWith('/api/calendar/')&&r.method==='DELETE')return calendarDelete(p,u,e);if(p==='/api/history'&&r.method==='GET')return historyGet(u,e);if(p==='/api/history'&&r.method==='POST')return historyPost(r,u,e);if(p==='/api/exercises'&&r.method==='GET')return exercisesGet(u,e);if(p==='/api/exercises/common'&&r.method==='POST')return commonAdd(r,u,e);if(p.startsWith('/api/exercises/common/')&&r.method==='PUT')return commonEdit(r,e,p.split('/').pop());if(p.startsWith('/api/exercises/common/')&&r.method==='DELETE')return commonDelete(r,e,p.split('/').pop());if(p==='/api/exercises/personal'&&r.method==='POST')return personalAdd(r,u,e);if(p.startsWith('/api/exercises/personal/')&&r.method==='PUT')return personalEdit(r,u,e,p.split('/').pop());if(p.startsWith('/api/exercises/personal/')&&r.method==='DELETE')return personalDelete(r,u,e,p.split('/').pop());if(p==='/api/edit-status'&&r.method==='GET')return editStatus(r,e);if(p==='/api/unlock-edit'&&r.method==='POST')return unlockEdit(r,e);if(p==='/api/lock-edit'&&r.method==='POST')return lockEdit();return json({ok:false,error:'Route introuvable.'},404)}
+function sameOrigin(r,u){const o=r.headers.get('Origin');return !o||o===u.origin}function json(x,s=200,extra={}){return new Response(JSON.stringify(x),{status:s,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...extra}})}
+function cookies(r){const out={},raw=r.headers.get('Cookie')||'';for(const p of raw.split(';')){const i=p.indexOf('=');if(i>0)out[p.slice(0,i).trim()]=decodeURIComponent(p.slice(i+1))}return out}function setCookie(n,v,max){return `${n}=${encodeURIComponent(v)}; Path=/; Max-Age=${max}; HttpOnly; Secure; SameSite=Lax`}
+function id(){return crypto.randomUUID()}function b64(a){let s='';for(const x of a)s+=String.fromCharCode(x);return btoa(s).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')}function bytes(s){s=s.replaceAll('-','+').replaceAll('_','/');while(s.length%4)s+='=';const x=atob(s);return Uint8Array.from(x,c=>c.charCodeAt(0))}async function sha(t){return b64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t))))}
+async function passHash(p,s){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(p),'PBKDF2',false,['deriveBits']);return b64(new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt:bytes(s),iterations:PBKDF2_ITERATIONS,hash:'SHA-256'},k,256)))}async function newPass(p){const s=b64(crypto.getRandomValues(new Uint8Array(16)));return{s, h:await passHash(p,s)}}
+async function session(uid,e){const raw=b64(crypto.getRandomValues(new Uint8Array(32))),now=Date.now();await e.DB.prepare('INSERT INTO sessions(id,user_id,token_hash,expires_at,created_at) VALUES(?,?,?,?,?)').bind(id(),uid,await sha(raw),now+SESSION_DAYS*86400000,now).run();return raw}
+async function getUser(r,e){const t=cookies(r).session;if(!t)return null;return e.DB.prepare('SELECT u.id,u.username,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').bind(await sha(t),Date.now()).first()}
+async function register(r,e){const b=await r.json().catch(()=>null);if(!b)return json({ok:false,error:'Données invalides.'},400);const username=String(b.username||'').trim(),email=String(b.email||'').trim().toLowerCase()||null,p=String(b.password||'');if(!/^[\p{L}\p{N}_.-]{3,24}$/u.test(username))return json({ok:false,error:'Pseudo : 3 à 24 caractères.'},400);if(p.length<8)return json({ok:false,error:'Mot de passe : 8 caractères minimum.'},400);if(await e.DB.prepare('SELECT id FROM users WHERE username=? OR (? IS NOT NULL AND email=?)').bind(username,email,email).first())return json({ok:false,error:'Pseudo ou email déjà utilisé.'},409);const {s,h}=await newPass(p),now=Date.now(),uid=id();await e.DB.prepare('INSERT INTO users(id,username,email,password_hash,password_salt,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').bind(uid,username,email,h,s,now,now).run();await e.DB.prepare('INSERT INTO user_data(user_id,seances_json,settings_json,favorites_json,goals_json,updated_at) VALUES(?,?,?,?,?,?)').bind(uid,'[]',JSON.stringify({theme:'system',sound:true,vibration:true,defaultRest:45}),'[]','{}',now).run();await migrateLegacyForFirstUser(uid,e);await seed(e);const token=await session(uid,e);return json({ok:true,user:{id:uid,username,email}},200,{'Set-Cookie':setCookie('session',token,SESSION_DAYS*86400)})}
+async function login(r,e){const b=await r.json().catch(()=>null);const ident=String(b?.identifier||'').trim(),p=String(b?.password||'');const u=await e.DB.prepare('SELECT * FROM users WHERE username=? OR lower(email)=lower(?) LIMIT 1').bind(ident,ident).first();if(!u||await passHash(p,u.password_salt)!==u.password_hash)return json({ok:false,error:'Identifiants incorrects.'},401);await seed(e);return json({ok:true,user:{id:u.id,username:u.username,email:u.email}},200,{'Set-Cookie':setCookie('session',await session(u.id,e),SESSION_DAYS*86400)})}
+async function logout(r,e){const t=cookies(r).session;if(t)await e.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await sha(t)).run();return new Response(null,{status:204,headers:{'Set-Cookie':setCookie('session','',0)}})}async function me(r,e){const u=await getUser(r,e);return u?json({ok:true,user:u}):json({ok:false,user:null},401)}
+async function changePassword(r,e){const u=await getUser(r,e),b=await r.json().catch(()=>null);if(!u||!b)return json({ok:false,error:'Connexion requise.'},401);const row=await e.DB.prepare('SELECT password_hash,password_salt FROM users WHERE id=?').bind(u.id).first();if(await passHash(String(b.current||''),row.password_salt)!==row.password_hash)return json({ok:false,error:'Mot de passe actuel incorrect.'},401);if(String(b.next||'').length<8)return json({ok:false,error:'8 caractères minimum.'},400);const {s,h}=await newPass(b.next);await e.DB.prepare('UPDATE users SET password_hash=?,password_salt=?,updated_at=? WHERE id=?').bind(h,s,Date.now(),u.id).run();await e.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(u.id).run();return json({ok:true},200,{'Set-Cookie':setCookie('session',await session(u.id,e),SESSION_DAYS*86400)})}
+async function deleteAccount(r,e){const u=await getUser(r,e),b=await r.json().catch(()=>null);if(!u)return json({ok:false,error:'Connexion requise.'},401);const row=await e.DB.prepare('SELECT password_hash,password_salt FROM users WHERE id=?').bind(u.id).first();if(!b||await passHash(String(b.password||''),row.password_salt)!==row.password_hash)return json({ok:false,error:'Mot de passe incorrect.'},401);await e.DB.prepare('DELETE FROM users WHERE id=?').bind(u.id).run();return new Response(null,{status:204,headers:{'Set-Cookie':setCookie('session','',0)}})}
+async function dataGet(u,e){const x=await e.DB.prepare('SELECT seances_json FROM user_data WHERE user_id=?').bind(u.id).first();return new Response(x?.seances_json||'[]',{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}async function dataPost(r,u,e){const b=await r.json().catch(()=>null);if(!Array.isArray(b))return json({ok:false,error:'Format invalide.'},400);await e.DB.prepare('UPDATE user_data SET seances_json=?,updated_at=? WHERE user_id=?').bind(JSON.stringify(b),Date.now(),u.id).run();return json({ok:true})}
+async function settingsGet(u,e){const x=await e.DB.prepare('SELECT settings_json FROM user_data WHERE user_id=?').bind(u.id).first();return json(JSON.parse(x?.settings_json||'{}'))}async function settingsPost(r,u,e){const b=await r.json().catch(()=>null);if(!b||typeof b!=='object')return json({ok:false,error:'Format invalide.'},400);await e.DB.prepare('UPDATE user_data SET settings_json=?,updated_at=? WHERE user_id=?').bind(JSON.stringify(b),Date.now(),u.id).run();return json({ok:true})}
+async function calendarGet(r,u,e){const q=new URL(r.url).searchParams,from=q.get('from'),to=q.get('to');let sql='SELECT id,event_date,session_id,title,completed,recurrence_json FROM calendar_events WHERE user_id=?',a=[u.id];if(from){sql+=' AND event_date>=?';a.push(from)}if(to){sql+=' AND event_date<=?';a.push(to)}sql+=' ORDER BY event_date,id';const x=await e.DB.prepare(sql).bind(...a).all();return json(x.results.map(v=>({...v,completed:!!v.completed,recurrence:v.recurrence_json?JSON.parse(v.recurrence_json):null})))}async function calendarPost(r,u,e){const b=await r.json().catch(()=>null);if(!b||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(b.date))return json({ok:false,error:'Date invalide.'},400);const now=Date.now(),eid=b.id||id();await e.DB.prepare('INSERT INTO calendar_events(id,user_id,event_date,session_id,title,completed,recurrence_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,updated_at=excluded.updated_at').bind(eid,u.id,b.date,b.sessionId||null,b.title||null,b.completed?1:0,b.recurrence?JSON.stringify(b.recurrence):null,now,now).run();return json({ok:true,id:eid})}async function calendarDelete(p,u,e){await e.DB.prepare('DELETE FROM calendar_events WHERE id=? AND user_id=?').bind(p.split('/').pop(),u.id).run();return json({ok:true})}
+async function historyGet(u,e){const x=await e.DB.prepare('SELECT * FROM history WHERE user_id=? ORDER BY started_at DESC LIMIT 500').bind(u.id).all();return json(x.results)}async function historyPost(r,u,e){const b=await r.json().catch(()=>null);if(!b?.sessionName)return json({ok:false,error:'Séance manquante.'},400);await e.DB.prepare('INSERT INTO history(id,user_id,session_id,session_name,started_at,duration_seconds,data_json) VALUES(?,?,?,?,?,?,?)').bind(id(),u.id,b.sessionId||null,b.sessionName,Number(b.startedAt)||Date.now(),Number(b.durationSeconds)||0,JSON.stringify(b.data||{})).run();return json({ok:true})}
+async function migrateLegacyForFirstUser(uid,e){const state=await e.DB.prepare("SELECT value FROM system_state WHERE key='legacy_imported'").first();if(state)return;try{const raw=await e.SEANCES_KV?.get('seances');if(raw&&JSON.parse(raw).length){await e.DB.prepare('UPDATE user_data SET seances_json=?,updated_at=? WHERE user_id=?').bind(raw,Date.now(),uid).run()}await e.DB.prepare("INSERT OR REPLACE INTO system_state(key,value) VALUES('legacy_imported','1')").run()}catch{}}
+async function seed(e){const n=await e.DB.prepare('SELECT COUNT(*) c FROM common_exercises').first();if(Number(n?.c))return;try{const raw=await e.SEANCES_KV?.get('seances');if(!raw)return;const ss=JSON.parse(raw),seen=new Set();for(const s of ss)for(const x of s.exercises||[]){if(seen.has(x.name))continue;seen.add(x.name);await e.DB.prepare('INSERT OR IGNORE INTO common_exercises(id,name,data_json,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(id(),x.name,JSON.stringify(x),null,Date.now(),Date.now()).run()}}catch{}}
+async function exercisesGet(u,e){await seed(e);const c=await e.DB.prepare('SELECT id,name,data_json FROM common_exercises ORDER BY name').all(),p=await e.DB.prepare('SELECT id,name,data_json FROM user_exercises WHERE user_id=? ORDER BY name').bind(u.id).all();return json({common:c.results.map(x=>({...x,data:JSON.parse(x.data_json)})),personal:p.results.map(x=>({...x,data:JSON.parse(x.data_json)}))})}
+async function commonAdd(r,u,e){const b=await r.json().catch(()=>null);if(!b?.name)return json({ok:false,error:'Nom requis.'},400);try{const now=Date.now(),eid=id();await e.DB.prepare('INSERT INTO common_exercises(id,name,data_json,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(eid,String(b.name).trim(),JSON.stringify(b.data||{}),u.id,now,now).run();return json({ok:true,id:eid})}catch{return json({ok:false,error:'Cet exercice existe déjà.'},409)}}
+async function editOk(r,e){return !e.EDIT_CODE||cookies(r).edit_auth===e.EDIT_CODE}async function commonEdit(r,e,eid){if(!await editOk(r,e))return json({ok:false,error:'EDIT_CODE requis.'},403);const b=await r.json().catch(()=>null);if(!b?.name)return json({ok:false,error:'Nom requis.'},400);await e.DB.prepare('UPDATE common_exercises SET name=?,data_json=?,updated_at=? WHERE id=?').bind(String(b.name).trim(),JSON.stringify(b.data||{}),Date.now(),eid).run();return json({ok:true})}async function commonDelete(r,e,eid){if(!await editOk(r,e))return json({ok:false,error:'EDIT_CODE requis.'},403);await e.DB.prepare('DELETE FROM common_exercises WHERE id=?').bind(eid).run();return json({ok:true})}
+async function personalAdd(r,u,e){const b=await r.json().catch(()=>null);if(!b?.name)return json({ok:false,error:'Nom requis.'},400);const eid=id(),now=Date.now();await e.DB.prepare('INSERT INTO user_exercises(id,user_id,name,data_json,created_at,updated_at) VALUES(?,?,?,?,?,?)').bind(eid,u.id,String(b.name).trim(),JSON.stringify(b.data||{}),now,now).run();return json({ok:true,id:eid})}async function personalEdit(r,u,e,eid){const b=await r.json().catch(()=>null);await e.DB.prepare('UPDATE user_exercises SET name=?,data_json=?,updated_at=? WHERE id=? AND user_id=?').bind(String(b.name).trim(),JSON.stringify(b.data||{}),Date.now(),eid,u.id).run();return json({ok:true})}async function personalDelete(r,u,e,eid){await e.DB.prepare('DELETE FROM user_exercises WHERE id=? AND user_id=?').bind(eid,u.id).run();return json({ok:true})}
+async function editStatus(r,e){return json({unlocked:!!e.EDIT_CODE&&cookies(r).edit_auth===e.EDIT_CODE})}async function unlockEdit(r,e){if(!e.EDIT_CODE)return json({ok:false,error:'EDIT_CODE non configuré.'},500);const b=await r.json().catch(()=>null);if(b?.code===e.EDIT_CODE)return json({ok:true},200,{'Set-Cookie':setCookie('edit_auth',b.code,3600)});return json({ok:false},401)}async function lockEdit(){return json({ok:true},200,{'Set-Cookie':setCookie('edit_auth','',0)})}
