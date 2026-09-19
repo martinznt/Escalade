@@ -1,0 +1,10 @@
+{
+  "name": "escalade-et-renforcement-musculaire",
+  "main": "./worker.js",
+  "compatibility_date": "2026-09-19",
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  }
+}
