@@ -7,7 +7,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "vitest": "latest",
-    "wrangler": "latest"
+    "vitest": "5.0.1",
+    "wrangler": "4.135.0"
   }
 }
