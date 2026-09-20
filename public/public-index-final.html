@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Séance Entraînement</title>
+<meta name="theme-color" content="#b87928"><meta name="description" content="Carnet intelligent d'escalade et de renforcement">
+<link rel="manifest" href="/manifest.json"><link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+:root{--bg:#0d0c0b;--surface:#171513;--surface2:#211e1a;--line:#38322b;--text:#f5efe7;--muted:#aaa095;--accent:#d28b32;--accent2:#f0c16b;--danger:#e56a73;--ok:#57c98b;--shadow:0 8px 28px #0005;--radius:16px}
+:root[data-theme=light]{--bg:#f7f4ee;--surface:#fff;--surface2:#eee9df;--line:#ddd4c5;--text:#241f19;--muted:#766f65;--accent:#a96519;--accent2:#805015;--danger:#bd3948;--ok:#258657;--shadow:0 8px 24px #5b4d3718}
+:root[data-accent=blue]{--accent:#4b8ee8;--accent2:#8ab7ff}:root[data-accent=green]{--accent:#31a76b;--accent2:#78db9f}:root[data-accent=purple]{--accent:#956be8;--accent2:#c5a9ff}:root[data-accent=red]{--accent:#d95360;--accent2:#ff9ca3}
+:root[data-icons=square]{--radius:7px}:root[data-icons=soft]{--radius:22px}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}button,input,textarea,select{font:inherit}button{cursor:pointer}
+.app{max-width:900px;margin:auto;padding:16px 14px 100px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.brand{display:flex;gap:10px;align-items:center}.brand-logo{font-size:28px}.brand h1{font-size:20px;margin:0;font-weight:900}.brand small{color:var(--muted)}.top-actions{display:flex;gap:7px}.icon{width:42px;height:42px;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:var(--radius)}
+.nav{position:fixed;z-index:50;bottom:10px;left:50%;transform:translateX(-50%);max-width:870px;width:calc(100% - 20px);display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:6px;background:color-mix(in srgb,var(--surface) 94%,transparent);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);backdrop-filter:blur(16px)}.nav button{border:0;background:transparent;color:var(--muted);padding:7px 3px;border-radius:12px;font-size:10px;font-weight:800}.nav button.active{background:var(--surface2);color:var(--accent2)}.nav span{display:block;font-size:18px;margin-bottom:2px}
+.view{display:none}.view.active{display:block}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:0 2px 8px #0002;margin-bottom:12px}.hero{background:linear-gradient(135deg,var(--surface),var(--surface2));padding:18px}.hero h2{margin:0 0 5px;font-size:25px}.muted{color:var(--muted)}.small{font-size:12px}.section-title{font-size:14px;font-weight:900;margin:18px 0 8px}.row{display:flex;gap:8px;align-items:center;justify-content:space-between}.wrap{display:flex;gap:7px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:var(--surface2);color:var(--text);padding:10px 13px;border-radius:var(--radius);font-weight:800}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn.ghost{background:transparent}.btn.danger{color:var(--danger)}.btn:disabled{opacity:.5;cursor:not-allowed}
+input,textarea,select{width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:11px;padding:11px;outline:none}input:focus,textarea:focus,select:focus{border-color:var(--accent)}textarea{min-height:150px;resize:vertical}.field{margin-bottom:10px}.field label{display:block;font-size:11px;color:var(--muted);font-weight:900;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.auth{min-height:100vh;display:grid;place-items:center;padding:18px}.auth-card{width:min(460px,100%);background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:var(--shadow)}.auth-logo{text-align:center;font-size:46px}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:16px 0}.tabs button{border:0;background:var(--surface2);color:var(--muted);padding:11px;border-radius:10px;font-weight:900}.tabs button.on{color:var(--accent2);outline:1px solid var(--accent)}
+.session{display:flex;gap:10px;align-items:center}.session .grow{flex:1;min-width:0}.session-title{font-weight:900;font-size:15px}.pill{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:var(--surface2);color:var(--muted);font-size:11px;font-weight:800}.pill.accent{color:var(--accent2)}.session-card{position:relative}.session-card .actions{display:flex;gap:5px;margin-top:9px}.session-card .actions .btn{flex:1}
+.exercise{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface2);margin:8px 0}.exercise-head{display:flex;gap:9px;align-items:center}.exercise-icon{font-size:23px}.exercise h3{font-size:14px;margin:0}.exercise .meta{color:var(--accent2);font-size:12px;font-weight:800;margin-top:3px}.exercise ul{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:12px;line-height:1.45}.exercise .muscles{margin-top:8px;font-size:11px}
+.modal{position:fixed;inset:0;z-index:100;display:none;background:#0009;padding:14px;align-items:flex-end;justify-content:center}.modal.show{display:flex}.modal-box{width:min(760px,100%);max-height:92vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:16px}.modal-head{display:flex;justify-content:space-between;align-items:center;position:sticky;top:-16px;background:var(--surface);padding:5px 0 12px;z-index:2}.modal-head h2{font-size:18px;margin:0}
+.kpi{font-size:25px;font-weight:950}.kpi-label{font-size:11px;color:var(--muted)}.bar{height:9px;border-radius:99px;background:var(--surface2);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.runner{position:fixed;inset:0;background:var(--bg);z-index:90;display:none;flex-direction:column;overflow:hidden}
+.runner.show{display:flex}
+.runner-inner{width:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;height:100%;padding:12px 14px 18px}
+.runner-top{padding:0 2px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.runner-progress{flex:1;height:6px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.runner-progress i{display:block;height:100%;background:var(--accent);width:0%;transition:width .2s}
+.runner-meta{text-align:center;font-size:11px;color:var(--muted);padding:6px 0 8px;flex-shrink:0}
+.runner-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 2px;overflow-y:auto;text-align:center}
+.runner-phase{font-size:11px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:14px}
+.runner-phase.work{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent2)}
+.runner-phase.rest{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent2)}
+.runner-emoji{font-size:56px;margin-bottom:6px}.runner-ex{font-size:25px;font-weight:950;margin:0 0 6px}.runner-target{font-size:15px;color:var(--muted);margin-bottom:18px}.runner-target b{color:var(--accent2);font-size:17px}
+.runner-timer{font-size:64px;font-weight:950;color:var(--accent2);margin:6px 0 18px;font-variant-numeric:tabular-nums}
+.runner-cues{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:480px;margin-bottom:18px;text-align:left}
+.runner-cue{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}.runner-cue .lbl{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}.runner-cue.ok .lbl{color:var(--accent2)}.runner-cue.bad .lbl{color:var(--danger)}.runner-cue ul{margin:0;padding-left:16px;font-size:12.5px;line-height:1.6}
+.runner-actions{display:flex;flex-direction:column;gap:8px;width:100%;max-width:340px}.runner-big{padding:16px;border-radius:14px;border:0;background:var(--accent);color:#fff;font-weight:900;font-size:16px}.runner-row{display:flex;gap:8px}.runner-row .btn{flex:1}
+.runner-done{display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;height:100%}.runner-done.show{display:flex}.runner-done .emoji{font-size:64px;margin-bottom:10px}
+@media(max-width:620px){.runner-cues{grid-template-columns:1fr}.runner-timer{font-size:58px}}
+.palette{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.palette button{height:42px;border:2px solid var(--line);border-radius:12px;background:var(--surface2);color:var(--text)}.palette button.on{border-color:var(--accent)}
+.toast{position:fixed;top:12px;left:50%;transform:translateX(-50%) translateY(-20px);opacity:0;z-index:200;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:10px 13px;transition:.2s;pointer-events:none;max-width:92%;text-align:center}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.offline{position:fixed;top:0;left:0;right:0;background:var(--danger);color:white;text-align:center;font-size:11px;padding:4px;z-index:201;display:none}.offline.show{display:block}
+@media(max-width:620px){.grid,.grid3{grid-template-columns:1fr}.nav{grid-template-columns:repeat(6,1fr)}.nav button{font-size:9px}.nav span{font-size:16px}.top h1{font-size:18px}}
+</style>
+</head>
+<body>
+<div id="offline" class="offline">Hors ligne — tes données locales restent disponibles et seront synchronisées dès le retour du réseau.</div>
+<div id="toast" class="toast"></div>
+<section id="auth" class="auth">
+  <div class="auth-card">
+    <div class="auth-logo">🧗</div><h1 style="text-align:center">Séance Entraînement</h1>
+    <p class="muted" style="text-align:center">Ton carnet intelligent pour grimper, progresser et équilibrer ton entraînement.</p>
+    <div class="tabs"><button id="tabLogin" class="on" onclick="switchAuth('login')">Connexion</button><button id="tabReg" onclick="switchAuth('register')">Créer un compte</button></div>
+    <form id="loginForm" onsubmit="login(event)"><div class="field"><label>Pseudo ou email</label><input id="loginId" autocomplete="username" required></div><div class="field"><label>Mot de passe</label><input id="loginPw" type="password" autocomplete="current-password" required></div><div id="loginErr" class="small" style="color:var(--danger)"></div><button class="btn primary" style="width:100%">Ouvrir mon espace</button><p class="small muted">Une fois connecté, une session sécurisée est conservée jusqu'à 60 jours d'inactivité maximale. Tu n'as normalement plus à retaper ton mot de passe.</p></form>
+    <form id="regForm" style="display:none" onsubmit="register(event)"><div class="field"><label>Pseudo</label><input id="regUser" autocomplete="username" required minlength="3"></div><div class="field"><label>Email facultatif</label><input id="regEmail" type="email" autocomplete="email"></div><div class="field"><label>Mot de passe</label><input id="regPw" type="password" autocomplete="new-password" required minlength="8"></div><div class="field"><label>Confirmation</label><input id="regPw2" type="password" autocomplete="new-password" required minlength="8"></div><div id="regErr" class="small" style="color:var(--danger)"></div><button class="btn primary" style="width:100%">Créer mon espace</button></form>
+  </div>
+</section>
+<main id="app" class="app" style="display:none">
+<header class="top"><div class="brand"><div class="brand-logo">🧗</div><div><h1>Séance Entraînement</h1><small id="hello"></small></div></div><div class="top-actions"><button class="icon" title="Créer une séance" onclick="openGenerator()">＋</button><button class="icon" title="Apparence" onclick="showView('settings')">🎨</button></div></header>
+
+<section id="home" class="view active">
+  <div class="card hero"><div class="row"><div><h2>Ton entraînement, sans friction.</h2><p class="muted">Importe une séance en texte, génère-la selon ton objectif ou lance ce que tu as prévu.</p></div><div style="font-size:48px">⚡</div></div><div class="wrap"><button class="btn primary" onclick="openImport()">📋 Coller une séance</button><button class="btn" onclick="openGenerator()">✨ Générer</button></div></div>
+  <div id="smartSummary" class="grid3"></div>
+  <div class="section-title">Mes séances</div><div id="sessions"></div>
+</section>
+
+<section id="calendar" class="view"><div class="row"><div><h2>Calendrier</h2><p class="muted small">Planifie sans surcharger deux jours durs à la suite.</p></div><button class="btn primary" onclick="addCalendar()">＋</button></div><div id="calendarList"></div></section>
+
+<section id="library" class="view"><div class="row"><div><h2>Bibliothèque</h2><p class="muted small">Exercices communs + personnels. Les séances importées enrichissent ton vocabulaire.</p></div><button class="btn primary" onclick="openExercise()">＋</button></div><div id="libraryList"></div></section>
+
+<section id="stats" class="view"><h2>Progression</h2><div id="statsContent"></div></section>
+
+<section id="social" class="view"><div class="row"><div><h2>Communauté</h2><p class="muted small">Tout est privé par défaut. Tu décides ce que les autres peuvent voir.</p></div></div><div class="card"><div class="field"><label>Voir un profil public</label><div class="row"><input id="profileSearch" placeholder="Pseudo"><button class="btn" onclick="searchProfile()">Voir</button></div></div><div id="profileResult"></div></div><div class="card"><h3>Mes abonnements</h3><div id="feed"></div></div></section>
+
+<section id="settings" class="view"><h2>Personnalisation</h2><div class="card"><h3>Apparence</h3><div class="section-title">Mode</div><div class="grid3"><button class="btn" onclick="setTheme('light')">☀️ Clair</button><button class="btn" onclick="setTheme('dark')">🌙 Sombre</button><button class="btn" onclick="setTheme('system')">📱 Système</button></div><div class="section-title">Palette</div><div class="palette"><button data-a="gold" onclick="setAccent('gold')">🟠</button><button data-a="blue" onclick="setAccent('blue')">🔵</button><button data-a="green" onclick="setAccent('green')">🟢</button><button data-a="purple" onclick="setAccent('purple')">🟣</button><button data-a="red" onclick="setAccent('red')">🔴</button></div><div class="section-title">Forme</div><div class="grid3"><button class="btn" onclick="setIcons('rounded')">◯ Arrondi</button><button class="btn" onclick="setIcons('square')">□ Carré</button><button class="btn" onclick="setIcons('soft')">◉ Doux</button></div></div>
+<div class="card"><h3>Mon profil</h3><div class="field"><label>Nom affiché</label><input id="displayName"></div><div class="field"><label>Bio</label><textarea id="bio" style="min-height:90px"></textarea></div><div class="field"><label>Emoji</label><input id="avatar" maxlength="8"></div><label class="pill"><input id="publicProfile" type="checkbox" style="width:auto"> Profil public</label><br><label class="pill"><input id="shareProgress" type="checkbox" style="width:auto"> Partager mes progressions</label><br><label class="pill"><input id="shareWorkouts" type="checkbox" style="width:auto"> Partager mes séances</label><br><button class="btn primary" onclick="saveProfile()">Enregistrer</button><p id="profileLink" class="small muted"></p></div>
+<div class="card"><h3>Préférences d'entraînement</h3><div class="grid3"><div class="field"><label>Repos par défaut (s)</label><input id="defaultRest" type="number" min="0" max="3600"></div><div class="field"><label>Son</label><select id="sound"><option value="1">Oui</option><option value="0">Non</option></select></div><div class="field"><label>Vibration</label><select id="vibration"><option value="1">Oui</option><option value="0">Non</option></select></div></div><label class="pill"><input id="keepScreen" type="checkbox" style="width:auto"> Garder l'écran actif pendant une séance</label><button class="btn" onclick="saveSettings()">Sauver</button></div>
+<div class="card"><h3>Compte</h3><div class="wrap"><button class="btn" onclick="exportData()">Exporter mes données</button><label class="btn">Importer JSON <input type="file" hidden accept="application/json" onchange="importData(event)"></label><button class="btn danger" onclick="logout()">Se déconnecter</button></div></div>
+<div class="card"><h3>Sources de la génération</h3><p class="small muted">Le moteur privilégie la spécificité de l'objectif, la mesure des performances, la progression graduelle et l'équilibre entre force, puissance, endurance, technique et mobilité. Il ne remplace pas un coach ni un professionnel de santé.</p><ul class="small muted"><li><a href="https://pubmed.ncbi.nlm.nih.gov/36636194/" target="_blank" rel="noopener">Revue systématique : entraînement et performance en escalade</a>.</li><li><a href="https://pubmed.ncbi.nlm.nih.gov/39216626/" target="_blank" rel="noopener">Revue : déterminants de la performance en escalade</a>.</li><li><a href="https://latticetraining.com/blog/how-to-manage-finger-strength-for-climbers/" target="_blank" rel="noopener">Lattice Training : gestion de la force des doigts</a>.</li><li><a href="https://latticetraining.com/blog/training-series-endurance" target="_blank" rel="noopener">Lattice Training : endurance</a>.</li></ul></div></section>
+</main>
+
+<nav id="nav" class="nav" style="display:none"><button data-v="home" onclick="showView('home')" class="active"><span>🏠</span>Accueil</button><button data-v="calendar" onclick="showView('calendar')"><span>📅</span>Planning</button><button data-v="library" onclick="showView('library')"><span>🧰</span>Exercices</button><button data-v="stats" onclick="showView('stats')"><span>📈</span>Progrès</button><button data-v="social" onclick="showView('social')"><span>👥</span>Social</button><button data-v="settings" onclick="showView('settings')"><span>⚙️</span>Réglages</button></nav>
+
+<div id="modal" class="modal"><div class="modal-box"><div class="modal-head"><h2 id="modalTitle"></h2><button class="icon" onclick="closeModal()">×</button></div><div id="modalBody"></div></div></div>
+<div id="runner" class="runner">
+  <div class="runner-inner">
+    <div class="runner-top">
+      <button class="btn" onclick="stopRunner()">← Quitter</button>
+      <div class="runner-progress"><i id="runProgressBar"></i></div>
+      <span id="runProgress" class="pill"></span>
+    </div>
+    <div id="runMeta" class="runner-meta"></div>
+    <div id="runnerBody" class="runner-body"></div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);let user=null,settings={theme:'system',accent:'gold',iconStyle:'rounded',sound:true,vibration:true,defaultRest:45,keepScreen:true},profile={},sessions=[],version=1,history=[],metrics=[],exercises={common:[],personal:[]},calendar=[],runnerState=null,syncTimer=null,offlineMode=false;
+const LS=id=>`seance-entrainement:${id}`;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(url,opt={}){const r=await fetch(url,{credentials:'same-origin',...opt});let d=null;try{d=await r.json()}catch{}if(!r.ok)throw Object.assign(new Error(d?.error||`Erreur ${r.status}`),{status:r.status,data:d});return d}
+function toast(t){$('toast').textContent=t;$('toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').classList.remove('show'),2400)}
+function setOffline(v){offlineMode=v;$('offline').classList.toggle('show',v)}
+window.addEventListener('online',()=>{setOffline(false);syncNow()});window.addEventListener('offline',()=>setOffline(true));
+function switchAuth(m){$('loginForm').style.display=m==='login'?'block':'none';$('regForm').style.display=m==='register'?'block':'none';$('tabLogin').classList.toggle('on',m==='login');$('tabReg').classList.toggle('on',m==='register')}
+async function login(e){e.preventDefault();$('loginErr').textContent='';try{const d=await api('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:$('loginId').value,password:$('loginPw').value})});user=d.user;await enter()}catch(x){$('loginErr').textContent=x.message}}
+async function register(e){e.preventDefault();$('regErr').textContent='';if($('regPw').value!==$('regPw2').value){$('regErr').textContent='Les mots de passe ne correspondent pas.';return}try{const d=await api('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('regUser').value,email:$('regEmail').value,password:$('regPw').value})});user=d.user;await enter()}catch(x){$('regErr').textContent=x.message}}
+async function bootstrap(){try{const d=await api('/api/auth/me');user=d.user;localStorage.setItem('last-user',JSON.stringify(user));await enter()}catch(x){const cached=localStorage.getItem('last-user');if(cached && !navigator.onLine){user=JSON.parse(cached);setOffline(true);await enter(true)}else $('auth').style.display='grid'}}
+async function enter(offline=false){$('auth').style.display='none';$('app').style.display='block';$('nav').style.display='grid';$('hello').textContent='Connecté en tant que '+user.username;try{settings=offline?JSON.parse(localStorage.getItem(LS(user.id)+':settings')||'null')||settings:await api('/api/settings');profile=offline?JSON.parse(localStorage.getItem(LS(user.id)+':profile')||'null')||{}:await api('/api/profile');if(!offline){const d=await api('/api/data');sessions=d.data||[];version=d.version||1;await syncAux()}else sessions=JSON.parse(localStorage.getItem(LS(user.id)+':sessions')||'[]');}catch{sessions=JSON.parse(localStorage.getItem(LS(user.id)+':sessions')||'[]');setOffline(true)}applyAppearance();renderHome();if(settings.keepScreen)setupWakeLock()}
+async function syncAux(){try{history=await api('/api/history');metrics=await api('/api/metrics');exercises=await api('/api/exercises');calendar=await api('/api/calendar');localStorage.setItem(LS(user.id)+':settings',JSON.stringify(settings));localStorage.setItem(LS(user.id)+':profile',JSON.stringify(profile));}catch(x){if(!navigator.onLine)setOffline(true);else toast(x.message||'Erreur de synchronisation')}}
+async function syncNow(){if(!user||!navigator.onLine)return;try{const d=await api('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:sessions,version})});version=d.version||version+1;toast('Synchronisé');}catch(x){if(x.status===409){try{const remote=await api('/api/data');localStorage.setItem(LS(user.id)+':conflict',JSON.stringify({local:sessions,localVersion:version,remote:remote.data,remoteVersion:remote.version,at:Date.now()}));toast('Conflit : une copie locale de tes données a été conservée.');}catch{} }else if(x.status===401){setOffline(true)}}}
+function saveLocal(){localStorage.setItem(LS(user.id)+':sessions',JSON.stringify(sessions));clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,700)}
+async function saveAll(){saveLocal();if(navigator.onLine)syncNow()}
+function showView(v){document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));$(v).classList.add('active');document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.v===v));if(v==='home')renderHome();if(v==='stats')renderStats();if(v==='library')renderLibrary();if(v==='calendar')renderCalendar();if(v==='social')renderSocial();if(v==='settings')renderSettings()}
+function applyAppearance(){const t=settings.theme||'system';if(t==='system'){const dark=matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.setAttribute('data-theme',dark?'dark':'light')}else document.documentElement.setAttribute('data-theme',t);document.documentElement.setAttribute('data-accent',settings.accent||'gold');document.documentElement.setAttribute('data-icons',settings.iconStyle||'rounded')}
+matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(settings.theme==='system')applyAppearance()});
+async function saveSettings(){settings.defaultRest=Number($('defaultRest').value)||45;settings.sound=$('sound').value==='1';settings.vibration=$('vibration').value==='1';settings.keepScreen=$('keepScreen').checked;try{await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(settings)});localStorage.setItem(LS(user.id)+':settings',JSON.stringify(settings));toast('Réglages enregistrés')}catch{setOffline(true)}applyAppearance()}
+function setTheme(t){settings.theme=t;applyAppearance();saveSettings()};function setAccent(a){settings.accent=a;applyAppearance();saveSettings()};function setIcons(a){settings.iconStyle=a;applyAppearance();saveSettings()}
+function renderHome(){const done=history.filter(h=>Date.now()-h.started_at<7*864e5).length;const mins=Math.round(history.reduce((a,h)=>a+(h.duration_seconds||0),0)/60);$('smartSummary').innerHTML=`<div class="card"><div class="kpi">${done}</div><div class="kpi-label">séances / 7 jours</div></div><div class="card"><div class="kpi">${mins} min</div><div class="kpi-label">entraînement cumulé</div></div><div class="card"><div class="kpi">${sessions.length}</div><div class="kpi-label">séances prêtes</div></div>`;$('sessions').innerHTML=sessions.length?sessions.map((s,i)=>`<div class="card session-card"><div class="session"><div style="font-size:28px">${esc(s.emoji||'🧗')}</div><div class="grow"><div class="session-title">${esc(s.name)}</div><div class="small muted">${s.exercises?.length||0} exercices · ${esc(s.duration||estimateSession(s))}</div><div class="wrap" style="margin-top:5px">${(s.tags||[]).slice(0,4).map(x=>`<span class="pill">${esc(x)}</span>`).join('')}</div></div></div><div class="actions"><button class="btn primary" onclick="runSession('${s.id}')">▶ Lancer</button><button class="btn" onclick="editSession('${s.id}')">✏️</button><button class="btn danger" onclick="deleteSession('${s.id}')">🗑️</button></div></div>`).join(''):'<div class="card"><b>Aucune séance pour le moment.</b><p class="muted small">Colle ton texte ou demande au générateur une séance adaptée.</p></div>'}
+function estimateSession(s){return Math.max(10,(s.exercises||[]).reduce((a,e)=>a+(e.type==='time'?e.sets*e.amount/60:e.sets*1.5+(e.rest||45)*e.sets/60),0)).toFixed(0)+' min'}
+function openModal(title,body){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modal').classList.add('show')};function closeModal(){$('modal').classList.remove('show')}
+function openImport(){openModal('Importer une séance',`<p class="muted small">Colle exactement ton texte. Le parseur reconnaît titre, durée, objectifs, exercices numérotés, séries × répétitions, temps, repos, charge, consignes, muscles et progression.</p><textarea id="paste">${esc(localStorage.getItem('draft-session')||'')}</textarea><div class="wrap"><button class="btn primary" onclick="previewImport()">Analyser</button><button class="btn" onclick="closeModal()">Annuler</button></div><div id="parsePreview"></div>`)}
+function parseSession(text){localStorage.setItem('draft-session',text);const lines=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),first=lines[0]||'Nouvelle séance';let name=first.replace(/^[^A-Za-zÀ-ÿ🦵🧗🔥💪⚡]+/,'').replace(/^.*?SÉANCE\s+/i,'').trim()||first;let duration=(text.match(/Durée\s*:\s*([^\n]+)/i)||[])[1]?.trim()||'';let objectives=(text.match(/Objectifs?\s*:\s*([^\n]+)/i)||[])[1]?.split(/[•,;]/).map(x=>x.trim()).filter(Boolean)||[];let progression='';const pm=text.match(/📈\s*PROGRESSION[\s\S]*?(?=\n\s*📈|$)/i);if(pm)progression=pm[0].replace(/📈\s*PROGRESSION\s*/i,'').trim();let ex=[];for(let i=0;i<lines.length;i++){let m=lines[i].match(/^(?:\d+[\.\)]|\d+\s*[–-])\s*(.+)$/);if(!m)continue;let title=m[1].trim();let block=[];for(let j=i+1;j<lines.length&&!lines[j].match(/^(?:\d+[\.\)]|\d+\s*[–-])\s*/);j++)block.push(lines[j]);let spec=block.find(x=>/×|x|reps?|rép|s\b|min|sec|repos|kg|poids du corps/i.test(x)&&!/^•?\s*Travaille/i.test(x))||'';let rest=((spec.match(/repos\s*([~≈]?\s*\d+)\s*(min|m|s|sec)?/i)||[]));let restSec=rest[1]?Number(rest[1])*(/min|m/i.test(rest[2]||'')?60:1):settings.defaultRest;let time=title.match(/\b(\d+)\s*[–-]\s*(\d+)?\s*s\b/i)||spec.match(/\b(\d+)\s*[–-]\s*(\d+)?\s*s\b/i);let rep=(spec.match(/(\d+)\s*[×x]\s*(\d+)(?:\s*[–-]\s*(\d+))?/i)||[]);let load=(spec.match(/(\+\s*\d+(?:[.,]\d+)?\s*(?:kg|kilos?)?|poids du corps|sans charge)/i)||[])[1]||'';let muscles=(block.find(x=>/Travaille\s*:/i.test(x))||'').replace(/^.*?Travaille\s*:\s*/i,'').split(/[,;•]/).map(x=>x.trim()).filter(Boolean);let instructions=block.filter(x=>/^[-•]/.test(x)&&!/^[-•]\s*Travaille/i.test(x)).map(x=>x.replace(/^[-•]\s*/,''));let sets=rep[1]?Number(rep[1]):time?2:3,repMin=rep[2]?Number(rep[2]):rep[1]?Number(rep[2]):0,repMax=rep[3]?Number(rep[3]):repMin;let amount=time?Number(time[1]):repMin||10;let type=time?'time':'reps';ex.push({id:crypto.randomUUID(),name:title.replace(/\s*—.*$/,''),emoji:pickEmoji(title),type,amount,sets,repMin,repMax,rest:restSec,load,muscles,instructions,ok:[],bad:[]})}return{id:crypto.randomUUID(),name,emoji:pickEmoji(name),duration,objectives,tags:objectives.slice(0,5),progression,exercises:ex,createdAt:Date.now()}}
+function pickEmoji(t){t=t.toLowerCase();if(/jamb|squat|fente|mollet|jambe/.test(t))return'🦵';if(/doigt|poutre|réglette|reglette|suspension/.test(t))return'🖐️';if(/saut|explos|puissance|power/.test(t))return'⚡';if(/gainage|core/.test(t))return'🔥';if(/traction|tirage/.test(t))return'💪';return'🧗'}
+function previewImport(){const s=parseSession($('paste').value);$('parsePreview').innerHTML=`<div class="card" style="margin-top:12px"><b>${esc(s.name)}</b><p class="small muted">${s.exercises.length} exercices détectés${s.duration?' · '+esc(s.duration):''}</p>${s.exercises.map((e,i)=>`<div class="pill">${i+1}. ${esc(e.name)} · ${e.sets} × ${e.type==='time'?e.amount+' s':e.repMin+(e.repMax&&e.repMax!==e.repMin?'–'+e.repMax:'')}</div>`).join('')}<br><button class="btn primary" onclick="importParsed()">Ajouter à mes séances</button></div>`;window._parsed=s}
+function importParsed(){sessions.unshift(window._parsed);saveAll();closeModal();renderHome();toast('Séance créée automatiquement')}
+function openGenerator(){openModal('Générateur intelligent',`<p class="muted small">Le moteur utilise tes séances passées, tes métriques, ton niveau déclaré et tes préférences. Il évite de répéter exactement le même contenu et ajoute un bloc d'équilibre.</p><div class="grid"><div class="field"><label>Taille</label><select id="gSize"><option value="small">Petite · ~30 min</option><option value="medium" selected>Moyenne · ~50 min</option><option value="large">Grande · ~75 min</option></select></div><div class="field"><label>Objectif principal</label><select id="gGoal"><option value="performance">Performance max</option><option value="power">Puissance / explosivité</option><option value="speed">Vitesse</option><option value="resi">Rési / puissance-endurance</option><option value="endurance">Endurance</option><option value="strength">Force</option><option value="technique">Technique / placement</option><option value="balance">Équilibre / complément</option></select></div><div class="field"><label>Style de grimpe</label><select id="gStyle"><option value="all">Peu importe</option><option value="slab">Dalle</option><option value="crimp">Réglette</option><option value="overhang">Dévers</option><option value="route">Voie</option><option value="boulder">Bloc</option></select></div><div class="field"><label>Forme aujourd'hui</label><select id="gFatigue"><option value="fresh">Très frais</option><option value="normal" selected>Normale</option><option value="tired">Fatigué</option><option value="bad">Très fatigué</option></select></div><div class="field"><label>Matériel</label><input id="gEquip" placeholder="poutre, pan, haltères, élastique..."></div><div class="field"><label>Ton niveau / objectif</label><input id="gLevel" placeholder="ex. 6C bloc, 7A projet, débutant..."></div></div><button class="btn primary" style="width:100%" onclick="generateSession()">✨ Générer ma séance</button><div id="genResult"></div>`)}
+function recentFocus(){const txt=history.slice(0,12).map(h=>(h.session_name||'')+' '+(h.data_json||'')).join(' ').toLowerCase();const latest={};for(const m of metrics){if(!latest[m.metric]||m.recorded_at>latest[m.metric].recorded_at)latest[m.metric]=m}return{fingers:/poutre|doigt|réglette|reglette|suspension/.test(txt),legs:/jambes|squat|fente|mollet/.test(txt),pull:/traction|tirage|row/.test(txt),core:/gainage|core/.test(txt),metrics:latest}}
+const EX={warm:[['Mobilité poignets + épaules','time',45,2,30,'Mobilité générale'],['Montées de genoux + pas dynamiques','time',45,2,30,'Température et coordination'],['Escalade facile progressive','time',120,2,60,'Technique et mise en route']],performance:[['Bloc de qualité proche max','reps',1,6,180,'Performance / lecture'],['Tractions lestées','reps',5,4,150,'Tirage / force'],['Suspensions courtes sur réglette confortable','time',7,5,150,'Force des doigts']],power:[['Blocs explosifs à mouvements courts','reps',3,5,150,'Puissance'],['Lancers de medecine-ball','reps',5,4,90,'Puissance haut du corps'],['Sauts verticaux maximaux','reps',4,4,120,'Explosivité jambes']],speed:[['Blocs faciles en mouvement rapide','reps',1,8,75,'Vitesse / coordination'],['Traversée technique sans pause','time',60,3,60,'Coordination'],['Footwork silencieux','time',90,3,45,'Précision']],resi:[['Intervalles bloc soutenus','time',30,6,30,'Puissance-endurance'],['4x4 blocs sous-maximaux','reps',4,4,120,'Puissance-endurance'],['Pompes contrôlées','reps',10,3,60,'Antagonistes']],endurance:[['Escalade continue facile à modérée','time',300,2,120,'Endurance aérobie'],['Traversées faciles sans chute','time',180,2,90,'Endurance'],['Mobilité hanches / chevilles','time',60,2,30,'Mobilité']],strength:[['Tractions lestées','reps',5,4,150,'Force tirage'],['Squats lestés','reps',6,4,150,'Jambes'],['Rowing haltère','reps',8,3,90,'Dos / stabilité'],['Suspension contrôlée','time',7,5,150,'Doigts']],technique:[['Blocs dalle : pieds silencieux','reps',4,3,60,'Technique'],['Escalade à vue facile','reps',1,6,75,'Lecture'],['Montées sans regarder les pieds','reps',1,5,60,'Conscience corporelle']],balance:[['Face pulls élastique','reps',15,3,60,'Épaules'],['Cossack squat','reps',6,2,60,'Hanches'],['Mollets unilatéraux','reps',15,3,45,'Chevilles'],['Gainage latéral','time',30,2,45,'Tronc']]};
+function generateSession(){const size=$('gSize').value,goal=$('gGoal').value,style=$('gStyle').value,fat=$('gFatigue').value,equip=$('gEquip').value.toLowerCase(),level=$('gLevel').value;const f=recentFocus();let count=size==='small'?2:size==='large'?4:3;let arr=[...EX.warm];if(f.metrics){const m=Object.values(f.metrics).find(x=>/suspension|poutre|doigt/i.test(x.metric));if(m&&goal==='performance'&&Number(m.value)>0)toast('Séance calibrée sur ta dernière mesure de doigts : '+m.value+' '+(m.unit||''))}let pool=[...(EX[goal]||EX.performance)];if(fat==='bad'){pool=EX.balance.concat(EX.technique);count=Math.min(2,count)}else if(fat==='tired'){pool=EX.technique.concat(EX.balance);count=Math.min(3,count)}if(style==='slab')pool.unshift(['Travail dalle : transfert de poids','reps',4,3,60,'Équilibre / précision']);if(style==='crimp')pool.unshift(['Suspensions en demi-crimp confortable','time',7,4,150,'Doigts']);if(style==='overhang')pool.unshift(['Bloc dévers : verrouillages contrôlés','reps',3,4,120,'Tirage / gainage']);if(!f.legs&&goal!=='balance')pool.push(...EX.balance.slice(1,3));let used=new Set();for(const x of pool){if(arr.length>=count+1)break;if(used.has(x[0]))continue;used.add(x[0]);if(x[0].toLowerCase().includes('poutre')&&!equip.includes('poutre')&&!equip.includes('réglette')&&goal!=='performance')continue;arr.push(x)}const ex=arr.map((x,i)=>({id:crypto.randomUUID(),name:x[0],type:x[1],amount:x[2],sets:x[3],repMin:x[1]==='reps'?x[2]:0,repMax:x[1]==='reps'?x[2]:0,rest:x[4],load:'',muscles:[x[5]],instructions:[],emoji:pickEmoji(x[0]),ok:[],bad:[]}));if(f.legs&&goal==='power')ex.push({...EX.balance[2],id:crypto.randomUUID(),name:EX.balance[2][0],type:EX.balance[2][1],amount:EX.balance[2][2],sets:2,repMin:EX.balance[2][2],repMax:EX.balance[2][2],rest:45,load:'',muscles:['Équilibre'],instructions:[],emoji:'🦵',ok:[],bad:[]});const s={id:crypto.randomUUID(),name:`${size==='small'?'Petite':size==='large'?'Grande':'Moyenne'} séance — ${goalLabel(goal)}${style!=='all'?' · '+styleLabel(style):''}`,emoji:'🧠',duration:size==='small'?'~30 min':size==='large'?'~75 min':'~50 min',objectives:[goalLabel(goal),styleLabel(style),fatLabel(fat)],tags:[goalLabel(goal),styleLabel(style)],level,progression:`Le moteur utilise ton historique pour équilibrer les qualités. Augmente seulement si la technique reste propre et si les performances restent stables.`,exercises:ex,createdAt:Date.now()};sessions.unshift(s);saveAll();closeModal();renderHome();toast('Séance personnalisée créée')}
+function goalLabel(x){return({performance:'performance max',power:'puissance',speed:'vitesse',resi:'rési',endurance:'endurance',strength:'force',technique:'technique',balance:'équilibre'})[x]||x}function styleLabel(x){return({all:'tous styles',slab:'dalle',crimp:'réglette',overhang:'dévers',route:'voie',boulder:'bloc'})[x]||x}function fatLabel(x){return({fresh:'forme fraîche',normal:'forme normale',tired:'fatigue',bad:'fatigue élevée'})[x]}
+function editSession(id){const s=sessions.find(x=>x.id===id);if(!s)return;openModal('Modifier la séance',`<div class="field"><label>Nom</label><input id="editName" value="${esc(s.name)}"></div><div class="field"><label>Progression</label><textarea id="editProg">${esc(s.progression||'')}</textarea></div><div id="editExercises">${s.exercises.map((e,i)=>`<div class="exercise"><div class="row"><b>${i+1}. ${esc(e.name)}</b><button class="btn danger" onclick="removeExEdit(${i})">×</button></div><div class="grid3"><input id="en${i}" value="${esc(e.name)}" placeholder="Nom"><input id="es${i}" type="number" value="${e.sets}" placeholder="Séries"><input id="er${i}" type="number" value="${e.amount}" placeholder="Reps/sec"></div></div>`).join('')}</div><button class="btn primary" onclick="saveSessionEdit('${id}')">Enregistrer</button>`)}
+function removeExEdit(i){const box=$('editExercises').children[i];box.remove()}
+function saveSessionEdit(id){const s=sessions.find(x=>x.id===id);s.name=$('editName').value;s.progression=$('editProg').value;[...$('editExercises').children].forEach((node,i)=>{const name=node.querySelector(`#en${i}`);const sets=node.querySelector(`#es${i}`);const amt=node.querySelector(`#er${i}`);if(name&&sets&&amt&&s.exercises[i]){s.exercises[i].name=name.value;s.exercises[i].sets=Number(sets.value)||1;s.exercises[i].amount=Number(amt.value)||1}});saveAll();closeModal();renderHome();toast('Séance modifiée')}
+function deleteSession(id){if(!confirm('Supprimer cette séance ?'))return;sessions=sessions.filter(x=>x.id!==id);saveAll();renderHome()}
+function runSession(id){
+  const s=sessions.find(x=>x.id===id);
+  if(!s||!s.exercises?.length)return;
+  runnerState={s,index:0,setsDone:[],started:Date.now(),timer:null,remaining:0,deadline:0,paused:false,phase:null,lastBeep:0};
+  $('runner').classList.add('show');
+  renderRunner();
+}
+function renderRunner(){
+  clearRunnerTimer();
+  const s=runnerState.s,e=s.exercises[runnerState.index];
+  const pct=Math.round((runnerState.index/s.exercises.length)*100);
+  $('runProgress').textContent=`${runnerState.index+1}/${s.exercises.length}`;
+  $('runProgressBar').style.width=pct+'%';
+  $('runMeta').textContent=`Exercice ${runnerState.index+1}/${s.exercises.length}`;
+  const cuesOk=(e.ok||[]).filter(x=>String(x).trim()&&String(x).trim()!=='—');
+  const cuesBad=(e.bad||[]).filter(x=>String(x).trim()&&String(x).trim()!=='—');
+  const target=e.type==='time'?`Série <b>${e.sets} séries</b> — tenir ${e.amount}s`:`${e.load?esc(e.load)+' · ':''}<b>${e.repMin||e.amount}${e.repMax&&e.repMax!==e.repMin?'–'+e.repMax:''} répétitions</b> · ${e.sets} séries`;
+  $('runnerBody').innerHTML=`
+    <div id="runPhase" class="runner-phase work">En action</div>
+    <div class="runner-emoji">${esc(e.emoji||'🧗')}</div>
+    <div class="runner-ex">${esc(e.name)}</div>
+    <div class="runner-target">${target}</div>
+    <div id="rTimer" class="runner-timer">${e.type==='time'?formatTime(e.amount):'Prêt'}</div>
+    <div class="runner-cues">
+      <div class="runner-cue ok"><div class="lbl">✅ À faire</div><ul>${cuesOk.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>Technique propre</li>'}</ul></div>
+      <div class="runner-cue bad"><div class="lbl">❌ À éviter</div><ul>${cuesBad.map(x=>`<li>${esc(x)}</li>`).join('')||'<li>Ne pas sacrifier la qualité</li>'}</ul></div>
+    </div>
+    <div class="runner-actions">
+      <button class="runner-big" id="runnerMain" onclick="runnerMainAction()">▶ Démarrer la série</button>
+      <div class="runner-row">
+        <button class="btn" onclick="adjustRunnerTimer(-15)">−15 s</button>
+        <button class="btn" id="runnerPause" onclick="toggleRunnerPause()">⏸ Pause</button>
+        <button class="btn" onclick="adjustRunnerTimer(15)">+15 s</button>
+      </div>
+      <div class="runner-row">
+        <button class="btn" onclick="skipExercise()">Passer l'exercice</button>
+        <button class="btn" onclick="markRunnerSet()">✓ Série faite</button>
+      </div>
+    </div>`;
+  runnerState.phase='idle';
+  runnerState.currentSet=1;
+  runnerState.totalSets=Math.max(1,Number(e.sets)||1);
+  updateRunnerSetLabel();
+}
+function updateRunnerSetLabel(){
+  const e=runnerState.s.exercises[runnerState.index];
+  const btn=$('runnerMain');
+  if(!btn)return;
+  if(runnerState.phase==='work')btn.textContent=`⏱ Série ${runnerState.currentSet}/${runnerState.totalSets}`;
+  else if(runnerState.phase==='rest')btn.textContent='Repos en cours…';
+  else btn.textContent=e.type==='time'?`▶ Démarrer ${runnerState.currentSet}/${runnerState.totalSets}`:`▶ Démarrer la série ${runnerState.currentSet}/${runnerState.totalSets}`;
+}
+function clearRunnerTimer(){
+  if(runnerState?.timer){clearInterval(runnerState.timer);runnerState.timer=null}
+  if(runnerState)runnerState.deadline=0;
+}
+function startRunnerTimer(seconds,phase){
+  clearRunnerTimer();
+  runnerState.phase=phase;
+  runnerState.paused=false;
+  runnerState.remaining=Math.max(0,Number(seconds)||0);
+  runnerState.deadline=Date.now()+runnerState.remaining*1000;
+  runnerState.lastBeep=0;
+  updateRunnerTimer();
+  runnerState.timer=setInterval(updateRunnerTimer,200);
+}
+function updateRunnerTimer(){
+  if(!runnerState)return;
+  if(runnerState.paused)return;
+  const left=Math.max(0,(runnerState.deadline-Date.now())/1000);
+  runnerState.remaining=left;
+  const el=$('rTimer');
+  if(el)el.textContent=formatTime(Math.ceil(left));
+  const sec=Math.ceil(left);
+  if(sec>0&&sec<=3&&sec!==runnerState.lastBeep){runnerState.lastBeep=sec;beep()}
+  if(left<=0){
+    clearRunnerTimer();
+    beep();
+    runnerTimerFinished();
+  }
+}
+function runnerTimerFinished(){
+  const e=runnerState.s.exercises[runnerState.index];
+  if(runnerState.phase==='work'){
+    runnerState.phase='idle';
+    runnerState.setsDone[runnerState.index]??=[];
+    runnerState.setsDone[runnerState.index].push({set:runnerState.currentSet,completedAt:Date.now(),timed:true});
+    if(runnerState.currentSet<runnerState.totalSets){
+      startRunnerTimer(e.rest||settings.defaultRest,'rest');
+      renderRunnerRestState();
+    }else{
+      nextExercise();
+    }
+  }else if(runnerState.phase==='rest'){
+    runnerState.phase='idle';
+    renderRunner();
+  }
+}
+function renderRunnerRestState(){
+  const e=runnerState.s.exercises[runnerState.index];
+  const phase=$('runPhase'),timer=$('rTimer');
+  if(phase)phase.textContent='Repos';
+  if(phase)phase.className='runner-phase rest';
+  if(timer)timer.textContent=formatTime(Math.ceil(runnerState.remaining));
+  $('runnerMain').textContent=`Repos · ${formatTime(Math.ceil(runnerState.remaining))}`;
+}
+function runnerMainAction(){
+  const e=runnerState.s.exercises[runnerState.index];
+  if(runnerState.phase==='rest')return;
+  if(runnerState.phase==='work')return;
+  if(e.type==='time'){
+    startRunnerTimer(e.amount,'work');
+  }else{
+    runnerState.phase='work';
+    $('runnerMain').textContent=`⏱ Série ${runnerState.currentSet}/${runnerState.totalSets}`;
+  }
+}
+function markRunnerSet(){
+  const e=runnerState.s.exercises[runnerState.index];
+  if(runnerState.phase==='work')return;
+  runnerState.setsDone[runnerState.index]??=[];
+  if(!runnerState.setsDone[runnerState.index].some(x=>x.set===runnerState.currentSet)){
+    runnerState.setsDone[runnerState.index].push({set:runnerState.currentSet,completedAt:Date.now(),timed:false});
+  }
+  if(runnerState.currentSet<runnerState.totalSets){
+    runnerState.currentSet++;
+    startRunnerTimer(e.rest||settings.defaultRest,'rest');
+    renderRunnerRestState();
+  }else{
+    nextExercise();
+  }
+}
+function toggleRunnerPause(){
+  if(!runnerState||runnerState.phase==='idle'||runnerState.phase==='rest'&&runnerState.remaining<=0)return;
+  const btn=$('runnerPause');
+  if(!runnerState.paused){
+    runnerState.remaining=Math.max(0,(runnerState.deadline-Date.now())/1000);
+    runnerState.paused=true;
+    if(runnerState.timer){clearInterval(runnerState.timer);runnerState.timer=null}
+    if(btn)btn.textContent='▶ Reprendre';
+  }else{
+    runnerState.paused=false;
+    runnerState.deadline=Date.now()+runnerState.remaining*1000;
+    runnerState.timer=setInterval(updateRunnerTimer,200);
+    if(btn)btn.textContent='⏸ Pause';
+  }
+}
+function adjustRunnerTimer(delta){
+  if(!runnerState||runnerState.phase==='idle')return;
+  const now=Date.now();
+  const current=runnerState.paused?runnerState.remaining:Math.max(0,(runnerState.deadline-now)/1000);
+  runnerState.remaining=Math.max(0,current+delta);
+  if(!runnerState.paused)runnerState.deadline=now+runnerState.remaining*1000;
+  const el=$('rTimer');if(el)el.textContent=formatTime(Math.ceil(runnerState.remaining));
+}
+function formatTime(s){s=Math.max(0,Math.ceil(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function formatRest(s){return s>=60?Math.floor(s/60)+' min '+(s%60?s%60+' s':''):s+' s'}
+function beep(){
+  if(settings.vibration&&navigator.vibrate)navigator.vibrate([100,60,100]);
+  if(settings.sound){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=700;g.gain.value=.04;o.start();o.stop(a.currentTime+.15)}catch{}}
+}
+function skipExercise(){nextExercise()}
+function nextExercise(){
+  clearRunnerTimer();
+  if(runnerState.index<runnerState.s.exercises.length-1){
+    runnerState.index++;
+    runnerState.currentSet=1;
+    runnerState.phase='idle';
+    renderRunner();
+  }else finishRunner()
+}
+async function finishRunner(){
+  const s=runnerState.s,duration=Math.round((Date.now()-runnerState.started)/1000);
+  $('runner').classList.remove('show');clearRunnerTimer();
+  const allSets=runnerState.setsDone;
+  try{
+    await api('/api/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:s.id,sessionName:s.name,startedAt:runnerState.started,durationSeconds:duration,data:{sets:allSets}})});
+    history=await api('/api/history');
+    toast('Séance terminée — progression enregistrée')
+  }catch{toast('Séance terminée localement ; synchronisation impossible pour le moment.')}
+  renderHome()
+}
+function stopRunner(){
+  if(confirm('Quitter la séance ? La séance en cours ne sera pas enregistrée.')){
+    clearRunnerTimer();
+    $('runner').classList.remove('show');
+  }
+}
+async function renderStats(){if(navigator.onLine){try{history=await api('/api/history');metrics=await api('/api/metrics')}catch{}}const total=history.length,mins=Math.round(history.reduce((a,h)=>a+(h.duration_seconds||0),0)/60);const by={};history.forEach(h=>{const d=new Date(h.started_at).toISOString().slice(0,10);by[d]=(by[d]||0)+1});const streak=Object.keys(by).length;let metricNames=[...new Set(metrics.map(m=>m.metric))];$('statsContent').innerHTML=`<div class="grid3"><div class="card"><div class="kpi">${total}</div><div class="kpi-label">séances</div></div><div class="card"><div class="kpi">${mins} min</div><div class="kpi-label">temps total</div></div><div class="card"><div class="kpi">${streak}</div><div class="kpi-label">jours actifs</div></div></div><div class="card"><div class="row"><h3>Mesures</h3><button class="btn" onclick="addMetric()">＋</button></div>${metricNames.length?metricNames.map(n=>{const a=metrics.filter(m=>m.metric===n).sort((a,b)=>a.recorded_at-b.recorded_at),last=a.at(-1);return `<div style="margin:14px 0"><div class="row"><b>${esc(n)}</b><span class="pill accent">${last.value} ${esc(last.unit||'')}</span></div><div class="bar"><i style="width:${Math.min(100,20+a.length*8)}%"></i></div><div class="small muted">${a.length} mesures · dernière ${new Date(last.recorded_at).toLocaleDateString('fr-FR')}</div></div>`}).join(''):'<p class="muted small">Ajoute tes performances : max traction, suspension, cotation projet, saut, etc. Le générateur pourra s’en servir.</p>'}</div><div class="card"><h3>Équilibre des séances</h3><p class="small muted">Le moteur compare tes derniers entraînements et cherche les qualités peu présentes. Ce n'est pas un diagnostic médical.</p><div class="wrap">${['force','puissance','resi','endurance','technique','équilibre'].map(x=>`<span class="pill">${x}</span>`).join('')}</div></div>`}
+async function addMetric(){const name=prompt('Nom de la mesure (ex. max suspension 7s)');if(!name)return;const val=Number(prompt('Valeur'));if(!Number.isFinite(val))return;const unit=prompt('Unité (kg, reps, s, niveau...)')||'';try{await api('/api/metrics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({metric:name,value:val,unit})});metrics=await api('/api/metrics');renderStats();toast('Performance enregistrée')}catch(x){toast(x.message)}}
+async function renderLibrary(){if(navigator.onLine){try{exercises=await api('/api/exercises')}catch{}}const all=[...(exercises.common||[]).map(x=>({...x,scope:'commun'})),...(exercises.personal||[]).map(x=>({...x,scope:'perso'}))];$('libraryList').innerHTML=all.length?all.map(x=>`<div class="card"><div class="row"><div><b>${esc(x.data?.emoji||'💪')} ${esc(x.name)}</b><span class="pill">${x.scope}</span></div></div><p class="small muted">${esc(x.data?.load||'')} · ${x.data?.sets||3} séries · ${x.data?.amount||''} ${x.data?.type==='time'?'s':'reps'}</p></div>`).join(''):'<div class="card muted">Aucun exercice.</div>'}
+function openExercise(){openModal('Ajouter un exercice',`<div class="field"><label>Nom</label><input id="exName"></div><div class="field"><label>Charge / repère</label><input id="exLoad"></div><div class="grid3"><input id="exSets" type="number" value="3" placeholder="Séries"><input id="exAmount" type="number" value="10" placeholder="Reps / secondes"><select id="exType"><option value="reps">Reps</option><option value="time">Temps</option></select></div><button class="btn primary" onclick="addExercise()">Ajouter</button>`)}
+async function addExercise(){const data={emoji:'💪',type:$('exType').value,amount:Number($('exAmount').value),sets:Number($('exSets').value),rest:settings.defaultRest,load:$('exLoad').value,ok:[],bad:[],muscles:[],instructions:[]};try{await api('/api/exercises/personal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('exName').value,data})});exercises=await api('/api/exercises');closeModal();renderLibrary();toast('Exercice ajouté')}catch(x){toast(x.message)}}
+function renderCalendar(){const now=new Date();$('calendarList').innerHTML=`<div class="card"><h3>Prochaines séances</h3>${calendar.length?calendar.sort((a,b)=>a.event_date.localeCompare(b.event_date)).slice(0,30).map(x=>`<div class="row" style="padding:9px 0;border-bottom:1px solid var(--line)"><span><b>${esc(x.event_date)}</b> · ${esc(x.title||'Séance')}</span><button class="btn" onclick="deleteCal('${x.id}')">×</button></div>`).join(''):'<p class="muted small">Rien de planifié.</p>'}</div>`}
+async function addCalendar(){const date=prompt('Date YYYY-MM-DD',new Date().toISOString().slice(0,10));if(!date)return;const title=prompt('Titre de la séance','Entraînement');if(!title)return;try{await api('/api/calendar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,title})});calendar=await api('/api/calendar');renderCalendar()}catch(x){toast(x.message)}}
+async function deleteCal(id){await api('/api/calendar/'+id,{method:'DELETE'});calendar=await api('/api/calendar');renderCalendar()}
+async function renderSocial(){if(navigator.onLine){try{$('feed').innerHTML=(await api('/api/feed')).map(x=>`<div style="padding:9px 0;border-bottom:1px solid var(--line)">${esc(x.avatar_emoji)} <b>${esc(x.display_name)}</b> a fait <b>${esc(x.session_name)}</b> · <span class="muted">${new Date(x.started_at).toLocaleDateString('fr-FR')}</span></div>`).join('')||'<p class="muted small">Aucune activité de tes abonnements.</p>'}catch{}}}
+async function searchProfile(){const u=$('profileSearch').value.trim();if(!u)return;try{const d=await api('/api/profile/public/'+encodeURIComponent(u));$('profileResult').innerHTML=`<div class="card"><div class="row"><div><span style="font-size:28px">${esc(d.profile.avatar_emoji)}</span> <b>${esc(d.profile.display_name)}</b> <span class="pill">@${esc(d.profile.username)}</span></div><button class="btn primary" onclick="followUser('${esc(d.profile.username)}')">Suivre</button></div><p class="muted small">${esc(d.profile.bio||'')}</p>${d.metrics?.length?'<h4>Progression partagée</h4>'+d.metrics.slice(0,8).map(m=>`<span class="pill">${esc(m.metric)} : ${m.value} ${esc(m.unit||'')}</span>`).join(' '):'<p class="muted small">Aucune progression publique.</p>'}</div>`}catch(x){$('profileResult').textContent=x.message}}
+async function followUser(username){try{await api('/api/follows',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});toast('Abonnement ajouté');renderSocial()}catch(x){toast(x.message)}}
+function renderSettings(){settings=settings||{};profile=profile||{};$('defaultRest').value=settings.defaultRest||45;$('sound').value=settings.sound?'1':'0';$('vibration').value=settings.vibration?'1':'0';$('keepScreen').checked=settings.keepScreen!==false;$('displayName').value=profile.display_name||user.username;$('bio').value=profile.bio||'';$('avatar').value=profile.avatar_emoji||'🧗';$('publicProfile').checked=!!profile.public_profile;$('shareProgress').checked=!!profile.share_progress;$('shareWorkouts').checked=!!profile.share_workouts;$('profileLink').textContent=profile.public_profile?`Ton profil public : /profil/${user.username}`:''}
+async function saveProfile(){profile={display_name:$('displayName').value,bio:$('bio').value,avatar_emoji:$('avatar').value,public_profile:$('publicProfile').checked,share_progress:$('shareProgress').checked,share_workouts:$('shareWorkouts').checked};try{await api('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(profile)});localStorage.setItem(LS(user.id)+':profile',JSON.stringify(profile));toast('Profil enregistré')}catch(x){toast(x.message)}}
+function exportData(){const blob=new Blob([JSON.stringify({version:4,sessions,settings,profile,history,metrics},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='seance-entrainement-sauvegarde.json';a.click();URL.revokeObjectURL(a.href)}
+function importData(e){const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d.sessions))sessions=d.sessions;saveAll();renderHome();toast('Import terminé')}catch{toast('JSON invalide')}};r.readAsText(f)}
+async function logout(){try{await api('/api/auth/logout',{method:'POST'})}catch{}localStorage.removeItem('last-user');location.reload()}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&runnerState&&runnerState.phase!=='idle'&&!runnerState.paused)updateRunnerTimer()});
+let wakeLock=null;async function setupWakeLock(){if(!('wakeLock' in navigator))return;document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&runnerState&&settings.keepScreen)try{wakeLock=await navigator.wakeLock.request('screen')}catch{}})}
+window.addEventListener('beforeunload',()=>{if(user)localStorage.setItem(LS(user.id)+':sessions',JSON.stringify(sessions))});
+bootstrap();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+</script>
+</body></html>
