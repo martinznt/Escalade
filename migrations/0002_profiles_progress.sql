@@ -1,0 +1,6 @@
+ALTER TABLE user_data ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+CREATE TABLE IF NOT EXISTS profiles (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', public_profile INTEGER NOT NULL DEFAULT 0, share_progress INTEGER NOT NULL DEFAULT 0, share_workouts INTEGER NOT NULL DEFAULT 0, avatar_emoji TEXT NOT NULL DEFAULT '🧗', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS follows (follower_id TEXT NOT NULL, followed_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(follower_id,followed_id), FOREIGN KEY(follower_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(followed_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS metrics (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, metric TEXT NOT NULL, value REAL NOT NULL, unit TEXT NOT NULL DEFAULT '', recorded_at INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS idx_metrics_user_date ON metrics(user_id,recorded_at);
+CREATE INDEX IF NOT EXISTS idx_history_user_public ON history(user_id,started_at);
