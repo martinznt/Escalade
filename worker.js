@@ -7,7 +7,7 @@ export default {async fetch(request,env){const url=new URL(request.url);try{
     return await route(request,env,url.pathname);
   }
   return env.ASSETS.fetch(request);
-}catch(e){console.error(e);return json({ok:false,error:'Erreur serveur.'},500)}};
+}catch(e){console.error(e);return json({ok:false,error:'Erreur serveur.'},500)} }};
 
 async function route(r,e,p){
  if(p==='/api/auth/register'&&r.method==='POST')return register(r,e);
