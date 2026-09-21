@@ -1,9 +1,24 @@
 {
-  "$schema":"https://unpkg.com/wrangler@latest/config-schema.json",
-  "name":"escalade-et-renforcement-musculaire",
-  "main":"./worker.js",
-  "compatibility_date":"2026-09-19",
-  "assets":{"directory":"./public","binding":"ASSETS","run_worker_first":true},
-  "d1_databases":[{"binding":"DB","database_name":"escalade-et-renforcement-db","database_id":"96b79d1b-00a4-4471-be3d-12eeaa27e170","migrations_dir":"./migrations"}],
-  "kv_namespaces":[{"binding":"SEANCES_KV","id":"31069536a98340b08806589d340ae9c8"}]
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "escalade-et-renforcement-musculaire",
+  "main": "./worker.js",
+  "compatibility_date": "2026-09-19",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "escalade-et-renforcement-db",
+      "database_id": "96b79d1b-00a4-4471-be3d-12eeaa27e170"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SEANCES_KV",
+      "id": "31069536a98340b08806589d340ae9c8"
+    }
+  ]
 }
