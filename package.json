@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "check": "node --check worker.js && node --check schema.js && for f in public/*.js; do node --check \"$f\"; done",
-    "test": "node --test tests/engine.test.mjs tests/worker.test.mjs tests/legacy-upgrade.test.mjs",
+    "test": "node --test tests/engine.test.mjs tests/worker.test.mjs tests/legacy-upgrade.test.mjs tests/sports.test.mjs",
     "test:e2e": "node tests/e2e.mjs"
   },
   "devDependencies": {

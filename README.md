@@ -1,92 +1,33 @@
-# Seances entrainement — v6.0
+# Seances entrainement — v7.0
 
-PWA complète pour l'escalade et le renforcement musculaire, pensée pour être déployée directement avec Cloudflare Workers + D1 + KV.
+Application PWA de suivi et génération de séances sportives, pensée pour l'escalade mais conçue comme une plateforme multi-activité.
 
-## Structure GitHub
+## Nouveautés v7.0
+- Profil sportif intelligent et extensible.
+- Activités natives : escalade bloc, escalade voie, musculation/force, course, basketball, cyclisme, natation.
+- Ajout d'activités personnalisées et de catégories personnalisées.
+- Ajout/modification/suppression d'indicateurs sportifs.
+- Détection de domaine : une information comme « max tractions » est rattachée au tirage, tandis que « max pompes » est rattachée à la poussée.
+- Analyse des domaines d'une activité pour identifier les forces et les axes à travailler.
+- Générateur avec choix entre travail des points faibles et progression des points forts.
+- Générateur adapté aux activités personnalisées à partir de leurs catégories.
+- Profil escalade historique conservé.
+- Rate-limit atomique amélioré.
+- API de modification/suppression avec contrôle réel du nombre de lignes modifiées.
+- File offline : les erreurs définitives sont conservées dans `failedOutbox` au lieu d'être perdues.
+- Cache PWA v7.0.
 
-```text
-/
-├── worker.js             # API, authentification, sécurité, D1
-├── schema.js             # schéma D1 auto-initialisé/migré
-├── wrangler.json         # configuration Cloudflare
-├── package.json          # scripts de vérification et test E2E
-├── public/
-│   ├── index.html        # shell PWA
-│   ├── app.js            # interface et logique cliente
-│   ├── engine.js         # moteur de séances/génération/progression
-│   ├── library.js        # bibliothèque d'exercices
-│   ├── shared.js         # normalisation/synchronisation
-│   ├── boot.js           # thème et démarrage visuel
-│   ├── style.css         # interface
-│   ├── sw.js             # cache/offline
-│   ├── manifest.json     # PWA
-│   ├── icon-192.png
-│   ├── icon-512.png
-│   ├── icon-maskable-512.png
-│   └── robots.txt
-└── tests/
-    ├── engine.test.mjs
-    ├── worker.test.mjs
-    ├── legacy-upgrade.test.mjs
-    ├── e2e.mjs
-    ├── d1shim.mjs
-    └── sample.txt
-```
+## Installation Cloudflare
+1. Mettre les fichiers à la racine du dépôt GitHub.
+2. Conserver `wrangler.json` et les bindings D1 existants.
+3. Déployer avec `npx wrangler deploy`.
 
-## Fonctionnalités v6.0
-
-- création, import, édition, duplication et lancement de séances
-- générateur intelligent selon objectif, niveau, matériel, historique et récupération
-- progression automatique des prescriptions
-- chronomètres, repos, vibration, son, voix, wake lock et mode mains libres
-- historique détaillé avec RPE et notes de séance
-- calendrier et récurrences hebdomadaires
-- tableau de progression, statistiques, courbes, records et équilibre musculaire
-- objectifs personnels avec progression
-- journal d'escalade : bloc/voie/poutre, niveau, résultat, tentatives, style et notes
-- sauvegarde/import JSON
-- fonctionnement PWA/offline avec synchronisation différée
-- authentification durable et protections serveur
-- bibliothèque d'exercices commune + exercices personnels
-- communauté avec partage volontaire et contrôles de confidentialité
-
-## Déploiement
-
-1. Mettre tout le contenu de ce dossier à la racine du dépôt GitHub.
-2. Conserver `wrangler.json` et les bindings D1/KV existants.
-3. Déployer avec Wrangler :
-
-```bash
-npx wrangler deploy
-```
-
-## Vérification locale
-
-Vérification syntaxique :
-
-```bash
-npm run check
-```
-
-Tests unitaires/intégration :
-
+## Tests
 ```bash
 npm test
-```
-
-Test navigateur : installer les dépendances puis :
-
-```bash
-npx playwright install chromium
+npm run check
 npm run test:e2e
 ```
 
-Le test E2E utilise maintenant le package `playwright` normal au lieu d'un chemin absolu propre à un environnement particulier.
-
-## Versionnement PWA
-
-Le Service Worker utilise le cache `seances-entrainement-v6-0`. Lors d'une prochaine version, augmenter explicitement ce numéro afin de forcer le renouvellement propre du cache.
-
-## Sécurité et données
-
-Les données privées restent liées au compte côté serveur. Les données locales servent aussi de cache/offline et les opérations non synchronisées sont conservées dans une file d'attente locale. L'export JSON permet de conserver une sauvegarde indépendante.
+`npm test` exécute les tests moteur, Worker/sécurité, migration legacy et profil multi-activité.
+Le test E2E nécessite Playwright et un navigateur Chromium installé.

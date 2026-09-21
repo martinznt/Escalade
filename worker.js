@@ -9,7 +9,7 @@ const MAX_BODY = 1_500_000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README… restent privés).
 const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/engine.js', '/library.js', '/shared.js', '/sw.js',
-  '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
+  '/manifest.json', '/sports.js', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
@@ -90,26 +90,30 @@ async function readJson(request, max = MAX_BODY) {
   try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : null; } catch { return null; }
 }
 
-/* Limitation de débit (compteur simple dans system_state) */
-async function rlBlocked(env, key, max, windowMs) {
+/* Limitation de débit atomique : une seule écriture décide du compteur. */
+async function rlState(env, key) {
   const row = await db(env, 'SELECT value FROM system_state WHERE key=?', 'rl:' + key).first();
-  if (!row) return false;
-  try { const s = JSON.parse(row.value); return Date.now() - s.t < windowMs && s.n >= max; } catch { return false; }
+  try { return row ? JSON.parse(row.value) : null; } catch { return null; }
+}
+async function rlBlocked(env, key, max, windowMs) {
+  const s = await rlState(env, key), now = Date.now();
+  return !!s && now - Number(s.t || 0) < windowMs && Number(s.n || 0) >= max;
 }
 async function rlHit(env, key, windowMs) {
-  const k = 'rl:' + key, now = Date.now();
-  const row = await db(env, 'SELECT value FROM system_state WHERE key=?', k).first();
-  let s = { n: 0, t: now };
-  try { if (row) { const o = JSON.parse(row.value); if (now - o.t < windowMs) s = o; } } catch { /* repart de zéro */ }
-  s.n++;
-  await db(env, 'INSERT OR REPLACE INTO system_state(key,value) VALUES(?,?)', k, JSON.stringify(s)).run();
+  const k='rl:'+key, now=Date.now();
+  const r=await db(env, `INSERT INTO system_state(key,value) VALUES(?,?)
+    ON CONFLICT(key) DO UPDATE SET value=CASE
+      WHEN ? - CAST(json_extract(system_state.value,'$.t') AS INTEGER) < ?
+      THEN json_set(system_state.value,'$.n',CAST(json_extract(system_state.value,'$.n') AS INTEGER)+1)
+      ELSE json_object('n',1,'t',?) END
+    RETURNING value`, k, JSON.stringify({n:1,t:now}), now, windowMs, now).first();
+  try { return JSON.parse(r?.value || '{"n":1}'); } catch { return {n:1,t:now}; }
 }
 const rlReset = (env, key) => db(env, 'DELETE FROM system_state WHERE key=?', 'rl:' + key).run();
-/** Compte un essai et dit si la limite est dépassée. */
 async function limited(env, key, max, windowMs) {
-  if (await rlBlocked(env, key, max, windowMs)) return true;
-  await rlHit(env, key, windowMs);
-  return false;
+  if (await rlBlocked(env,key,max,windowMs)) return true;
+  const s=await rlHit(env,key,windowMs);
+  return Number(s.n||0)>max;
 }
 
 let schemaReady = null;
@@ -222,11 +226,11 @@ async function routeAuthed(request, env, url, auth, secure) {
 
   if (p === '/api/calendar' && m === 'GET') return calendarGet(url, env, u);
   if (p === '/api/calendar' && m === 'POST') return calendarPost(request, env, u);
-  if ((x = p.match(/^\/api\/calendar\/([\w-]{1,64})$/)) && m === 'DELETE') { await db(env, 'DELETE FROM calendar_events WHERE id=? AND user_id=?', x[1], u.id).run(); return json({ ok: true }); }
+  if ((x = p.match(/^\/api\/calendar\/([\w-]{1,64})$/)) && m === 'DELETE') { const r=await db(env, 'DELETE FROM calendar_events WHERE id=? AND user_id=?', x[1], u.id).run(); if(!r.meta?.changes)return fail('Événement introuvable.',404); return json({ ok: true }); }
 
   if (p === '/api/history' && m === 'GET') return historyGet(env, u);
   if (p === '/api/history' && m === 'POST') return historyPost(request, env, u);
-  if ((x = p.match(/^\/api\/history\/([\w-]{1,64})$/)) && m === 'DELETE') { await db(env, 'DELETE FROM history WHERE id=? AND user_id=?', x[1], u.id).run(); return json({ ok: true }); }
+  if ((x = p.match(/^\/api\/history\/([\w-]{1,64})$/)) && m === 'DELETE') { const r=await db(env, 'DELETE FROM history WHERE id=? AND user_id=?', x[1], u.id).run(); if(!r.meta?.changes)return fail('Historique introuvable.',404); return json({ ok: true }); }
 
   if (p === '/api/exercises' && m === 'GET') return exercisesGet(env, u);
   if (p === '/api/exercises/common' && m === 'POST') return commonAdd(request, env, u);
@@ -237,7 +241,7 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/exercises/personal' && m === 'POST') return personalAdd(request, env, u);
   if ((x = p.match(/^\/api\/exercises\/personal\/([\w-]{1,64})$/))) {
     if (m === 'PUT') return personalEdit(request, env, u, x[1]);
-    if (m === 'DELETE') { await db(env, 'DELETE FROM user_exercises WHERE id=? AND user_id=?', x[1], u.id).run(); return json({ ok: true }); }
+    if (m === 'DELETE') { const r=await db(env, 'DELETE FROM user_exercises WHERE id=? AND user_id=?', x[1], u.id).run(); if(!r.meta?.changes)return fail('Exercice introuvable.',404); return json({ ok: true }); }
   }
 
   if (p === '/api/edit/status' && m === 'GET') return json({ ok: true, unlocked: await editOk(request, env, u) });
@@ -366,13 +370,22 @@ async function syncPost(request, env, u) {
 /* ═════════════ Réglages du profil sportif ═════════════ */
 function cleanSettings(o) {
   o = o && typeof o === 'object' ? o : {};
-  const bool = (v) => !!v;
-  const out = {};
-  if (o.level && typeof o.level === 'object') out.level = { boulderMax: str(o.level.boulderMax, 4), routeMax: str(o.level.routeMax, 4), years: o.level.years === null || o.level.years === '' || o.level.years === undefined ? null : clamp(o.level.years, 0, 80, null) };
-  if (o.equipment && typeof o.equipment === 'object') out.equipment = Object.fromEntries(['wall', 'hangboard', 'bar', 'dips', 'weights', 'band'].map((k) => [k, bool(o.equipment[k])]));
-  if (o.avoid && typeof o.avoid === 'object') out.avoid = Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, bool(o.avoid[k])]));
-  for (const k of ['sound', 'vibration', 'voice', 'keepAwake', 'handsFree', 'onboarded']) if (k in o) out[k] = bool(o[k]);
-  if ('defaultRest' in o) out.defaultRest = clamp(o.defaultRest, 0, 600, 60);
+  const bool=(v)=>!!v, out={};
+  if(o.level&&typeof o.level==='object') out.level={boulderMax:str(o.level.boulderMax,4),routeMax:str(o.level.routeMax,4),years:o.level.years===null||o.level.years===''||o.level.years===undefined?null:clamp(o.level.years,0,80,null)};
+  if(o.equipment&&typeof o.equipment==='object') out.equipment=Object.fromEntries(['wall','hangboard','bar','dips','weights','band'].map(k=>[k,bool(o.equipment[k])]));
+  if(o.avoid&&typeof o.avoid==='object') out.avoid=Object.fromEntries(['fingers','shoulders','elbows','knees'].map(k=>[k,bool(o.avoid[k])]));
+  for(const k of ['sound','vibration','voice','keepAwake','handsFree','onboarded']) if(k in o) out[k]=bool(o[k]);
+  if('defaultRest' in o) out.defaultRest=clamp(o.defaultRest,0,600,60);
+  if(o.sportProfile&&typeof o.sportProfile==='object') {
+    const sp={version:2,activities:{},metrics:[],notes:[]};
+    for(const [id,a] of Object.entries(o.sportProfile.activities||{}).slice(0,50)) {
+      if(!a||typeof a!=='object') continue;
+      sp.activities[str(id,60)]={id:str(a.id||id,60),label:str(a.label,80),emoji:str(a.emoji,8),custom:!!a.custom,aliases:Array.isArray(a.aliases)?a.aliases.slice(0,20).map(x=>str(x,60)).filter(Boolean):[],domains:Array.isArray(a.domains)?a.domains.slice(0,30).map(d=>({key:str(d?.key,50),name:str(d?.name,80),description:str(d?.description,180),score:d?.score==null?null:clamp(d.score,0,100,null)})):[]};
+    }
+    for(const m of (Array.isArray(o.sportProfile.metrics)?o.sportProfile.metrics:[]).slice(0,300)) if(m&&str(m.name,80)) sp.metrics.push({id:str(m.id,64)||uid(),name:str(m.name,80),activityId:str(m.activityId,60),domain:str(m.domain,50),value:clamp(m.value,-100000,100000,null),unit:str(m.unit,20),score:m.score==null?null:clamp(m.score,0,100,null),note:str(m.note,300),updatedAt:clamp(m.updatedAt,0,9e15,Date.now())});
+    sp.notes=Array.isArray(o.sportProfile.notes)?o.sportProfile.notes.slice(0,50).map(x=>str(x,500)).filter(Boolean):[];
+    out.sportProfile=sp;
+  }
   return out;
 }
 async function settingsGet(env, u) {
@@ -474,12 +487,14 @@ async function commonEdit(request, env, u, id) {
   const b = await readJson(request, 20000);
   if (!b) return fail('Données invalides.');
   const data = cleanExercise(b.exercise || b);
-  await db(env, 'UPDATE common_exercises SET name=?,data_json=?,updated_at=? WHERE id=?', data.name, JSON.stringify(data), Date.now(), id).run();
+  const r=await db(env, 'UPDATE common_exercises SET name=?,data_json=?,updated_at=? WHERE id=?', data.name, JSON.stringify(data), Date.now(), id).run();
+  if(!r.meta?.changes) return fail('Exercice introuvable.',404);
   return json({ ok: true });
 }
 async function commonDelete(request, env, u, id) {
   if (!(await editOk(request, env, u))) return fail('Code de modification requis.', 403);
-  await db(env, 'DELETE FROM common_exercises WHERE id=?', id).run();
+  const r=await db(env, 'DELETE FROM common_exercises WHERE id=?', id).run();
+  if(!r.meta?.changes) return fail('Exercice introuvable.',404);
   return json({ ok: true });
 }
 async function personalAdd(request, env, u) {
@@ -496,7 +511,8 @@ async function personalEdit(request, env, u, id) {
   const b = await readJson(request, 20000);
   const data = b && cleanExercise(b.exercise || b);
   if (!data) return fail('Données invalides.');
-  await db(env, 'UPDATE user_exercises SET name=?,data_json=?,updated_at=? WHERE id=? AND user_id=?', data.name, JSON.stringify(data), Date.now(), id, u.id).run();
+  const r=await db(env, 'UPDATE user_exercises SET name=?,data_json=?,updated_at=? WHERE id=? AND user_id=?', data.name, JSON.stringify(data), Date.now(), id, u.id).run();
+  if(!r.meta?.changes) return fail('Exercice introuvable.',404);
   return json({ ok: true });
 }
 
