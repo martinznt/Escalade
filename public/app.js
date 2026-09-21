@@ -2,6 +2,7 @@
 import { uid, clamp, normalizeEx, normalizeSession, mergeSeances, readStored, fmtDur, norm, exKey, summarizeHistory, parseKg } from './shared.js';
 import { LIBRARY, FOCUS, GROUP_LABEL, GROUP_TARGET, EQUIPMENT, SOURCES, byId } from './library.js';
 import { parseSessionText, exportSessionText, generateSession, swapExercise, sessionMinutes, exMinutes, exMeta, analyze, groupLoads, progressHint, applyPerformedBase, parseRest, GRADES, REGIONS, SIZES } from './engine.js';
+import { ACTIVITY_PRESETS, defaultProfile, ensureActivity, addActivity, addDomain, addMetric, analyzeProfile, inferDomain, generateGenericSession } from './sports.js';
 
 /* ═════════ Outils d'affichage (tout est échappé : pas de HTML injecté) ═════════ */
 class Raw { constructor(s) { this.s = s; } }
@@ -23,11 +24,11 @@ const parseDur = (v) => { v = String(v ?? '').trim(); if (!v) return 0; if (/^\d
 const libToEx = (l) => normalizeEx({ ...l, id: uid(), libId: l.id, ok: l.cues, bad: l.bad, note: '', block: 'main' });
 
 /* ═════════ État ═════════ */
-const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, onboarded: false };
+const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, onboarded: false, sportProfile: defaultProfile() };
 const S = {
-  user: null, tab: 'home', settings: { ...DEFAULT_SETTINGS }, seances: { items: [], tomb: {} }, history: [], events: [], common: [], personal: [], outbox: [],
+  user: null, tab: 'home', settings: { ...DEFAULT_SETTINGS }, seances: { items: [], tomb: {} }, history: [], events: [], common: [], personal: [], outbox: [], failedOutbox: [],
   sync: 'idle', dirty: false, syncing: false, sub: { seances: 'list', progress: 'me', lib: 'coach' }, openId: null, importText: '', importResult: null,
-  gen: { size: 'moyenne', focus: 'surprise', feeling: 'normal', eq: null, result: null, saved: false }, cal: null, unlocked: false,
+  gen: { size: 'moyenne', focus: 'surprise', feeling: 'normal', eq: null, result: null, saved: false, activityId: 'climbing_boulder', profileMode: 'weaknesses', duration: 'medium' }, cal: null, unlocked: false,
   social: { me: null, feed: null, results: [], loading: false, q: '' }, progressEx: '', silDays: 7, player: null, authMode: 'login', authError: '', libQuery: '',
 };
 const ACT = {};
@@ -35,7 +36,7 @@ const DKEY = () => `sea:data:${S.user?.id}`;
 
 function persistLocalNow() {
   if (!S.user) return;
-  const ok = store.set(DKEY(), { seances: S.seances, history: S.history.slice(0, 500), events: S.events, settings: S.settings, common: S.common, personal: S.personal, outbox: S.outbox });
+  const ok = store.set(DKEY(), { seances: S.seances, history: S.history.slice(0, 500), events: S.events, settings: S.settings, common: S.common, personal: S.personal, outbox: S.outbox, failedOutbox: S.failedOutbox });
   if (!ok) toast('Stockage de l’appareil plein : exporte tes données (Réglages).');
 }
 function saveLocal() {
@@ -48,7 +49,7 @@ function loadLocal() {
   if (!d) return false;
   S.seances = { items: (d.seances?.items || []).map(normalizeSession), tomb: d.seances?.tomb || {} };
   S.history = d.history || []; S.events = d.events || []; S.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
-  S.common = d.common || []; S.personal = d.personal || []; S.outbox = d.outbox || [];
+  S.common = d.common || []; S.personal = d.personal || []; S.outbox = d.outbox || []; S.failedOutbox = d.failedOutbox || [];
   return true;
 }
 
@@ -78,7 +79,7 @@ async function flush() {
   while (S.outbox.length) {
     const op = S.outbox[0];
     try { await api(op.method, op.path, op.body); S.outbox.shift(); }
-    catch (e) { if (e.offline || e.status >= 500 || e.status === 401 || e.status === 429) throw e; S.outbox.shift(); }
+    catch (e) { if (e.offline || e.status >= 500 || e.status === 401 || e.status === 429) throw e; S.failedOutbox.push({ ...op, error:e.message, status:e.status||0, at:Date.now() }); S.failedOutbox=S.failedOutbox.slice(-100); S.outbox.shift(); toast(`Une action n’a pas pu être synchronisée : ${e.message}`); }
   }
   saveLocal();
 }
@@ -441,22 +442,29 @@ ACT.saveImport = () => { const s = saveSeance(S.importResult.session); S.importT
 
 /* ═════════ Générateur de séances ═════════ */
 function vGenerate() {
-  const g = S.gen, eq = g.eq || eqSet(), r = g.result;
+  const g=S.gen, eq=g.eq||eqSet(), r=g.result, profile=S.settings.sportProfile||defaultProfile();
+  const acts=Object.entries(ACTIVITY_PRESETS).concat(Object.entries(profile.activities||{}).filter(([id])=>!ACTIVITY_PRESETS[id]));
   return h`<h1>Générer une séance</h1>
-    <div class="card"><b>Durée</b><div class="chips">${Object.entries(SIZES).map(([k, v]) => h`<button class="chip ${g.size === k ? 'on' : ''}" data-act="gSet" data-k="size" data-v="${k}">${v.label} · ~${v.main + v.warm + v.cool} min</button>`)}</div>
-      <b>Objectif</b><div class="chips">${Object.entries(FOCUS).map(([k, v]) => h`<button class="chip ${g.focus === k ? 'on' : ''}" data-act="gSet" data-k="focus" data-v="${k}">${v.emoji} ${v.label}</button>`)}<button class="chip ${g.focus === 'surprise' ? 'on' : ''}" data-act="gSet" data-k="focus" data-v="surprise">🎲 Surprends-moi</button></div>
-      ${FOCUS[g.focus] ? h`<div class="muted small">${FOCUS[g.focus].text}</div>` : ''}
-      <b>Forme du jour</b><div class="chips">${[['frais', '😄 Frais'], ['normal', '🙂 Normal'], ['fatigue', '😮‍💨 Fatigué']].map(([k, l]) => h`<button class="chip ${g.feeling === k ? 'on' : ''}" data-act="gSet" data-k="feeling" data-v="${k}">${l}</button>`)}</div>
-      <b>Matériel dispo aujourd’hui</b><div class="chips">${Object.entries(EQUIPMENT).map(([k, l]) => h`<button class="chip ${eq[k] ? 'on' : ''}" data-act="gEq" data-k="${k}">${l}</button>`)}</div>
+    <div class="card"><b>Activité</b><div class="chips">${acts.map(([id,a])=>h`<button class="chip ${g.activityId===id?'on':''}" data-act="gSet" data-k="activityId" data-v="${id}">${a.emoji||'🏅'} ${a.label}</button>`)}</div>
+      <p class="muted tiny">Tu peux ajouter tes propres activités dans ton profil : elles apparaîtront ici automatiquement.</p>
+      <b>Orientation de la séance</b><div class="chips">${[['weaknesses','🎯 Travailler mes points faibles'],['strengths','🚀 Progresser dans mes points forts']].map(([k,l])=>h`<button class="chip ${g.profileMode===k?'on':''}" data-act="gSet" data-k="profileMode" data-v="${k}">${l}</button>`)}</div>
+      <b>Durée</b>${g.activityId.startsWith('climbing_') ? h`<div class="chips">${Object.entries(SIZES).map(([k,v])=>h`<button class="chip ${g.size===k?'on':''}" data-act="gSet" data-k="size" data-v="${k}">${v.label} · ~${v.main+v.warm+v.cool} min</button>`)}</div>` : h`<div class="chips">${[['short','Courte'],['medium','Moyenne'],['long','Longue']].map(([k,l])=>h`<button class="chip ${g.duration===k?'on':''}" data-act="gSet" data-k="duration" data-v="${k}">${l}</button>`)}</div>`}
+      ${g.activityId.startsWith('climbing_') ? h`<b>Objectif escalade</b><div class="chips">${Object.entries(FOCUS).map(([k,v])=>h`<button class="chip ${g.focus===k?'on':''}" data-act="gSet" data-k="focus" data-v="${k}">${v.emoji} ${v.label}</button>`)}<button class="chip ${g.focus==='surprise'?'on':''}" data-act="gSet" data-k="focus" data-v="surprise">🎲 Surprends-moi</button></div>`:''}
+      <b>Forme du jour</b><div class="chips">${[['frais','😄 Frais'],['normal','🙂 Normal'],['fatigue','😮‍💨 Fatigué']].map(([k,l])=>h`<button class="chip ${g.feeling===k?'on':''}" data-act="gSet" data-k="feeling" data-v="${k}">${l}</button>`)}</div>
+      ${g.activityId.startsWith('climbing_') ? h`<b>Matériel dispo aujourd’hui</b><div class="chips">${Object.entries(EQUIPMENT).map(([k,l])=>h`<button class="chip ${eq[k]?'on':''}" data-act="gEq" data-k="${k}">${l}</button>`)}</div>`:''}
       <button class="btn pri big" data-act="generate">✨ Générer</button></div>
-    ${r ? vGenResult(r) : h`<p class="muted small center">La séance s’adapte à ton niveau, ton historique, ta forme du jour et ton matériel. Rien n’est enregistré tant que tu ne le décides pas.</p>`}`;
+    ${r ? vGenResult(r) : h`<p class="muted small center">Le générateur utilise ton activité, tes indicateurs, tes forces/faiblesses, ton historique et tes contraintes quand ces données existent.</p>`}`;
 }
-ACT.gSet = (el) => { S.gen[el.dataset.k] = el.dataset.v; render(); };
-ACT.gEq = (el) => { const eq = { ...(S.gen.eq || eqSet()) }; eq[el.dataset.k] = !eq[el.dataset.k]; S.gen.eq = eq; render(); };
-ACT.generate = () => {
-  const g = S.gen;
-  g.result = generateSession({ size: g.size, focus: g.focus, feeling: g.feeling, equipment: g.eq || undefined, seed: Math.floor(Math.random() * 1e9) }, { settings: S.settings, history: S.history, now: Date.now() });
-  g.saved = false; render(); setTimeout(() => $('#genresult')?.scrollIntoView({ behavior: 'smooth' }), 50);
+ACT.gSet=(el)=>{S.gen[el.dataset.k]=el.dataset.v; if(el.dataset.k==='activityId')S.gen.result=null; render();};
+ACT.gEq=(el)=>{const eq={...(S.gen.eq||eqSet())};eq[el.dataset.k]=!eq[el.dataset.k];S.gen.eq=eq;render();};
+ACT.generate=()=>{
+  const g=S.gen, profile=S.settings.sportProfile||defaultProfile();
+  if(g.activityId.startsWith('climbing_')) {
+    const focusMap={climbing_boulder:g.focus,climbing_route:g.focus};
+    const focus=focusMap[g.activityId]||g.focus;
+    g.result=generateSession({size:g.size,focus,feeling:g.feeling,equipment:g.eq||undefined,seed:Math.floor(Math.random()*1e9)},{settings:S.settings,history:S.history,now:Date.now()});
+  } else g.result=generateGenericSession({activityId:g.activityId,mode:g.profileMode,duration:g.duration},profile,S.settings);
+  g.saved=false;render();setTimeout(()=>$('#genresult')?.scrollIntoView({behavior:'smooth'}),50);
 };
 function vGenResult(r) {
   const s = r.session;
@@ -537,6 +545,17 @@ function vMe() {
     <div class="card"><h3>Historique</h3>${S.history.slice(0, 15).map((x) => h`<div class="item"><div class="grow"><b>${x.sessionName}</b><div class="muted small">${fmtDate(x.startedAt)} · ${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.note ? ' · 📝 ' + x.data.note : ''}</div></div><button class="btn danger sm" data-act="delHist" data-id="${x.id}" aria-label="Supprimer">✕</button></div>`)}</div>`;
 }
 ACT.silDays = (el) => { S.silDays = Number(el.dataset.id); render(); };
+ACT.addDomain=(el)=>{const id=el.dataset.id;openSheet(h`<h2 style="margin:0">Nouvelle catégorie</h2><form data-submit="addDomain" class="card" style="border:0;padding:0"><label>Nom<input name="name" maxlength="60" required placeholder="Ex. puissance, mobilité, précision…"></label><label>Description<input name="description" maxlength="180" placeholder="À quoi correspond cette catégorie ?"></label><button class="btn pri" type="submit">Ajouter</button></form>`);S.domainActivity=id;};
+SUBMIT.addDomain=(form)=>{const f=Object.fromEntries(new FormData(form)),p=S.settings.sportProfile||defaultProfile(),d=addDomain(p,S.domainActivity,f.name,f.description);if(!d)return toast('Nom invalide.');S.settings.sportProfile=p;saveSettings();closeSheet();render();toast(`Catégorie « ${d.name} » ajoutée.`);};
+ACT.delMetric=(el)=>{const p=S.settings.sportProfile||defaultProfile();p.metrics=(p.metrics||[]).filter(m=>m.id!==el.dataset.id);S.settings.sportProfile=p;saveSettings();render();};
+ACT.editMetric=(el)=>{const p=S.settings.sportProfile||defaultProfile(),m=(p.metrics||[]).find(x=>x.id===el.dataset.id);if(!m)return;const acts=Object.entries(ACTIVITY_PRESETS).concat(Object.entries(p.activities||{}).filter(([id])=>!ACTIVITY_PRESETS[id]));S.editMetricId=m.id;openSheet(h`<h2 style="margin:0">Modifier l’information</h2><form data-submit="editMetric" class="card" style="border:0;padding:0"><label>Activité<select name="activityId">${acts.map(([id,a])=>h`<option value="${id}" ${id===m.activityId?'selected':''}>${a.emoji||'🏅'} ${a.label}</option>`)}</select></label><label>Nom<input name="name" maxlength="80" required value="${m.name}"></label><label>Valeur<input name="value" type="number" step="0.1" value="${m.value}"></label><label>Unité<input name="unit" maxlength="20" value="${m.unit||''}"></label><label>Score personnel<input name="score" type="number" min="0" max="100" step="1" value="${m.score??''}"></label><label>Domaine<input name="domain" maxlength="50" value="${m.domain||''}"></label><label>Note<textarea name="note" maxlength="300" rows="2">${m.note||''}</textarea></label><button class="btn pri" type="submit">Enregistrer</button></form>`);};
+SUBMIT.editMetric=(form)=>{const f=Object.fromEntries(new FormData(form)),p=S.settings.sportProfile||defaultProfile(),m=addMetric(p,{id:S.editMetricId,activityId:f.activityId,name:f.name,value:f.value,unit:f.unit,domain:f.domain,score:f.score===''?null:f.score,note:f.note});if(!m)return toast('Données invalides.');S.settings.sportProfile=p;saveSettings();closeSheet();render();toast('Information modifiée.');};
+ACT.addActivity=()=>openSheet(h`<h2 style="margin:0">Ajouter une activité</h2><form data-submit="addActivity" class="card" style="border:0;padding:0"><label>Nom de l’activité<input name="name" maxlength="60" required placeholder="Ex. Tennis, ski, handball…"></label><label>Mots-clés (facultatif)<input name="aliases" maxlength="180" placeholder="synonymes séparés par des virgules"></label><button class="btn pri" type="submit">Créer et analyser</button></form>`);
+SUBMIT.addActivity=(form)=>{const f=Object.fromEntries(new FormData(form)),p=S.settings.sportProfile||defaultProfile(),aliases=String(f.aliases||'').split(',').map(x=>x.trim()).filter(Boolean),a=addActivity(p,f.name,aliases);if(!a)return toast('Nom invalide.');S.settings.sportProfile=p;saveSettings();closeSheet();render();toast(`${a.label} ajoutée avec ses catégories initiales.`);};
+ACT.sportActivity=(el)=>{const id=el.dataset.id,p=S.settings.sportProfile||defaultProfile();ensureActivity(p,id);S.settings.sportProfile=p;saveSettings();render();};
+ACT.addMetric=()=>{ const p=S.settings.sportProfile||defaultProfile(), acts=Object.entries(ACTIVITY_PRESETS).concat(Object.entries(p.activities||{}).filter(([id])=>!ACTIVITY_PRESETS[id])); const domains=[...new Set(acts.flatMap(([id])=>((ACTIVITY_PRESETS[id]||p.activities?.[id])?.domains||[]).map(d=>Array.isArray(d)?d[0]:d.key)))]; openSheet(h`<h2 style="margin:0">Ajouter une information sportive</h2><form data-submit="addMetric" class="card" style="border:0;padding:0"><label>Activité<select name="activityId">${acts.map(([id,a])=>h`<option value="${id}">${a.emoji||'🏅'} ${a.label}</option>`)}</select></label><label>Information / performance<input name="name" maxlength="80" required placeholder="Ex. Max tractions, 5 km, niveau en dalle…"></label><label>Valeur<input name="value" type="number" step="0.1" placeholder="Ex. 16"></label><label>Unité<input name="unit" maxlength="20" placeholder="reps, kg, min, km…"></label><label>Domaine<select name="domain"><option value="">Détection automatique</option>${domains.map(x=>h`<option>${x}</option>`)}</select></label><label>Score personnel (0–100, facultatif)<input name="score" type="number" min="0" max="100" step="1" placeholder="Laisse vide pour une estimation interne"></label><label>Note<textarea name="note" maxlength="300" rows="2"></textarea></label><button class="btn pri" type="submit">Enregistrer</button></form>`); };
+SUBMIT.addMetric=(form)=>{const f=Object.fromEntries(new FormData(form)),p=S.settings.sportProfile||defaultProfile();ensureActivity(p,f.activityId);const m=addMetric(p,{activityId:f.activityId,name:f.name,value:f.value,unit:f.unit,domain:f.domain,score:f.score===''?null:f.score,note:f.note});if(!m)return toast('Ajoute au moins un nom et une valeur.');S.settings.sportProfile=p;saveSettings();closeSheet();render();toast(`« ${m.name} » enregistré : domaine ${m.domain}.`);};
+
 ACT.addGoal = () => openSheet(h`<h2 style="margin:0">Nouvel objectif</h2><form data-submit="addGoal" class="card" style="border:0;padding:0"><label>Nom<input name="name" maxlength="80" required placeholder="Ex. 20 tractions"></label><label>Valeur cible<input name="target" type="number" min="1" step="0.1" required></label><label>Type<select name="kind"><option value="manual">Valeur manuelle</option><option value="sessions">Nombre de séances</option><option value="climb">Réussites escalade</option></select></label><label>Unité<input name="unit" maxlength="15" placeholder="reps, kg, séances…"></label><label>Valeur actuelle (si manuelle)<input name="current" type="number" min="0" step="0.1" value="0"></label><button class="btn pri" type="submit">Créer</button></form>`);
 SUBMIT.addGoal = (form) => { const f = Object.fromEntries(new FormData(form)); S.settings.goals = [...goalList(), { id: uid(), name: String(f.name).trim(), target: Number(f.target), unit: String(f.unit || '').trim(), kind: f.kind || 'manual', current: Number(f.current || 0), since: f.kind === 'sessions' ? ymd(new Date()) : undefined }]; saveSettings(); closeSheet(); render(); };
 ACT.delGoal = (el) => { const gs = goalList(); gs.splice(Number(el.dataset.i), 1); S.settings.goals = gs; saveSettings(); render(); };
@@ -599,27 +618,35 @@ ACT.socRespond = async (el) => { try { await api('POST', '/api/social/respond', 
 
 /* ═════════ Réglages ═════════ */
 function saveSettings() { saveLocal(); queue('POST', '/api/settings', { settings: S.settings }); }
+function profileAnalysisCard(activityId, profile) {
+  const a=ACTIVITY_PRESETS[activityId]||profile.activities?.[activityId]; if(!a)return '';
+  const an=analyzeProfile(profile,activityId), metrics=(profile.metrics||[]).filter(m=>m.activityId===activityId);
+  return h`<div class="card flat"><div class="row between"><b>${a.emoji||'🏅'} ${a.label}</b><div class="row"><span class="tiny muted">${an.metricCount} indicateur(s)</span><button class="btn sm" data-act="addDomain" data-id="${activityId}">＋ Catégorie</button></div></div>${an.domains.length?an.domains.map(d=>h`<div class="item"><div class="grow"><b>${d.label||d.domain}</b><div class="meter"><i style="width:${d.score}%"></i></div></div><span class="small">${d.score}/100</span></div>`):h`<p class="muted tiny">Aucune donnée. Ajoute ton niveau, un record ou un score.</p>`}${an.strengths.length?h`<p class="small"><b>Forces détectées :</b> ${an.strengths.map(x=>x.label||x.domain).join(', ')}</p>`:''}${an.weaknesses.length?h`<p class="small"><b>Axes à travailler :</b> ${an.weaknesses.map(x=>x.label||x.domain).join(', ')}</p>`:''}${metrics.length?h`<details><summary>Informations enregistrées</summary>${metrics.slice(0,20).map(m=>h`<div class="item"><div class="grow"><b>${m.name}</b><div class="muted tiny">${m.value} ${m.unit||''} · ${m.domain}</div></div><button class="btn sm" data-act="editMetric" data-id="${m.id}">Modifier</button><button class="btn danger sm" data-act="delMetric" data-id="${m.id}">✕</button></div>`)}</details>`:''}</div>`;
+}
+function vSportProfile(){
+  const p=S.settings.sportProfile||defaultProfile(), acts=Object.entries(ACTIVITY_PRESETS).concat(Object.entries(p.activities||{}).filter(([id])=>!ACTIVITY_PRESETS[id]));
+  return h`<div class="card"><div class="row between"><h3>🧠 Profil sportif intelligent</h3><button class="btn sm pri" data-act="addActivity">＋ Activité</button></div><p class="muted small">Ton profil ne stocke pas seulement des performances : chaque indicateur est rattaché à un domaine. Le moteur peut ainsi comparer tes domaines à l’intérieur d’une activité et orienter les séances vers tes points faibles ou tes points forts.</p>
+    <div class="chips">${acts.map(([id,a])=>h`<button class="chip ${p.activities?.[id]?'on':''}" data-act="sportActivity" data-id="${id}">${a.emoji||'🏅'} ${a.label}</button>`)}</div>
+    ${acts.map(([id,a])=>p.activities?.[id]?profileAnalysisCard(id,p):'').join('')}
+    <button class="btn" data-act="addMetric">＋ Ajouter une information / performance</button>
+  </div>`;
+}
 function vSettings() {
-  const st = S.settings, lv = st.level || {}, eq = st.equipment || {}, av = st.avoid || {};
-  const gradeSel = (name, cur) => h`<select name="${name}"><option value="">—</option>${GRADES.slice(3).map((g) => h`<option ${g === cur ? 'selected' : ''}>${g}</option>`)}</select>`;
-  return h`<h1>Réglages</h1>
-    <form data-submit="saveProfile" class="card"><h3>🧗 Mon profil sportif</h3><p class="muted small">Sert à adapter les séances : les exercices trop durs ou risqués sont écartés.</p>
-      <div class="grid3"><label>Bloc max${gradeSel('boulderMax', lv.boulderMax)}</label><label>Voie max${gradeSel('routeMax', lv.routeMax)}</label><label>Années de grimpe<input type="number" name="years" min="0" max="80" step="0.5" value="${lv.years ?? ''}"></label></div>
-      <b class="small">Mon matériel</b>${Object.entries(EQUIPMENT).map(([k, l]) => h`<label class="chk"><input type="checkbox" name="eq_${k}" ${(st.equipment ? eq[k] : k === 'wall') ? 'checked' : ''}> ${l}</label>`)}
-      <b class="small">Zones à ménager</b>${[['fingers', 'Doigts / poulies'], ['shoulders', 'Épaules'], ['elbows', 'Coudes'], ['knees', 'Genoux / chevilles']].map(([k, l]) => h`<label class="chk"><input type="checkbox" name="av_${k}" ${av[k] ? 'checked' : ''}> ${l}</label>`)}
+  const st=S.settings, lv=st.level||{}, eq=st.equipment||{}, av=st.avoid||{};
+  const gradeSel=(name,cur)=>h`<select name="${name}"><option value="">—</option>${GRADES.slice(3).map(g=>h`<option ${g===cur?'selected':''}>${g}</option>`)}</select>`;
+  return h`<h1>Réglages</h1>${vSportProfile()}
+    <form data-submit="saveProfile" class="card"><h3>🧗 Profil escalade détaillé</h3><p class="muted small">Ces champs restent utiles pour les générateurs escalade. Les autres activités se configurent dans le profil intelligent ci-dessus.</p>
+      <div class="grid3"><label>Bloc max${gradeSel('boulderMax',lv.boulderMax)}</label><label>Voie max${gradeSel('routeMax',lv.routeMax)}</label><label>Années de grimpe<input type="number" name="years" min="0" max="80" step="0.5" value="${lv.years??''}"></label></div>
+      <b class="small">Mon matériel</b>${Object.entries(EQUIPMENT).map(([k,l])=>h`<label class="chk"><input type="checkbox" name="eq_${k}" ${(st.equipment?eq[k]:k==='wall')?'checked':''}> ${l}</label>`)}
+      <b class="small">Zones à ménager</b>${[['fingers','Doigts / poulies'],['shoulders','Épaules'],['elbows','Coudes'],['knees','Genoux / chevilles']].map(([k,l])=>h`<label class="chk"><input type="checkbox" name="av_${k}" ${av[k]?'checked':''}> ${l}</label>`)}
       <button class="btn pri" type="submit">Enregistrer mon profil</button></form>
-    <div class="card"><h3>▶ Pendant la séance</h3>
-      <label>Repos par défaut (s)<input type="number" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest ?? 60}"></label>
-      ${[['sound', 'Bips pour les chronos'], ['vibration', 'Vibration en fin de repos'], ['voice', 'Lire les exercices à voix haute'], ['keepAwake', 'Garder l’écran allumé'], ['handsFree', 'Mode « mains pleines de magnésie » (gros boutons + commandes vocales : « fait », « passe », « pause », « plus »)']].map(([k, l]) => h`<label class="chk"><input type="checkbox" data-change="pref" name="${k}" ${st[k] ? 'checked' : ''}> ${l}</label>`)}</div>
-    ${vAppearance()}
-    <div class="card"><h3>👤 Compte : ${S.user.username}</h3><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn" data-act="export">📥 Sauvegarde (fichier)</button><label class="btn" style="display:inline-block;cursor:pointer">📤 Restaurer<input type="file" accept="application/json" data-change="importFile" class="hidden"></label></div>
-      <div class="row wrapf">${S.unlocked ? h`<button class="btn" data-act="lockEdit">🔓 Reverrouiller la bibliothèque commune</button>` : h`<button class="btn" data-act="askUnlock">🔒 Code de modification (bibliothèque commune)</button>`}<button class="btn" data-act="syncNow">🔄 Synchroniser maintenant</button><button class="btn" data-act="diag">🩺 Diagnostic</button></div>
-      <div class="row wrapf"><button class="btn" data-act="logout">Se déconnecter</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></div>
-    <p class="muted tiny center">Seances entrainement · v6.0 · Les séances proposées suivent des principes d’entraînement courants et ne remplacent pas l’avis d’un coach ou d’un médecin.</p>`;
+    <div class="card"><h3>▶ Pendant la séance</h3><label>Repos par défaut (s)<input type="number" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest??60}"></label>${[['sound','Bips pour les chronos'],['vibration','Vibration en fin de repos'],['voice','Lire les exercices à voix haute'],['keepAwake','Garder l’écran allumé'],['handsFree','Mode mains pleines de magnésie']].map(([k,l])=>h`<label class="chk"><input type="checkbox" data-change="pref" name="${k}" ${st[k]?'checked':''}> ${l}</label>`)}</div>
+    ${vAppearance()}<div class="card"><h3>👤 Compte : ${S.user.username}</h3><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn" data-act="export">📥 Sauvegarde (fichier)</button><label class="btn" style="display:inline-block;cursor:pointer">📤 Restaurer<input type="file" accept="application/json" data-change="importFile" class="hidden"></label></div><div class="row wrapf">${S.unlocked?h`<button class="btn" data-act="lockEdit">🔓 Reverrouiller</button>`:h`<button class="btn" data-act="askUnlock">🔒 Code de modification</button>`}<button class="btn" data-act="syncNow">🔄 Synchroniser</button><button class="btn" data-act="diag">🩺 Diagnostic</button></div><div class="row wrapf"><button class="btn" data-act="logout">Se déconnecter</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></div>
+    <p class="muted tiny center">Seances entrainement · v7.0 · Plateforme sportive multi-activité.</p>`;
 }
 SUBMIT.saveProfile = (form) => {
   const f = Object.fromEntries(new FormData(form)), keys = Object.keys(EQUIPMENT);
-  S.settings = { ...S.settings, onboarded: true, level: { boulderMax: f.boulderMax || '', routeMax: f.routeMax || '', years: f.years === '' ? null : Number(f.years) },
+  S.settings = { ...S.settings, onboarded: true, sportProfile: S.settings.sportProfile || defaultProfile(), level: { boulderMax: f.boulderMax || '', routeMax: f.routeMax || '', years: f.years === '' ? null : Number(f.years) },
     equipment: Object.fromEntries(keys.map((k) => [k, !!f['eq_' + k]])), avoid: Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, !!f['av_' + k]])) };
   saveSettings(); toast('Profil enregistré'); render();
 };
