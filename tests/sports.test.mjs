@@ -2,10 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ACTIVITY_PRESETS, defaultProfile, ensureActivity, addActivity, addMetric, analyzeProfile, inferDomain, generateGenericSession } from '../public/sports.js';
 
-test('profil multi-activité : activité native et catégories',()=>{
-  const p=defaultProfile(); ensureActivity(p,'basketball');
-  assert.equal(p.activities.basketball.domains.length,8);
-  assert.ok(p.activities.basketball.domains.some(x=>x.key==='tir'));
+test('V1 : seules les activités prévues sont préconfigurées',()=>{
+  assert.ok(ACTIVITY_PRESETS.climbing_boulder); assert.ok(ACTIVITY_PRESETS.strength); assert.ok(ACTIVITY_PRESETS.running); assert.ok(ACTIVITY_PRESETS.swimming);
+  assert.equal(ACTIVITY_PRESETS.basketball, undefined); assert.equal(ACTIVITY_PRESETS.cycling, undefined);
 });
 
 test('profil : max tractions reconnu comme tirage et pompes comme poussée',()=>{
