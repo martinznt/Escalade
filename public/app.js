@@ -254,6 +254,7 @@ ACT.todayGen = (el) => {
 ACT.commandSheet = () => openSheet(h`<h2 style="margin:0">Commande</h2>
   <p class="muted small">Écris ce que tu veux faire, par exemple : « Fais une séance de 20 minutes pour les jambes », « Remplace les tractions », « Ajoute 5 minutes de gainage », « Montre mes records ».</p>
   <form data-submit="command" class="card" style="border:0;padding:0"><label>Ta commande<input name="text" maxlength="200" required autofocus placeholder="Fais une séance de 20 minutes…"></label><button class="btn pri" type="submit">Exécuter</button></form>`);
+const SUBMIT = {};
 SUBMIT.command = (f) => { const text = f.text.value.trim(); if (text) runCommand(parseCommand(text)); };
 function currentSession() { return S.gen.result?.session || (S.openId && getSeance(S.openId)) || null; }
 function applySessionEdit(before, after) {
@@ -321,7 +322,6 @@ function openDaySheet() {
     <button class="btn" data-act="closeSheet">Fermer</button>`);
 }
 ACT.delEvent = (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; if (e.recurrence && !confirmBox('Supprimer toute la série hebdomadaire ?')) return; S.events = S.events.filter((x) => x.id !== e.id); queue('DELETE', `/api/calendar/${encodeURIComponent(e.id)}`); openDaySheet(); render(); };
-const SUBMIT = {};
 SUBMIT.addEvent = (form) => {
   const f = Object.fromEntries(new FormData(form)), s = getSeance(f.sid); if (!s) return;
   const ev = { id: uid(), date: S.selDay, title: s.name, sessionId: s.id, completed: false, recurrence: f.weekly ? { freq: 'weekly', until: null } : null };
