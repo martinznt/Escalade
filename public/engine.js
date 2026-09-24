@@ -345,6 +345,42 @@ export function analyze(history, now = Date.now()) {
   return A;
 }
 
+/**
+ * « Que faire aujourd'hui ? »
+ * Ne prétend jamais connaître la forme du jour (donnée non mesurée) : au lieu d'imposer
+ * un seul plan, propose plusieurs options concrètes, chacune avec sa raison explicite,
+ * calculées à partir de données réelles (historique, calendrier). L'utilisateur choisit.
+ * todayEvents : événements du calendrier déjà filtrés sur la date du jour (calculé côté appelant,
+ * pour ne pas dupliquer la logique de fuseau horaire/format de date déjà gérée ailleurs).
+ */
+export function suggestToday({ settings = {}, history = [], todayEvents = [], now = Date.now() } = {}) {
+  const options = [];
+  for (const ev of (todayEvents || []).filter((e) => !e?.completed).slice(0, 2)) {
+    options.push({ kind: 'event', id: `event:${ev.id}`, title: ev.title || 'Séance prévue', reason: 'C’est prévu aujourd’hui dans ton calendrier.', eventId: ev.id, sessionId: ev.sessionId || null });
+  }
+  const A = analyze(history, now);
+  const hasHistory = (history || []).some((h) => h.startedAt > 0);
+  if (!hasHistory) {
+    options.push({ kind: 'generate', id: 'gen:decouverte', title: 'Séance découverte', size: 'petite', feeling: 'normal', focus: 'surprise', reason: 'Pas encore d’historique enregistré : une petite séance pour commencer, sans présumer de ton niveau ni de ta forme.' });
+    return { options: options.slice(0, 3), dataLevel: 'none' };
+  }
+  if (A.hoursSinceAny < 20) {
+    options.push({ kind: 'rest', id: 'rest', title: 'Jour de repos', reason: `Dernière séance il y a ${Math.round(A.hoursSinceAny)} h : le repos ou une activité légère est une option tout aussi valable.` });
+  }
+  const sizeGuess = A.avgMinutes >= 50 ? 'grosse' : A.avgMinutes >= 25 ? 'moyenne' : A.avgMinutes > 0 ? 'petite' : 'moyenne';
+  options.push({
+    kind: 'generate', id: 'gen:normal', title: 'Séance du jour', size: sizeGuess, feeling: 'normal', focus: 'surprise',
+    reason: A.n7 >= 5 ? `${A.n7} séances déjà cette semaine : le générateur allège automatiquement le volume.` : 'Basée sur ce que tu as le moins travaillé ces 2 dernières semaines. Dis-moi si tu es fatigué pour une version plus douce.',
+  });
+  if (A.lastRpe >= 4 && A.lastRpeHours < 48) {
+    options.push({
+      kind: 'generate', id: 'gen:leger', title: 'Version allégée', size: 'petite', feeling: 'fatigue', focus: 'surprise',
+      reason: `Ta dernière séance était difficile (ressenti ${A.lastRpe}/5) il y a ${Math.round(A.lastRpeHours)} h : voici une alternative plus douce, au cas où tu ne te sentirais pas frais.`,
+    });
+  }
+  return { options: options.slice(0, 3), dataLevel: A.totalSets30 > 0 ? 'ok' : 'limited' };
+}
+
 /** Dernière performance et suggestion de charge pour un exercice. */
 /** Transforme la dernière série réellement effectuée en nouvelle base de prescription. */
 export function applyPerformedBase(ex, set) {
@@ -668,6 +704,34 @@ function buildCooldown({ focus, size, eq }) {
 }
 
 /** Remplace un exercice par une alternative compatible (même famille, autre exercice). */
+/**
+ * Ajoute un exercice à une séance (utilisé par la commande naturelle « ajoute X minutes de Y »).
+ * Cherche d'abord dans la bibliothèque ; si rien ne correspond, crée un bloc générique à durée
+ * fixe avec le nom donné, plutôt que d'échouer silencieusement ou d'inventer un exercice inconnu.
+ */
+export function addExerciseToSession(session, query, minutes) {
+  if (!session || !String(query || '').trim()) return session;
+  const lib = matchLibrary(query);
+  const secs = Math.max(60, Math.min(1800, Math.round((minutes == null ? 5 : minutes) * 60)));
+  const ex = lib
+    ? normalizeEx({ ...lib, id: uid(), block: 'main', libId: lib.id, ok: lib.cues, bad: lib.bad, note: '', mode: 'time', sets: 1, secMin: secs, secMax: secs, rest: 0 })
+    : normalizeEx({ id: uid(), block: 'main', name: query.trim().replace(/^\w/, (c) => c.toUpperCase()), mode: 'time', sets: 1, secMin: secs, secMax: secs, rest: 0, note: '', muscles: [] });
+  return normalizeSession({ ...session, exercises: [...session.exercises, ex], updatedAt: Date.now() });
+}
+
+/** Retrouve un exercice de la séance par son nom, en tolérant les formulations approximatives (commandes naturelles). */
+export function findExerciseInSession(session, query) {
+  const k = exKey(query);
+  if (!session || !k) return null;
+  let best = null;
+  for (const e of session.exercises || []) {
+    const ek = exKey(e.name);
+    if (ek === k) return e;
+    if (k.length >= 4 && (ek.includes(k) || k.includes(ek)) && (!best || ek.length > exKey(best.name).length)) best = e;
+  }
+  return best;
+}
+
 export function swapExercise(session, exId, ctx = {}) {
   const idx = session.exercises.findIndex((e) => e.id === exId);
   if (idx < 0) return session;

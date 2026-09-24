@@ -1,7 +1,9 @@
 // app.js — interface de « Seances entrainement » (PWA). Aucune bibliothèque externe : tout est local et fonctionne hors ligne.
 import { uid, clamp, normalizeEx, normalizeSession, mergeSeances, readStored, fmtDur, norm, exKey, summarizeHistory, parseKg } from './shared.js';
 import { LIBRARY, FOCUS, GROUP_LABEL, GROUP_TARGET, EQUIPMENT, SOURCES, byId } from './library.js';
-import { parseSessionText, exportSessionText, generateSession, swapExercise, sessionMinutes, exMinutes, exMeta, analyze, groupLoads, progressHint, applyPerformedBase, parseRest, GRADES, REGIONS, SIZES } from './engine.js';
+import { parseSessionText, exportSessionText, generateSession, swapExercise, sessionMinutes, exMinutes, exMeta, analyze, groupLoads, progressHint, applyPerformedBase, parseRest, suggestToday, addExerciseToSession, findExerciseInSession, GRADES, REGIONS, SIZES } from './engine.js';
+import { parseCommand } from './commands.js';
+import { decideOutboxError } from './outbox.js';
 import { ACTIVITY_PRESETS, defaultProfile, ensureActivity, addActivity, addDomain, addMetric, analyzeProfile, inferDomain, generateGenericSession } from './sports.js';
 
 /* ═════════ Outils d'affichage (tout est échappé : pas de HTML injecté) ═════════ */
@@ -74,12 +76,18 @@ function sessionExpired() {
   S.authMode = 'login'; S.authError = 'Session expirée : reconnecte-toi (tes données de cet appareil sont conservées).'; S.prefill = name;
   render();
 }
-function queue(method, path, body) { S.outbox.push({ method, path, body }); saveLocal(); syncSoon(); }
+function queue(method, path, body) { S.outbox.push({ method, path, body, attempts: 0 }); saveLocal(); syncSoon(); }
 async function flush() {
   while (S.outbox.length) {
     const op = S.outbox[0];
     try { await api(op.method, op.path, op.body); S.outbox.shift(); }
-    catch (e) { if (e.offline || e.status >= 500 || e.status === 401 || e.status === 429) throw e; S.failedOutbox.push({ ...op, error:e.message, status:e.status||0, at:Date.now() }); S.failedOutbox=S.failedOutbox.slice(-100); S.outbox.shift(); toast(`Une action n’a pas pu être synchronisée : ${e.message}`); }
+    catch (e) {
+      const d = decideOutboxError(op, { offline: e.offline, status: e.status, message: e.message });
+      if (d.action === 'retry-later') { op.attempts = d.attempts; throw e; }
+      S.failedOutbox.push({ ...op, error: d.reason, status: e.status || 0, at: Date.now() });
+      S.failedOutbox = S.failedOutbox.slice(-100); S.outbox.shift();
+      toast(d.action === 'drop-poisoned' ? `Action écartée après échecs répétés : ${op.path}` : `Une action n’a pas pu être synchronisée : ${d.reason}`);
+    }
   }
   saveLocal();
 }
@@ -222,13 +230,72 @@ ACT.subHome = (el) => { S.sub.home = el.dataset.id; render(); };
 function vToday() {
   const today = ymd(new Date()), evs = eventsOn(today), sum = summarizeHistory(S.history, Date.now(), tz());
   const last = S.history[0];
+  const doneToday = doneOn(today);
   return h`${S.settings.onboarded ? '' : h`<div class="card flat"><b>Complète ton profil</b><span class="muted small">Niveau, matériel, zones sensibles : les séances générées s’adaptent à toi.</span><button class="btn pri" data-act="tab" data-id="settings">Ouvrir Réglages</button></div>`}
     <div class="card"><h3>Aujourd’hui</h3>
       ${evs.length ? evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b>${doneEventOn(e, today) ? h`<div class="small" style="color:var(--ok)">✓ Faite</div>` : ''}</div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶ Lancer</button>` : h`<span class="tag warn">séance supprimée</span>`}</div>`; })
-        : h`<p class="muted">Rien de prévu aujourd’hui.</p>`}
-      <div class="row wrapf"><button class="btn pri" data-act="tab" data-id="generate">✨ Générer une séance</button><button class="btn" data-act="tab" data-id="seances">📚 Mes séances</button></div></div>
+        : doneToday ? h`<p class="muted">✅ Séance déjà enregistrée aujourd’hui. Bien joué.</p>`
+        : vTodaySuggestions()}
+      <div class="row wrapf"><button class="btn pri" data-act="tab" data-id="generate">✨ Générer une séance</button><button class="btn" data-act="tab" data-id="seances">📚 Mes séances</button><button class="btn" data-act="commandSheet">🗣️ Commande</button></div></div>
     <div class="grid3"><div class="stat"><b>${sum.sessions7}</b><span>séances / 7 j</span></div><div class="stat"><b>${sum.streak}</b><span>jours d’affilée</span></div><div class="stat"><b>${sum.minutes30}</b><span>min / 30 j</span></div></div>${vGoals()}${vClimbing()}
     ${last ? h`<div class="card"><h3>Dernière séance</h3><div class="row"><div class="ico">✅</div><div class="grow"><b>${last.sessionName}</b><div class="muted small">${fmtDate(last.startedAt)} · ${Math.round(last.durationSeconds / 60)} min</div></div></div></div>` : ''}`;
+}
+function vTodaySuggestions() {
+  const sugg = suggestToday({ settings: S.settings, history: S.history, now: Date.now() });
+  if (!sugg.options.length) return h`<p class="muted">Rien de prévu aujourd’hui.</p>`;
+  return h`<p class="muted small">Rien de planifié : voici ce que je te propose, avec la raison de chaque option.</p>
+    ${sugg.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div></div>
+      ${o.kind === 'generate' ? h`<button class="btn pri sm" data-act="todayGen" data-id="${o.id}" data-size="${o.size}" data-feeling="${o.feeling}" data-focus="${o.focus}">✨</button>` : ''}</div>`)}`;
+}
+ACT.todayGen = (el) => {
+  S.gen.size = el.dataset.size; S.gen.feeling = el.dataset.feeling; S.gen.focus = el.dataset.focus || 'surprise';
+  S.tab = 'generate'; ACT.generate();
+};
+ACT.commandSheet = () => openSheet(h`<h2 style="margin:0">Commande</h2>
+  <p class="muted small">Écris ce que tu veux faire, par exemple : « Fais une séance de 20 minutes pour les jambes », « Remplace les tractions », « Ajoute 5 minutes de gainage », « Montre mes records ».</p>
+  <form data-submit="command" class="card" style="border:0;padding:0"><label>Ta commande<input name="text" maxlength="200" required autofocus placeholder="Fais une séance de 20 minutes…"></label><button class="btn pri" type="submit">Exécuter</button></form>`);
+SUBMIT.command = (f) => { const text = f.text.value.trim(); if (text) runCommand(parseCommand(text)); };
+function currentSession() { return S.gen.result?.session || (S.openId && getSeance(S.openId)) || null; }
+function applySessionEdit(before, after) {
+  if (S.gen.result?.session === before) { S.gen.result.session = after; S.gen.saved = false; } else saveSeance(after);
+}
+function runCommand(c) {
+  if (c.type === 'unknown') { toast(`Je n’ai pas compris : « ${c.raw} ». Essaie une formulation plus simple.`); return; }
+  if (c.confirm && !confirmBox('Confirmer : supprimer la dernière séance de l’historique ?')) return;
+  switch (c.type) {
+    case 'generate':
+      if (c.size) S.gen.size = c.size;
+      if (c.focus) S.gen.focus = c.focus;
+      closeSheet(); S.tab = 'generate'; ACT.generate();
+      toast(c.minutes ? `Séance générée (~${c.minutes} min demandées).` : 'Séance générée.');
+      break;
+    case 'swapExercise': {
+      const s = currentSession();
+      const target = s && findExerciseInSession(s, c.query);
+      if (!target) { toast(`Je ne trouve pas « ${c.query} » dans la séance ouverte.`); return; }
+      applySessionEdit(s, swapExercise(s, target.id, { settings: S.settings }));
+      closeSheet(); render(); toast(`« ${target.name} » remplacé.`);
+      break;
+    }
+    case 'addExercise': {
+      const s = currentSession();
+      if (!s) { toast('Ouvre ou génère d’abord une séance.'); return; }
+      const s2 = addExerciseToSession(s, c.query, c.minutes);
+      const added = s2.exercises.at(-1);
+      applySessionEdit(s, s2);
+      closeSheet(); render(); toast(`Ajouté : ${added.name} — ${Math.round(added.secMin / 60)} min.`);
+      break;
+    }
+    case 'showRecords': closeSheet(); S.tab = 'progress'; render(); break;
+    case 'deleteLastHistory': {
+      if (!S.history.length) { toast('Aucune séance dans l’historique.'); return; }
+      const id = S.history[0].id;
+      S.history = S.history.filter((x) => x.id !== id);
+      queue('DELETE', `/api/history/${encodeURIComponent(id)}`);
+      closeSheet(); render(); toast('Dernière séance supprimée de l’historique.');
+      break;
+    }
+  }
 }
 function vCalendar() {
   if (!S.cal) { const d = new Date(); S.cal = { y: d.getFullYear(), m: d.getMonth() }; }
@@ -468,8 +535,10 @@ ACT.generate=()=>{
 };
 function vGenResult(r) {
   const s = r.session;
+  const why = Array.isArray(r.meta?.why) ? r.meta.why.filter(Boolean) : [];
   return h`<div id="genresult" class="card"><div class="row"><div class="ico acc">${s.emoji}</div><div class="grow"><h3>${s.name}</h3><div class="muted small">~${sessionMinutes(s)} min · échauffement ${r.meta.warmMin} min</div></div></div>
     ${notesBlock(s)}
+    ${why.length ? h`<details class="card" open><summary><b>💡 Pourquoi cette séance ?</b></summary><ul class="txt why-list">${why.map((w) => h`<li>${w}</li>`)}</ul></details>` : ''}
     ${blocksOf(s, (e, i) => exRow(e, i, s.exercises.length, { swap: e.block === 'main' }))}
     <div class="row wrapf"><button class="btn pri" data-act="play" data-gen="1">▶ Lancer</button><button class="btn" data-act="saveGen" ${S.gen.saved ? 'disabled' : ''}>${S.gen.saved ? '✓ Enregistrée' : '💾 Enregistrer'}</button><button class="btn" data-act="generate">🔁 Autre proposition</button></div></div>`;
 }
@@ -652,10 +721,16 @@ SUBMIT.saveProfile = (form) => {
 };
 CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : clamp(el.value, 0, 600, 60); saveSettings(); applyHands(); };
 CHG.accent = (el) => setAppearance({ accent: el.value });
+function diagOutboxHtml() {
+  const first = S.outbox[0];
+  const pending = first ? h`<p class="muted small">File d’attente : ${S.outbox.length} action(s) en attente. En tête : ${first.method} ${first.path}${first.attempts ? ` (échec ${first.attempts}× jusqu’ici, nouvel essai en cours)` : ''}.</p>` : '';
+  const failed = S.failedOutbox.length ? h`<details><summary>Dernières actions écartées (${S.failedOutbox.length})</summary><ul class="why-list">${S.failedOutbox.slice(-5).reverse().map((f) => h`<li>${new Date(f.at).toLocaleString('fr-FR')} · ${f.method} ${f.path} · ${f.error}</li>`)}</ul></details>` : '';
+  return h`${pending}${failed}`;
+}
 ACT.syncNow = () => { toast('Synchronisation…'); syncAll(); };
 ACT.diag = async () => {
-  try { const r = await api('GET', '/api/health'); const me = await api('GET', '/api/auth/me'); openSheet(h`<h2 style="margin:0">Diagnostic</h2><p>✅ Serveur joignable · ✅ connecté en tant que <b>${me.user.username}</b></p><p>${r.db ? '✅' : '❌'} Base de données D1</p><p>${r.editCode ? '✅' : '⚠️'} Code de modification ${r.editCode ? 'configuré' : 'absent (variable EDIT_CODE)'}</p><p>Invitation obligatoire : ${r.inviteRequired ? 'oui' : 'non'}</p><p class="muted small">Synchro : ${S.sync} · ${S.outbox.length} action(s) en attente · ${S.seances.items.length} séances · ${S.history.length} séances faites</p><button class="btn" data-act="closeSheet">Fermer</button>`); }
-  catch (e) { openSheet(h`<h2 style="margin:0">Diagnostic</h2><p class="err">${e.offline ? 'Serveur injoignable (hors ligne ?)' : e.message}</p><button class="btn" data-act="closeSheet">Fermer</button>`); }
+  try { const r = await api('GET', '/api/health'); const me = await api('GET', '/api/auth/me'); openSheet(h`<h2 style="margin:0">Diagnostic</h2><p>✅ Serveur joignable · ✅ connecté en tant que <b>${me.user.username}</b></p><p>${r.db ? '✅' : '❌'} Base de données D1</p><p>${r.editCode ? '✅' : '⚠️'} Code de modification ${r.editCode ? 'configuré' : 'absent (variable EDIT_CODE)'}</p><p>Invitation obligatoire : ${r.inviteRequired ? 'oui' : 'non'}</p><p class="muted small">Synchro : ${S.sync} · ${S.outbox.length} action(s) en attente · ${S.seances.items.length} séances · ${S.history.length} séances faites</p>${diagOutboxHtml()}<button class="btn" data-act="closeSheet">Fermer</button>`); }
+  catch (e) { openSheet(h`<h2 style="margin:0">Diagnostic</h2><p class="err">${e.offline ? 'Serveur injoignable (hors ligne ?)' : e.message}</p>${diagOutboxHtml()}<button class="btn" data-act="closeSheet">Fermer</button>`); }
 };
 ACT.askUnlock = () => { S.afterUnlock = null; openSheet(h`<h2 style="margin:0">Code de modification</h2><form data-submit="unlock" class="card" style="border:0;padding:0"><input type="password" name="code" autocomplete="off" required placeholder="Code" aria-label="Code"><button class="btn pri" type="submit">Débloquer</button></form>`); };
 ACT.chpass = () => openSheet(h`<h2 style="margin:0">Changer le mot de passe</h2><form data-submit="chpass" class="card" style="border:0;padding:0"><input type="text" name="username" value="${S.user.username}" autocomplete="username" class="hidden"><label>Mot de passe actuel<input type="password" name="current" autocomplete="current-password" required></label><label>Nouveau (8 caractères min.)<input type="password" name="next" autocomplete="new-password" required minlength="8"></label><p class="muted tiny">Tes autres appareils seront déconnectés.</p><button class="btn pri" type="submit">Changer</button></form>`);
