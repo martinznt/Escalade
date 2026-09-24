@@ -34,6 +34,7 @@ const S = {
   social: { me: null, feed: null, results: [], loading: false, q: '' }, progressEx: '', silDays: 7, player: null, authMode: 'login', authError: '', libQuery: '',
 };
 const ACT = {};
+const SUBMIT = {};
 const DKEY = () => `sea:data:${S.user?.id}`;
 
 function persistLocalNow() {
@@ -212,10 +213,10 @@ function render() {
   const views = { home: vHome, seances: vSeances, generate: vGenerate, progress: vProgress, settings: vSettings };
   app.innerHTML = h`<header class="wrap top" style="padding-bottom:0"><span class="brand"><img src="/icon-192.png" alt=""> Seances entrainement</span><span class="row small muted"><span id="syncdot" class="dot"></span></span></header>
     <main class="wrap">${views[S.tab]()}</main>
-    <nav class="tabs" aria-label="Navigation">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span>${label}</button>`)}</nav>`.s;
+    <nav class="tabs" aria-label="Navigation">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" data-tab="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span>${label}</button>`)}</nav>`.s;
   setSync(S.sync);
 }
-ACT.tab = (el) => { S.tab = el.dataset.id; if (S.tab === 'seances' && S.sub.seances === 'detail') S.sub.seances = 'list'; window.scrollTo(0, 0); render(); if (S.tab === 'progress' && S.sub.progress === 'friends') loadSocial(); };
+ACT.tab = (el) => { const id = el?.dataset?.id || el?.dataset?.tab; if (!['home','seances','generate','progress','settings'].includes(id)) return; S.tab = id; if (S.tab === 'seances' && S.sub.seances === 'detail') S.sub.seances = 'list'; window.scrollTo(0, 0); render(); if (S.tab === 'progress' && S.sub.progress === 'friends') loadSocial(); };
 ACT.closeSheet = closeSheet;
 
 const exIcon = (e) => h`<div class="ico">${e.emoji}</div>`;
@@ -254,7 +255,6 @@ ACT.todayGen = (el) => {
 ACT.commandSheet = () => openSheet(h`<h2 style="margin:0">Commande</h2>
   <p class="muted small">Écris ce que tu veux faire, par exemple : « Fais une séance de 20 minutes pour les jambes », « Remplace les tractions », « Ajoute 5 minutes de gainage », « Montre mes records ».</p>
   <form data-submit="command" class="card" style="border:0;padding:0"><label>Ta commande<input name="text" maxlength="200" required autofocus placeholder="Fais une séance de 20 minutes…"></label><button class="btn pri" type="submit">Exécuter</button></form>`);
-const SUBMIT = {};
 SUBMIT.command = (f) => { const text = f.text.value.trim(); if (text) runCommand(parseCommand(text)); };
 function currentSession() { return S.gen.result?.session || (S.openId && getSeance(S.openId)) || null; }
 function applySessionEdit(before, after) {
@@ -696,7 +696,7 @@ function vSportProfile(){
   const p=S.settings.sportProfile||defaultProfile(), acts=Object.entries(ACTIVITY_PRESETS).concat(Object.entries(p.activities||{}).filter(([id])=>!ACTIVITY_PRESETS[id]));
   return h`<div class="card"><div class="row between"><h3>🧠 Profil sportif intelligent</h3><button class="btn sm pri" data-act="addActivity">＋ Activité</button></div><p class="muted small">Ton profil ne stocke pas seulement des performances : chaque indicateur est rattaché à un domaine. Le moteur peut ainsi comparer tes domaines à l’intérieur d’une activité et orienter les séances vers tes points faibles ou tes points forts.</p>
     <div class="chips">${acts.map(([id,a])=>h`<button class="chip ${p.activities?.[id]?'on':''}" data-act="sportActivity" data-id="${id}">${a.emoji||'🏅'} ${a.label}</button>`)}</div>
-    ${acts.map(([id,a])=>p.activities?.[id]?profileAnalysisCard(id,p):'').join('')}
+    ${acts.map(([id,a])=>p.activities?.[id]?profileAnalysisCard(id,p):'')}
     <button class="btn" data-act="addMetric">＋ Ajouter une information / performance</button>
   </div>`;
 }
@@ -711,7 +711,7 @@ function vSettings() {
       <button class="btn pri" type="submit">Enregistrer mon profil</button></form>
     <div class="card"><h3>▶ Pendant la séance</h3><label>Repos par défaut (s)<input type="number" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest??60}"></label>${[['sound','Bips pour les chronos'],['vibration','Vibration en fin de repos'],['voice','Lire les exercices à voix haute'],['keepAwake','Garder l’écran allumé'],['handsFree','Mode mains pleines de magnésie']].map(([k,l])=>h`<label class="chk"><input type="checkbox" data-change="pref" name="${k}" ${st[k]?'checked':''}> ${l}</label>`)}</div>
     ${vAppearance()}<div class="card"><h3>👤 Compte : ${S.user.username}</h3><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn" data-act="export">📥 Sauvegarde (fichier)</button><label class="btn" style="display:inline-block;cursor:pointer">📤 Restaurer<input type="file" accept="application/json" data-change="importFile" class="hidden"></label></div><div class="row wrapf">${S.unlocked?h`<button class="btn" data-act="lockEdit">🔓 Reverrouiller</button>`:h`<button class="btn" data-act="askUnlock">🔒 Code de modification</button>`}<button class="btn" data-act="syncNow">🔄 Synchroniser</button><button class="btn" data-act="diag">🩺 Diagnostic</button></div><div class="row wrapf"><button class="btn" data-act="logout">Se déconnecter</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></div>
-    <p class="muted tiny center">Seances entrainement · v8.0 · Plateforme sportive multi-activité.</p>`;
+    <p class="muted tiny center">Seances entrainement · v8.1 · Plateforme sportive multi-activité.</p>`;
 }
 SUBMIT.saveProfile = (form) => {
   const f = Object.fromEntries(new FormData(form)), keys = Object.keys(EQUIPMENT);
@@ -740,7 +740,7 @@ SUBMIT.delacct = async (form) => { try { await api('POST', '/api/auth/delete', {
 ACT.export = () => {
   const appearance = window.__sea?.load?.() || {};
   const data = {
-    app: 'seance-entrainement', version: 8, exportedAt: new Date().toISOString(),
+    app: 'seance-entrainement', version: 8.1, exportedAt: new Date().toISOString(),
     seances: S.seances, history: S.history, events: S.events, settings: S.settings,
     personal: S.personal, appearance,
   };
@@ -876,7 +876,7 @@ function vRecap(p) {
     <button class="btn pri big" data-act="pSave" ${sets ? '' : 'disabled'}>💾 Enregistrer</button><button class="btn" data-act="pDiscard">Ne pas enregistrer</button></div>`;
 }
 Object.assign(ACT, {
-  play: (el) => { const s = el.dataset.gen ? S.gen.result?.session : getSeance(el.dataset.id); closeSheet(); if (s) startPlayer(s, el.dataset.event); },
+  play: (el) => { const s = el.dataset.gen ? S.gen.result?.session : getSeance(el.dataset.id); closeSheet(); if (!s) { toast('Séance introuvable. Recharge tes données.'); return; } if (!Array.isArray(s.exercises) || !s.exercises.length) { toast('Cette séance ne contient aucun exercice.'); return; } try { startPlayer(s, el.dataset.event); } catch (e) { console.error('Impossible de lancer la séance', e); toast('Impossible de lancer cette séance. Recharge l’application.'); } },
   pAdj: (el) => { const p = S.player, k = el.dataset.k, d = Number(el.dataset.d), ex = cur(); if (k === 'reps') p.reps = Math.max(0, p.reps + d); else if (k === 'load') p.load = Math.max(0, Math.round((p.load + d * 0.5) * 10) / 10); else p.secs = Math.max(1, p.secs + d * 5); drawPlayer(); },
   pGo: () => { const p = S.player, ex = cur(); if (ex.mode === 'time') { p.phase = 'work'; p.end = Date.now() + p.secs * 1000; p.total = p.secs * 1000; p.lastBeep = 0; p.started = Date.now(); p.workStartedAt = p.started; p.workPausedTotal = 0; p.paused = false; p.pausedAt = 0; beep(880, 120); drawPlayer(); } else { buzz(40); completeSet(0); } },
   pWorkDone: () => { const p = S.player; const pauseNow = p.paused && p.pausedAt ? Date.now() - p.pausedAt : 0; completeSet(Math.max(1, Math.round((Date.now() - p.started - (p.workPausedTotal || 0) - pauseNow) / 1000))); },
