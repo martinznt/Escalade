@@ -17,6 +17,13 @@ Application PWA de suivi et génération de séances sportives, pensée pour l'e
 - File offline : les erreurs définitives sont conservées dans `failedOutbox` au lieu d'être perdues.
 - Cache PWA v7.0.
 
+## Nouveautés v7.1
+- **Pourquoi ?** : les raisons déjà calculées par le générateur (`meta.why`) sont maintenant affichées dans un bloc dépliable après chaque séance générée, au lieu d'être calculées puis jetées.
+- **Que faire aujourd'hui ?** (`suggestToday` dans `engine.js`) : quand rien n'est planifié, l'accueil propose 1 à 3 options concrètes (événement du jour, repos si séance très récente, séance du jour, version allégée si la dernière séance était dure) — chacune avec sa raison. Ne présume jamais de la forme du jour : propose une alternative plutôt que de deviner.
+- **Commandes en langage naturel** (`public/commands.js`) : parseur déterministe, sans IA externe, pour « Fais une séance de 20 minutes pour les jambes », « Remplace les tractions », « Ajoute 5 minutes de gainage », « Montre mes records », « Supprime ma dernière séance » (confirmation obligatoire). Accessible via le bouton 🗣️ Commande sur l'accueil. Une phrase non reconnue ne déclenche jamais d'action inventée.
+- **Robustesse de la file d'attente hors-ligne** (`public/outbox.js`) : après investigation, la plupart des opérations étaient déjà protégées contre les doublons (contraintes d'unicité + conversion en 409 côté Worker). Ajout d'un filet de sécurité générique : une opération qui échoue avec une erreur serveur (5xx) plus de 6 fois de suite est désormais écartée (au lieu de bloquer indéfiniment toutes les opérations suivantes), et signalée clairement. Le Diagnostic affiche maintenant l'opération en tête de file et les dernières actions écartées, y compris hors ligne.
+- Nouveaux tests : `tests/commands.test.mjs` (parseur de commandes), `tests/outbox.test.mjs` (protection anti-blocage) — voir « Audit » ci-dessous pour le détail de ce qui a été vérifié et ce qui reste à faire.
+
 ## Installation Cloudflare
 1. Mettre les fichiers à la racine du dépôt GitHub.
 2. Conserver `wrangler.json` et les bindings D1 existants.
@@ -29,5 +36,5 @@ npm run check
 npm run test:e2e
 ```
 
-`npm test` exécute les tests moteur, Worker/sécurité, migration legacy et profil multi-activité.
+`npm test` exécute les tests moteur, Worker/sécurité, migration legacy, profil multi-activité, commandes naturelles et file d'attente hors-ligne (92 vérifications).
 Le test E2E nécessite Playwright et un navigateur Chromium installé.
