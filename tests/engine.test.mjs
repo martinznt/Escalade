@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { parseSessionText, exportSessionText, generateSession, parseRest, analyze, progressHint, applyPerformedBase, levelFrom, sessionMinutes, exMinutes, swapExercise, SIZES } from '../public/engine.js';
+import { parseSessionText, exportSessionText, generateSession, parseRest, analyze, progressHint, applyPerformedBase, levelFrom, sessionMinutes, exMinutes, swapExercise, suggestToday, SIZES } from '../public/engine.js';
 import { FOCUS, LIBRARY } from '../public/library.js';
 import { mergeSeances, normalizeSession, normalizeEx, summarizeHistory, readStored } from '../public/shared.js';
 
@@ -140,4 +140,36 @@ ok('summarizeHistory : streak, semaines, records', () => {
   const H = [mkHist({ startedAt: now - 3600000 }), mkHist({ startedAt: now - 86400000 - 3600000 }), mkHist({ startedAt: now - 20 * 86400000 })];
   const r = summarizeHistory(H, now); assert.equal(r.streak, 2); assert.equal(r.weekly.length, 8); assert.equal(r.sessions30, 3); assert.equal(r.records[0].value, 10);
 });
+console.log('Que faire aujourd’hui ?');
+ok('un événement du jour passe en premier, avec sa raison', () => {
+  const r = suggestToday({ settings: {}, history: [mkHist({ startedAt: now - 5 * 86400000 })], todayEvents: [{ id: 'e1', title: 'Séance jambes', completed: false }], now });
+  assert.equal(r.options[0].kind, 'event');
+  assert.equal(r.options[0].title, 'Séance jambes');
+  assert.match(r.options[0].reason, /calendrier/);
+});
+ok('un événement déjà fait aujourd’hui n’est pas reproposé', () => {
+  const r = suggestToday({ settings: {}, history: [], todayEvents: [{ id: 'e1', title: 'Fait', completed: true }], now });
+  assert.ok(!r.options.some((o) => o.kind === 'event'));
+});
+ok('aucun historique : une seule proposition prudente, sans forme du jour présumée', () => {
+  const r = suggestToday({ settings: {}, history: [], now });
+  assert.equal(r.dataLevel, 'none');
+  assert.equal(r.options.length, 1);
+  assert.equal(r.options[0].feeling, 'normal');
+  assert.equal(r.options[0].size, 'petite');
+});
+ok('séance très récente (<20h) : le repos est proposé', () => {
+  const r = suggestToday({ settings: {}, history: [mkHist({ startedAt: now - 10 * 3600000 })], now });
+  assert.ok(r.options.some((o) => o.kind === 'rest'));
+});
+ok('dernière séance dure et récente : une version allégée est proposée en plus de la normale', () => {
+  const r = suggestToday({ settings: {}, history: [mkHist({ startedAt: now - 30 * 3600000, data: { rpe: 5, exercises: [] } })], now });
+  assert.ok(r.options.some((o) => o.id === 'gen:leger' && o.feeling === 'fatigue'));
+  assert.ok(r.options.some((o) => o.id === 'gen:normal'));
+});
+ok('jamais plus de 3 options', () => {
+  const r = suggestToday({ settings: {}, history: [mkHist({ startedAt: now - 30 * 3600000, data: { rpe: 5, exercises: [] } })], todayEvents: [{ id: 'e1', title: 'A', completed: false }, { id: 'e2', title: 'B', completed: false }], now });
+  assert.ok(r.options.length <= 3);
+});
+
 console.log(`\n${n} tests OK`);
