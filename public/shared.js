@@ -129,7 +129,7 @@ const DAY = 86400000;
 const dayNum = (t, tz = 0) => Math.floor((t - tz * 60000) / DAY);
 
 export function summarizeHistory(rows, now = Date.now(), tz = 0) {
-  const entries = (rows || []).filter((r) => r && Number(r.startedAt) > 0).sort((a, b) => b.startedAt - a.startedAt);
+  const entries = (rows || []).filter((r) => r && Number(r.startedAt) > 0 && Number(r.startedAt) <= now).sort((a, b) => b.startedAt - a.startedAt);
   const today = dayNum(now, tz);
   const days = new Set(entries.map((r) => dayNum(r.startedAt, tz)));
   let streak = 0;
@@ -142,6 +142,7 @@ export function summarizeHistory(rows, now = Date.now(), tz = 0) {
   let sessions7 = 0, sessions30 = 0, seconds30 = 0;
   for (const r of entries) {
     const age = now - r.startedAt;
+    if (age < 0) continue;
     if (age <= 7 * DAY) sessions7++;
     if (age <= 30 * DAY) { sessions30++; seconds30 += Number(r.durationSeconds) || 0; }
     const w = Math.round((thisMonday - monday(r.startedAt)) / 7);

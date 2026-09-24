@@ -711,7 +711,7 @@ function vSettings() {
       <button class="btn pri" type="submit">Enregistrer mon profil</button></form>
     <div class="card"><h3>▶ Pendant la séance</h3><label>Repos par défaut (s)<input type="number" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest??60}"></label>${[['sound','Bips pour les chronos'],['vibration','Vibration en fin de repos'],['voice','Lire les exercices à voix haute'],['keepAwake','Garder l’écran allumé'],['handsFree','Mode mains pleines de magnésie']].map(([k,l])=>h`<label class="chk"><input type="checkbox" data-change="pref" name="${k}" ${st[k]?'checked':''}> ${l}</label>`)}</div>
     ${vAppearance()}<div class="card"><h3>👤 Compte : ${S.user.username}</h3><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn" data-act="export">📥 Sauvegarde (fichier)</button><label class="btn" style="display:inline-block;cursor:pointer">📤 Restaurer<input type="file" accept="application/json" data-change="importFile" class="hidden"></label></div><div class="row wrapf">${S.unlocked?h`<button class="btn" data-act="lockEdit">🔓 Reverrouiller</button>`:h`<button class="btn" data-act="askUnlock">🔒 Code de modification</button>`}<button class="btn" data-act="syncNow">🔄 Synchroniser</button><button class="btn" data-act="diag">🩺 Diagnostic</button></div><div class="row wrapf"><button class="btn" data-act="logout">Se déconnecter</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></div>
-    <p class="muted tiny center">Seances entrainement · v7.0 · Plateforme sportive multi-activité.</p>`;
+    <p class="muted tiny center">Seances entrainement · v8.0 · Plateforme sportive multi-activité.</p>`;
 }
 SUBMIT.saveProfile = (form) => {
   const f = Object.fromEntries(new FormData(form)), keys = Object.keys(EQUIPMENT);
@@ -723,7 +723,7 @@ CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked :
 CHG.accent = (el) => setAppearance({ accent: el.value });
 function diagOutboxHtml() {
   const first = S.outbox[0];
-  const pending = first ? h`<p class="muted small">File d’attente : ${S.outbox.length} action(s) en attente. En tête : ${first.method} ${first.path}${first.attempts ? ` (échec ${first.attempts}× jusqu’ici, nouvel essai en cours)` : ''}.</p>` : '';
+  const pending = first ? `<p class="muted small">File d’attente : ${S.outbox.length} action(s) en attente. En tête : ${first.method} ${first.path}${first.attempts ? ` (échec ${first.attempts}× jusqu’ici, nouvel essai en cours)` : ''}.</p>` : '';
   const failed = S.failedOutbox.length ? h`<details><summary>Dernières actions écartées (${S.failedOutbox.length})</summary><ul class="why-list">${S.failedOutbox.slice(-5).reverse().map((f) => h`<li>${new Date(f.at).toLocaleString('fr-FR')} · ${f.method} ${f.path} · ${f.error}</li>`)}</ul></details>` : '';
   return h`${pending}${failed}`;
 }
@@ -740,7 +740,7 @@ SUBMIT.delacct = async (form) => { try { await api('POST', '/api/auth/delete', {
 ACT.export = () => {
   const appearance = window.__sea?.load?.() || {};
   const data = {
-    app: 'seance-entrainement', version: 6, exportedAt: new Date().toISOString(),
+    app: 'seance-entrainement', version: 8, exportedAt: new Date().toISOString(),
     seances: S.seances, history: S.history, events: S.events, settings: S.settings,
     personal: S.personal, appearance,
   };
@@ -798,7 +798,7 @@ function initInputs(keepLoad) {
 function startPlayer(session, eventId) {
   const s = normalizeSession(session);
   if (!s.exercises.length) { toast('Cette séance est vide'); return; }
-  S.player = { s, eventId: eventId || null, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pausedAt: 0, pausedTotal: 0, log: s.exercises.map((e) => ({ name: e.name, libId: e.libId, group: e.group, intensity: e.intensity, risk: e.risk, muscles: e.muscles, sets: [] })), rpe: 0, note: '', prs: [] };
+  S.player = { s, eventId: eventId || null, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pausedAt: 0, pausedTotal: 0, workPausedTotal: 0, workStartedAt: 0, log: s.exercises.map((e) => ({ name: e.name, libId: e.libId, group: e.group, intensity: e.intensity, risk: e.risk, muscles: e.muscles, sets: [] })), rpe: 0, note: '', prs: [] };
   initInputs(false);
   $('#player').classList.add('open'); document.body.style.overflow = 'hidden';
   wake(); beep(1, 1); drawPlayer(); clearInterval(startPlayer.t); startPlayer.t = setInterval(tick, 250); voiceStart(); speak(`${s.exercises[0].name}`);
@@ -821,7 +821,9 @@ function startRest(sec) { const p = S.player; const safe = Math.max(0, Number(se
 function completeSet(secondsDone) {
   const p = S.player, ex = cur();
   if (ex.perSide && p.side === 0) { p.side = 1; p.phase = 'ready'; buzz(80); toast('Change de côté'); drawPlayer(); return; }
-  p.log[p.i].sets.push({ reps: ex.mode === 'reps' ? p.reps : 0, seconds: ex.mode === 'time' ? secondsDone : 0, load: p.load || 0, done: true });
+  const workPause = (p.workPausedTotal || 0) + (p.paused && p.pausedAt && p.phase === 'work' ? Date.now() - p.pausedAt : 0);
+  const accurateSeconds = ex.mode === 'time' && p.workStartedAt ? Math.max(0, Math.round((Date.now() - p.workStartedAt - workPause) / 1000)) : secondsDone;
+  p.log[p.i].sets.push({ reps: ex.mode === 'reps' ? p.reps : 0, seconds: ex.mode === 'time' ? accurateSeconds : 0, load: p.load || 0, done: true });
   p.side = 0;
   if (p.set + 1 < ex.sets) { p.set++; if (ex.rest > 0) startRest(ex.rest); else { p.phase = 'ready'; initInputs(true); drawPlayer(); } }
   else nextExercise();
@@ -876,9 +878,9 @@ function vRecap(p) {
 Object.assign(ACT, {
   play: (el) => { const s = el.dataset.gen ? S.gen.result?.session : getSeance(el.dataset.id); closeSheet(); if (s) startPlayer(s, el.dataset.event); },
   pAdj: (el) => { const p = S.player, k = el.dataset.k, d = Number(el.dataset.d), ex = cur(); if (k === 'reps') p.reps = Math.max(0, p.reps + d); else if (k === 'load') p.load = Math.max(0, Math.round((p.load + d * 0.5) * 10) / 10); else p.secs = Math.max(1, p.secs + d * 5); drawPlayer(); },
-  pGo: () => { const p = S.player, ex = cur(); if (ex.mode === 'time') { p.phase = 'work'; p.end = Date.now() + p.secs * 1000; p.total = p.secs * 1000; p.lastBeep = 0; p.started = Date.now(); beep(880, 120); drawPlayer(); } else { buzz(40); completeSet(0); } },
-  pWorkDone: () => { const p = S.player; completeSet(Math.max(1, Math.round((Date.now() - p.started) / 1000))); },
-  pPause: () => { const p = S.player; if (!p || !['rest', 'work'].includes(p.phase)) return; const now = Date.now(); if (p.paused) { p.pausedTotal = (p.pausedTotal || 0) + Math.max(0, now - (p.pausedAt || now)); p.end = now + Math.max(0, p.remaining || 0); p.paused = false; p.pausedAt = 0; } else { p.remaining = Math.max(0, p.end - now); p.paused = true; p.pausedAt = now; } drawPlayer(); },
+  pGo: () => { const p = S.player, ex = cur(); if (ex.mode === 'time') { p.phase = 'work'; p.end = Date.now() + p.secs * 1000; p.total = p.secs * 1000; p.lastBeep = 0; p.started = Date.now(); p.workStartedAt = p.started; p.workPausedTotal = 0; p.paused = false; p.pausedAt = 0; beep(880, 120); drawPlayer(); } else { buzz(40); completeSet(0); } },
+  pWorkDone: () => { const p = S.player; const pauseNow = p.paused && p.pausedAt ? Date.now() - p.pausedAt : 0; completeSet(Math.max(1, Math.round((Date.now() - p.started - (p.workPausedTotal || 0) - pauseNow) / 1000))); },
+  pPause: () => { const p = S.player; if (!p || !['rest', 'work'].includes(p.phase)) return; const now = Date.now(); if (p.paused) { const pausedFor = Math.max(0, now - (p.pausedAt || now)); p.pausedTotal = (p.pausedTotal || 0) + pausedFor; if (p.phase === 'work') p.workPausedTotal = (p.workPausedTotal || 0) + pausedFor; p.end = now + Math.max(0, p.remaining || 0); p.paused = false; p.pausedAt = 0; } else { p.remaining = Math.max(0, p.end - now); p.paused = true; p.pausedAt = now; } drawPlayer(); },
   pRestAdd: () => { const p = S.player; if (!p || p.phase !== 'rest') return; if (p.paused) p.remaining = Math.max(0, p.remaining || 0) + 30000; else p.end += 30000; p.total += 30000; tick(); drawPlayer(); },
   pRestSkip: () => { const p = S.player; p.phase = 'ready'; initInputs(true); drawPlayer(); },
   pSkip: () => { if (!confirmBox('Passer cet exercice ?')) return; nextExercise(); },

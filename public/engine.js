@@ -302,6 +302,7 @@ export function groupLoads(history, now = Date.now(), days = 30) {
   const g = Object.fromEntries(Object.keys(GROUP_LABEL).map((k) => [k, 0]));
   const r = Object.fromEntries(Object.keys(REGIONS).map((k) => [k, 0]));
   for (const h of history || []) {
+    if (!h || !Number.isFinite(Number(h.startedAt)) || h.startedAt <= 0 || h.startedAt > now) continue;
     if (now - h.startedAt > days * DAY) continue;
     for (const ex of h.data?.exercises || []) {
       const done = (ex.sets || []).filter((s) => s.done !== false).length;
@@ -315,7 +316,7 @@ export function groupLoads(history, now = Date.now(), days = 30) {
 }
 
 export function analyze(history, now = Date.now()) {
-  const hist = [...(history || [])].filter((h) => h.startedAt > 0).sort((a, b) => b.startedAt - a.startedAt);
+  const hist = [...(history || [])].filter((h) => h && Number(h.startedAt) > 0 && Number(h.startedAt) <= now).sort((a, b) => b.startedAt - a.startedAt);
   const A = { n7: 0, n30: 0, hoursSinceAny: Infinity, hoursSinceHighFinger: Infinity, hoursSinceHighLegs: Infinity, lastRpe: 0, lastRpeHours: Infinity, avgMinutes: 0, lastSeen: new Map(), lastFocus: '', focusCounts: {} };
   const mins = [];
   for (const h of hist) {

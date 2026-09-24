@@ -1,6 +1,6 @@
 // sw.js — hors ligne : l'appli s'ouvre même sans réseau. Réseau d'abord (mises à jour immédiates), cache en secours.
-const CACHE = 'seances-entrainement-v7-0';
-const SHELL = ['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/engine.js', '/library.js', '/shared.js', '/sports.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
+const CACHE = 'seances-entrainement-v8-0';
+const SHELL = ['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/engine.js', '/library.js', '/shared.js', '/sports.js', '/commands.js', '/outbox.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => Promise.allSettled(SHELL.map((u) => c.add(new Request(u, { cache: 'reload' })))))

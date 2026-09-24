@@ -11,10 +11,6 @@ export const ACTIVITY_PRESETS = {
     ['tirage','Tirage','Tractions, row et tirages'],['poussee','Poussée','Pompes, dips et développés'],['jambes','Jambes','Squat, fente et extension de hanche'],['gainage','Gainage','Tronc et transfert de force'],['epaules','Épaules','Stabilité et force des épaules'],['grip','Prise','Poigne et avant-bras'],['puissance','Puissance','Production de force rapide'],['mobilite','Mobilité','Amplitude utile au mouvement'] ]},
   running: { label:'Course', emoji:'🏃', aliases:['course','running','jogging','run'], domains:[
     ['endurance','Endurance fondamentale','Tenir un effort facile longtemps'],['seuil','Seuil','Soutenir une allure soutenue'],['vitesse','Vitesse','Produire une allure rapide'],['fractionne','Fractionné','Répéter des efforts rapides'],['cotes','Côtes','Force spécifique en montée'],['technique','Technique','Économie de course'],['mobilite','Mobilité','Amplitude et mobilité'],['recuperation','Récupération','Gérer la charge et les jours faciles'] ]},
-  basketball: { label:'Basketball', emoji:'🏀', aliases:['basket','basketball'], domains:[
-    ['dribble','Dribble','Contrôle de balle'],['tir','Tir','Adresse et régularité'],['passe','Passe','Précision et prise d’information'],['appuis','Appuis','Changements de direction et freinage'],['detente','Détente','Impulsion et puissance des jambes'],['vitesse','Vitesse','Accélération'],['endurance','Endurance','Répéter les efforts'],['defense','Défense','Déplacements et posture défensive'] ]},
-  cycling: { label:'Cyclisme', emoji:'🚴', aliases:['vélo','velo','cyclisme','cycling'], domains:[
-    ['endurance','Endurance','Tenir une sortie longue'],['seuil','Seuil','Soutenir une puissance/allure élevée'],['puissance','Puissance','Efforts courts et puissants'],['cotes','Côtes','Force spécifique en montée'],['cadence','Cadence','Régularité du pédalage'],['recuperation','Récupération','Gestion de charge'] ]},
   swimming: { label:'Natation', emoji:'🏊', aliases:['natation','swim','swimming'], domains:[
     ['technique','Technique','Efficacité des mouvements'],['endurance','Endurance','Tenir la distance'],['vitesse','Vitesse','Allure rapide'],['virages','Virages','Virages et coulées'],['respiration','Respiration','Coordination respiratoire'],['puissance','Puissance','Production de force'] ]},
 };
@@ -133,7 +129,6 @@ const E = (id,name,emoji,domain,cues,sets=3,repsMin=8,repsMax=12,rest=60) => ({i
 export const ACTIVITY_EXERCISES = {
   strength:[E('gen-push','Pompes','🤜','poussee',['Corps gainé, amplitude confortable.']),E('gen-pull','Tractions','⬆️','tirage',['Épaules actives, mouvement contrôlé.'],4,4,8,120),E('gen-squat','Squat','🦵','jambes',['Pieds stables, genoux suivent les pieds.'],3,8,15,75),E('gen-core','Gainage','🧱','gainage',['Corps aligné, respiration régulière.'],3,25,45,45)],
   running:[{id:'run-easy',name:'Course facile',emoji:'🏃',domain:'endurance',mode:'time',sets:1,secMin:900,secMax:1800,rest:0,cues:['Allure confortable : tu dois pouvoir parler par phrases.']},{id:'run-intervals',name:'Intervalles rapides',emoji:'⚡',domain:'fractionne',mode:'time',sets:6,secMin:30,secMax:60,rest:90,cues:['Reste rapide mais propre, récupération complète si nécessaire.']},{id:'run-hills',name:'Côtes',emoji:'⛰️',domain:'cotes',mode:'time',sets:6,secMin:30,secMax:60,rest:120,cues:['Monte avec des foulées régulières, redescends en récupération.']},{id:'run-tech',name:'Technique de course',emoji:'👟',domain:'technique',mode:'time',sets:4,secMin:30,secMax:45,rest:45,cues:['Travaille la cadence et la posture sans forcer.']}],
-  basketball:[{id:'bb-foot',name:'Appuis et changements de direction',emoji:'🏀',domain:'appuis',mode:'time',sets:5,secMin:20,secMax:30,rest:60,cues:['Freine progressivement et garde le contrôle du genou.']},{id:'bb-dribble',name:'Dribble main faible',emoji:'🏀',domain:'dribble',mode:'time',sets:5,secMin:45,secMax:60,rest:45,cues:['Regarde régulièrement devant toi.']},{id:'bb-jump',name:'Sauts verticaux contrôlés',emoji:'⬆️',domain:'detente',sets:4,repsMin:5,repsMax:6,rest:90,mode:'reps',cues:['Atterrissage silencieux et stable.']},{id:'bb-defense',name:'Déplacements défensifs',emoji:'🛡️',domain:'defense',mode:'time',sets:5,secMin:20,secMax:30,rest:60,cues:['Buste stable, petits pas rapides.']}],
 };
 
 export function generateGenericSession({activityId, mode='weaknesses', duration='medium'}, profile, settings={}) {
@@ -149,7 +144,7 @@ export function generateGenericSession({activityId, mode='weaknesses', duration=
   pool.sort((x,y)=>(order.has(x.domain)?order.get(x.domain):99)-(order.has(y.domain)?order.get(y.domain):99));
   const wanted=duration==='short'?3:duration==='long'?6:4;
   const chosen=[]; for(const e of pool){if(!chosen.some(x=>x.domain===e.domain))chosen.push(e);if(chosen.length>=wanted)break;}
-  while(chosen.length<wanted) chosen.push(pool[chosen.length%pool.length]);
+  while(chosen.length<wanted && chosen.length<pool.length) chosen.push(pool[chosen.length]);
   const exercises=chosen.map(x=>({...x,id:uid()}));
   const focusLabel=mode==='strengths'?'tes points forts':'tes points faibles';
   const why=analysis.metricCount?`Séance ${a.label} orientée vers ${focusLabel}. Domaines analysés : ${analysis.domains.map(x=>`${x.domain} ${x.score}/100`).join(', ')}.`:'Profil encore peu renseigné : ajoute des indicateurs pour rendre l’analyse plus précise.';
