@@ -1,10 +1,10 @@
-# Seances entrainement — v7.0
+# Seances entrainement — v8.0
 
 Application PWA de suivi et génération de séances sportives, pensée pour l'escalade mais conçue comme une plateforme multi-activité.
 
-## Nouveautés v7.0
+## Base V8
 - Profil sportif intelligent et extensible.
-- Activités natives : escalade bloc, escalade voie, musculation/force, course, basketball, cyclisme, natation.
+- Activités natives V1 : escalade bloc, escalade voie, musculation/force, course et natation. Basketball et cyclisme ne sont pas préconfigurés dans cette V1 ; ils restent ajoutables comme activités personnalisées.
 - Ajout d'activités personnalisées et de catégories personnalisées.
 - Ajout/modification/suppression d'indicateurs sportifs.
 - Détection de domaine : une information comme « max tractions » est rattachée au tirage, tandis que « max pompes » est rattachée à la poussée.
@@ -15,9 +15,9 @@ Application PWA de suivi et génération de séances sportives, pensée pour l'e
 - Rate-limit atomique amélioré.
 - API de modification/suppression avec contrôle réel du nombre de lignes modifiées.
 - File offline : les erreurs définitives sont conservées dans `failedOutbox` au lieu d'être perdues.
-- Cache PWA v7.0.
+- Cache PWA v8.0.
 
-## Nouveautés v7.1
+## Fonctionnalités conservées de la V7.1
 - **Pourquoi ?** : les raisons déjà calculées par le générateur (`meta.why`) sont maintenant affichées dans un bloc dépliable après chaque séance générée, au lieu d'être calculées puis jetées.
 - **Que faire aujourd'hui ?** (`suggestToday` dans `engine.js`) : quand rien n'est planifié, l'accueil propose 1 à 3 options concrètes (événement du jour, repos si séance très récente, séance du jour, version allégée si la dernière séance était dure) — chacune avec sa raison. Ne présume jamais de la forme du jour : propose une alternative plutôt que de deviner.
 - **Commandes en langage naturel** (`public/commands.js`) : parseur déterministe, sans IA externe, pour « Fais une séance de 20 minutes pour les jambes », « Remplace les tractions », « Ajoute 5 minutes de gainage », « Montre mes records », « Supprime ma dernière séance » (confirmation obligatoire). Accessible via le bouton 🗣️ Commande sur l'accueil. Une phrase non reconnue ne déclenche jamais d'action inventée.
@@ -36,5 +36,5 @@ npm run check
 npm run test:e2e
 ```
 
-`npm test` exécute les tests moteur, Worker/sécurité, migration legacy, profil multi-activité, commandes naturelles et file d'attente hors-ligne (92 vérifications).
+`npm test` exécute les tests moteur, Worker/sécurité, migration legacy, profil multi-activité, commandes naturelles et file d'attente hors-ligne (101 vérifications internes).
 Le test E2E nécessite Playwright et un navigateur Chromium installé.

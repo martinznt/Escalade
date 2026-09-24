@@ -1,19 +1,19 @@
-# Audit final — Séances entraînement v7.0
+# Audit final — Séances entraînement v8.0
 
-## Validation effectuée
+## Validation V8 effectuée
 - Syntaxe Node vérifiée sur `worker.js`, `schema.js` et tous les JavaScript de `public/`.
-- 32 tests moteur historiques OK.
-- 33 tests Worker/sécurité OK.
-- 5 tests supplémentaires du profil multi-activité OK.
+- 39 vérifications moteur OK.
+- 34 vérifications Worker/sécurité OK.
+- 6 vérifications du profil multi-activité OK.
 - Migration legacy OK.
 - Le rate-limit a été rendu atomique côté compteur SQLite et les routes de modification/suppression vérifient maintenant réellement `changes`.
 - Les erreurs HTTP définitives de la file offline sont conservées dans `failedOutbox` au lieu d'être supprimées silencieusement.
 - Le doublon de propriété `muscles` dans le nettoyage de l'historique a été supprimé.
-- Nouveau `sports.js` ajouté au Worker et au shell PWA.
+- `commands.js` et `outbox.js` sont maintenant explicitement servis par le Worker et présents dans le shell PWA.
 
-## Fonctionnalités v7.0
+## Fonctionnalités V8
 - Profil sportif généraliste et extensible.
-- Activités natives : bloc, voie, musculation/force, course, basketball, cyclisme, natation.
+- Activités natives V1 : bloc, voie, musculation/force, course et natation. Basketball et cyclisme ne sont pas préconfigurés.
 - Ajout d'activités personnalisées.
 - Génération automatique de catégories initiales pour une activité personnalisée.
 - Ajout, modification et suppression d'informations/performance.
@@ -24,9 +24,9 @@
 - Conservation du générateur escalade existant et de ses contraintes de niveau, matériel, récupération et prévention.
 
 ## Limitation de validation
-Le test E2E Chromium existe dans `tests/e2e.mjs`, mais Playwright n'a pas pu être installé dans l'environnement d'audit avant expiration du délai réseau. Il n'est donc pas honnête de déclarer le parcours navigateur exécuté ici. Les tests unitaires/intégration disponibles ont tous été exécutés et passent.
+Le test E2E Chromium existe dans `tests/e2e.mjs`, mais Playwright n'est pas installé dans cet environnement. Le test navigateur réel n'a donc pas été exécuté ici. Tous les tests Node disponibles et la vérification syntaxique ont été exécutés avec succès.
 
-## Session de travail v7.1 — suite du cahier des charges « ultra fiable »
+## Corrections V8 après audit approfondi
 Objectif : avancer sur plusieurs points du cahier des charges (§8 Pourquoi, §11 planification, §12 offline, §21 commandes naturelles) sans tout refaire d'un coup, en testant à chaque étape.
 
 **Vérifié et implémenté :**
@@ -42,4 +42,21 @@ Objectif : avancer sur plusieurs points du cahier des charges (§8 Pourquoi, §1
 - §21 : commandes naturelles limitées à 5 formulations explicites ; pas de généralisation à des tournures libres.
 - Le test E2E Chromium reste non exécuté (Playwright indisponible dans cet environnement).
 
-**Bug trouvé après coup (vérification demandée par l'utilisateur) :** dans `diagOutboxHtml()`, le paragraphe « opération en tête de file » était construit avec un simple template JS au lieu du moteur `h` maison, qui échappe automatiquement tout ce qui n'est pas explicitement marqué comme HTML. Résultat : la balise `<p>` se serait affichée comme texte brut (`&lt;p class=...&gt;`) au lieu d'un paragraphe, dans l'écran Diagnostic uniquement. Corrigé, puis vérifié de deux façons : (1) recherche dans tout `app.js` du même motif (backtick HTML non protégé par `h` ni `raw()`) — aucune autre occurrence ; (2) exécution réelle hors navigateur du texte source de `vTodaySuggestions`, `diagOutboxHtml` et du bloc « Pourquoi » de `vGenResult`, avec le vrai moteur de template et des données réalistes (file vide/pleine, historique vide/avec séance dure, raisons vides/remplies) : sortie HTML correcte dans tous les cas testés. Cela reste une vérification ciblée sur le code ajouté cette session, pas un remplacement du test E2E navigateur.
+## Corrections V8 effectuées
+- Correction du routage statique : `commands.js` et `outbox.js` sont désormais accessibles au navigateur.
+- Correction du shell PWA : mêmes modules ajoutés au cache initial et cache versionné en V8.
+- Persistance serveur des `goals` et `climbingLogs`, avec compatibilité avec l'ancien champ `goals_json`.
+- Rate-limit réorganisé autour d'une écriture SQL atomique unique pour éviter la course entre lecture et incrément.
+- Protection contre les collisions concurrentes de pseudo/e-mail lors de l'inscription.
+- Quotas calendrier/bibliothèque corrigés sur les bornes exactes.
+- Séances futures ignorées dans les statistiques, charges et analyses de récupération.
+- Chronomètre : la durée de travail d'une série chronométrée exclut désormais les pauses.
+- Export JSON et interface mis à jour en V8.
+- Basketball et cyclisme retirés des presets préconfigurés de cette V1.
+- Générateur générique : évite maintenant de dupliquer artificiellement des exercices lorsqu'il n'existe pas assez de domaines/exercices.
+- Ajout de tests couvrant ces corrections.
+
+## Validation finale V8
+- `npm run check` : OK.
+- `npm test` : **101 vérifications internes, 0 échec**.
+- `npm run test:e2e` : non exécutable dans cet environnement car le module Playwright n'est pas installé.
