@@ -1,4 +1,4 @@
-# Seances entrainement — v8.0
+# Seances entrainement — v8.1
 
 Application PWA de suivi et génération de séances sportives, pensée pour l'escalade mais conçue comme une plateforme multi-activité.
 
@@ -15,7 +15,7 @@ Application PWA de suivi et génération de séances sportives, pensée pour l'e
 - Rate-limit atomique amélioré.
 - API de modification/suppression avec contrôle réel du nombre de lignes modifiées.
 - File offline : les erreurs définitives sont conservées dans `failedOutbox` au lieu d'être perdues.
-- Cache PWA v8.0.
+- Cache PWA v8.1.
 
 ## Fonctionnalités conservées de la V7.1
 - **Pourquoi ?** : les raisons déjà calculées par le générateur (`meta.why`) sont maintenant affichées dans un bloc dépliable après chaque séance générée, au lieu d'être calculées puis jetées.

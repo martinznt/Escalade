@@ -1,4 +1,4 @@
-# Audit final — Séances entraînement v8.0
+# Audit final — Séances entraînement v8.1
 
 ## Validation V8 effectuée
 - Syntaxe Node vérifiée sur `worker.js`, `schema.js` et tous les JavaScript de `public/`.
@@ -44,14 +44,14 @@ Objectif : avancer sur plusieurs points du cahier des charges (§8 Pourquoi, §1
 
 ## Corrections V8 effectuées
 - Correction du routage statique : `commands.js` et `outbox.js` sont désormais accessibles au navigateur.
-- Correction du shell PWA : mêmes modules ajoutés au cache initial et cache versionné en V8.
+- Correction du shell PWA : mêmes modules ajoutés au cache initial et cache versionné en V8.1
 - Persistance serveur des `goals` et `climbingLogs`, avec compatibilité avec l'ancien champ `goals_json`.
 - Rate-limit réorganisé autour d'une écriture SQL atomique unique pour éviter la course entre lecture et incrément.
 - Protection contre les collisions concurrentes de pseudo/e-mail lors de l'inscription.
 - Quotas calendrier/bibliothèque corrigés sur les bornes exactes.
 - Séances futures ignorées dans les statistiques, charges et analyses de récupération.
 - Chronomètre : la durée de travail d'une série chronométrée exclut désormais les pauses.
-- Export JSON et interface mis à jour en V8.
+- Export JSON et interface mis à jour en V8.1
 - Basketball et cyclisme retirés des presets préconfigurés de cette V1.
 - Générateur générique : évite maintenant de dupliquer artificiellement des exercices lorsqu'il n'existe pas assez de domaines/exercices.
 - Ajout de tests couvrant ces corrections.
