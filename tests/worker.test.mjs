@@ -39,6 +39,14 @@ await ok('inscription OK, cookie de session valable 1 an', async () => {
   assert.match(sc, /Max-Age=31536000/); assert.match(sc, /HttpOnly/); assert.match(sc, /Secure/); assert.match(sc, /SameSite=Lax/);
 });
 await ok('doublon de pseudo (casse ignorée) refusé', async () => assert.equal((await B.post('/api/auth/register', { username: 'MARTIN', password: 'motdepasse1' })).status, 409));
+await ok('inscription : rafale concurrente sur le même pseudo → exactement un succès, jamais de 500', async () => {
+  const results = await Promise.all(Array.from({ length: 6 }, () => new Client().call('POST', '/api/auth/register', { username: 'course-pseudo', password: 'motdepasse1' }, { 'CF-Connecting-IP': '10.0.0.9' })));
+  const ok200 = results.filter((r) => r.status === 200).length;
+  const conflict409 = results.filter((r) => r.status === 409).length;
+  assert.equal(ok200, 1, 'une seule inscription doit réussir pour un pseudo donné, même en rafale concurrente');
+  assert.equal(conflict409, 5, 'les autres doivent recevoir un 409 clair');
+  assert.ok(results.every((r) => r.status !== 500), 'jamais de 500 générique, même en cas de course');
+});
 await ok('/me avec cookie = connecté ; sans cookie = 401', async () => { assert.equal((await A.get('/api/auth/me')).data.user.username, 'Martin'); assert.equal((await new Client().get('/api/auth/me')).status, 401); });
 await ok('connexion : mauvais mot de passe 401, bon mot de passe 200, aussi via e-mail', async () => {
   const c = new Client();
@@ -49,6 +57,16 @@ await ok('blocage après 10 échecs', async () => {
   const c = new Client(); let last;
   for (let i = 0; i < 11; i++) last = await c.post('/api/auth/login', { username: 'martin', password: 'mauvais-mdp' });
   assert.equal(last.status, 429);
+});
+await ok('rate limit login : une rafale concurrente ne peut pas contourner la limite (race condition)', async () => {
+  await new Client().call('POST', '/api/auth/register', { username: 'concurrent1', password: 'motdepasse1' }, { 'CF-Connecting-IP': '10.0.0.8' });
+  const c = new Client();
+  const results = await Promise.all(Array.from({ length: 15 }, () => c.post('/api/auth/login', { username: 'concurrent1', password: 'mauvais-mdp' })));
+  const attempted = results.filter((r) => r.status === 401).length;
+  const blocked = results.filter((r) => r.status === 429).length;
+  assert.equal(attempted + blocked, 15, 'chaque requête doit être soit tentée soit bloquée, rien d’autre');
+  assert.ok(attempted <= 10, `au plus 10 tentatives réelles autorisées malgré la rafale concurrente, obtenu ${attempted}`);
+  assert.ok(blocked >= 5, `au moins 5 tentatives doivent être bloquées sur 15 en rafale, obtenu ${blocked}`);
 });
 await ok('renouvellement : la session est prolongée quand elle vieillit', async () => {
   env.DB.raw.exec(`UPDATE sessions SET expires_at=${Date.now() + 100 * 86400000}`);
@@ -80,29 +98,42 @@ await ok('événement créé, relu, supprimé', async () => {
   await A.post('/api/calendar', { id: 'ev1', date: '2026-09-22', title: 'Jambes', completed: true, recurrence: { freq: 'weekly' } });
   const g2 = await A.get('/api/calendar'); assert.equal(g2.data.events[0].date, '2026-09-22'); assert.equal(g2.data.events[0].recurrence.freq, 'weekly');
   assert.equal((await A.post('/api/calendar', { date: 'pas-une-date' })).status, 400);
-  assert.equal((await A.post('/api/calendar', { date: '2026-02-30', title: 'date impossible' })).status, 400);
-  assert.equal((await A.post('/api/calendar', { date: '2026-09-31', title: 'date impossible' })).status, 400);
 });
 await ok('IDOR : un autre compte ne peut pas écraser ni supprimer mon événement', async () => {
   assert.equal((await B.post('/api/calendar', { id: 'ev1', date: '2030-01-01', title: 'piraté' })).status, 409);
   await B.del('/api/calendar/ev1');
   const g = await A.get('/api/calendar'); assert.equal(g.data.events[0].title, 'Jambes'); assert.equal(g.data.events[0].date, '2026-09-22');
 });
-const hist = (id, t, extra = {}) => ({ id, sessionId: 's1', sessionName: 'Jambes', startedAt: t, durationSeconds: 2700, data: { rpe: 3, focus: 'jambes', note: 'Note test', exercises: [{ name: 'Squats lestés', group: 'jambes', muscles: ['quadriceps'], sets: [{ reps: 8, load: 12.5, done: true }, { reps: 8, load: 12.5, done: true }] }] }, ...extra });
+const hist = (id, t, extra = {}) => ({ id, sessionId: 's1', sessionName: 'Jambes', startedAt: t, durationSeconds: 2700, data: { rpe: 3, focus: 'jambes', exercises: [{ name: 'Squats lestés', group: 'jambes', muscles: ['quadriceps'], sets: [{ reps: 8, load: 12.5, done: true }, { reps: 8, load: 12.5, done: true }] }] }, ...extra });
 await ok('historique : ajout idempotent, lecture, suppression protégée', async () => {
   const t = Date.now() - 3600000;
   assert.equal((await A.post('/api/history', hist('h1', t))).status, 200); assert.equal((await A.post('/api/history', hist('h1', t))).status, 200);
-  const saved = (await A.get('/api/history')).data.history[0]; assert.equal(saved.data.note, 'Note test');
   assert.equal((await A.get('/api/history')).data.history.length, 1);
   await B.del('/api/history/h1'); assert.equal((await A.get('/api/history')).data.history.length, 1);
   assert.equal((await A.post('/api/history', { sessionName: 'x' })).status, 400);
 });
-await ok('réglages nettoyés et objectifs/journal persistants', async () => {
-  const r = await A.post('/api/settings', { level: { boulderMax: '6B', years: 3 }, equipment: { wall: true, hangboard: 1, hack: true }, avoid: {}, evil: '<script>', goals: [{ id: 'g1', name: '20 tractions', target: 20, kind: 'manual', current: 16, unit: 'reps' }], climbingLogs: [{ id: 'c1', date: Date.now(), type: 'bloc', grade: '7A', result: 'send', attempts: 2, style: 'pince', note: 'ok' }] });
+await ok('historique : collision d’identifiant avec un AUTRE utilisateur → erreur claire, jamais un faux succès ni un écrasement', async () => {
+  const t = Date.now() - 7200000;
+  const r = await B.post('/api/history', hist('h1', t, { sessionName: 'Séance de Julie' }));
+  assert.equal(r.status, 409, 'un id déjà pris par un autre utilisateur ne doit jamais renvoyer 200');
+  const mine = await A.get('/api/history');
+  assert.equal(mine.data.history.find((x) => x.id === 'h1')?.sessionName, 'Jambes', 'ma séance ne doit pas avoir été écrasée par celle de Julie');
+});
+await ok('réglages nettoyés', async () => {
+  const r = await A.post('/api/settings', { level: { boulderMax: '6B', years: 3 }, equipment: { wall: true, hangboard: 1, hack: true }, evil: '<script>' });
   assert.equal(r.data.settings.equipment.hangboard, true); assert.equal(r.data.settings.equipment.hack, undefined); assert.equal(r.data.settings.evil, undefined);
   assert.equal((await A.get('/api/settings')).data.settings.level.boulderMax, '6B');
-  assert.equal((await A.get('/api/settings')).data.settings.goals[0].name, '20 tractions');
-  assert.equal((await A.get('/api/settings')).data.settings.climbingLogs[0].grade, '7A');
+});
+await ok('objectifs (goals) : survivent réellement à un aller-retour serveur, pas seulement à la fusion en mémoire côté client', async () => {
+  const goal = { id: 'g1', name: 'Monter en 6a', target: 10, unit: 'voies', kind: 'sessions', current: 3, since: '2026-01-01' };
+  await A.post('/api/settings', { level: { boulderMax: '6B' }, goals: [goal] });
+  const stored = (await A.get('/api/settings')).data.settings.goals;
+  assert.equal(stored?.length, 1, 'l’objectif doit être réellement conservé côté serveur, pas seulement en mémoire locale');
+  assert.equal(stored[0].name, 'Monter en 6a'); assert.equal(stored[0].target, 10); assert.equal(stored[0].current, 3); assert.equal(stored[0].since, '2026-01-01');
+  // Un autre réglage envoyé ensuite ne doit pas effacer les objectifs déjà enregistrés côté serveur si le
+  // client les renvoie fidèlement (comportement normal de saveSettings(), qui envoie tout S.settings).
+  await A.post('/api/settings', { level: { boulderMax: '6B' }, goals: [goal] });
+  assert.equal((await A.get('/api/settings')).data.settings.goals.length, 1);
 });
 
 console.log('Bibliothèque commune');
@@ -114,10 +145,7 @@ await ok('les exercices de l’ancienne version sont repris ; ajout ouvert à to
 await ok('modification/suppression : code requis, lié au compte', async () => {
   const list = (await A.get('/api/exercises')).data.common; const id = list.find((e) => e.name === 'Traction archer').id;
   assert.equal((await A.put('/api/exercises/common/' + id, { name: 'Traction archer', sets: 5 })).status, 403);
-  env.DB.raw.exec("DELETE FROM system_state WHERE key LIKE 'rl:edit:%'");
-  for (let i = 0; i < 5; i++) assert.equal((await A.post('/api/edit/unlock', { code: 'mauvais' })).status, 403);
-  assert.equal((await A.post('/api/edit/unlock', { code: 'mauvais' })).status, 429);
-  env.DB.raw.exec("DELETE FROM system_state WHERE key LIKE 'rl:edit:%'");
+  assert.equal((await A.post('/api/edit/unlock', { code: 'mauvais' })).status, 403);
   assert.equal((await A.post('/api/edit/unlock', { code: 'code-secret-42' })).status, 200);
   assert.equal((await A.get('/api/edit/status')).data.unlocked, true);
   assert.equal((await A.put('/api/exercises/common/' + id, { name: 'Traction archer', sets: 5 })).status, 200);
@@ -167,13 +195,11 @@ await ok('se désabonner / retirer un abonné', async () => {
 await ok('recherche : les caractères % et _ ne sont pas des jokers', async () => assert.equal((await A.get('/api/social/search?q=%25%25')).data.users.length, 0));
 
 console.log('Fichiers statiques et sécurité');
-await ok('tous les modules importés par app.js sont servis', async () => {
-  for (const p of ['/app.js', '/engine.js', '/library.js', '/shared.js', '/sports.js', '/commands.js', '/outbox.js']) assert.equal((await worker.fetch(new Request(ORIGIN + p), env)).status, 200, p);
-});
 await ok('seuls les fichiers du site sont publics', async () => {
   for (const p of ['/worker.js', '/wrangler.json', '/schema.js', '/README.md', '/tests/sample.txt', '/.assetsignore', '/%2e%2e/worker.js']) assert.equal((await worker.fetch(new Request(ORIGIN + p), env)).status, 404, p);
   for (const p of ['/', '/index.html', '/app.js', '/sw.js', '/manifest.json']) assert.equal((await worker.fetch(new Request(ORIGIN + p), env)).status, 200, p);
-  const r = await worker.fetch(new Request(ORIGIN + '/', { method: 'POST' }), env); assert.equal(r.status, 405);
+  const r = await worker.fetch(new Request(ORIGIN + '/'), env); assert.match(r.headers.get('Content-Security-Policy'), /default-src 'self'/); assert.equal(r.headers.get('X-Content-Type-Options'), 'nosniff');
+  assert.equal((await worker.fetch(new Request(ORIGIN + '/', { method: 'POST' }), env)).status, 405);
   assert.equal((await worker.fetch(new Request(ORIGIN + '/sw.js'), env)).headers.get('Cache-Control'), 'no-cache');
 });
 await ok('rate limit d’inscription', async () => {

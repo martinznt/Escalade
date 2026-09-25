@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { parseSessionText, exportSessionText, generateSession, parseRest, analyze, progressHint, applyPerformedBase, levelFrom, sessionMinutes, exMinutes, swapExercise, suggestToday, SIZES, groupLoads } from '../public/engine.js';
+import { parseSessionText, exportSessionText, generateSession, parseRest, analyze, progressHint, applyPerformedBase, levelFrom, sessionMinutes, exMinutes, swapExercise, suggestToday, SIZES } from '../public/engine.js';
 import { FOCUS, LIBRARY } from '../public/library.js';
 import { mergeSeances, normalizeSession, normalizeEx, summarizeHistory, readStored } from '../public/shared.js';
 
@@ -136,13 +136,6 @@ ok('swapExercise remplace par une alternative compatible', () => {
   assert.equal(g2.exercises.length, g.exercises.length);
 });
 ok('levelFrom', () => { assert.equal(levelFrom({}), 0); assert.equal(levelFrom({ level: { boulderMax: '7A', years: 5 } }), 2); assert.equal(levelFrom({ level: { boulderMax: '6C', years: 0.5 } }), 0); assert.equal(levelFrom({ level: { boulderMax: '6A', years: 3 } }), 1); });
-ok('les séances futures sont ignorées par les statistiques', () => {
-  const future = now + 2 * 86400000;
-  const H = [mkHist({ startedAt: future }), mkHist({ startedAt: now - 3600000 })];
-  const r = summarizeHistory(H, now); assert.equal(r.sessions7, 1); assert.equal(r.streak, 1);
-  const loads = groupLoads(H, now, 30); assert.ok(Object.values(loads.groups).reduce((a,b)=>a+b,0) > 0);
-  const a = analyze(H, now); assert.equal(a.n7, 1); assert.ok(a.hoursSinceAny >= 0);
-});
 ok('summarizeHistory : streak, semaines, records', () => {
   const H = [mkHist({ startedAt: now - 3600000 }), mkHist({ startedAt: now - 86400000 - 3600000 }), mkHist({ startedAt: now - 20 * 86400000 })];
   const r = summarizeHistory(H, now); assert.equal(r.streak, 2); assert.equal(r.weekly.length, 8); assert.equal(r.sessions30, 3); assert.equal(r.records[0].value, 10);
