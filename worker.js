@@ -273,7 +273,6 @@ async function register(request, env, secure) {
   await db(env, "INSERT INTO user_data(user_id,seances_json,settings_json,favorites_json,goals_json,updated_at) VALUES(?,?,?,?,?,?)", id, '{"items":[],"tomb":{}}', '{}', '[]', '{}', now).run();
   await db(env, 'INSERT OR IGNORE INTO profiles(user_id,updated_at) VALUES(?,?)', id, now).run();
   await migrateLegacyForFirstUser(env, id);
-  await seedCommon(env);
   const token = await createSession(env, id);
   return json({ ok: true, user: { id, username, email } }, 200, { 'Set-Cookie': cookie('session', token, SESSION_DAYS * 86400, secure) });
 }
@@ -339,21 +338,6 @@ async function migrateLegacyForFirstUser(env, userId) {
     if (legacy.items.length) await db(env, 'UPDATE user_data SET seances_json=?,updated_at=? WHERE user_id=?', JSON.stringify(legacy), Date.now(), userId).run();
   } catch (e) { console.error('migration KV', e); }
 }
-async function seedCommon(env) {
-  const n = await db(env, 'SELECT COUNT(*) c FROM common_exercises').first();
-  if (Number(n?.c)) return;
-  try {
-    const raw = await env.SEANCES_KV?.get('seances');
-    if (!raw) return;
-    const seen = new Set(), now = Date.now();
-    for (const s of readStored(raw).items) for (const x of s.exercises) {
-      if (seen.has(x.name)) continue;
-      seen.add(x.name);
-      await db(env, 'INSERT OR IGNORE INTO common_exercises(id,name,data_json,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?)', uid(), x.name, JSON.stringify(cleanExercise(x)), null, now, now).run();
-    }
-  } catch (e) { console.error('seed', e); }
-}
-
 /* ═════════════ Séances : synchronisation avec fusion ═════════════ */
 async function syncGet(env, u) {
   const row = await db(env, 'SELECT seances_json FROM user_data WHERE user_id=?', u.id).first();
@@ -380,6 +364,7 @@ function cleanSettings(o) {
   if(o.level&&typeof o.level==='object') out.level={boulderMax:str(o.level.boulderMax,4),routeMax:str(o.level.routeMax,4),years:o.level.years===null||o.level.years===''||o.level.years===undefined?null:clamp(o.level.years,0,80,null)};
   if(o.equipment&&typeof o.equipment==='object') out.equipment=Object.fromEntries(['wall','hangboard','bar','dips','weights','band'].map(k=>[k,bool(o.equipment[k])]));
   if(o.avoid&&typeof o.avoid==='object') out.avoid=Object.fromEntries(['fingers','shoulders','elbows','knees'].map(k=>[k,bool(o.avoid[k])]));
+  if(Array.isArray(o.climbingLogs)) out.climbingLogs=o.climbingLogs.slice(0,500).map(x=>({id:str(x?.id,64)||uid(),date:clamp(x?.date,0,9e15,Date.now()),type:str(x?.type,30),grade:str(x?.grade,20),result:['send','attempt','flash','top','fail'].includes(x?.result)?x.result:'attempt',attempts:clamp(x?.attempts,1,999,1),style:str(x?.style,60),note:str(x?.note,500)}));
   for(const k of ['sound','vibration','voice','keepAwake','handsFree','onboarded']) if(k in o) out[k]=bool(o[k]);
   if('defaultRest' in o) out.defaultRest=clamp(o.defaultRest,0,600,60);
   if(o.sportProfile&&typeof o.sportProfile==='object') {
@@ -490,10 +475,9 @@ async function historyPost(request, env, u) {
 /* ═════════════ Exercices : commun (tout le monde) et personnel ═════════════ */
 function cleanExercise(x) { const e = normalizeEx(x); delete e.id; delete e.block; delete e.isNew; return e; }
 async function exercisesGet(env, u) {
-  await seedCommon(env);
-  const c = await db(env, 'SELECT id,name,data_json FROM common_exercises ORDER BY name LIMIT 2500').all();
+  const c = await db(env, 'SELECT id,name,data_json,created_by FROM common_exercises ORDER BY name LIMIT 2500').all();
   const p = await db(env, 'SELECT id,name,data_json FROM user_exercises WHERE user_id=? ORDER BY name LIMIT 1000', u.id).all();
-  const map = (r) => ({ id: r.id, name: r.name, data: { ...(safeParse(r.data_json) || {}), name: r.name } });
+  const map = (r) => ({ id: r.id, name: r.name, createdBy: r.created_by || null, data: { ...(safeParse(r.data_json) || {}), name: r.name } });
   return json({ ok: true, common: c.results.map(map), personal: p.results.map(map) });
 }
 async function commonAdd(request, env, u) {
@@ -507,7 +491,10 @@ async function commonAdd(request, env, u) {
   return json({ ok: true, id });
 }
 async function commonEdit(request, env, u, id) {
-  if (!(await editOk(request, env, u))) return fail('Code de modification requis.', 403);
+  const current = await db(env, 'SELECT created_by FROM common_exercises WHERE id=?', id).first();
+  if (!current) return fail('Exercice introuvable.', 404);
+  const owner = current.created_by === u.id;
+  if (!owner && !(await editOk(request, env, u))) return fail('Droit de modification requis.', 403);
   const b = await readJson(request, 20000);
   if (!b) return fail('Données invalides.');
   const data = cleanExercise(b.exercise || b);
@@ -516,7 +503,10 @@ async function commonEdit(request, env, u, id) {
   return json({ ok: true });
 }
 async function commonDelete(request, env, u, id) {
-  if (!(await editOk(request, env, u))) return fail('Code de modification requis.', 403);
+  const current = await db(env, 'SELECT created_by FROM common_exercises WHERE id=?', id).first();
+  if (!current) return fail('Exercice introuvable.', 404);
+  const owner = current.created_by === u.id;
+  if (!owner && !(await editOk(request, env, u))) return fail('Droit de suppression requis.', 403);
   const r=await db(env, 'DELETE FROM common_exercises WHERE id=?', id).run();
   if(!r.meta?.changes) return fail('Exercice introuvable.',404);
   return json({ ok: true });
