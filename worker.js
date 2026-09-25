@@ -39,7 +39,7 @@ async function serveAsset(request, env, url) {
   const res = await env.ASSETS.fetch(request);
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) headers.set(k, v);
-  if (url.pathname === '/sw.js' || url.pathname === '/app.js' || url.pathname === '/boot.js' || url.pathname === '/engine.js' || url.pathname === '/sports.js' || url.pathname === '/shared.js') headers.set('Cache-Control', 'no-cache');
+  if (url.pathname === '/sw.js') headers.set('Cache-Control', 'no-cache');
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
@@ -90,7 +90,15 @@ async function readJson(request, max = MAX_BODY) {
   try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : null; } catch { return null; }
 }
 
-/* Limitation de débit : lecture + incrément + décision dans une seule écriture SQL atomique. */
+/* Limitation de débit atomique : une seule écriture décide du compteur. */
+async function rlState(env, key) {
+  const row = await db(env, 'SELECT value FROM system_state WHERE key=?', 'rl:' + key).first();
+  try { return row ? JSON.parse(row.value) : null; } catch { return null; }
+}
+async function rlBlocked(env, key, max, windowMs) {
+  const s = await rlState(env, key), now = Date.now();
+  return !!s && now - Number(s.t || 0) < windowMs && Number(s.n || 0) >= max;
+}
 async function rlHit(env, key, windowMs) {
   const k='rl:'+key, now=Date.now();
   const r=await db(env, `INSERT INTO system_state(key,value) VALUES(?,?)
@@ -101,10 +109,11 @@ async function rlHit(env, key, windowMs) {
     RETURNING value`, k, JSON.stringify({n:1,t:now}), now, windowMs, now).first();
   try { return JSON.parse(r?.value || '{"n":1}'); } catch { return {n:1,t:now}; }
 }
-const rlReset = (env, key) => db(env, 'DELETE FROM system_state WHERE key=?', 'rl:'+key).run();
+const rlReset = (env, key) => db(env, 'DELETE FROM system_state WHERE key=?', 'rl:' + key).run();
 async function limited(env, key, max, windowMs) {
-  const s = await rlHit(env, key, windowMs);
-  return Number(s.n || 0) > max;
+  if (await rlBlocked(env,key,max,windowMs)) return true;
+  const s=await rlHit(env,key,windowMs);
+  return Number(s.n||0)>max;
 }
 
 let schemaReady = null;
@@ -181,7 +190,10 @@ async function handleApi(request, env, url) {
   try { await ensureSchema(env); } catch (e) { console.error('schema', e); return fail('Initialisation de la base impossible.', 500); }
 
   const secure = url.protocol === 'https:';
-  if (p === '/api/auth/register' && m === 'POST') return register(request, env, secure);
+  if (p === '/api/auth/register' && m === 'POST') {
+    try { return await register(request, env, secure); }
+    catch (e) { if (e && /UNIQUE/i.test(String(e.message))) return fail('Pseudo ou e-mail déjà utilisé.', 409); throw e; }
+  }
   if (p === '/api/auth/login' && m === 'POST') return login(request, env, secure);
   if (p === '/api/auth/logout' && m === 'POST') return logout(request, env, secure);
 
@@ -257,12 +269,7 @@ async function register(request, env, secure) {
   if (taken) return fail('Pseudo ou e-mail déjà utilisé.', 409);
 
   const { salt, hash } = await newPassword(password), now = Date.now(), id = uid();
-  try {
-    await db(env, 'INSERT INTO users(id,username,email,password_hash,password_salt,created_at,updated_at) VALUES(?,?,?,?,?,?,?)', id, username, email, hash, salt, now, now).run();
-  } catch (e) {
-    if (/unique|constraint/i.test(String(e?.message || e))) return fail('Pseudo ou e-mail déjà utilisé.', 409);
-    throw e;
-  }
+  await db(env, 'INSERT INTO users(id,username,email,password_hash,password_salt,created_at,updated_at) VALUES(?,?,?,?,?,?,?)', id, username, email, hash, salt, now, now).run();
   await db(env, "INSERT INTO user_data(user_id,seances_json,settings_json,favorites_json,goals_json,updated_at) VALUES(?,?,?,?,?,?)", id, '{"items":[],"tomb":{}}', '{}', '[]', '{}', now).run();
   await db(env, 'INSERT OR IGNORE INTO profiles(user_id,updated_at) VALUES(?,?)', id, now).run();
   await migrateLegacyForFirstUser(env, id);
@@ -278,10 +285,13 @@ async function login(request, env, secure) {
   if (!b) return fail('Données invalides.');
   const username = str(b.username, 40), password = String(b.password ?? '').slice(0, 200);
   const rk = 'login:' + clientIp(request) + ':' + username.toLowerCase();
+  // Incrément atomique AVANT la tentative : la décision se base sur le compteur déjà incrémenté,
+  // pas sur une lecture préalable — des tentatives concurrentes ne peuvent donc pas toutes passer
+  // avant que le compteur ne les rattrape (cf. limited(), même principe).
   if (await limited(env, rk, 10, 900000)) return fail('Trop d’essais. Réessaie dans quelques minutes.', 429);
   const row = await db(env, 'SELECT id,username,email,password_hash,password_salt FROM users WHERE lower(username)=lower(?) OR email=lower(?)', username, username).first();
   const computed = await passHash(password, row ? row.password_salt : DUMMY_SALT);
-  if (!row || !safeEq(computed, row.password_hash)) { return fail('Pseudo ou mot de passe incorrect.', 401); }
+  if (!row || !safeEq(computed, row.password_hash)) return fail('Pseudo ou mot de passe incorrect.', 401);
   await rlReset(env, rk);
   const token = await createSession(env, row.id);
   return json({ ok: true, user: { id: row.id, username: row.username, email: row.email } }, 200, { 'Set-Cookie': cookie('session', token, SESSION_DAYS * 86400, secure) });
@@ -382,47 +392,36 @@ function cleanSettings(o) {
     sp.notes=Array.isArray(o.sportProfile.notes)?o.sportProfile.notes.slice(0,50).map(x=>str(x,500)).filter(Boolean):[];
     out.sportProfile=sp;
   }
-  if (Array.isArray(o.goals)) {
-    out.goals = o.goals.slice(0,100).map(g => ({
-      id: str(g?.id,64) || uid(), name: str(g?.name,80), target: clamp(g?.target,0,1e9,0),
-      unit: str(g?.unit,20), kind: ['manual','sessions','climb'].includes(g?.kind) ? g.kind : 'manual',
-      current: clamp(g?.current,0,1e9,0), since: /^\d{4}-\d{2}-\d{2}$/.test(g?.since||'') ? g.since : undefined
-    })).filter(g => g.name);
-  }
-  if (Array.isArray(o.climbingLogs)) {
-    out.climbingLogs = o.climbingLogs.slice(0,500).map(x => ({
-      id: str(x?.id,64) || uid(), date: clamp(x?.date,0,9e15,Date.now()), type: str(x?.type,40),
-      grade: str(x?.grade,10), result: ['send','attempt','fail'].includes(x?.result) ? x.result : 'attempt',
-      attempts: clamp(x?.attempts,1,999,1), style: str(x?.style,40), note: str(x?.note,300)
-    }));
-  }
+  // Objectifs utilisateur (S.settings.goals côté client) : sans cette entrée, ils étaient silencieusement
+  // supprimés à chaque synchronisation des réglages, car cleanSettings() est une liste blanche stricte.
+  if (Array.isArray(o.goals)) out.goals = o.goals.slice(0, 100).map((x) => (x && str(x.name, 80) ? {
+    id: str(x.id, 64) || uid(),
+    name: str(x.name, 80),
+    target: clamp(x.target, -1000000, 1000000, 0),
+    unit: str(x.unit, 20),
+    kind: str(x.kind, 20) || 'manual',
+    current: clamp(x.current, -1000000, 1000000, 0),
+    since: isDate(x.since) ? x.since : undefined,
+  } : null)).filter(Boolean);
   return out;
 }
-
 async function settingsGet(env, u) {
-  const row = await db(env, 'SELECT settings_json,goals_json FROM user_data WHERE user_id=?', u.id).first();
+  const row = await db(env, 'SELECT settings_json FROM user_data WHERE user_id=?', u.id).first();
   let s = {}; try { s = JSON.parse(row?.settings_json || '{}'); } catch { /* vide */ }
-  if (!Array.isArray(s.goals)) { try { const g = JSON.parse(row?.goals_json || '[]'); if (Array.isArray(g)) s.goals = g; } catch { /* vide */ } }
   return json({ ok: true, settings: cleanSettings(s) });
 }
 async function settingsPost(request, env, u) {
-  const b = await readJson(request, 300000);
+  const b = await readJson(request, 20000);
   if (!b) return fail('Données invalides.');
   const clean = cleanSettings(b.settings ?? b);
-  const goalsJson = JSON.stringify(Array.isArray(clean.goals) ? clean.goals : []);
-  await db(env, 'UPDATE user_data SET settings_json=?,goals_json=?,updated_at=? WHERE user_id=?', JSON.stringify(clean), goalsJson, Date.now(), u.id).run();
+  await db(env, 'UPDATE user_data SET settings_json=?,updated_at=? WHERE user_id=?', JSON.stringify(clean), Date.now(), u.id).run();
   return json({ ok: true, settings: clean });
 }
 
 /* ═════════════ Calendrier ═════════════ */
 const rowToEvent = (r) => ({ id: r.id, date: r.event_date, sessionId: r.session_id, title: r.title || '', completed: !!r.completed, recurrence: r.recurrence_json ? safeParse(r.recurrence_json) : null });
 function safeParse(t) { try { return JSON.parse(t); } catch { return null; } }
-const isDate = (s) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return false;
-  const [y, m, d] = s.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
-};
+const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && !Number.isNaN(Date.parse(s));
 
 async function calendarGet(url, env, u) {
   const from = url.searchParams.get('from'), to = url.searchParams.get('to');
@@ -440,7 +439,7 @@ async function calendarPost(request, env, u) {
   let rec = null;
   if (b.recurrence && b.recurrence.freq === 'weekly') rec = { freq: 'weekly', until: isDate(b.recurrence.until) ? b.recurrence.until : null };
   const count = await db(env, 'SELECT COUNT(*) c FROM calendar_events WHERE user_id=?', u.id).first();
-  if (Number(count?.c) >= 3000) return fail('Trop d’événements.', 413);
+  if (Number(count?.c) > 3000) return fail('Trop d’événements.', 413);
   const now = Date.now();
   const r = await db(env, `INSERT INTO calendar_events(id,user_id,event_date,session_id,title,completed,recurrence_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,updated_at=excluded.updated_at
@@ -454,7 +453,7 @@ async function calendarPost(request, env, u) {
 function cleanHistoryData(d) {
   d = d && typeof d === 'object' ? d : {};
   return {
-    rpe: clamp(d.rpe, 1, 5, 0), focus: str(d.focus, 20), note: str(d.note, 1000),
+    rpe: clamp(d.rpe, 1, 5, 0), focus: str(d.focus, 20),
     exercises: (Array.isArray(d.exercises) ? d.exercises : []).slice(0, 60).map((e) => ({
       name: str(e?.name, 80), libId: str(e?.libId, 40), group: str(e?.group, 20),
       intensity: ['low', 'mod', 'high'].includes(e?.intensity) ? e.intensity : '', risk: ['finger', 'shoulder', 'elbow', 'knee'].includes(e?.risk) ? e.risk : '',
@@ -476,8 +475,15 @@ async function historyPost(request, env, u) {
   const id = /^[\w-]{1,64}$/.test(b.id || '') ? b.id : uid();
   const data = JSON.stringify(cleanHistoryData(b.data));
   if (data.length > 60000) return fail('Séance trop volumineuse.', 413);
-  await db(env, 'INSERT OR IGNORE INTO history(id,user_id,session_id,session_name,started_at,duration_seconds,data_json) VALUES(?,?,?,?,?,?,?)',
+  // ON CONFLICT scopé au bon user_id (même motif que calendarPost) : un retry idempotent du même
+  // utilisateur réussit toujours ; une collision d'identifiant avec un AUTRE utilisateur (en pratique
+  // quasi impossible avec crypto.randomUUID, mais jamais à exclure) ne doit jamais être avalée
+  // silencieusement — meta.changes===0 le révèle et on renvoie une erreur claire plutôt qu'un faux succès.
+  const r = await db(env, `INSERT INTO history(id,user_id,session_id,session_name,started_at,duration_seconds,data_json) VALUES(?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id,session_name=excluded.session_name,started_at=excluded.started_at,duration_seconds=excluded.duration_seconds,data_json=excluded.data_json
+    WHERE history.user_id=excluded.user_id`,
     id, u.id, b.sessionId ? str(b.sessionId, 64) : null, str(b.sessionName, 100) || 'Séance', startedAt, clamp(b.durationSeconds, 0, 86400, 0), data).run();
+  if (!r.meta || r.meta.changes === 0) return fail('Identifiant déjà utilisé.', 409);
   return json({ ok: true, id });
 }
 
@@ -496,7 +502,7 @@ async function commonAdd(request, env, u) {
   if (await limited(env, 'common-add:' + u.id, 40, DAY)) return fail('Trop d’ajouts aujourd’hui. Réessaie demain.', 429);
   const data = cleanExercise({ ...(b.exercise || {}), name: b.name ?? b.exercise?.name }), now = Date.now(), id = uid();
   const count = await db(env, 'SELECT COUNT(*) c FROM common_exercises').first();
-  if (Number(count?.c) >= 2500) return fail('La bibliothèque commune est pleine.', 413);
+  if (Number(count?.c) > 2500) return fail('La bibliothèque commune est pleine.', 413);
   await db(env, 'INSERT INTO common_exercises(id,name,data_json,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?)', id, data.name, JSON.stringify(data), u.id, now, now).run();
   return json({ ok: true, id });
 }
@@ -547,8 +553,8 @@ async function editUnlock(request, env, u, secure) {
   if (!env.EDIT_CODE) return fail('EDIT_CODE n’est pas configuré sur le serveur.', 500);
   const b = await readJson(request, 2000);
   const rk = 'edit:' + clientIp(request) + ':' + u.id;
-  if (await limited(env, rk, 5, 900000)) return fail('Trop d’essais. Réessaie dans quelques minutes.', 429);
-  if (!b || !safeEq(String(b.code ?? ''), env.EDIT_CODE)) { return fail('Code incorrect.', 403); }
+  if (await rlBlocked(env, rk, 5, 900000)) return fail('Trop d’essais. Réessaie dans quelques minutes.', 429);
+  if (!b || !safeEq(String(b.code ?? ''), env.EDIT_CODE)) { await rlHit(env, rk, 900000); return fail('Code incorrect.', 403); }
   await rlReset(env, rk);
   const exp = Date.now() + 30 * DAY;
   const value = `${u.id}.${exp}.${await hmac(env.EDIT_CODE, `${u.id}.${exp}`)}`;
