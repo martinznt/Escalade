@@ -421,7 +421,7 @@ SUBMIT.saveEx = async (form) => {
       saveSeance({ ...s, exercises: list });
     } else if (ctx.kind === 'personal' && ctx.id) { await api('PUT', `/api/exercises/personal/${ctx.id}`, { exercise: e }); await refreshExercises(); }
     else if (ctx.kind === 'personal') { await api('POST', '/api/exercises/personal', { exercise: e }); await refreshExercises(); }
-    else if (ctx.kind === 'common' && ctx.id) await withEdit(() => api('PUT', `/api/exercises/common/${ctx.id}`, { exercise: e }).then(refreshExercises));
+    else if (ctx.kind === 'common' && ctx.id) { const owner = S.common.find((x) => x.id === ctx.id)?.createdBy === S.user?.id; await (owner ? api('PUT', `/api/exercises/common/${ctx.id}`, { exercise: e }).then(refreshExercises) : withEdit(() => api('PUT', `/api/exercises/common/${ctx.id}`, { exercise: e }).then(refreshExercises))); }
     else if (ctx.kind === 'newcommon') { await api('POST', '/api/exercises/common', { name: e.name, exercise: e }); await refreshExercises(); }
     closeSheet(); toast('Enregistré'); render();
   } catch (err) { toast(err.offline ? 'Il faut une connexion pour cette action.' : err.message); }
@@ -445,13 +445,13 @@ SUBMIT.unlock = async (form) => {
 ACT.lockEdit = async () => { try { await api('POST', '/api/edit/lock', {}); } catch { /* rien */ } S.unlocked = false; toast('Modification verrouillée'); render(); };
 
 /* Bibliothèque : coach (intégrée), commune, personnelle */
-const listFor = (kind) => kind === 'coach' ? LIBRARY.filter((x) => x.role === 'main').map((x) => ({ id: x.id, name: x.name, data: libToEx(x) })) : kind === 'common' ? S.common.map((x) => ({ id: x.id, name: x.name, data: normalizeEx(x.data) })) : S.personal.map((x) => ({ id: x.id, name: x.name, data: normalizeEx(x.data) }));
+const listFor = (kind) => kind === 'coach' ? LIBRARY.filter((x) => x.role === 'main').map((x) => ({ id: x.id, name: x.name, data: libToEx(x) })) : kind === 'common' ? S.common.map((x) => ({ id: x.id, name: x.name, createdBy: x.createdBy || null, data: normalizeEx(x.data) })) : S.personal.map((x) => ({ id: x.id, name: x.name, data: normalizeEx(x.data) }));
 function vLibrary() {
   const kind = S.sub.lib;
   return h`${seg('subLib', kind, [['coach', 'Coach'], ['common', 'Commune'], ['personal', 'Perso']])}
     ${S.addTo && getSeance(S.addTo) ? h`<div class="card" style="border-color:var(--accent)"><div class="row"><div class="grow">Ajout à <b>${getSeance(S.addTo).name}</b></div><button class="btn pri sm" data-act="doneAdd">Terminé</button></div></div>` : ''}
     <input type="text" data-input="libq" placeholder="Rechercher un exercice…" value="${S.libQuery}" aria-label="Rechercher">
-    <div class="row wrapf">${kind !== 'coach' ? h`<button class="btn sm" data-act="newLibEx">＋ Nouvel exercice ${kind === 'common' ? 'commun' : 'perso'}</button>` : ''}${kind === 'common' ? h`<span class="muted tiny">${S.unlocked ? '🔓 modification débloquée' : '🔒 modification : code requis'}</span>` : ''}</div>
+    <div class="row wrapf">${kind !== 'coach' ? h`<button class="btn sm" data-act="newLibEx">＋ Nouvel exercice ${kind === 'common' ? 'commun' : 'perso'}</button>` : ''}${kind === 'common' ? h`<span class="muted tiny">Créateur : modification directe · autres comptes : droit administrateur</span>` : ''}</div>
     <div class="card" id="liblist">${libRows(kind)}</div>
     <details class="card"><summary><b>Sources d’inspiration</b></summary>${SOURCES.map((s) => h`<p class="small"><b>${s.title}</b> — ${s.by}<br><span class="muted">${s.note}</span></p>`)}<p class="tiny muted">Les séances suivent des principes d’entraînement courants ; elles ne recopient pas ces ouvrages et ne remplacent ni un coach ni un avis médical.</p></details>`;
 }
@@ -481,7 +481,7 @@ ACT.libKeep = async () => { const x = selEx(); if (!x) return; try { await api('
 ACT.libEdit = () => { const x = selEx(); if (x) openSheet(exForm(x.data, { kind: S.libSel.kind, id: x.id })); };
 ACT.libDel = async () => {
   const x = selEx(); if (!x || !confirmBox(`Supprimer « ${x.name} » ?`)) return;
-  try { const kind = S.libSel.kind; await withEdit(() => api('DELETE', kind === 'common' ? `/api/exercises/common/${x.id}` : `/api/exercises/personal/${x.id}`).then(refreshExercises)); if (!$('#sheet .err')) { closeSheet(); render(); } } catch (e) { toast(e.offline ? 'Il faut une connexion.' : e.message); }
+  try { const kind = S.libSel.kind; const owner = kind === 'common' && x.createdBy === S.user?.id; const fn = () => api('DELETE', kind === 'common' ? `/api/exercises/common/${x.id}` : `/api/exercises/personal/${x.id}`).then(refreshExercises); await (owner ? fn() : withEdit(fn)); if (!$('#sheet .err')) { closeSheet(); render(); } } catch (e) { toast(e.offline ? 'Il faut une connexion.' : e.message); }
 };
 ACT.addEx = () => {
   const s = getSeance(S.openId); if (!s) return;
