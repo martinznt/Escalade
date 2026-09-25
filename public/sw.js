@@ -1,5 +1,5 @@
 // sw.js — hors ligne : l'appli s'ouvre même sans réseau. Réseau d'abord (mises à jour immédiates), cache en secours.
-const CACHE = 'seances-entrainement-v8-1';
+const CACHE = 'seances-entrainement-v7-1';
 const SHELL = ['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/engine.js', '/library.js', '/shared.js', '/sports.js', '/commands.js', '/outbox.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
 
 self.addEventListener('install', (e) => {

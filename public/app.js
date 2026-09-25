@@ -34,7 +34,6 @@ const S = {
   social: { me: null, feed: null, results: [], loading: false, q: '' }, progressEx: '', silDays: 7, player: null, authMode: 'login', authError: '', libQuery: '',
 };
 const ACT = {};
-const SUBMIT = {};
 const DKEY = () => `sea:data:${S.user?.id}`;
 
 function persistLocalNow() {
@@ -213,10 +212,10 @@ function render() {
   const views = { home: vHome, seances: vSeances, generate: vGenerate, progress: vProgress, settings: vSettings };
   app.innerHTML = h`<header class="wrap top" style="padding-bottom:0"><span class="brand"><img src="/icon-192.png" alt=""> Seances entrainement</span><span class="row small muted"><span id="syncdot" class="dot"></span></span></header>
     <main class="wrap">${views[S.tab]()}</main>
-    <nav class="tabs" aria-label="Navigation">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" data-tab="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span>${label}</button>`)}</nav>`.s;
+    <nav class="tabs" aria-label="Navigation">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span>${label}</button>`)}</nav>`.s;
   setSync(S.sync);
 }
-ACT.tab = (el) => { const id = el?.dataset?.id || el?.dataset?.tab; if (!['home','seances','generate','progress','settings'].includes(id)) return; S.tab = id; if (S.tab === 'seances' && S.sub.seances === 'detail') S.sub.seances = 'list'; window.scrollTo(0, 0); render(); if (S.tab === 'progress' && S.sub.progress === 'friends') loadSocial(); };
+ACT.tab = (el) => { S.tab = el.dataset.id; if (S.tab === 'seances' && S.sub.seances === 'detail') S.sub.seances = 'list'; window.scrollTo(0, 0); render(); if (S.tab === 'progress' && S.sub.progress === 'friends') loadSocial(); };
 ACT.closeSheet = closeSheet;
 
 const exIcon = (e) => h`<div class="ico">${e.emoji}</div>`;
@@ -322,6 +321,7 @@ function openDaySheet() {
     <button class="btn" data-act="closeSheet">Fermer</button>`);
 }
 ACT.delEvent = (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; if (e.recurrence && !confirmBox('Supprimer toute la série hebdomadaire ?')) return; S.events = S.events.filter((x) => x.id !== e.id); queue('DELETE', `/api/calendar/${encodeURIComponent(e.id)}`); openDaySheet(); render(); };
+const SUBMIT = {};
 SUBMIT.addEvent = (form) => {
   const f = Object.fromEntries(new FormData(form)), s = getSeance(f.sid); if (!s) return;
   const ev = { id: uid(), date: S.selDay, title: s.name, sessionId: s.id, completed: false, recurrence: f.weekly ? { freq: 'weekly', until: null } : null };
@@ -690,13 +690,14 @@ function saveSettings() { saveLocal(); queue('POST', '/api/settings', { settings
 function profileAnalysisCard(activityId, profile) {
   const a=ACTIVITY_PRESETS[activityId]||profile.activities?.[activityId]; if(!a)return '';
   const an=analyzeProfile(profile,activityId), metrics=(profile.metrics||[]).filter(m=>m.activityId===activityId);
-  return h`<div class="card flat"><div class="row between"><b>${a.emoji||'🏅'} ${a.label}</b><div class="row"><span class="tiny muted">${an.metricCount} indicateur(s)</span><button class="btn sm" data-act="addDomain" data-id="${activityId}">＋ Catégorie</button></div></div>${an.domains.length?an.domains.map(d=>h`<div class="item"><div class="grow"><b>${d.label||d.domain}</b><div class="meter"><i style="width:${d.score}%"></i></div></div><span class="small">${d.score}/100</span></div>`):h`<p class="muted tiny">Aucune donnée. Ajoute ton niveau, un record ou un score.</p>`}${an.strengths.length?h`<p class="small"><b>Forces détectées :</b> ${an.strengths.map(x=>x.label||x.domain).join(', ')}</p>`:''}${an.weaknesses.length?h`<p class="small"><b>Axes à travailler :</b> ${an.weaknesses.map(x=>x.label||x.domain).join(', ')}</p>`:''}${metrics.length?h`<details><summary>Informations enregistrées</summary>${metrics.slice(0,20).map(m=>h`<div class="item"><div class="grow"><b>${m.name}</b><div class="muted tiny">${m.value} ${m.unit||''} · ${m.domain}</div></div><button class="btn sm" data-act="editMetric" data-id="${m.id}">Modifier</button><button class="btn danger sm" data-act="delMetric" data-id="${m.id}">✕</button></div>`)}</details>`:''}</div>`;
+  const anyEstimated = an.domains.some(d=>d.estimated);
+  return h`<div class="card flat"><div class="row between"><b>${a.emoji||'🏅'} ${a.label}</b><div class="row"><span class="tiny muted">${an.metricCount} indicateur(s)</span><button class="btn sm" data-act="addDomain" data-id="${activityId}">＋ Catégorie</button></div></div>${an.domains.length?an.domains.map(d=>h`<div class="item"><div class="grow"><b>${d.label||d.domain}</b><div class="meter"><i style="width:${d.score}%"></i></div></div><span class="small">${d.estimated?'≈':''}${d.score}/100${d.estimated?h`<span class="tiny muted"> (estimation)</span>`:''}</span></div>`):h`<p class="muted tiny">Aucune donnée. Ajoute ton niveau, un record ou un score.</p>`}${an.strengths.length?h`<p class="small"><b>${an.strengths.some(x=>x.estimated)?'Forces probables' :'Forces détectées'} :</b> ${an.strengths.map(x=>x.label||x.domain).join(', ')}</p>`:''}${an.weaknesses.length?h`<p class="small"><b>${an.weaknesses.some(x=>x.estimated)?'Axes probablement à travailler':'Axes à travailler'} :</b> ${an.weaknesses.map(x=>x.label||x.domain).join(', ')}</p>`:''}${anyEstimated?h`<p class="tiny muted">≈ Estimation calculée à partir de la valeur saisie (pas une mesure). Ajoute un « score personnel » à une information pour remplacer l’estimation par ton propre jugement.</p>`:''}${metrics.length?h`<details><summary>Informations enregistrées</summary>${metrics.slice(0,20).map(m=>h`<div class="item"><div class="grow"><b>${m.name}</b><div class="muted tiny">${m.value} ${m.unit||''} · ${m.domain}</div></div><button class="btn sm" data-act="editMetric" data-id="${m.id}">Modifier</button><button class="btn danger sm" data-act="delMetric" data-id="${m.id}">✕</button></div>`)}</details>`:''}</div>`;
 }
 function vSportProfile(){
   const p=S.settings.sportProfile||defaultProfile(), acts=Object.entries(ACTIVITY_PRESETS).concat(Object.entries(p.activities||{}).filter(([id])=>!ACTIVITY_PRESETS[id]));
   return h`<div class="card"><div class="row between"><h3>🧠 Profil sportif intelligent</h3><button class="btn sm pri" data-act="addActivity">＋ Activité</button></div><p class="muted small">Ton profil ne stocke pas seulement des performances : chaque indicateur est rattaché à un domaine. Le moteur peut ainsi comparer tes domaines à l’intérieur d’une activité et orienter les séances vers tes points faibles ou tes points forts.</p>
     <div class="chips">${acts.map(([id,a])=>h`<button class="chip ${p.activities?.[id]?'on':''}" data-act="sportActivity" data-id="${id}">${a.emoji||'🏅'} ${a.label}</button>`)}</div>
-    ${acts.map(([id,a])=>p.activities?.[id]?profileAnalysisCard(id,p):'')}
+    ${acts.map(([id,a])=>p.activities?.[id]?profileAnalysisCard(id,p):'').join('')}
     <button class="btn" data-act="addMetric">＋ Ajouter une information / performance</button>
   </div>`;
 }
@@ -711,7 +712,7 @@ function vSettings() {
       <button class="btn pri" type="submit">Enregistrer mon profil</button></form>
     <div class="card"><h3>▶ Pendant la séance</h3><label>Repos par défaut (s)<input type="number" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest??60}"></label>${[['sound','Bips pour les chronos'],['vibration','Vibration en fin de repos'],['voice','Lire les exercices à voix haute'],['keepAwake','Garder l’écran allumé'],['handsFree','Mode mains pleines de magnésie']].map(([k,l])=>h`<label class="chk"><input type="checkbox" data-change="pref" name="${k}" ${st[k]?'checked':''}> ${l}</label>`)}</div>
     ${vAppearance()}<div class="card"><h3>👤 Compte : ${S.user.username}</h3><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn" data-act="export">📥 Sauvegarde (fichier)</button><label class="btn" style="display:inline-block;cursor:pointer">📤 Restaurer<input type="file" accept="application/json" data-change="importFile" class="hidden"></label></div><div class="row wrapf">${S.unlocked?h`<button class="btn" data-act="lockEdit">🔓 Reverrouiller</button>`:h`<button class="btn" data-act="askUnlock">🔒 Code de modification</button>`}<button class="btn" data-act="syncNow">🔄 Synchroniser</button><button class="btn" data-act="diag">🩺 Diagnostic</button></div><div class="row wrapf"><button class="btn" data-act="logout">Se déconnecter</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></div>
-    <p class="muted tiny center">Seances entrainement · v8.1 · Plateforme sportive multi-activité.</p>`;
+    <p class="muted tiny center">Seances entrainement · v7.0 · Plateforme sportive multi-activité.</p>`;
 }
 SUBMIT.saveProfile = (form) => {
   const f = Object.fromEntries(new FormData(form)), keys = Object.keys(EQUIPMENT);
@@ -723,7 +724,7 @@ CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked :
 CHG.accent = (el) => setAppearance({ accent: el.value });
 function diagOutboxHtml() {
   const first = S.outbox[0];
-  const pending = first ? `<p class="muted small">File d’attente : ${S.outbox.length} action(s) en attente. En tête : ${first.method} ${first.path}${first.attempts ? ` (échec ${first.attempts}× jusqu’ici, nouvel essai en cours)` : ''}.</p>` : '';
+  const pending = first ? h`<p class="muted small">File d’attente : ${S.outbox.length} action(s) en attente. En tête : ${first.method} ${first.path}${first.attempts ? ` (échec ${first.attempts}× jusqu’ici, nouvel essai en cours)` : ''}.</p>` : '';
   const failed = S.failedOutbox.length ? h`<details><summary>Dernières actions écartées (${S.failedOutbox.length})</summary><ul class="why-list">${S.failedOutbox.slice(-5).reverse().map((f) => h`<li>${new Date(f.at).toLocaleString('fr-FR')} · ${f.method} ${f.path} · ${f.error}</li>`)}</ul></details>` : '';
   return h`${pending}${failed}`;
 }
@@ -740,7 +741,7 @@ SUBMIT.delacct = async (form) => { try { await api('POST', '/api/auth/delete', {
 ACT.export = () => {
   const appearance = window.__sea?.load?.() || {};
   const data = {
-    app: 'seance-entrainement', version: 8.1, exportedAt: new Date().toISOString(),
+    app: 'seance-entrainement', version: 6, exportedAt: new Date().toISOString(),
     seances: S.seances, history: S.history, events: S.events, settings: S.settings,
     personal: S.personal, appearance,
   };
@@ -798,7 +799,7 @@ function initInputs(keepLoad) {
 function startPlayer(session, eventId) {
   const s = normalizeSession(session);
   if (!s.exercises.length) { toast('Cette séance est vide'); return; }
-  S.player = { s, eventId: eventId || null, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pausedAt: 0, pausedTotal: 0, workPausedTotal: 0, workStartedAt: 0, log: s.exercises.map((e) => ({ name: e.name, libId: e.libId, group: e.group, intensity: e.intensity, risk: e.risk, muscles: e.muscles, sets: [] })), rpe: 0, note: '', prs: [] };
+  S.player = { s, eventId: eventId || null, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pausedAt: 0, pausedTotal: 0, log: s.exercises.map((e) => ({ name: e.name, libId: e.libId, group: e.group, intensity: e.intensity, risk: e.risk, muscles: e.muscles, sets: [] })), rpe: 0, note: '', prs: [] };
   initInputs(false);
   $('#player').classList.add('open'); document.body.style.overflow = 'hidden';
   wake(); beep(1, 1); drawPlayer(); clearInterval(startPlayer.t); startPlayer.t = setInterval(tick, 250); voiceStart(); speak(`${s.exercises[0].name}`);
@@ -821,9 +822,7 @@ function startRest(sec) { const p = S.player; const safe = Math.max(0, Number(se
 function completeSet(secondsDone) {
   const p = S.player, ex = cur();
   if (ex.perSide && p.side === 0) { p.side = 1; p.phase = 'ready'; buzz(80); toast('Change de côté'); drawPlayer(); return; }
-  const workPause = (p.workPausedTotal || 0) + (p.paused && p.pausedAt && p.phase === 'work' ? Date.now() - p.pausedAt : 0);
-  const accurateSeconds = ex.mode === 'time' && p.workStartedAt ? Math.max(0, Math.round((Date.now() - p.workStartedAt - workPause) / 1000)) : secondsDone;
-  p.log[p.i].sets.push({ reps: ex.mode === 'reps' ? p.reps : 0, seconds: ex.mode === 'time' ? accurateSeconds : 0, load: p.load || 0, done: true });
+  p.log[p.i].sets.push({ reps: ex.mode === 'reps' ? p.reps : 0, seconds: ex.mode === 'time' ? secondsDone : 0, load: p.load || 0, done: true });
   p.side = 0;
   if (p.set + 1 < ex.sets) { p.set++; if (ex.rest > 0) startRest(ex.rest); else { p.phase = 'ready'; initInputs(true); drawPlayer(); } }
   else nextExercise();
@@ -876,11 +875,11 @@ function vRecap(p) {
     <button class="btn pri big" data-act="pSave" ${sets ? '' : 'disabled'}>💾 Enregistrer</button><button class="btn" data-act="pDiscard">Ne pas enregistrer</button></div>`;
 }
 Object.assign(ACT, {
-  play: (el) => { const s = el.dataset.gen ? S.gen.result?.session : getSeance(el.dataset.id); closeSheet(); if (!s) { toast('Séance introuvable. Recharge tes données.'); return; } if (!Array.isArray(s.exercises) || !s.exercises.length) { toast('Cette séance ne contient aucun exercice.'); return; } try { startPlayer(s, el.dataset.event); } catch (e) { console.error('Impossible de lancer la séance', e); toast('Impossible de lancer cette séance. Recharge l’application.'); } },
+  play: (el) => { const s = el.dataset.gen ? S.gen.result?.session : getSeance(el.dataset.id); closeSheet(); if (s) startPlayer(s, el.dataset.event); },
   pAdj: (el) => { const p = S.player, k = el.dataset.k, d = Number(el.dataset.d), ex = cur(); if (k === 'reps') p.reps = Math.max(0, p.reps + d); else if (k === 'load') p.load = Math.max(0, Math.round((p.load + d * 0.5) * 10) / 10); else p.secs = Math.max(1, p.secs + d * 5); drawPlayer(); },
-  pGo: () => { const p = S.player, ex = cur(); if (ex.mode === 'time') { p.phase = 'work'; p.end = Date.now() + p.secs * 1000; p.total = p.secs * 1000; p.lastBeep = 0; p.started = Date.now(); p.workStartedAt = p.started; p.workPausedTotal = 0; p.paused = false; p.pausedAt = 0; beep(880, 120); drawPlayer(); } else { buzz(40); completeSet(0); } },
-  pWorkDone: () => { const p = S.player; const pauseNow = p.paused && p.pausedAt ? Date.now() - p.pausedAt : 0; completeSet(Math.max(1, Math.round((Date.now() - p.started - (p.workPausedTotal || 0) - pauseNow) / 1000))); },
-  pPause: () => { const p = S.player; if (!p || !['rest', 'work'].includes(p.phase)) return; const now = Date.now(); if (p.paused) { const pausedFor = Math.max(0, now - (p.pausedAt || now)); p.pausedTotal = (p.pausedTotal || 0) + pausedFor; if (p.phase === 'work') p.workPausedTotal = (p.workPausedTotal || 0) + pausedFor; p.end = now + Math.max(0, p.remaining || 0); p.paused = false; p.pausedAt = 0; } else { p.remaining = Math.max(0, p.end - now); p.paused = true; p.pausedAt = now; } drawPlayer(); },
+  pGo: () => { const p = S.player, ex = cur(); if (ex.mode === 'time') { p.phase = 'work'; p.end = Date.now() + p.secs * 1000; p.total = p.secs * 1000; p.lastBeep = 0; p.started = Date.now(); beep(880, 120); drawPlayer(); } else { buzz(40); completeSet(0); } },
+  pWorkDone: () => { const p = S.player; completeSet(Math.max(1, Math.round((Date.now() - p.started) / 1000))); },
+  pPause: () => { const p = S.player; if (!p || !['rest', 'work'].includes(p.phase)) return; const now = Date.now(); if (p.paused) { p.pausedTotal = (p.pausedTotal || 0) + Math.max(0, now - (p.pausedAt || now)); p.end = now + Math.max(0, p.remaining || 0); p.paused = false; p.pausedAt = 0; } else { p.remaining = Math.max(0, p.end - now); p.paused = true; p.pausedAt = now; } drawPlayer(); },
   pRestAdd: () => { const p = S.player; if (!p || p.phase !== 'rest') return; if (p.paused) p.remaining = Math.max(0, p.remaining || 0) + 30000; else p.end += 30000; p.total += 30000; tick(); drawPlayer(); },
   pRestSkip: () => { const p = S.player; p.phase = 'ready'; initInputs(true); drawPlayer(); },
   pSkip: () => { if (!confirmBox('Passer cet exercice ?')) return; nextExercise(); },
