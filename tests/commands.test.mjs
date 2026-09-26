@@ -19,7 +19,7 @@ ok('« Ajoute 5 minutes de gainage »', () => {
 });
 ok('« Montre mes records »', () => {
   assert.equal(parseCommand('Montre mes records.').type, 'showRecords');
-  assert.equal(parseCommand('Affiche ma progression').type, 'showRecords');
+  assert.equal(parseCommand('Affiche ma progression').type, 'showProgress');
 });
 ok('« Supprime ma dernière séance » est marquée destructive', () => {
   const c = parseCommand('Supprime ma dernière séance');
@@ -34,6 +34,15 @@ ok('minutes bornées entre 5 et 180', () => {
   assert.equal(parseCommand('Fais une séance de 3 minutes').minutes, 5);
   assert.equal(parseCommand('Fais une séance de 500 minutes').minutes, 180);
 });
+
+ok('« que faire aujourd’hui » → options du jour', () => { assert.equal(parseCommand('Qu’est-ce que je fais aujourd’hui ?').type, 'today'); });
+ok('« remplace X par Y » garde le remplaçant', () => { const c = parseCommand('Remplace les pompes par des dips'); assert.equal(c.type, 'swapExercise'); assert.equal(c.query, 'pompes'); assert.equal(c.by, 'dips'); });
+ok('« je n’ai que 12 minutes » → adaptation de durée', () => { const c = parseCommand('Je n’ai que 12 minutes'); assert.equal(c.type, 'adaptDuration'); assert.equal(c.minutes, 12); });
+ok('« pas de barre aujourd’hui » → matériel indisponible', () => { const c = parseCommand('Pas de barre de traction aujourd’hui'); assert.equal(c.type, 'equipmentOff'); assert.ok(c.equipment.includes('bar')); });
+ok('« planifie une séance demain » → date calculée', () => { const now = new Date(2026, 0, 10, 9); const c = parseCommand('Planifie une séance demain', now); assert.equal(c.type, 'plan'); assert.equal(c.date, '2026-01-11'); });
+ok('séance de course légère : activité et mode léger détectés', () => { const c = parseCommand('Fais une séance de course légère de 30 min'); assert.equal(c.type, 'generate'); assert.equal(c.activity, 'running'); assert.equal(c.light, true); assert.equal(c.minutes, 30); });
+ok('« retire le gainage » demande confirmation', () => { const c = parseCommand('Retire le gainage'); assert.equal(c.type, 'removeExercise'); assert.equal(c.confirm, true); });
+ok('chaque intention reconnue porte un résumé', () => { for (const t of ['Montre mes records', 'Fais une séance de 20 minutes', 'Remplace les tractions']) assert.ok(parseCommand(t).summary); });
 
 console.log('addExerciseToSession / findExerciseInSession');
 const { session } = generateSession({ focus: 'devers', size: 'moyenne', seed: 1 }, { now: Date.now() });

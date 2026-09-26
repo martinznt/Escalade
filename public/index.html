@@ -2,12 +2,12 @@
 <html lang="fr" data-mode="dark">
 <head>
 <meta charset="utf-8">
-<title>Seances entrainement</title>
+<title>Mes séances</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Seances entrainement : tes séances d’escalade et de renforcement, avec chronos, progression et générateur intelligent.">
-<meta name="theme-color" content="#111214">
-<meta name="application-name" content="Seances entrainement">
-<meta name="apple-mobile-web-app-title" content="Seances entrainement">
+<meta name="description" content="Mes séances : entraînement multi-activité (escalade, musculation, renforcement, course, natation), profil intelligent, séances générées et expliquées, progression personnelle.">
+<meta name="theme-color" content="#16110e">
+<meta name="application-name" content="Mes séances">
+<meta name="apple-mobile-web-app-title" content="Mes séances">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,11 +18,12 @@
 <script src="/boot.js"></script>
 </head>
 <body>
-<div id="app" aria-live="polite"></div>
+<div id="app" aria-live="polite"><div class="boot-loading" role="status">Chargement…</div></div>
 <div id="sheet"></div>
+<div id="dialog"></div>
 <div id="player" role="dialog" aria-label="Séance en cours"></div>
-<div id="toast" role="status"></div>
-<noscript><p style="padding:2rem;text-align:center">Seances entrainement a besoin de JavaScript.</p></noscript>
+<div id="toast" role="status" aria-live="polite"></div>
+<noscript><p style="padding:2rem;text-align:center">Mes séances a besoin de JavaScript.</p></noscript>
 <script type="module" src="/app.js"></script>
 </body>
 </html>

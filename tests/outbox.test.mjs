@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { decideOutboxError, MAX_SERVER_ATTEMPTS } from '../public/outbox.js';
+import { decideOutboxError, MAX_SERVER_ATTEMPTS, retryDelay, newOpId, describeOp } from '../public/outbox.js';
 
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓', name); };
 const op = (attempts = 0) => ({ method: 'POST', path: '/api/exercises/personal', body: {}, attempts });
@@ -9,9 +9,9 @@ ok('hors-ligne : on rejoue plus tard, le compteur ne bouge pas', () => {
   const d = decideOutboxError(op(2), { offline: true });
   assert.equal(d.action, 'retry-later'); assert.equal(d.attempts, 2);
 });
-ok('401 (session) : on rejoue plus tard, le compteur ne bouge pas', () => {
+ok('401 (session) : la file se met en pause jusqu’à la reconnexion, rien n’est perdu', () => {
   const d = decideOutboxError(op(1), { status: 401 });
-  assert.equal(d.action, 'retry-later'); assert.equal(d.attempts, 1);
+  assert.equal(d.action, 'pause-auth'); assert.equal(d.attempts, 1);
 });
 ok('429 (limite de débit) : on rejoue plus tard, le compteur ne bouge pas', () => {
   const d = decideOutboxError(op(0), { status: 429 });
@@ -19,7 +19,7 @@ ok('429 (limite de débit) : on rejoue plus tard, le compteur ne bouge pas', () 
 });
 ok('erreur 4xx définitive (hors 401/429) : on écarte immédiatement, la file continue', () => {
   const d = decideOutboxError(op(0), { status: 409, message: 'Cet élément existe déjà.' });
-  assert.equal(d.action, 'drop-failed'); assert.equal(d.reason, 'Cet élément existe déjà.');
+  assert.equal(d.action, 'drop-failed'); assert.match(d.reason, /Conflit : Cet élément existe déjà\./);
 });
 ok('erreur serveur (5xx) sous le seuil : on rejoue plus tard, le compteur avance', () => {
   const d = decideOutboxError(op(0), { status: 500 });
@@ -41,5 +41,11 @@ ok('une erreur serveur transitoire suivie d’un succès ne doit jamais atteindr
   for (let i = 0; i < 2; i++) { const d = decideOutboxError(op(a), { status: 500 }); assert.equal(d.action, 'retry-later'); a = d.attempts; }
   assert.equal(a, 2);
 });
+
+ok('400 : écartée en échec avec le message du serveur', () => { const d = decideOutboxError(op(0), { status: 400, message: 'Nom requis.' }); assert.equal(d.action, 'drop-failed'); assert.equal(d.reason, 'Nom requis.'); });
+ok('425 (opération en cours côté serveur) : on rejoue plus tard', () => { assert.equal(decideOutboxError(op(0), { status: 425 }).action, 'retry-later'); });
+ok('délai croissant plafonné à 5 min', () => { assert.equal(retryDelay(1), 2000); assert.equal(retryDelay(2), 4000); assert.equal(retryDelay(30), 300000); });
+ok('identifiants d’opération uniques', () => { const s = new Set(Array.from({ length: 500 }, newOpId)); assert.equal(s.size, 500); });
+ok('libellé lisible', () => { assert.equal(describeOp({ method: 'POST', path: '/api/history' }), 'Enregistrement — séance réalisée'); });
 
 console.log(`\n${n} tests OK`);
