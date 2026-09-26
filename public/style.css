@@ -1,9 +1,11 @@
-/* Mes séances — styles. Sombre, doux, premium mais calme : brun profond, cuivre et or utilisés avec retenue.
+/* Mes séances — styles. Mode sombre noir pur, sobre ; la palette ne change que la couleur d'accent.
    Le thème repose sur data-mode (clair/sombre) + data-palette, posés par boot.js avant l'affichage. */
 :root{--accent:#c8914d;--on-accent:#1b1208;--ok:#7fae7a;--warn:#d4a94f;--bad:#d06a5a;--info:#7ea3b8;--r:14px;--ico-r:30%;--gap:12px;font-size:16px;--tap:44px}
-html[data-mode=dark]{color-scheme:dark;--bg:#16110e;--card:#1f1814;--card2:#2a211b;--line:#3a2e25;--text:#efe6dc;--muted:#a8998a;--shadow:0 8px 28px #0009;--body:#2c231d;--bodyline:#4a3b30}
-html[data-mode=light]{color-scheme:light;--bg:#f4efe9;--card:#fffdfa;--card2:#efe7de;--line:#e0d4c6;--text:#2a1f17;--muted:#6f6154;--shadow:0 6px 22px #3a2a1a1f;--body:#e9dfd3;--bodyline:#cdbba7;--accent:#a86f2f;--on-accent:#fff}
-html[data-palette=granit]{--accent:#6f97a8}html[data-palette=foret]{--accent:#8c9a6b}html[data-palette=corail]{--accent:#c27a5a}html[data-palette=encre]{--accent:#9a8bb8}
+html[data-mode=dark]{color-scheme:dark;--bg:#000;--card:#111113;--card2:#1c1c1f;--line:#2e2e33;--text:#f4f4f5;--muted:#a1a1aa;--shadow:0 8px 28px #000c;--body:#202024;--bodyline:#3f3f46}
+html[data-mode=light]{color-scheme:light;--bg:#f5f5f7;--card:#fff;--card2:#ececf0;--line:#dcdce2;--text:#18181b;--muted:#5b5b66;--shadow:0 6px 22px #0000001a;--body:#e4e4e8;--bodyline:#c4c4cc;--on-accent:#fff}
+html[data-palette=gres]{--accent:#d4a056}html[data-palette=granit]{--accent:#5fa8d3}html[data-palette=foret]{--accent:#5cb87a}html[data-palette=corail]{--accent:#ef6f5e}html[data-palette=encre]{--accent:#a78bfa}html[data-palette=rose]{--accent:#f472b6}
+html[data-mode=light][data-palette=gres]{--accent:#a86f2f}html[data-mode=light][data-palette=granit]{--accent:#1f6f9f}html[data-mode=light][data-palette=foret]{--accent:#2f7d4a}html[data-mode=light][data-palette=corail]{--accent:#c2412f}html[data-mode=light][data-palette=encre]{--accent:#6d4fd8}html[data-mode=light][data-palette=rose]{--accent:#c0307c}
+html[data-mode=dark]{--on-accent:#0b0b0c}
 html[data-palette=contraste][data-mode=dark]{--bg:#000;--card:#0b0b0b;--card2:#161616;--line:#666;--text:#fff;--muted:#ddd;--accent:#ffd60a;--on-accent:#000}
 html[data-palette=contraste][data-mode=light]{--bg:#fff;--card:#fff;--card2:#eee;--line:#222;--text:#000;--muted:#222;--accent:#0a3cff;--on-accent:#fff}
 html[data-radius=sharp]{--r:6px}html[data-radius=bubble]{--r:24px}
@@ -125,3 +127,26 @@ html.hands .btn.big{min-height:84px;font-size:1.35rem}html.hands .stepper button
 .boot-error{max-width:520px;margin:12vh auto;padding:18px;background:var(--card);border:1px solid var(--bad);border-radius:16px;display:grid;gap:10px}.boot-error pre{white-space:pre-wrap;font-size:.8rem;color:var(--muted);background:var(--card2);padding:8px;border-radius:8px}
 .goalcard{display:grid;gap:6px}
 .item.ex.editable{flex-wrap:wrap}.item.ex.editable .grow{flex-basis:calc(100% - 52px)}.item.ex .acts{width:100%;justify-content:flex-end}
+/* ═════ Premiers pas, accueil simplifié, installation (v8.1) ═════ */
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qa{appearance:none;border:1px solid var(--line);background:var(--card);border-radius:var(--r);padding:14px 12px;text-align:left;cursor:pointer;display:grid;gap:2px;min-height:96px;color:var(--text)}
+.qa:active{transform:scale(.98)}.qa .qi{font-size:1.6rem;line-height:1}.qa b{font-size:.98rem;margin-top:4px}.qa small{color:var(--muted);font-size:.78rem}
+.qa.pri{background:color-mix(in srgb,var(--accent) 18%,var(--card));border-color:color-mix(in srgb,var(--accent) 60%,var(--line))}
+.setup{display:grid;gap:12px;padding-top:4px}.setup h1.q{font-size:1.45rem;margin:.4rem 0 0}
+.choices{display:grid;gap:10px}
+.choice{appearance:none;width:100%;text-align:left;border:2px solid var(--line);background:var(--card);border-radius:14px;padding:14px 16px;min-height:56px;font-size:1.02rem;font-weight:600;cursor:pointer;color:var(--text)}
+.choice.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--card))}
+.choice.on::after{content:"✓";float:right;color:var(--accent)}
+.setup-nav{position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));background:var(--bg);padding:10px 0;margin-top:6px}
+.welcome p{font-size:.98rem}
+.tour{display:grid;gap:10px;padding:6px 4px}.tour-ic{font-size:3.2rem}.tour h2{margin:0}.tour p{font-size:1rem}
+.dots{display:flex;gap:6px;justify-content:center}.dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}.dots i.on{background:var(--accent)}
+.auth .lead{font-size:1.08rem;color:var(--text);margin:.2rem 0 .6rem}
+.pitch{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.pitch li{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.pitch span{font-size:1.5rem;line-height:1.2}.pitch b{display:block}.pitch small{color:var(--muted)}
+.app-mini{border-radius:22%}
+.syncbadge.guest{width:auto;padding:0 10px;font-size:.8rem;color:var(--text)}
+.faq{border-top:1px solid var(--line);padding:8px 0}.faq summary{cursor:pointer;font-weight:600;min-height:32px}
+ol.steps{padding-left:1.3rem;display:grid;gap:6px}
+.sub{margin:-.2rem 0 .3rem}

@@ -43,26 +43,35 @@ const H = (page) => ({
 /* ═════════ Compte A ═════════ */
 const ctxA = await newCtx(); const A = await ctxA.newPage(); watch(A, 'A'); cur = A; const a = H(A);
 console.log('Compte A');
-await step('première ouverture : écran de connexion, titre « Mes séances »', async () => {
-  await A.goto(BASE); await A.waitForSelector('form[data-submit=login]');
+await step('première ouverture : page d’accueil claire (présentation, créer un compte, essayer sans compte), fond noir', async () => {
+  await A.goto(BASE); await A.waitForSelector('[data-act=guestStart]');
   assert.equal(await A.title(), 'Mes séances');
-  const man = await (await A.request.get(BASE + '/manifest.json')).json(); assert.equal(man.name, 'Mes séances');
+  assert.match(await a.text('main'), /coach d’entraînement/); assert.equal(await a.count('[data-act=authPick][data-id=register]'), 1);
+  assert.equal(await A.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(0, 0, 0)', 'mode sombre noir pur');
+  const man = await (await A.request.get(BASE + '/manifest.json')).json(); assert.equal(man.name, 'Mes séances'); assert.equal(man.display, 'standalone'); assert.equal(man.background_color, '#000000');
   await a.noOverflow('connexion');
 });
 await step('mauvais identifiants : message clair', async () => {
+  await a.click('[data-act=authPick][data-id=login]'); await A.waitForSelector('form[data-submit=login]');
   await A.fill('input[name=username]', 'Personne'); await A.fill('input[name=password]', 'mauvais-mdp'); await a.click('button[type=submit]');
   await A.waitForFunction(() => /incorrect/i.test(document.querySelector('.err')?.textContent || ''));
 });
-await step('inscription → tableau de bord avec premier lancement (aucune séance imposée)', async () => {
+await step('inscription → accueil avec proposition de compléter le profil (aucune séance imposée)', async () => {
   await a.click('[data-act=authMode]'); await A.fill('input[name=username]', 'Alice'); await A.fill('input[name=password]', 'motdepasse1'); await a.click('button[type=submit]');
-  await A.waitForSelector('nav.tabs'); await A.waitForSelector('[data-act=obAct]');
+  await A.waitForSelector('nav.tabs'); await A.waitForSelector('[data-act=setupStart][data-id=quiz]');
   assert.match(await a.text('h1'), /Bonjour Alice/);
   assert.equal(await A.evaluate(async () => (await (await fetch('/api/sync')).json()).items.length), 0, 'aucune séance générique créée');
 });
-await step('choix des activités et de l’environnement', async () => {
-  await a.click('[data-act=obAct][data-id=climbing_boulder]'); await a.click('[data-act=obAct][data-id=conditioning]');
-  await a.click('[data-act=obEnv][data-id=maison]'); await a.click('[data-act=obDone]');
-  await A.waitForTimeout(200); assert.equal(await a.count('[data-act=obDone]'), 0);
+await step('fiche de profil (tout sur une page) : sports et lieu, puis visite guidée', async () => {
+  await a.click('[data-act=setupStart][data-id=form]'); await A.waitForSelector('[data-act=setupFinish]');
+  await a.click('[data-act=setPick][data-q=acts][data-v=climbing_boulder]'); await a.click('[data-act=setPick][data-q=acts][data-v=conditioning]');
+  await a.click('[data-act=setPick][data-q=places][data-v=maison]');
+  await a.click('[data-act=setupFinish]'); await A.waitForSelector('#sheet.open [data-act=setupThanks]');
+  assert.match(await a.text('#sheet'), /Escalade — bloc, Renforcement/);
+  await a.click('[data-act=setupThanks]'); await A.waitForSelector('#sheet.open .tour');
+  await a.click('.tour [data-act=tourEnd]'); await A.waitForTimeout(200);
+  assert.equal(await a.count('[data-act=setupStart]'), 0, 'profil marqué comme complété');
+  await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'main' && i.d.setupDone), 12000, 'profil enregistré sur le serveur');
 });
 await step('navigation sur les 5 onglets, sans erreur ni débordement', async () => {
   for (const t of ['progress', 'library', 'profile', 'settings', 'home']) { await a.tab(t); await a.noOverflow(t); }
@@ -263,7 +272,7 @@ console.log('Compte B');
 const ctxB = await newCtx(); const B = await ctxB.newPage(); watch(B, 'B'); cur = B; const b = H(B);
 let commonId;
 await step('inscription B : les données privées de A sont invisibles', async () => {
-  await B.goto(BASE); await B.waitForSelector('form[data-submit=login]'); await b.click('[data-act=authMode]');
+  await B.goto(BASE); await B.waitForSelector('[data-act=authPick][data-id=register]'); await b.click('[data-act=authPick][data-id=register]');
   await B.fill('input[name=username]', 'Bob'); await B.fill('input[name=password]', 'motdepasse2'); await b.click('button[type=submit]'); await B.waitForSelector('nav.tabs');
   assert.equal((await b.api('GET', '/api/history')).data.history.length, 0);
   assert.equal((await b.api('GET', '/api/items?since=0')).data.items.length, 0);
@@ -298,7 +307,7 @@ await step('B signale un bug depuis Paramètres', async () => {
 console.log('Administrateur');
 const ctxC = await newCtx(); const C = await ctxC.newPage(); watch(C, 'C'); cur = C; const c = H(C);
 await step('mauvais mot de passe admin refusé ; bon EDIT_PASSWORD → compte administrateur', async () => {
-  await C.goto(BASE); await C.waitForSelector('form[data-submit=login]'); await c.click('[data-act=authMode]');
+  await C.goto(BASE); await C.waitForSelector('[data-act=authPick][data-id=register]'); await c.click('[data-act=authPick][data-id=register]');
   await C.fill('input[name=username]', 'Carole'); await C.fill('input[name=password]', 'motdepasse3'); await c.click('button[type=submit]'); await C.waitForSelector('nav.tabs');
   await c.tab('settings'); await c.sub('setSub', 'admin');
   await C.fill('form[data-submit=adminOn] input[name=password]', 'pas-le-bon'); await c.click('form[data-submit=adminOn] button');
@@ -359,6 +368,33 @@ await step('déconnexion puis reconnexion : données intactes', async () => {
   await a2.tab('settings'); await a2.click('[data-act=logout]'); await a2.confirm(); await A2.waitForSelector('form[data-submit=login]');
   await A2.fill('input[name=password]', 'motdepasse1'); await a2.click('button[type=submit]'); await A2.waitForSelector('nav.tabs');
   await a2.tab('library'); await a2.sub('libSub', 'seances'); await A2.waitForSelector('text=Créée hors ligne'); await A2.waitForSelector('text=Tirage maison');
+});
+/* ═════════ Invité ═════════ */
+console.log('Invité');
+const ctxG = await newCtx(); const G = await ctxG.newPage(); watch(G, 'G'); cur = G; const g = H(G);
+await step('mode invité : questionnaire en QCM, « finir plus tard », aucune donnée envoyée au serveur', async () => {
+  await G.goto(BASE); await G.waitForSelector('[data-act=guestStart]'); await g.click('[data-act=guestStart]');
+  await G.waitForSelector('.setup'); await g.click('[data-act=setPick][data-q=acts][data-v=running]'); await g.click('[data-act=setupNext]:not([disabled])');
+  await g.click('[data-act=setPick][data-q=level][data-v=nsp]'); await G.waitForSelector('text=séances par semaine');
+  await g.click('[data-act=setupLater]'); await G.waitForSelector('.quick');
+  await G.waitForSelector('#sheet.open .tour'); await g.click('.tour [data-act=tourEnd]'); await G.waitForTimeout(200);
+  assert.equal(await g.count('.syncbadge.guest'), 1);
+  assert.match(await g.text('main'), /profil n’est pas encore complet/);
+  await g.tab('library'); await g.sub('libSub', 'common'); await G.waitForSelector('text=Compte nécessaire');
+});
+await step('invité : création et enregistrement d’une séance, conservées au rechargement', async () => {
+  await g.tab('library'); await g.sub('libSub', 'seances'); await g.click('[data-act=newSeance]');
+  await G.waitForSelector('input[data-change=sName]');
+  await G.fill('input[data-change=sName]', 'Séance invitée'); await G.press('input[data-change=sName]', 'Tab'); await G.waitForTimeout(400);
+  await G.reload(); await G.waitForSelector('nav.tabs'); await g.tab('library'); await g.sub('libSub', 'seances');
+  await G.waitForSelector('text=Séance invitée');
+});
+await step('invité → compte : les données locales sont transférées sur le nouveau compte', async () => {
+  await g.tab('settings'); await g.click('[data-act=guestUpgrade]'); await G.waitForSelector('form[data-submit=register]');
+  await G.fill('input[name=username]', 'Gaston'); await G.fill('input[name=password]', 'motdepasse9'); await g.click('button[type=submit]');
+  await G.waitForSelector('nav.tabs'); assert.equal(await g.count('.syncbadge.guest'), 0);
+  await poll(async () => (await g.api('GET', '/api/sync')).data.items.some((x) => x.name === 'Séance invitée'), 15000, 'séance invitée transférée');
+  await poll(async () => (await g.api('GET', '/api/items?since=0')).data.items.some((x) => x.c === 'activity' && x.d.preset === 'running'), 15000, 'profil invité transféré');
 });
 await step('aucune erreur JavaScript dans les navigateurs', async () => assert.deepEqual(errors, []));
 console.log(`\n${n} étapes E2E OK`);

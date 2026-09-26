@@ -2,8 +2,8 @@
 // Stratégie : réseau d'abord (mise à jour immédiate), cache en secours ; le shell complet est précaché à
 // l'installation. SHELL doit contenir EXACTEMENT les fichiers servis par le Worker (tests/assets.test.mjs).
 // La version du cache change à chaque livraison : les anciens caches sont supprimés à l'activation.
-const CACHE = 'mes-seances-v8-0-1';
-const SHELL = ['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/player.js',
+const CACHE = 'mes-seances-v8-1-0';
+const SHELL = ['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt'];
 

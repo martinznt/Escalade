@@ -92,7 +92,12 @@ export const SCHEMAS = {
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
   habit: { key: ['s', 120], decision: ['e', ['accepted', 'dismissed'], 'dismissed'] },
   // Configuration personnelle (tableau de bord, environnement par défaut…) : un item par clé.
-  config: { blocks: ['strs', 20, 30], envId: ['id'], durations: ['strs', 10, 10], unavailable: ['ids', 40] },
+  config: {
+    blocks: ['strs', 20, 30], envId: ['id'], durations: ['strs', 10, 10], unavailable: ['ids', 40],
+    // Premiers pas (questionnaire de profil, visite guidée) : réponses déclarées par l'utilisateur.
+    perWeek: ['n', 1, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', ''], ''], intent: ['s', 30],
+    setupDone: ['b'], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
+  },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);
 

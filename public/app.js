@@ -2,7 +2,8 @@
 // Charge les vues, gère l'authentification, la navigation (onglets + adresse #/onglet/sous-vue/paramètre),
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
 import { h, raw, $, toast, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST } from './state.js';
+import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession } from './shared.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';
@@ -11,12 +12,13 @@ import { vProfile } from './views-profile.js';
 import { vSettings } from './views-settings.js';
 import { onVisible } from './player.js';
 
-const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '🧠', 'Profil'], ['settings', '⚙️', 'Paramètres']];
+const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
 const VIEWS = { home: vHome, progress: vProgress, library: vLibrary, profile: vProfile, settings: vSettings };
 
 /* ═════════ Rendu ═════════ */
 function syncBadge() {
   const n = pendingCount();
+  if (S.user?.guest) return h`<button class="syncbadge guest" data-act="goAccount" aria-label="Mode invité : créer un compte">👀 Invité</button>`;
   const label = { ok: 'Synchronisé', sync: 'Synchronisation…', pending: `${n} modification(s) en attente`, offline: `Hors ligne${n ? ` · ${n} en attente` : ''}`, error: 'Erreur de synchronisation', auth: 'Reconnexion nécessaire', idle: '' }[S.sync] || '';
   return h`<button class="syncbadge ${S.sync}" data-act="goSync" aria-label="${label}" title="${label}"><span class="dot"></span>${S.sync === 'offline' ? 'Hors ligne' : n ? String(n) : ''}</button>`;
 }
@@ -42,31 +44,59 @@ setRenderer(doRender);
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
 ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'seances', profile: 'understand', settings: 'main' }[id]; const keep = S.tab === id ? base : S.sub[id]; go(id, ['seance', 'shared-edit', 'common-detail', 'import'].includes(keep) ? base : keep || base); };
 ACT.goSync = () => go('settings', 'sync');
+ACT.goAccount = () => go('settings', 'main');
 ACT.closeSheet = () => closeSheet();
 
 /* ═════════ Authentification ═════════ */
 function vAuth() {
-  const reg = S.authMode === 'register';
-  return h`<main class="auth wrap"><div class="center"><img class="app-logo" src="/icon-192.png" alt="" width="84" height="84"><h1>Mes séances</h1><p class="muted">${reg ? 'Crée ton compte personnel. Tu resteras connecté sur cet appareil.' : 'Connecte-toi à ton compte.'}</p></div>
-    <form data-submit="${reg ? 'register' : 'login'}" class="card" autocomplete="on">
-      <label>Pseudo${reg ? '' : ' ou e-mail'}<input type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required minlength="3" maxlength="120" value="${S.prefill || ls.get('sea:lastname', '') || ''}"></label>
+  const reg = S.authMode === 'register', up = !!S.upgradeGuest;
+  return h`<main class="auth wrap"><div class="center"><img class="app-logo" src="/icon-192.png" alt="" width="84" height="84"><h1>Mes séances</h1>
+      ${up ? h`<p class="muted">Crée ton compte : tout ce que tu as fait en mode invité (séances, historique, profil) y sera transféré.</p>` : h`<p class="lead">Ton coach d’entraînement personnel, gratuit.</p>`}</div>
+    ${up ? '' : h`<ul class="pitch"><li><span>✨</span><div><b>Des séances faites pour toi</b><small>Escalade, muscu, renforcement, course, natation… selon ton niveau, ton temps et ton matériel.</small></div></li>
+      <li><span>▶️</span><div><b>Guidé pendant l’effort</b><small>Chrono, repos, séries : il suffit de suivre l’écran.</small></div></li>
+      <li><span>📈</span><div><b>Tu vois tes progrès</b><small>Historique, records et conseils expliqués simplement.</small></div></li></ul>`}
+    ${up || S.authMode ? '' : h`<div class="stack"><button class="btn pri big" data-act="authPick" data-id="register">Créer mon compte gratuit</button><button class="btn big" data-act="authPick" data-id="login">J’ai déjà un compte</button>
+      <button class="btn ghost" data-act="guestStart">👀 Essayer sans compte</button><p class="tiny muted center">Sans compte, tes données restent seulement sur cet appareil. Tu pourras créer un compte plus tard sans rien perdre.</p></div>`}
+    ${up || S.authMode ? h`<form data-submit="${reg ? 'register' : 'login'}" class="card" autocomplete="on"><h2 style="margin:0">${reg ? 'Créer mon compte' : 'Me connecter'}</h2>
+      <label>${reg ? 'Choisis un pseudo' : 'Pseudo ou e-mail'}<input type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required minlength="3" maxlength="120" value="${S.prefill || ls.get('sea:lastname', '') || ''}"></label>
       ${reg ? h`<label>E-mail (facultatif)<input type="email" name="email" autocomplete="email" maxlength="120"></label>` : ''}
-      <label>Mot de passe<input type="password" name="password" autocomplete="${reg ? 'new-password' : 'current-password'}" required minlength="8" maxlength="200"></label>
-      ${reg ? h`<label>Code d’invitation (si on t’en a donné un)<input type="text" name="invite" autocomplete="off" maxlength="60"></label>` : ''}
+      <label>Mot de passe${reg ? ' (8 caractères minimum)' : ''}<input type="password" name="password" autocomplete="${reg ? 'new-password' : 'current-password'}" required minlength="8" maxlength="200"></label>
+      ${reg ? h`<details class="how mini"><summary>J’ai un code d’invitation</summary><label>Code d’invitation<input type="text" name="invite" autocomplete="off" maxlength="60"></label></details>` : ''}
       <div class="err" role="alert">${S.authError}</div>
       <button class="btn pri big" type="submit">${reg ? 'Créer mon compte' : 'Me connecter'}</button>
-    </form>
-    <button class="btn ghost" data-act="authMode">${reg ? 'J’ai déjà un compte' : 'Créer un compte'}</button>
+      ${up ? '' : h`<button class="btn ghost" type="button" data-act="authMode">${reg ? 'J’ai déjà un compte' : 'Créer un compte'}</button>`}</form>
+      ${up ? h`<button class="btn ghost" data-act="guestBack">‹ Revenir au mode invité</button>` : h`<button class="btn ghost" data-act="authPick" data-id="">‹ Retour</button>`}` : ''}
+    ${installCard()}
     <p class="tiny muted center">Chaque personne a son propre compte. Tes données sont privées par défaut.</p></main>`;
 }
+ACT.authPick = (el) => { S.authMode = el.dataset.id || ''; S.authError = ''; render(); };
 ACT.authMode = () => { S.authMode = S.authMode === 'login' ? 'register' : 'login'; S.authError = ''; render(); };
+/* ═════════ Mode invité : sans compte, données seulement sur cet appareil ═════════ */
+ACT.guestStart = async () => {
+  S.user = { ...GUEST }; S.loaded = false; ls.set('sea:user', { ...GUEST });
+  render(); await loadLocal(); go('home', 'dash');
+  if (!mainConfig().setupDone && !mainConfig().setupLater) openSetup('quiz');
+};
+ACT.guestUpgrade = async () => { writePending(); await persistNow(); S.upgradeGuest = true; S.authMode = 'register'; S.authError = ''; S.user = null; render(); };
+ACT.guestBack = async () => { S.upgradeGuest = false; S.authMode = ''; S.user = { ...GUEST }; S.loaded = false; render(); await loadLocal(); render(); };
+ACT.guestLogin = async () => { writePending(); await persistNow(); S.upgradeGuest = false; S.user = null; S.authMode = 'login'; render(); };
 async function authSubmit(form, kind) {
   const f = Object.fromEntries(new FormData(form));
   const btn = form.querySelector('button[type=submit]'); btn.disabled = true; S.authError = '';
   try {
     const r = await api('POST', kind === 'register' ? '/api/auth/register' : '/api/auth/login', f, { quiet401: true });
+    if (S.upgradeGuest && kind === 'register') await transferGuest(r.user);
     await enter(r.user, kind === 'register');
   } catch (e) { S.authError = e.offline ? 'Pas de connexion internet : la première connexion doit se faire en ligne.' : e.message; btn.disabled = false; render(); }
+}
+/** Nouveau compte créé depuis le mode invité : les données locales (et tout ce qui attend d'être envoyé) passent au compte. */
+async function transferGuest(user) {
+  S.user = { ...GUEST }; await loadLocal();
+  S.user = user; S.seancesDirty = S.seancesDirty || S.seances.items.length > 0;
+  for (const k of S.items.keys()) S.dirtyItems.add(k);
+  S.outbox.push({ opId: 'op-guest-settings-' + Date.now(), method: 'POST', path: '/api/settings', body: { settings: S.settings }, attempts: 0, at: Date.now(), label: 'Modification — réglages' });
+  writePending(); await persistNow(); await clearLocal('guest');
+  S.upgradeGuest = false;
 }
 async function enter(user, fresh) {
   S.user = user; S.expiredShown = false; S.prefill = ''; S.loaded = false;
@@ -112,6 +142,7 @@ function vPublicVisitor(name) {
     ${S.user ? h`<button class="btn" data-act="tab" data-id="home">‹ Retour à mon espace</button>` : ''}</main>`;
 }
 ACT.pubLogin = () => { location.hash = ''; S.authMode = 'login'; render(); };
+ACT.tourStart2 = () => maybeTour(true);
 ACT.pubView = async (el) => { try { const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`, undefined, { quiet401: true }); S.publicSession = r.item; render(); } catch (e) { toast(e.message); } };
 
 /* ═════════ Événements ═════════ */
@@ -152,6 +183,7 @@ async function start() {
   registerSW();
   parseHash();
   const cached = ls.get('sea:user');
+  if (cached?.guest) { S.user = { ...GUEST }; render(); await loadLocal(); render(); window.__seaStarted = true; return; }
   if (cached?.id) {
     S.user = cached; render();
     await loadLocal(); render();

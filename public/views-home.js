@@ -11,12 +11,13 @@ import { adaptDuration, alternatives, replaceExercise, BODY_WORDS } from './gene
 import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { openGenerator, blocksOf } from './views-library.js';
 import { startPlayer } from './player.js';
+import { vSetup, setupCard, installCard } from './views-setup.js';
 
 export const DASH_BLOCKS = {
   today: 'Que faire aujourd’hui ?', command: 'Commande', next: 'Prochaines séances', progress: 'Progression', goals: 'Objectifs', records: 'Records',
   regularity: 'Régularité', capacities: 'Capacités', reco: 'Recommandations', load: 'Charge récente', summary: 'Résumé de la semaine', achievements: 'Jalons', calendar: 'Calendrier',
 };
-const DEFAULT_DASH = ['today', 'command', 'next', 'goals', 'progress', 'reco', 'regularity'];
+const DEFAULT_DASH = ['today', 'next', 'goals', 'progress', 'reco', 'regularity', 'command'];
 export const dashBlocks = () => (item('config', 'dashboard')?.blocks?.length ? item('config', 'dashboard').blocks.filter((b) => DASH_BLOCKS[b]) : DEFAULT_DASH);
 
 export function eventsOn(date) {
@@ -26,21 +27,14 @@ export function eventsOn(date) {
 const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt)) === date);
 
 export function vHome() {
+  if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  return h`<div class="row between"><h1>Bonjour ${S.user.username}</h1><button class="btn sm" data-act="dashEdit" aria-label="Personnaliser le tableau de bord">⚙︎ Blocs</button></div>
-    ${seg('homeSub', sub, [['dash', 'Tableau de bord'], ['cal', 'Calendrier']])}${sub === 'cal' ? vCalendar() : vDash()}`;
+  return h`<div class="row between"><h1>${S.user.guest ? 'Bonjour 👋' : `Bonjour ${S.user.username}`}</h1>${sub === 'dash' ? h`<button class="btn sm" data-act="dashEdit" aria-label="Choisir les blocs affichés sur l’accueil">✎ Personnaliser</button>` : ''}</div>
+    ${seg('homeSub', sub, [['dash', '🏠 Ma journée'], ['cal', '📅 Calendrier']])}${sub === 'cal' ? vCalendar() : vDash()}`;
 }
 ACT.homeSub = (el) => go('home', el.dataset.id);
 
 /* ═════════ Premier lancement : aucune séance générique imposée ═════════ */
-function vOnboarding() {
-  const acts = ctx().activities;
-  return h`<div class="card acc-b"><h3>Bienvenue 👋</h3><p class="small">Pour des analyses et des séances adaptées, indique d’abord ce que tu pratiques. Tu peux tout modifier ensuite dans ton Profil.</p>
-    <b class="small">Mes activités</b><div class="chips">${Object.entries(ACTIVITIES).map(([id, a]) => chip(!!acts[id], `${a.emoji} ${a.label}`, `data-act="obAct" data-id="${id}"`))}</div>
-    <p class="tiny muted">Basket, vélo, tennis… : ajoute-les comme activité personnalisée dans Profil › Activités.</p>
-    <b class="small">Où t’entraînes-tu le plus souvent ?</b><div class="chips">${Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre').map(([k, l]) => chip(ctx().envs.some((e) => e.type === k), l, `data-act="obEnv" data-id="${k}"`))}</div>
-    <div class="row wrapf"><button class="btn pri" data-act="obDone">C’est parti</button><button class="btn" data-act="goProfile" data-id="perfs">Renseigner mes performances</button></div></div>`;
-}
 ACT.obAct = (el) => {
   const id = el.dataset.id, c = ctx(), a = c.activities[id];
   if (a) putItem('activity', a.itemId, { preset: id, label: ACTIVITIES[id].label, emoji: ACTIVITIES[id].emoji, archived: true });
@@ -60,11 +54,18 @@ ACT.goProfile = (el) => go('profile', el.dataset.id);
 function vDash() {
   const blocks = dashBlocks();
   const loop = S.lastLoop && Date.now() - S.lastLoop.at < 15 * 60000 ? S.lastLoop : null;
-  return h`${!S.settings.onboarded ? vOnboarding() : ''}
+  return h`${setupCard()}${installCard()}
+    <div class="quick">
+      <button class="qa pri" data-act="genOpen"><span class="qi">✨</span><b>Me proposer une séance</b><small>Adaptée à toi, expliquée</small></button>
+      <button class="qa" data-act="goLib"><span class="qi">📚</span><b>Mes séances</b><small>Lancer, créer, modifier</small></button>
+      <button class="qa" data-act="homeSub" data-id="cal"><span class="qi">📅</span><b>Planifier</b><small>Calendrier de la semaine</small></button>
+      <button class="qa" data-act="goProgress" data-id="summary"><span class="qi">📈</span><b>Mes progrès</b><small>Historique et records</small></button>
+    </div>
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée — ce qui change dans ton profil</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<p class="tiny muted">Ces données alimentent tes analyses et tes prochaines séances générées.</p><button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
     ${blocks.map((b) => { try { return BLOCK_VIEWS[b]?.() || ''; } catch (e) { console.error(e); return card(DASH_BLOCKS[b] || b, h`<p class="small warn-t">Ce bloc n’a pas pu s’afficher : ${e.message}</p><p class="tiny muted">Le reste de l’accueil fonctionne. Tu peux le signaler dans Paramètres › Signaler un bug.</p>`); } })}
-    <div class="row wrapf"><button class="btn pri" data-act="genOpen">✨ Générer une séance</button><button class="btn" data-act="newSeanceHome">＋ Créer une séance</button><button class="btn" data-act="homeSub" data-id="cal">📅 Calendrier</button></div>`;
+    <p class="tiny muted center">Touche « ✎ Personnaliser » en haut pour choisir ce qui s’affiche ici.</p>`;
 }
+ACT.goLib = () => go('library', 'seances');
 ACT.loopClose = () => { S.lastLoop = null; render(); };
 ACT.genOpen = () => openGenerator({});
 ACT.newSeanceHome = () => ACT.newSeance();

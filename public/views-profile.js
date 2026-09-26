@@ -14,7 +14,7 @@ const SUBS = [['understand', 'Comprendre'], ['map', 'Ma carte'], ['activities', 
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'understand';
   const views = { understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: vClimbing, goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
-  return h`<h1>Profil</h1><div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
+  return h`<h1>Mon profil</h1><p class="small muted sub">Ce que l’app sait de toi et comment elle le sait. Tout est modifiable.</p><div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
 }
 ACT.profSub = (el) => { go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
 const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;
@@ -375,6 +375,7 @@ export async function loadSocial() {
   so.loading = false; render();
 }
 function vPublic() {
+  if (S.user.guest) return h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">Le profil public et le partage demande un compte gratuit. En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
   const so = S.social, c = ctx();
   if (!so.me && !so.loading && !so.error) setTimeout(loadSocial, 0);
   if (so.error && !so.me) return h`<div class="card flat"><p class="err">${so.error}</p><button class="btn" data-act="socReload">Réessayer</button></div>`;

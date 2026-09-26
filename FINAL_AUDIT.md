@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Mes séances v8.0.1
+# FINAL_AUDIT — Mes séances v8.1.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -285,6 +285,29 @@ réglages qu'un client V2 ne connaît pas.
 - **Test ajouté** : `tests/robustness.test.mjs` remplace tour à tour chaque champ des données (historique, profil,
   calendrier, séances, exercices personnels) par un nombre, une chaîne, `null` ou un objet vide, et vérifie qu'aucune
   analyse ne plante. Il échouait sur la version 8.0.0 et passe sur la 8.0.1.
+
+## Évolution 8.1.0 — prise en main par tous
+
+- **Page d'arrivée** compréhensible sans connaître le site : ce que fait l'app en 3 points, « Créer mon compte gratuit »,
+  « J'ai déjà un compte », « Essayer sans compte ».
+- **Mode invité** : aucune donnée envoyée au serveur ; tout reste sur l'appareil (séances, historique, profil). Les
+  fonctions qui demandent un serveur (bibliothèque partagée, profil public, signalement, administration) affichent
+  « Compte nécessaire ». « Créer mon compte (je garde mes données) » transfère tout sur le nouveau compte (vérifié en E2E).
+- **Questionnaire de profil** (une question par écran, gros boutons, avance tout seul) ou **fiche complète sur une page** ;
+  « Passer », « Je ne sais pas » et « Finir plus tard » partout ; réponses enregistrées comme *déclarées* ; rappel discret
+  sur l'accueil tant que le profil n'est pas complet ; utilisées par le générateur (durée, motivation, matériel, zones à ménager).
+- **Visite guidée** des onglets après le questionnaire (et dans Paramètres › Aide), **accueil simplifié** (4 grandes tuiles),
+  phrase d'explication sous chaque titre d'onglet, **Aide** avec questions fréquentes.
+- **Installation** : bouton « 📲 Installer » qui déclenche la vraie installation du navigateur (Android, ordinateur : app
+  dans la liste des applications, plein écran). Sur iPhone, Apple ne permet que « Sur l'écran d'accueil » depuis Safari :
+  la marche à suivre est affichée. Limite réelle : l'installation directe dépend du navigateur (Chrome, Edge, Samsung
+  Internet) ; Firefox Android et iOS n'exposent pas de bouton d'installation programmable.
+- **Mode sombre noir pur** (#000) pour toutes les couleurs d'accent (Or, Bleu, Vert, Rouge, Violet, Rose, Contraste).
+- **Paramètres réorganisés** : ⭐ Essentiel (compte, affichage, profil sportif, installation, séance), ❓ Aide,
+  💾 Mes données, 🔄 Synchronisation, 🐞 Signaler un bug, 🛡️ Admin ; options rares repliées.
+- Bug corrigé au passage : une sauvegarde locale asynchrone pouvait échouer si l'utilisateur changeait pendant l'écriture.
+- Tests : E2E porté à 39 étapes (page d'arrivée, fond noir, fiche de profil, visite, invité, « finir plus tard »,
+  transfert invité → compte).
 
 ## 16. Limitations réelles restantes
 

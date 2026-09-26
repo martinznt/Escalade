@@ -17,7 +17,7 @@ import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
 import { toast, tz, $ } from './ui.js';
 
-export const APP_VERSION = '8.0.1';
+export const APP_VERSION = '8.1.0';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
 export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {} };
 export const S = {
@@ -27,7 +27,7 @@ export const S = {
   outbox: [], failed: [], conflicts: [], sync: 'idle', syncing: false, syncAgain: false, lastSync: 0, lastError: '', loaded: false,
   shared: { common: null, publicMine: null, detail: null, loading: false, error: '' }, admin: { bugs: null }, social: { me: null, feed: null, error: '' }, myBugs: null,
   gen: { activityId: '', mode: 'weaknesses', goalId: '', minutes: 30, intentions: [], envId: '', light: false, priorities: {}, plan: null, result: null, saved: false },
-  player: null, ver: 0, authMode: 'login', authError: '', prefill: '', search: { q: '', smart: true }, cal: null, filters: {},
+  player: null, ver: 0, authMode: '', authError: '', prefill: '', search: { q: '', smart: true }, cal: null, filters: {},
 };
 export const bump = () => { S.ver++; };
 
@@ -70,9 +70,9 @@ export function persist() { clearTimeout(persistT); persistT = setTimeout(() => 
 export async function persistNow() {
   if (!S.user) return;
   clearTimeout(persistT);
-  const snap = snapshot();
-  try { await idb.set(dataKey(), snap); ls.del('sea:data:' + S.user.id); }
-  catch { if (!ls.set('sea:data:' + S.user.id, snap)) toast('Impossible d’enregistrer sur cet appareil (stockage plein ou bloqué).', 5000, 'bad'); }
+  const snap = snapshot(), id = S.user.id; // identifiant figé : l'utilisateur peut changer pendant l'écriture asynchrone
+  try { await idb.set(`data:${id}`, snap); ls.del('sea:data:' + id); }
+  catch { if (!ls.set('sea:data:' + id, snap)) toast('Impossible d’enregistrer sur cet appareil (stockage plein ou bloqué).', 5000, 'bad'); }
 }
 export async function loadLocal() {
   let d = null;
@@ -109,6 +109,7 @@ export async function clearLocal(userId) { try { await idb.del(`data:${userId}`)
 let onExpired = () => {};
 export const setOnExpired = (fn) => { onExpired = fn; };
 export async function api(method, path, body, opts = {}) {
+  if (S.user?.guest && !opts.guestOk) { const e = new Error('Mode invité : crée un compte gratuit (Paramètres › Compte) pour utiliser cette fonction. Tes données d’invité seront conservées.'); e.guest = true; throw e; }
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeout || 20000) : null;
   let res;
@@ -252,6 +253,7 @@ export const setSyncListener = (fn) => { setSyncUI = fn; };
 function setSync(s) { S.sync = s; setSyncUI(s); }
 export async function syncAll() {
   if (!S.user) return;
+  if (S.user.guest) { setSync('guest'); return; } // invité : tout reste sur l'appareil ; envoyé si un compte est créé
   if (S.syncing) { S.syncAgain = true; return; }
   if (!navigator.onLine) { setSync('offline'); return; }
   S.syncing = true; setSync('sync');
@@ -312,3 +314,4 @@ export function parseHash() {
   if (['home', 'progress', 'library', 'profile', 'settings'].includes(tab)) { S.tab = tab; if (sub) S.sub[tab] = sub; S.param = param ? decodeURIComponent(param) : ''; }
 }
 export const newId = () => uid();
+export const GUEST = Object.freeze({ id: 'guest', username: 'Invité', guest: true });

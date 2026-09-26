@@ -6,35 +6,69 @@ import { uid, mergeSeances, readStored, normalizeSession } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
 import { parseCSV, proposeMapping, checkMapping, proposeMetricMap, buildImport, TARGETS, MAX_CSV_BYTES } from './csv.js';
 import { describeOp } from './outbox.js';
+import { installCard, openSetup, showTour } from './views-setup.js';
 
-const PALETTES = [['gres', '#c8914d', 'Cuivre'], ['granit', '#6f97a8', 'Granit'], ['foret', '#8c9a6b', 'Forêt'], ['corail', '#c27a5a', 'Terre cuite'], ['encre', '#9a8bb8', 'Encre'], ['contraste', '#ffd60a', 'Contraste']];
-const SUBS = [['main', 'Général'], ['data', 'Données'], ['sync', 'Synchronisation'], ['admin', 'Administration'], ['bug', 'Signaler un bug']];
+const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
+const SUBS = [['main', '⭐ Essentiel'], ['help', '❓ Aide'], ['data', '💾 Mes données'], ['sync', '🔄 Synchronisation'], ['bug', '🐞 Signaler un bug'], ['admin', '🛡️ Admin']];
+const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
 export function vSettings() {
-  const sub = SUBS.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, data: vData, sync: vSync, admin: vAdmin, bug: vBug };
-  return h`<h1>Paramètres</h1><div class="scrollx">${seg('setSub', sub, SUBS)}</div>${views[sub]()}`;
+  const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin'].includes(k)) : SUBS;
+  const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
+  const views = { main: vMain, help: vHelp, data: vData, sync: vSync, admin: vAdmin, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  return h`<h1>Paramètres</h1><div class="scrollx">${seg('setSub', sub, subs)}</div>${views[sub]()}`;
 }
-ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug') loadMyBugs(); };
+ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug' && !S.user?.guest) loadMyBugs(); };
 
-/* ═════════ Général ═════════ */
+/* ═════════ Essentiel : ce qu'on change le plus souvent, en premier ═════════ */
 function vMain() {
   const st = S.settings, a = window.__sea.load();
   const segA = (k, opts) => h`<div class="chips">${opts.map(([v, l]) => chip(a[k] === v, l, `data-act="appear" data-k="${k}" data-v="${v}"`))}</div>`;
-  return h`<div class="card"><h3>▶ Pendant la séance</h3>
-      <label>Repos par défaut<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest ?? 60}"><em>s</em></span></label>
-      <label>Durée de séance préférée<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultMinutes" min="5" max="240" value="${st.defaultMinutes ?? 30}"><em>min</em></span></label>
-      ${[['sound', 'Bips pour les chronos'], ['vibration', 'Vibration en fin de repos et à la validation'], ['voice', 'Lire les exercices à voix haute'], ['keepAwake', 'Garder l’écran allumé'], ['handsFree', 'Mode mains libres (commandes vocales)'], ['autoBase', 'Proposer par défaut d’utiliser mes valeurs réalisées comme nouvelle base']].map(([k, l]) => h`<label class="chk"><input type="checkbox" data-change="pref" name="${k}" ${st[k] ? 'checked' : ''}> ${l}</label>`)}</div>
-    <div class="card"><h3>🎨 Apparence (cet appareil)</h3>
-      <label>Mode</label>${segA('mode', [['dark', 'Sombre'], ['light', 'Clair'], ['auto', 'Auto']])}
-      <label>Palette</label><div class="palette">${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${a.palette === id ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appear" data-k="palette" data-v="${id}"></button>`)}</div>
-      <label>Taille du texte</label>${segA('size', [['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']])}
-      <label>Densité</label>${segA('density', [['compact', 'Compact'], ['normal', 'Normal'], ['airy', 'Aéré']])}
-      <label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</div>
-    <div class="card"><h3>👤 Compte : ${S.user.username} ${S.user.isAdmin ? tag('administrateur', 'acc') : ''}</h3>
-      <div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn" data-act="logout">Se déconnecter</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></div>
-    <div class="card"><h3>ℹ️ À propos</h3><p class="small">Mes séances · version ${APP_VERSION}. Tes données sont liées à ton compte et synchronisées ; elles restent utilisables hors ligne sur cet appareil.</p>
-      <p class="tiny muted">Les séances et analyses suivent des principes d’entraînement courants. Elles décrivent tes données et ne constituent ni un avis médical ni un diagnostic. Aucune comparaison avec d’autres personnes n’est faite.</p></div>`;
+  const tog = ([k, l]) => h`<label class="chk"><input type="checkbox" data-change="pref" name="${k}" ${st[k] ? 'checked' : ''}> ${l}</label>`;
+  const account = S.user.guest
+    ? h`<div class="card acc-b"><h3>👀 Mode invité</h3><p class="small">Tes données restent <b>uniquement sur cet appareil</b> : si tu effaces le navigateur ou changes de téléphone, elles sont perdues. Crée un compte gratuit pour les garder et les retrouver partout.</p>
+        <button class="btn pri big" data-act="guestUpgrade">Créer mon compte (je garde mes données)</button>
+        <div class="row wrapf"><button class="btn" data-act="guestLogin">J’ai déjà un compte</button><button class="btn danger" data-act="guestQuit">Quitter le mode invité</button></div></div>`
+    : h`<div class="card"><div class="row between"><h3>👤 ${S.user.username} ${S.user.isAdmin ? tag('administrateur', 'acc') : ''}</h3><button class="btn sm" data-act="logout">Se déconnecter</button></div>
+        <details class="how mini"><summary>Gérer mon compte</summary><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></details></div>`;
+  return h`${account}
+    <div class="card"><h3>🎨 Affichage</h3>
+      <label>Thème</label>${segA('mode', [['dark', '🌙 Sombre'], ['light', '☀️ Clair'], ['auto', '🔁 Comme mon téléphone']])}
+      <label>Couleur</label><div class="palette">${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${a.palette === id ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appear" data-k="palette" data-v="${id}"></button>`)}</div>
+      <label>Taille du texte</label>${segA('size', [['s', 'Petit'], ['m', 'Normal'], ['l', 'Grand'], ['xl', 'Très grand']])}
+      <details class="how mini"><summary>Plus d’options d’affichage</summary><label>Espacement</label>${segA('density', [['compact', 'Serré'], ['normal', 'Normal'], ['airy', 'Aéré']])}<label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</details></div>
+    <div class="card"><h3>🧩 Mon profil sportif</h3><p class="small muted">Pour que l’app s’adapte à toi (sports, niveau, temps, matériel, objectif).</p>
+      <div class="row wrapf"><button class="btn pri" data-act="setupAgain" data-id="quiz">Répondre aux questions</button><button class="btn" data-act="setupAgain" data-id="form">Remplir la fiche</button><button class="btn ghost" data-act="goProfile" data-id="understand">Voir mon profil</button></div></div>
+    ${installCard({ force: true })}
+    <div class="card"><h3>▶ Pendant la séance</h3>
+      ${[['sound', '🔔 Bips pour les chronos'], ['vibration', '📳 Vibration à la fin du repos'], ['keepAwake', '💡 Garder l’écran allumé'], ['voice', '🗣️ Lire les exercices à voix haute']].map(tog)}
+      <div class="grid2"><label>Repos par défaut<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest ?? 60}"><em>secondes</em></span></label>
+      <label>Durée de séance habituelle<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultMinutes" min="5" max="240" value="${st.defaultMinutes ?? 30}"><em>min</em></span></label></div>
+      <details class="how mini"><summary>Options avancées</summary>${[['handsFree', 'Mode mains libres (commandes vocales)'], ['autoBase', 'Proposer d’utiliser mes valeurs réalisées comme nouvelle base']].map(tog)}</details></div>
+    <div class="card"><h3>ℹ️ À propos</h3><p class="small">Mes séances · version ${APP_VERSION}. ${S.user.guest ? 'Mode invité : données sur cet appareil uniquement.' : 'Tes données sont liées à ton compte et synchronisées ; elles restent utilisables hors ligne.'}</p>
+      <p class="tiny muted">Les séances et analyses suivent des principes d’entraînement courants. Elles ne constituent ni un avis médical ni un diagnostic. Aucune comparaison avec d’autres personnes n’est faite.</p></div>`;
 }
+ACT.setupAgain = (el) => openSetup(el.dataset.id);
+ACT.guestQuit = async () => {
+  if (!(await ask('Quitter le mode invité et effacer ses données de cet appareil ?', { ok: 'Effacer et quitter', danger: true, detail: 'Tes séances, ton historique et ton profil d’invité seront supprimés. Pour les garder, crée plutôt un compte.' }))) return;
+  await clearLocal('guest'); ls.del('sea:user'); location.hash = ''; location.reload();
+};
+
+/* ═════════ Aide ═════════ */
+const FAQ = [
+  ['Comment faire ma première séance ?', 'Sur l’Accueil, touche « ✨ Me proposer une séance », choisis la durée, puis « Voir la simulation » et « Générer ». Touche ensuite ▶ pour commencer : l’écran te guide exercice par exercice.'],
+  ['Comment l’app choisit mes exercices ?', 'Elle utilise ce que tu lui as dit (sports, niveau, matériel, zones à ménager), tes séances passées et tes mesures. Chaque séance générée a un encadré « Pourquoi cette séance ? » qui explique ses choix.'],
+  ['Je ne connais pas mon niveau, c’est grave ?', 'Non. Réponds « Je ne sais pas » : l’app reste prudente et apprend avec tes séances. Tu peux faire des petits tests plus tard (Profil › Performances).'],
+  ['Où sont mes séances enregistrées ?', 'Dans l’onglet 📚 Bibliothèque. L’historique de ce que tu as fait est dans 📈 Progrès › Historique.'],
+  ['Ça marche sans internet ?', 'Oui. Tout ce que tu fais hors connexion est gardé sur l’appareil et envoyé automatiquement quand internet revient.'],
+  ['Mes données sont-elles privées ?', 'Oui, par défaut personne ne voit tes données. Tu peux choisir de partager certaines choses dans Profil › Public.'],
+  ['Comment installer l’application ?', 'Dans ⭐ Essentiel, carte « Installer l’application ». Sur Android et ordinateur, l’app s’installe comme une vraie application. Sur iPhone : Safari › Partager › « Sur l’écran d’accueil ».'],
+  ['Un problème ?', 'Va dans « 🐞 Signaler un bug » et décris ce qui s’est passé : le message arrive directement à l’administrateur.'],
+];
+function vHelp() {
+  return h`<div class="card"><h3>🧭 Visite guidée</h3><p class="small">Revois en 30 secondes à quoi sert chaque onglet.</p><button class="btn pri" data-act="helpTour">Lancer la visite</button></div>
+    <div class="card"><h3>❓ Questions fréquentes</h3>${FAQ.map(([q, r]) => h`<details class="faq"><summary>${q}</summary><p class="small">${r}</p></details>`)}</div>`;
+}
+ACT.helpTour = () => showTour(0);
 CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); };
 ACT.appear = (el) => { window.__sea.save({ ...window.__sea.load(), [el.dataset.k]: el.dataset.v }); render(); };
 ACT.chpass = () => openSheet(h`<h2 style="margin:0">Changer le mot de passe</h2><form data-submit="chpass" class="stack"><input type="text" name="username" value="${S.user.username}" autocomplete="username" class="hidden" aria-hidden="true"><label>Mot de passe actuel<input type="password" name="current" autocomplete="current-password" required></label><label>Nouveau (8 caractères minimum)<input type="password" name="next" autocomplete="new-password" required minlength="8"></label><p class="tiny muted">Tes autres appareils seront déconnectés.</p><button class="btn pri" type="submit">Changer</button></form>`);
