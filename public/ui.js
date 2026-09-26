@@ -28,7 +28,8 @@ export const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 export const rng = (a, b) => (a === b ? `${a}` : `${a}–${b}`);
 export const fmtDur = (s) => { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60), r = s % 60; return m ? (r ? `${m} min ${r}` : `${m} min`) : `${r} s`; };
 export const mmss = (s) => `${Math.floor(s / 60)}:${pad(Math.max(0, s) % 60)}`;
-export const exLine = (e) => `${e.sets} × ${e.mode === 'time' ? rng(e.secMin, e.secMax) + ' s' : rng(e.repsMin, e.repsMax) + (e.unit ? ' ' + e.unit : '')}${e.perSide ? ' / côté' : ''}${e.rest ? ' · repos ' + fmtDur(e.rest) : ''}${e.load ? ' · ' + e.load : ''}`;
+const secTxt = (a, b) => (a >= 120 ? (a === b ? fmtDur(a) : `${fmtDur(a)} à ${fmtDur(b)}`) : rng(a, b) + ' s');
+export const exLine = (e) => `${e.sets} × ${e.mode === 'time' ? secTxt(e.secMin, e.secMax) : rng(e.repsMin, e.repsMax) + (e.unit ? ' ' + e.unit : '')}${e.perSide ? ' / côté' : ''}${e.rest ? ' · repos ' + fmtDur(e.rest) : ''}${e.load ? ' · ' + e.load : ''}`;
 
 /* ───────── Messages et feuilles ───────── */
 export function toast(msg, ms = 2800, kind = '') {

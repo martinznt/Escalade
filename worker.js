@@ -153,7 +153,9 @@ async function upgradeSchema(env) {
   if (follows.size && !follows.has('id')) {
     await env.DB.batch([
       env.DB.prepare("CREATE TABLE follows_v5 (id TEXT PRIMARY KEY, follower_id TEXT NOT NULL, followee_id TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(follower_id,followee_id), FOREIGN KEY(follower_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(followee_id) REFERENCES users(id) ON DELETE CASCADE)"),
-      env.DB.prepare("INSERT OR IGNORE INTO follows_v5(id,follower_id,followee_id,status,created_at) SELECT 'legacy-' || follower_id || '-' || followed_id, follower_id, followed_id, 'accepted', created_at FROM follows"),
+      // Les abonnements orphelins (compte supprimé) sont ignorés : sinon la contrainte de clé étrangère ferait
+      // échouer toute la mise à niveau et bloquerait l'application.
+      env.DB.prepare("INSERT OR IGNORE INTO follows_v5(id,follower_id,followee_id,status,created_at) SELECT 'legacy-' || follower_id || '-' || followed_id, follower_id, followed_id, 'accepted', created_at FROM follows WHERE follower_id IN (SELECT id FROM users) AND followed_id IN (SELECT id FROM users)"),
       env.DB.prepare('DROP TABLE follows'),
       env.DB.prepare('ALTER TABLE follows_v5 RENAME TO follows'),
     ]);
@@ -810,8 +812,12 @@ async function adminBugStatus(request, env, id) {
 /* ═════════════ Communauté : partage optionnel ═════════════ */
 const VISIBILITY = ['private', 'followers', 'public'];
 async function ensureProfile(env, id) {
-  await db(env, 'INSERT OR IGNORE INTO profiles(user_id,updated_at) VALUES(?,?)', id, Date.now()).run();
-  return db(env, 'SELECT visibility,share_stats,share_records,share_sessions,bio,share_json FROM profiles WHERE user_id=?', id).first();
+  const now = Date.now(), sel = () => db(env, 'SELECT visibility,share_stats,share_records,share_sessions,bio,share_json FROM profiles WHERE user_id=?', id).first();
+  await db(env, 'INSERT OR IGNORE INTO profiles(user_id,updated_at) VALUES(?,?)', id, now).run();
+  let row = await sel();
+  // Ancienne structure (v5) : display_name et created_at obligatoires sans valeur par défaut.
+  if (!row) { await db(env, 'INSERT OR IGNORE INTO profiles(user_id,display_name,created_at,updated_at) SELECT id,username,?,? FROM users WHERE id=?', now, now, id).run(); row = await sel(); }
+  return row;
 }
 const profileOut = (p) => ({ visibility: p.visibility, shareStats: !!p.share_stats, shareRecords: !!p.share_records, shareSessions: !!p.share_sessions, bio: p.bio || '', share: safeParse(p.share_json) || {} });
 function cleanShare(s) {

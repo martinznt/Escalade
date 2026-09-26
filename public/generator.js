@@ -203,8 +203,10 @@ function selectMain(plan, ctx, pool) {
     return s + rng() * 0.15;
   };
   let mins = 0;
+  // Un exercice dont la durée minimale dépasse le temps restant n'est pas proposé (ex. sortie longue pour 30 min).
+  const minMinutes = (x) => exMinutes(normalizeEx({ ...x, sets: x.mode === 'time' && x.flex ? 1 : Math.min(x.sets || 1, 2), secMin: x.flex ? x.flex[0] : x.secMin, secMax: x.flex ? x.flex[0] : x.secMin }));
   while (items.length < B.maxN && mins < B.main * 0.85) {
-    const avail = pool.filter((x) => !items.some((i) => i.lib.id === x.id));
+    const avail = pool.filter((x) => !items.some((i) => i.lib.id === x.id) && minMinutes(x) <= Math.max(2, B.main - mins) * 1.15);
     let best = null, bs = -Infinity;
     for (const x of avail) { const s = score(x); if (s > bs) { bs = s; best = x; } }
     if (!best || bs === -Infinity) break;
@@ -226,7 +228,7 @@ function fitTime(items, target) {
       if (flex && (!big || exMinutes(flex.ex) >= exMinutes(big.ex))) { flex.ex.secMin = flex.ex.secMax = Math.max(flex.lib.flex[0], Math.round(flex.ex.secMin * 0.85)); }
       else if (big) { if (big.ex.rest > 45 && big.ex.sets <= 2) big.ex.rest = Math.round(big.ex.rest * 0.75); else big.ex.sets--; }
       else if (items.length > 1) items.pop();
-      else { const i = items[0]; if (i.ex.mode === 'time') { i.ex.secMin = i.ex.secMax = Math.max(20, Math.round(i.ex.secMin * 0.8)); } else if (i.ex.rest > 20) i.ex.rest = Math.round(i.ex.rest * 0.7); else break; }
+      else { const i = items[0]; const floor = i.lib.flex ? i.lib.flex[0] : 20; if (i.ex.mode === 'time' && i.ex.secMin > floor) { i.ex.secMin = i.ex.secMax = Math.max(floor, Math.round(i.ex.secMin * 0.8)); } else if (i.ex.rest > 20) i.ex.rest = Math.round(i.ex.rest * 0.7); else break; }
     } else if (t < target * 0.85) {
       const flex = items.find((i) => i.ex.mode === 'time' && i.lib.flex && i.ex.secMax < i.lib.flex[1]);
       const grow = items.filter((i) => i.ex.sets < (i.lib.sets || 3) + 2 && i.lib.intensity !== 'high').sort((a, b) => a.ex.sets - b.ex.sets)[0];

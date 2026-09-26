@@ -1,7 +1,7 @@
 // views-home.js — Accueil : tableau de bord personnalisable, « Que faire aujourd'hui ? », commandes en langage
 // naturel, calendrier visuel (planifié / réalisé), premier lancement.
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk } from './ui.js';
-import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId } from './state.js';
+import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings } from './state.js';
 import { uid, summarizeHistory } from './shared.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, EQUIPMENT, CAPACITIES } from './model.js';
 import { sessionMinutes } from './engine.js';
@@ -53,7 +53,7 @@ ACT.obEnv = (el) => {
   putItem('env', 'env-' + t, { name: ENV_TYPES[t], type: t, equipment: ENV_TEMPLATES[t], isDefault: !ctx().envs.length });
   toast(`${ENV_TYPES[t]} ajouté avec un matériel type : vérifie-le dans Profil › Matériel.`); render();
 };
-ACT.obDone = () => { S.settings.onboarded = true; import('./state.js').then((m) => m.saveSettings()); render(); };
+ACT.obDone = () => { S.settings.onboarded = true; saveSettings(); render(); };
 ACT.goProfile = (el) => go('profile', el.dataset.id);
 
 /* ═════════ Tableau de bord ═════════ */
@@ -143,7 +143,7 @@ ACT.habitYes = (el) => {
   const hb = habits(ctx()).find((x) => x.key === el.dataset.k); if (!hb) return;
   const p = hb.proposal;
   if (p?.type === 'pref') putItem('pref', 'h-' + p.key.replace(/[^\w-]/g, '_').slice(0, 60), { key: p.key, label: p.label, value: p.value, source: 'habit', reason: 'Habitude confirmée : exercice souvent remplacé.' });
-  if (p?.type === 'config' && p.key === 'duration') { S.settings.defaultMinutes = p.value; import('./state.js').then((m) => m.saveSettings()); }
+  if (p?.type === 'config' && p.key === 'duration') { S.settings.defaultMinutes = p.value; saveSettings(); putItem('config', 'main', { ...(item('config', 'main') || {}), durations: [String(p.value)] }); }
   if (p?.type === 'env') { const env = ctx().envs.find((e) => e.name === p.name); if (env) putItem('config', 'main', { ...(item('config', 'main') || {}), envId: env.id }); }
   putItem('habit', 'hb-' + hb.key.replace(/[^\w:.-]/g, '_').slice(0, 70), { key: hb.key, decision: 'accepted' });
   toast('Préférence enregistrée'); render();

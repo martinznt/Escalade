@@ -1,58 +1,60 @@
+// tests/assets.test.mjs — cohérence des fichiers servis : imports ES ↔ liste blanche du Worker ↔ précache du
+// Service Worker ↔ fichiers sur disque ; manifeste ; aucun secret dans le frontend.
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { ok, done } from './helpers.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓', name); };
-
-function localImports(relFile) {
-  const src = readFileSync(path.join(root, relFile), 'utf8');
-  const re = /from\s+['"]\.\/([\w.-]+\.js)['"]/g;
-  const out = new Set(); let m;
-  while ((m = re.exec(src))) out.add('/' + m[1]);
+const pub = (f) => path.join(root, 'public', f);
+const read = (f) => readFileSync(path.join(root, f), 'utf8');
+function localImports(file) {
+  const src = readFileSync(pub(file), 'utf8'), out = new Set();
+  for (const m of src.matchAll(/(?:from\s+|import\s*\(\s*)['"]\.\/([\w.-]+\.js)['"]/g)) out.add(m[1]);
   return out;
 }
+const visited = new Set(), queue = ['app.js'];
+while (queue.length) { const f = queue.shift(); if (visited.has(f)) continue; visited.add(f); for (const i of localImports(f)) queue.push(i); }
+const workerSrc = read('worker.js'), swSrc = read('public/sw.js'), html = read('public/index.html');
+const PUBLIC = new Set([...workerSrc.match(/PUBLIC_FILES\s*=\s*new Set\(\[([\s\S]*?)\]\)/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
+const SHELL = new Set([...swSrc.match(/SHELL\s*=\s*\[([\s\S]*?)\]/)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
 
-console.log('Cohérence des fichiers JS servis au navigateur (public/*.js ↔ worker.js ↔ sw.js)');
-
-// Ferme transitivement tous les imports relatifs à partir du point d'entrée navigateur (app.js),
-// exactement comme le ferait le résolveur de modules ES du navigateur.
-const visited = new Set();
-const queue = ['public/app.js'];
-const allImported = new Set();
-while (queue.length) {
-  const f = queue.shift();
-  if (visited.has(f)) continue;
-  visited.add(f);
-  for (const imp of localImports(f)) {
-    allImported.add(imp);
-    const rel = 'public' + imp;
-    if (!visited.has(rel)) queue.push(rel);
+console.log('Fichiers servis');
+await ok('le graphe d’imports est complet (tous les modules de l’application détectés)', () => { for (const f of ['state.js', 'brain.js', 'generator.js', 'player.js', 'views-home.js', 'anatomy.js', 'grading.js', 'items.js']) assert.ok(visited.has(f), f); });
+await ok('chaque module importé existe sur disque', () => { for (const f of visited) assert.ok(existsSync(pub(f)), f); });
+await ok('chaque module importé est autorisé par le Worker (sinon 404 en ligne)', () => { for (const f of visited) assert.ok(PUBLIC.has('/' + f), '/' + f + ' absent de PUBLIC_FILES'); });
+await ok('chaque module importé est précaché par le Service Worker (sinon panne hors ligne)', () => { for (const f of visited) assert.ok(SHELL.has('/' + f), '/' + f + ' absent de SHELL'); });
+await ok('liste blanche du Worker et précache identiques', () => { assert.deepEqual([...PUBLIC].sort(), [...SHELL].sort()); });
+await ok('chaque fichier autorisé existe réellement', () => { for (const p of PUBLIC) if (p !== '/') assert.ok(existsSync(pub(p.slice(1))), p); });
+await ok('aucun fichier public inutile ou oublié (hors modules serveur)', () => {
+  const serverOnly = new Set(['migrate.js']);
+  for (const f of readdirSync(path.join(root, 'public'))) if (!serverOnly.has(f)) assert.ok(PUBLIC.has('/' + f), `public/${f} n’est pas servi : fichier orphelin ?`);
+});
+await ok('ressources de index.html présentes', () => { for (const m of html.matchAll(/(?:href|src)="\/([\w.-]+)"/g)) assert.ok(PUBLIC.has('/' + m[1]), m[1]); });
+await ok('manifeste valide avec icônes existantes', () => { const m = JSON.parse(read('public/manifest.json')); assert.equal(m.name, 'Mes séances'); for (const i of m.icons) assert.ok(existsSync(pub(i.src.slice(1)))); assert.ok(m.icons.some((i) => i.purpose === 'maskable')); });
+await ok('version du cache du Service Worker alignée sur la version de l’application', () => {
+  const v = read('public/state.js').match(/APP_VERSION = '([\d.]+)'/)[1];
+  assert.equal(read('worker.js').match(/APP_VERSION = '([\d.]+)'/)[1], v);
+  assert.match(swSrc, new RegExp(`mes-seances-v${v.replaceAll('.', '-')}`));
+});
+console.log('Secrets');
+await ok('EDIT_PASSWORD n’apparaît jamais dans le bundle public (ni valeur ni lecture)', () => {
+  for (const f of readdirSync(path.join(root, 'public'))) {
+    if (!/\.(js|html|json|css)$/.test(f)) continue;
+    const src = readFileSync(pub(f), 'utf8');
+    assert.ok(!/env\.EDIT_PASSWORD|EDIT_CODE|secret-admin|Adm1n/.test(src), f);
+    assert.ok(!/localStorage\.setItem\([^)]*password/i.test(src), f + ' : mot de passe stocké localement');
   }
-}
-
-const workerSrc = readFileSync(path.join(root, 'worker.js'), 'utf8');
-const swSrc = readFileSync(path.join(root, 'public/sw.js'), 'utf8');
-const publicFilesMatch = workerSrc.match(/PUBLIC_FILES\s*=\s*new Set\(\[([\s\S]*?)\]\)/);
-const shellMatch = swSrc.match(/SHELL\s*=\s*\[([\s\S]*?)\]/);
-assert.ok(publicFilesMatch, 'PUBLIC_FILES introuvable dans worker.js — le test ne peut pas vérifier la liste blanche');
-assert.ok(shellMatch, 'SHELL introuvable dans sw.js — le test ne peut pas vérifier le précache');
-const publicFiles = new Set([...publicFilesMatch[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
-const shell = new Set([...shellMatch[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
-
-ok('le test détecte bien des imports (sinon il vérifierait un ensemble vide sans rien garantir)', () => {
-  assert.ok(allImported.size >= 5);
-  for (const f of ['/engine.js', '/shared.js', '/library.js', '/commands.js', '/outbox.js', '/sports.js']) assert.ok(allImported.has(f), `${f} devrait être détecté comme importé`);
 });
-ok('chaque fichier JS importé (transitivement) depuis app.js existe réellement sur disque', () => {
-  for (const imp of allImported) assert.ok(existsSync(path.join(root, 'public' + imp)), `${imp} référencé par un import mais absent de public/`);
+await ok('wrangler.json ne contient aucun secret en clair', () => { const w = read('wrangler.json'); assert.ok(!/EDIT_PASSWORD"\s*:/.test(w) && !/"vars"[\s\S]*PASSWORD/.test(w)); });
+await ok('HTML généré : aucun innerHTML construit hors du moteur d’échappement h``', () => {
+  for (const f of readdirSync(path.join(root, 'public')).filter((x) => /^(views-|app|player|ui).*\.js$/.test(x))) {
+    const src = readFileSync(pub(f), 'utf8');
+    for (const m of src.matchAll(/innerHTML\s*=\s*([^;]+);/g)) {
+      const rhs = m[1].trim();
+      assert.ok(/\.s\b|^''$|^`<div class="back" data-act="closeSheet"><\/div>|^''|^sheetHtml/.test(rhs) || /\.map\(\(l\) => `<option value="\$\{l\.id\}">\$\{l\.label\.replace/.test(rhs), `${f} : innerHTML non échappé → ${rhs.slice(0, 80)}`);
+    }
+  }
 });
-ok('chaque fichier JS importé est autorisé par la liste blanche du Worker (PUBLIC_FILES) — sinon le Worker le bloque en 404, même en ligne', () => {
-  for (const imp of allImported) assert.ok(publicFiles.has(imp), `${imp} absent de PUBLIC_FILES dans worker.js`);
-});
-ok('chaque fichier JS importé est précaché par le Service Worker (SHELL) pour l’usage hors-ligne', () => {
-  for (const imp of allImported) assert.ok(shell.has(imp), `${imp} absent de SHELL dans sw.js`);
-});
-
-console.log(`\n${n} tests OK`);
+done('tests de cohérence des fichiers');

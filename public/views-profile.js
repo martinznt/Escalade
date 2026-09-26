@@ -1,8 +1,8 @@
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, api, newId } from './state.js';
-import { uid } from './shared.js';
+import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
+import { uid, normalizeEx, normalizeSession } from './shared.js';
 import { CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, metricTierText, metricsForCap } from './model.js';
 import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addLevel, moveLevel, removeLevel, renameLevel, setMapping, sortedLevels, gradeSnapshot, maximaSummary, snapshotText, REFERENCE, LEVEL_WORDS } from './grading.js';
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
@@ -42,7 +42,7 @@ function vMap() {
   return h`<div class="card"><h3>Activités</h3><div class="chips">${m.activities.length ? m.activities.map((a) => h`<span class="chip static">${a.label} · ${a.sessions90} séance(s) / 90 j</span>`) : h`<span class="muted small">Aucune activité.</span>`}</div></div>
     <div class="card"><h3>Carte des capacités</h3><p class="tiny muted">Touche une capacité pour explorer ses liens : exercices, métriques, muscles et objectifs. Couleur = état estimé (${sw.text})</p>
       <div class="legend small"><span>${tag('solide', 'ok')}</span><span>${tag('en développement', 'info')}</span><span>${tag('à renforcer', 'warn')}</span><span>${tag('non renseignée')}</span></div>
-      ${Object.entries(groups).map(([fam, list]) => h`<div class="capgroup"><b class="small">${CAP_FAMILIES[fam] || 'Autres'}</b><div class="capmap">${list.map((s) => h`<button class="cap ${s.status}" data-act="capOpen" data-id="${s.capId}" style="--rel:${Math.round(40 + s.relevance * 60)}%"><span>${s.label}</span><small>${STATUS_WORD[s.status]}${s.level != null ? ' · ' + confWord(s.confidence) : ''}</small></button>`)}</div></div>`)}
+      ${Object.entries(groups).map(([fam, list]) => h`<div class="capgroup"><b class="small">${CAP_FAMILIES[fam] || 'Autres'}</b><div class="capmap">${list.map((s) => h`<button class="cap ${s.status}" data-act="capOpen" data-id="${s.capId}" style="--rel:${Math.round(40 + s.relevance * 60)}%"><span>${s.label}</span><small>${STATUS_WORD[s.status]}${s.level != null ? ' · confiance ' + confWord(s.confidence) : ''}</small></button>`)}</div></div>`)}
       ${!m.capacities.length ? h`<p class="muted small">Choisis une activité ou un objectif pour faire apparaître tes capacités.</p>` : ''}</div>
     <div class="card"><h3>Muscles travaillés (30 jours)</h3>${raw(anatomySvg({ heat: muscleVolume(c, 30) }))}<p class="tiny muted center">Plus la zone est marquée, plus elle a été sollicitée (exercices réalisés + ressenti du questionnaire).</p></div>
     <div class="card"><h3>Objectifs</h3>${m.goals.length ? m.goals.map((g) => h`<button class="item pick" data-act="goalOpen" data-id="${g.goal.id}"><div class="grow"><b>${g.label}</b>${meter(g.progress.pct || 0)}<div class="tiny muted">${g.progress.text}</div></div></button>`) : h`<p class="muted small">Aucun objectif actif.</p>`}</div>
@@ -306,8 +306,7 @@ function goalPathsV(g) {
 }
 ACT.pathSeance = async (el) => {
   const g = item('goal', el.dataset.g), sk = SKILLS[g?.skillId], p = sk?.paths.find((x) => x.id === el.dataset.id); if (!p) return;
-  const { normalizeEx: nx } = await import('./shared.js');
-  const { saveSeance } = await import('./state.js');
+  const nx = normalizeEx;
   const exs = p.exercises.map((id) => byId(id)).filter(Boolean).map((l) => nx({ ...l, id: uid(), libId: l.id, ok: l.cues, bad: l.bad, block: 'main', why: `Chemin « ${p.label} » vers ${sk.label}` }));
   const s = saveSeance({ id: uid(), name: `${sk.label} — ${p.label}`, emoji: sk.emoji, source: 'generated', activity: sk.activity, exercises: exs, context: { goalId: g.id, plannedMin: p.minutes }, objectives: [p.traits] });
   toast('Séance créée'); go('library', 'seance', s.id);
@@ -427,7 +426,6 @@ ACT.pubDel = async (el) => { if (!(await ask('Retirer cette séance de ton profi
 ACT.pubCopy = async (el) => {
   try {
     const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`);
-    const { normalizeSession } = await import('./shared.js'); const { saveSeance } = await import('./state.js');
     const now = Date.now(), src = normalizeSession(r.item.session);
     const s = saveSeance({ ...src, id: uid(), name: r.item.title, source: 'copy', exercises: src.exercises.map((e) => ({ ...e, id: uid(), note: '' })), origin: { kind: 'public', id: r.item.id, author: r.item.author || '', copiedAt: now }, createdAt: now, updatedAt: now });
     toast('Copie indépendante enregistrée'); go('library', 'seance', s.id);

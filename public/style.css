@@ -101,9 +101,9 @@ nav.tabs button{appearance:none;border:0;background:transparent;color:var(--mute
 nav.tabs button .ico{width:auto;height:auto;background:none;font-size:1.25rem}nav.tabs button.on{color:var(--text);background:var(--card2)}
 /* Feuilles et dialogues */
 #sheet,#dialog{position:fixed;inset:0;z-index:20;display:none}#sheet.open,#dialog.open{display:block}#dialog{z-index:30}
-#sheet .back,#dialog .back{position:absolute;inset:0;background:#0009;animation:fade .15s}
-#sheet .panel,#dialog .panel{position:absolute;left:0;right:0;bottom:0;max-height:88dvh;overflow:auto;background:var(--card);border-radius:20px 20px 0 0;padding:10px 16px calc(18px + env(safe-area-inset-bottom));display:grid;gap:10px;box-shadow:var(--shadow);animation:up .2s ease-out;max-width:760px;margin:0 auto}
-#dialog .panel{bottom:auto;top:30%;border-radius:18px;margin:0 16px;max-width:520px}@media(min-width:560px){#dialog .panel{margin:0 auto}}
+#sheet>.back,#dialog>.back{position:absolute;inset:0;background:#0009;animation:fade .15s}
+#sheet>.panel,#dialog>.panel{position:absolute;left:0;right:0;bottom:0;max-height:88dvh;overflow:auto;background:var(--card);border-radius:20px 20px 0 0;padding:10px 16px calc(18px + env(safe-area-inset-bottom));display:grid;gap:10px;box-shadow:var(--shadow);animation:up .2s ease-out;max-width:760px;margin:0 auto}
+#dialog>.panel{bottom:auto;top:30%;border-radius:18px;margin:0 16px;max-width:520px}@media(min-width:560px){#dialog>.panel{margin:0 auto}}
 .grab{width:42px;height:5px;border-radius:9px;background:var(--line);justify-self:center}
 .list{display:grid;max-height:50dvh;overflow:auto}
 @keyframes up{from{transform:translateY(24px);opacity:0}}@keyframes fade{from{opacity:0}}
@@ -124,3 +124,4 @@ html.hands .btn.big{min-height:84px;font-size:1.35rem}html.hands .stepper button
 .boot-loading{padding:30vh 1rem;text-align:center;color:var(--muted)}
 .boot-error{max-width:520px;margin:12vh auto;padding:18px;background:var(--card);border:1px solid var(--bad);border-radius:16px;display:grid;gap:10px}.boot-error pre{white-space:pre-wrap;font-size:.8rem;color:var(--muted);background:var(--card2);padding:8px;border-radius:8px}
 .goalcard{display:grid;gap:6px}
+.item.ex.editable{flex-wrap:wrap}.item.ex.editable .grow{flex-basis:calc(100% - 52px)}.item.ex .acts{width:100%;justify-content:flex-end}

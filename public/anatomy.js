@@ -64,7 +64,7 @@ export function anatomySvg({ primary = [], secondary = [], heat = null } = {}) {
     if (Sx.has(id)) return { cls: 's', hint: 'secondaire' };
     return { cls: '' };
   };
-  return `<div class="anat">${view(FRONT, 'front', 'Vue de face', state)}${view(BACK, 'back', 'Vue de dos', state)}</div>`;
+  return `<div class="anat">${view(FRONT, 'v-front', 'Vue de face', state)}${view(BACK, 'v-back', 'Vue de dos', state)}</div>`;
 }
 export const FRONT_IDS = FRONT.map((x) => x[0]);
 export const BACK_IDS = BACK.map((x) => x[0]);
