@@ -54,8 +54,28 @@ export function normalizeEx(x = {}) {
     block: ['warmup', 'main', 'cool'].includes(x.block) ? x.block : 'main',
     libId: str(x.libId, 40),
     isNew: !!x.isNew,
+    // V2 : relations sémantiques (capacités pondérées, muscles principaux/secondaires), activités compatibles,
+    // matériel requis, famille de mouvement, difficulté intrinsèque et raison du choix par le générateur.
+    caps: capsObj(x.caps),
+    prim: idList(x.prim, 8),
+    sec: idList(x.sec, 10),
+    acts: idList(x.acts, 8),
+    needs: idList(x.needs, 8),
+    pattern: str(x.pattern, 20),
+    diff: clamp(x.diff, 0, 5, 0),
+    repSec: clamp(x.repSec, 0, 3600, 0),
+    why: str(x.why, 240),
   };
 }
+const ID_RE = /^[\w:.-]{1,80}$/;
+function idList(a, n) { return Array.isArray(a) ? [...new Set(a.map((v) => String(v ?? '')).filter((v) => ID_RE.test(v)))].slice(0, n) : []; }
+function capsObj(o) {
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  for (const [k, v] of Object.entries(o).slice(0, 10)) { const w = clamp(v, 0, 1, 0); if (ID_RE.test(k) && w > 0) out[k] = w; }
+  return out;
+}
+const strs = (a, n, max) => (Array.isArray(a) ? a.map((x) => str(x, max)).filter(Boolean).slice(0, n) : []);
 
 export function normalizeSession(s = {}) {
   s = s && typeof s === 'object' ? s : {};
@@ -70,11 +90,38 @@ export function normalizeSession(s = {}) {
     durationMin: clamp(s.durationMin, 0, 600, 0),
     objectives: strList(s.objectives, 8, 120),
     notes,
-    source: ['manual', 'text', 'generated', 'import'].includes(s.source) ? s.source : 'manual',
+    source: ['manual', 'text', 'generated', 'import', 'copy'].includes(s.source) ? s.source : 'manual',
     exercises: Array.isArray(s.exercises) ? s.exercises.slice(0, 60).map(normalizeEx) : [],
     createdAt: clamp(s.createdAt, 0, 9e15, 0),
     updatedAt: clamp(s.updatedAt, 0, 9e15, 0),
+    // V2 : activité, intentions structurées (priorité 1 à 3), contexte (environnement, matériel, durée prévue,
+    // objectif), modèle / archivage, origine d'une copie et explication de la génération.
+    activity: ID_RE.test(String(s.activity || '')) ? String(s.activity) : '',
+    intentions: Array.isArray(s.intentions) ? s.intentions.slice(0, 7).map((x) => ({ id: str(x?.id, 20), p: clamp(x?.p, 1, 3, 2) })).filter((x) => x.id) : [],
+    context: normalizeContext(s.context),
+    template: !!s.template,
+    archived: !!s.archived,
+    origin: s.origin && typeof s.origin === 'object' && ['common', 'public'].includes(s.origin.kind)
+      ? { kind: s.origin.kind, id: str(s.origin.id, 64), author: str(s.origin.author, 40), copiedAt: clamp(s.origin.copiedAt, 0, 9e15, 0) } : null,
+    explain: normalizeExplain(s.explain),
+    // Repère d'escalade optionnel indiqué par l'auteur (instantané de cotation, voir grading.js).
+    gradeHint: s.gradeHint && typeof s.gradeHint === 'object' && s.gradeHint.label ? {
+      systemId: str(s.gradeHint.systemId, 80), systemName: str(s.gradeHint.systemName, 60), levelId: str(s.gradeHint.levelId, 80), label: str(s.gradeHint.label, 30),
+      order: clamp(s.gradeHint.order, 0, 999, 0), total: clamp(s.gradeHint.total, 0, 999, 0), color: /^#[0-9a-f]{6}$/i.test(String(s.gradeHint.color || '')) ? String(s.gradeHint.color) : '',
+    } : null,
   };
+}
+export function normalizeContext(c) {
+  c = c && typeof c === 'object' ? c : {};
+  return {
+    env: ID_RE.test(String(c.env || '')) ? String(c.env) : '', envName: str(c.envName, 60), equipment: idList(c.equipment, 30),
+    plannedMin: clamp(c.plannedMin, 0, 600, 0), goalId: ID_RE.test(String(c.goalId || '')) ? String(c.goalId) : '', place: str(c.place, 80),
+  };
+}
+function normalizeExplain(e) {
+  if (!e || typeof e !== 'object') return null;
+  const out = { facts: strs(e.facts, 14, 240), inferences: strs(e.inferences, 14, 240), missing: strs(e.missing, 10, 240), excluded: strs(e.excluded, 14, 240) };
+  return out.facts.length || out.inferences.length || out.missing.length || out.excluded.length ? out : null;
 }
 
 /**
@@ -129,7 +176,8 @@ const DAY = 86400000;
 const dayNum = (t, tz = 0) => Math.floor((t - tz * 60000) / DAY);
 
 export function summarizeHistory(rows, now = Date.now(), tz = 0) {
-  const entries = (rows || []).filter((r) => r && Number(r.startedAt) > 0).sort((a, b) => b.startedAt - a.startedAt);
+  // Une séance datée dans le futur n'est jamais comptée comme réalisée (horloge d'un appareil décalée, import erroné).
+  const entries = (rows || []).filter((r) => r && Number(r.startedAt) > 0 && Number(r.startedAt) <= now + 5 * 60000).sort((a, b) => b.startedAt - a.startedAt);
   const today = dayNum(now, tz);
   const days = new Set(entries.map((r) => dayNum(r.startedAt, tz)));
   let streak = 0;

@@ -224,5 +224,328 @@ E('cd-shoulders', 'Étirement pectoraux et épaules', '🧘', { role: 'cool', ki
 E('cd-hips', 'Étirement hanches et fessiers', '🧘', { role: 'cool', kind: 'cool', group: 'jambes', muscles: ['fessiers', 'hanches'], mode: 'time', sets: 2, secMin: 30, secMax: 30, perSide: true, rest: 10, cues: ['Position du pigeon ou 4 croisé, respire.'], why: 'Récupération des hanches.', src: 'Retour au calme' });
 E('cd-breath', 'Respiration lente', '🌬️', { role: 'cool', kind: 'cool', group: 'gainage', muscles: [], mode: 'time', sets: 1, secMin: 90, secMax: 120, rest: 0, cues: ['Inspire 4 s, expire 6 s, allongé.'], why: 'Redescendre en douceur.', src: 'Retour au calme' });
 
+/* ═════════════ V2 : exercices multi-activités et annotations sémantiques ═════════════
+   Chaque exercice porte désormais :
+   - caps  : capacités sollicitées (relations pondérées 0–1, voir model.js CAPACITIES) ;
+   - prim / sec : muscles principaux / secondaires (identifiants de model.js MUSCLES, noms français) ;
+   - acts  : activités compatibles ; pattern : famille de mouvement (sert au remplacement intelligent) ;
+   - diff  : difficulté intrinsèque 1–5 (sert à l'estimation du niveau des séances communes).
+   Les nouveaux exercices portent climb:false : le générateur escalade historique (engine.js) ne les utilise pas. */
+const ACT_CODES = { B: 'climbing_boulder', V: 'climbing_route', S: 'strength', C: 'conditioning', R: 'running', N: 'swimming' };
+const acts = (codes) => [...codes].map((c) => ACT_CODES[c]).filter(Boolean);
+const cp = (t) => Object.fromEntries(t.split(/\s+/).filter(Boolean).map((p) => { const [k, v] = p.split(':'); return [k, Number(v)]; }));
+const X = (id, name, emoji, o) => E(id, name, emoji, { climb: false, ...o });
+
+/* ───── Figures : front lever, drapeau, traction à un bras, muscle-up, équilibre, pistol ───── */
+X('fl-adv-tuck', 'Front lever groupé avancé', '🛩️', { kind: 'core', group: 'gainage', needs: ['bar'], intensity: 'high', minLevel: 2, mode: 'time', sets: 4, secMin: 6, secMax: 10, rest: 150,
+  caps: cp('controle_scapulaire:.9 gainage_anterieur:.8 tirage_vertical:.4'), prim: ['grand_dorsal', 'grand_droit'], sec: ['biceps', 'trapezes'], acts: acts('C'), pattern: 'levier', diff: 4,
+  cues: ['Dos plat, hanches ouvertes plus loin que la version groupée.', 'Bras tendus, omoplates basses et serrées.'], bad: ['Plier les coudes.', 'Creuser le bas du dos.'], why: 'Étape intermédiaire entre le groupé et les versions longues.', src: 'Progression gymnique courante' });
+X('fl-straddle', 'Front lever jambes écartées', '🛩️', { kind: 'core', group: 'gainage', needs: ['bar'], intensity: 'high', minLevel: 2, mode: 'time', sets: 4, secMin: 4, secMax: 8, rest: 180,
+  caps: cp('controle_scapulaire:1 gainage_anterieur:.9 tirage_vertical:.5'), prim: ['grand_dorsal', 'grand_droit'], sec: ['biceps', 'trapezes', 'lombaires'], acts: acts('C'), pattern: 'levier', diff: 5,
+  cues: ['Jambes tendues et écartées pour raccourcir le levier.', 'Corps à l’horizontale, regard vers le haut.'], bad: ['Tenir au-delà d’une position propre.'], why: 'Levier presque complet avec un bras de levier réduit.', src: 'Progression gymnique courante' });
+X('fl-full', 'Front lever complet', '🛫', { kind: 'core', group: 'gainage', needs: ['bar'], intensity: 'high', minLevel: 2, mode: 'time', sets: 4, secMin: 3, secMax: 6, rest: 180,
+  caps: cp('controle_scapulaire:1 gainage_anterieur:1 tirage_vertical:.6'), prim: ['grand_dorsal', 'grand_droit'], sec: ['biceps', 'trapezes', 'lombaires', 'grand_fessier'], acts: acts('C'), pattern: 'levier', diff: 5,
+  cues: ['Corps gainé des épaules aux pieds, à l’horizontale.'], bad: ['Garder les hanches cassées.'], why: 'La figure finale.', src: 'Progression gymnique courante' });
+X('fl-raises', 'Montées en front lever groupé', '⤴️', { kind: 'core', group: 'gainage', needs: ['bar'], intensity: 'high', minLevel: 1, mode: 'reps', sets: 3, repsMin: 4, repsMax: 6, rest: 120,
+  caps: cp('controle_scapulaire:.8 gainage_anterieur:.6 tirage_vertical:.5'), prim: ['grand_dorsal', 'grand_droit'], sec: ['biceps', 'flechisseurs_hanche'], acts: acts('CB'), pattern: 'levier', diff: 4,
+  cues: ['Depuis la suspension, monte en position groupée bras tendus, redescends lentement.'], why: 'Force dynamique dans l’amplitude du front lever.', src: 'Progression gymnique courante' });
+X('fl-negative', 'Négatives de front lever', '⤵️', { kind: 'core', group: 'gainage', needs: ['bar'], intensity: 'high', minLevel: 2, mode: 'reps', sets: 3, repsMin: 3, repsMax: 5, rest: 150,
+  caps: cp('controle_scapulaire:.9 gainage_anterieur:.7 tirage_vertical:.6'), prim: ['grand_dorsal', 'grand_droit'], sec: ['biceps', 'trapezes'], acts: acts('C'), pattern: 'levier', diff: 4,
+  cues: ['Depuis la position inversée, descends en 4–5 s en gardant le corps gainé.'], why: 'L’excentrique renforce la position tenue.', src: 'Progression gymnique courante' });
+X('fl-band', 'Front lever avec élastique', '🎗️', { kind: 'core', group: 'gainage', needs: ['bar', 'band'], intensity: 'mod', minLevel: 1, mode: 'time', sets: 4, secMin: 10, secMax: 15, rest: 120,
+  caps: cp('controle_scapulaire:.8 gainage_anterieur:.7 tirage_vertical:.3'), prim: ['grand_dorsal', 'grand_droit'], sec: ['biceps'], acts: acts('C'), pattern: 'levier', diff: 3,
+  cues: ['Élastique sous les hanches, tiens une position plus longue que sans aide.'], why: 'Travailler une position avancée avec une charge réduite.', src: 'Progression courante' });
+X('reverse-plank', 'Planche inversée', '🌉', { kind: 'core', group: 'gainage', needs: [], mode: 'time', sets: 3, secMin: 20, secMax: 30, rest: 45,
+  caps: cp('chaine_posterieure:.6 stabilite_epaules:.4 controle_scapulaire:.3'), prim: ['grand_fessier', 'deltoide_post'], sec: ['ischios', 'triceps'], acts: acts('CBV'), pattern: 'gainage', diff: 1,
+  cues: ['Mains derrière toi, bassin haut, corps aligné.'], why: 'Compense les positions enroulées et prépare les épaules.', src: 'Renforcement classique' });
+X('flag-vertical', 'Drapeau vertical', '🚩', { kind: 'core', group: 'gainage', needs: ['pole'], intensity: 'mod', minLevel: 1, mode: 'time', sets: 4, secMin: 8, secMax: 15, rest: 120,
+  caps: cp('gainage_lateral:.8 stabilite_epaules:.5 poussee_verticale:.3'), prim: ['obliques', 'grand_dorsal'], sec: ['deltoide_ant', 'triceps'], acts: acts('C'), pattern: 'levier', diff: 3,
+  cues: ['Bras du haut qui tire, bras du bas qui pousse, corps vertical le long du poteau.'], bad: ['Laisser l’épaule du bas s’affaisser.'], why: 'Apprend l’alignement du drapeau avec un levier court.', src: 'Progression street workout courante' });
+X('flag-tuck', 'Drapeau groupé', '🚩', { kind: 'core', group: 'gainage', needs: ['pole'], intensity: 'high', minLevel: 2, mode: 'time', sets: 4, secMin: 5, secMax: 8, rest: 150,
+  caps: cp('gainage_lateral:.9 poussee_verticale:.4 tirage_vertical:.4 stabilite_epaules:.5'), prim: ['obliques', 'grand_dorsal'], sec: ['deltoide_ant', 'triceps', 'moyen_fessier'], acts: acts('C'), pattern: 'levier', diff: 4,
+  cues: ['Genoux ramenés, bassin à l’horizontale.'], why: 'Première position horizontale.', src: 'Progression street workout courante' });
+X('flag-negative', 'Négatives de drapeau', '🚩', { kind: 'core', group: 'gainage', needs: ['pole'], intensity: 'high', minLevel: 2, mode: 'reps', sets: 3, repsMin: 3, repsMax: 5, rest: 150,
+  caps: cp('gainage_lateral:.9 poussee_verticale:.5 tirage_vertical:.4'), prim: ['obliques', 'grand_dorsal'], sec: ['deltoide_ant', 'triceps'], acts: acts('C'), pattern: 'levier', diff: 4,
+  cues: ['Monte en drapeau vertical puis descends lentement vers l’horizontale.'], why: 'L’excentrique construit la force de la figure.', src: 'Progression street workout courante' });
+X('flag-full', 'Drapeau complet', '🚩', { kind: 'core', group: 'gainage', needs: ['pole'], intensity: 'high', minLevel: 2, mode: 'time', sets: 4, secMin: 3, secMax: 6, rest: 180,
+  caps: cp('gainage_lateral:1 poussee_verticale:.5 tirage_vertical:.5 stabilite_epaules:.5'), prim: ['obliques', 'grand_dorsal', 'deltoide_ant'], sec: ['triceps', 'moyen_fessier'], acts: acts('C'), pattern: 'levier', diff: 5,
+  cues: ['Corps tendu à l’horizontale, jambes serrées.'], why: 'La figure finale.', src: 'Progression street workout courante' });
+X('side-plank-raise', 'Gainage latéral avec levée de jambe', '📐', { kind: 'core', group: 'gainage', needs: [], mode: 'time', sets: 3, secMin: 20, secMax: 30, perSide: true, rest: 45,
+  caps: cp('gainage_lateral:1 equilibre:.3'), prim: ['obliques', 'moyen_fessier'], sec: ['grand_droit'], acts: acts('CSR'), pattern: 'gainage', diff: 2,
+  cues: ['Planche latérale, lève la jambe du dessus sans basculer.'], why: 'Chaîne latérale plus exigeante que la planche simple.', src: 'Renforcement classique' });
+X('copenhagen', 'Planche de Copenhague', '🧱', { kind: 'core', group: 'gainage', needs: [], mode: 'time', sets: 3, secMin: 15, secMax: 25, perSide: true, rest: 60,
+  caps: cp('gainage_lateral:.8 force_jambes:.3'), prim: ['adducteurs', 'obliques'], sec: ['moyen_fessier'], acts: acts('CSR'), pattern: 'gainage', diff: 3,
+  cues: ['Jambe du dessus posée sur un banc ou une chaise, corps aligné.', 'Version facile : genou posé.'], why: 'Adducteurs et chaîne latérale.', src: 'Renforcement classique' });
+X('archer-pullup', 'Tractions archer', '🏹', { kind: 'pull', group: 'tirer', needs: ['bar'], intensity: 'high', minLevel: 1, mode: 'reps', sets: 4, repsMin: 2, repsMax: 5, perSide: true, rest: 150,
+  caps: cp('tirage_unilateral:1 tirage_vertical:.6'), prim: ['grand_dorsal', 'biceps'], sec: ['avant_bras_flech', 'trapezes'], acts: acts('CB'), pattern: 'traction', diff: 4,
+  cues: ['Prise large : un bras tire, l’autre glisse tendu sur la barre.'], bad: ['Laisser l’épaule monter vers l’oreille.'], why: 'Transfert progressif du tirage vers un bras.', src: 'Progression street workout courante' });
+X('oap-negative', 'Négatives de traction à un bras', '☝️', { kind: 'pull', group: 'tirer', needs: ['bar'], intensity: 'high', minLevel: 2, mode: 'reps', sets: 4, repsMin: 1, repsMax: 3, perSide: true, rest: 180,
+  caps: cp('tirage_unilateral:1 blocage:.8'), prim: ['grand_dorsal', 'biceps'], sec: ['avant_bras_flech', 'coiffe'], acts: acts('C'), pattern: 'traction', diff: 5,
+  cues: ['Monte à deux bras, lâche une main, descends en 3 à 5 s.'], bad: ['Descendre en chute libre (coude exposé).'], why: 'L’excentrique précède la traction complète.', src: 'Progression courante' });
+X('oap-assisted', 'Traction à un bras assistée', '☝️', { kind: 'pull', group: 'tirer', needs: ['bar', 'band'], intensity: 'high', minLevel: 2, mode: 'reps', sets: 4, repsMin: 2, repsMax: 4, perSide: true, rest: 180,
+  caps: cp('tirage_unilateral:1 tirage_vertical:.6'), prim: ['grand_dorsal', 'biceps'], sec: ['avant_bras_flech'], acts: acts('C'), pattern: 'traction', diff: 4,
+  cues: ['Élastique ou main libre sur une serviette pour doser l’aide.'], why: 'Travail dans l’amplitude complète avec une aide contrôlée.', src: 'Progression courante' });
+X('oap', 'Traction à un bras', '☝️', { kind: 'pull', group: 'tirer', needs: ['bar'], intensity: 'high', minLevel: 2, mode: 'reps', sets: 5, repsMin: 1, repsMax: 2, perSide: true, rest: 240,
+  caps: cp('tirage_unilateral:1 blocage:.8 tirage_vertical:.6'), prim: ['grand_dorsal', 'biceps'], sec: ['avant_bras_flech', 'obliques'], acts: acts('C'), pattern: 'traction', diff: 5,
+  cues: ['Départ bras tendu actif, jambes serrées.'], why: 'La figure finale.', src: 'Progression courante' });
+X('high-pullup', 'Tractions poitrine à la barre', '🔝', { kind: 'pull', group: 'tirer', needs: ['bar'], intensity: 'high', minLevel: 1, mode: 'reps', sets: 4, repsMin: 3, repsMax: 6, rest: 150,
+  caps: cp('puissance_haut:.7 tirage_vertical:.8'), prim: ['grand_dorsal', 'biceps'], sec: ['trapezes', 'rhomboides'], acts: acts('CB'), pattern: 'traction', diff: 3,
+  cues: ['Tire fort et haut : poitrine vers la barre.'], why: 'Tirage haut nécessaire au muscle-up.', src: 'Progression street workout courante' });
+X('straight-bar-dips', 'Dips à la barre droite', '⬇️', { kind: 'antagonist', group: 'pousser', needs: ['bar'], intensity: 'mod', minLevel: 1, mode: 'reps', sets: 3, repsMin: 5, repsMax: 10, rest: 90,
+  caps: cp('poussee_horizontale:.6 poussee_verticale:.4'), prim: ['triceps', 'pectoraux'], sec: ['deltoide_ant'], acts: acts('CS'), pattern: 'poussee', diff: 3,
+  cues: ['Appui au-dessus de la barre, descends poitrine vers la barre, repousse.'], why: 'La sortie du muscle-up.', src: 'Progression street workout courante' });
+X('muscle-up-band', 'Muscle-up assisté (élastique)', '🔝', { kind: 'power', group: 'tirer', needs: ['bar', 'band'], intensity: 'high', minLevel: 1, mode: 'reps', sets: 4, repsMin: 2, repsMax: 4, rest: 150,
+  caps: cp('puissance_haut:1 tirage_vertical:.6 coordination:.5'), prim: ['grand_dorsal', 'triceps'], sec: ['biceps', 'pectoraux'], acts: acts('C'), pattern: 'traction', diff: 4,
+  cues: ['Tirage explosif, bascule des poignets au-dessus de la barre, puis poussée.'], why: 'Apprendre la transition avec une aide.', src: 'Progression street workout courante' });
+X('ring-row', 'Rowing aux anneaux', '🚣', { kind: 'pull', group: 'tirer', needs: ['rings'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 75,
+  caps: cp('tirage_horizontal:1 stabilite_epaules:.3'), prim: ['rhomboides', 'grand_dorsal'], sec: ['biceps', 'deltoide_post'], acts: acts('CS'), pattern: 'rowing', diff: 2,
+  cues: ['Corps gainé, tire les anneaux vers les côtes.'], why: 'Tirage horizontal libre pour les épaules.', src: 'Renforcement classique' });
+X('ring-dips', 'Dips aux anneaux', '⬇️', { kind: 'antagonist', group: 'pousser', needs: ['rings'], intensity: 'high', minLevel: 2, mode: 'reps', sets: 3, repsMin: 4, repsMax: 8, rest: 120,
+  caps: cp('poussee_horizontale:.7 stabilite_epaules:.6'), prim: ['triceps', 'pectoraux'], sec: ['deltoide_ant', 'grand_dentele'], acts: acts('C'), pattern: 'poussee', diff: 4,
+  cues: ['Anneaux serrés contre le corps, descente contrôlée.'], bad: ['Descendre plus bas que ce que les épaules tolèrent.'], why: 'Poussée instable très complète.', src: 'Gymnastique' });
+X('wall-handstand', 'Équilibre face au mur', '🤸', { kind: 'antagonist', group: 'pousser', needs: [], intensity: 'mod', minLevel: 1, mode: 'time', sets: 4, secMin: 20, secMax: 40, rest: 90,
+  caps: cp('poussee_verticale:.8 equilibre:.6 stabilite_epaules:.5'), prim: ['deltoide_ant', 'triceps'], sec: ['trapezes', 'grand_dentele', 'grand_droit'], acts: acts('C'), pattern: 'poussee', diff: 3,
+  cues: ['Ventre face au mur, mains à 10–20 cm, corps aligné.', 'Pousse le sol, épaules aux oreilles.'], why: 'Construit l’alignement et la force de l’équilibre.', src: 'Gymnastique' });
+X('pistol-box', 'Pistol squat sur box', '🦵', { kind: 'legs', group: 'jambes', needs: ['box'], mode: 'reps', sets: 3, repsMin: 5, repsMax: 8, perSide: true, rest: 75,
+  caps: cp('force_jambes:.8 equilibre:.6'), prim: ['quadriceps', 'grand_fessier'], sec: ['moyen_fessier', 'adducteurs'], acts: acts('CR'), pattern: 'squat', diff: 2,
+  cues: ['Assieds-toi sur une jambe jusqu’à la box, remonte sans élan.'], why: 'Amplitude réduite vers le pistol complet.', src: 'Progression courante' });
+X('pistol', 'Pistol squat', '🦵', { kind: 'legs', group: 'jambes', needs: [], intensity: 'mod', minLevel: 1, mode: 'reps', sets: 3, repsMin: 3, repsMax: 6, perSide: true, rest: 90,
+  caps: cp('force_jambes:1 equilibre:.7 mobilite_hanches:.4'), prim: ['quadriceps', 'grand_fessier'], sec: ['moyen_fessier', 'grand_droit', 'mollets'], acts: acts('C'), pattern: 'squat', diff: 4,
+  cues: ['Jambe libre tendue devant, talon au sol, descente complète.'], why: 'Force unilatérale et équilibre.', src: 'Progression courante' });
+
+/* ───── Musculation (salle) ───── */
+X('back-squat', 'Squat barre', '🏋️', { kind: 'legs', group: 'jambes', needs: ['barbell'], intensity: 'mod', mode: 'reps', sets: 4, repsMin: 5, repsMax: 8, rest: 150, load: 'Charge de travail',
+  caps: cp('force_jambes:1'), prim: ['quadriceps', 'grand_fessier'], sec: ['adducteurs', 'lombaires', 'grand_droit'], acts: acts('S'), pattern: 'squat', diff: 3,
+  cues: ['Pieds à largeur d’épaules, genoux dans l’axe des pieds.', 'Garde 1 à 2 répétitions en réserve.'], bad: ['Arrondir le bas du dos.'], why: 'Exercice de base de la force des jambes.', src: 'Musculation classique' });
+X('deadlift', 'Soulevé de terre', '🏗️', { kind: 'legs', group: 'jambes', needs: ['barbell'], intensity: 'high', minLevel: 1, mode: 'reps', sets: 3, repsMin: 4, repsMax: 6, rest: 180, load: 'Charge de travail',
+  caps: cp('chaine_posterieure:1 force_jambes:.4 pince:.3'), prim: ['ischios', 'grand_fessier', 'lombaires'], sec: ['trapezes', 'avant_bras_flech', 'quadriceps'], acts: acts('S'), pattern: 'charniere', diff: 4,
+  cues: ['Barre contre les tibias, dos plat, pousse le sol.'], bad: ['Arrondir le dos pour aller chercher la barre.'], why: 'Force de toute la chaîne postérieure.', src: 'Musculation classique' });
+X('bench-press', 'Développé couché', '🏋️', { kind: 'antagonist', group: 'pousser', needs: ['barbell', 'bench'], intensity: 'mod', mode: 'reps', sets: 4, repsMin: 5, repsMax: 8, rest: 150, load: 'Charge de travail',
+  caps: cp('poussee_horizontale:1'), prim: ['pectoraux', 'triceps'], sec: ['deltoide_ant'], acts: acts('S'), pattern: 'poussee', diff: 3,
+  cues: ['Omoplates serrées, pieds au sol, barre au bas des pectoraux.'], why: 'Force de poussée horizontale.', src: 'Musculation classique' });
+X('overhead-press', 'Développé militaire', '🙌', { kind: 'antagonist', group: 'pousser', needs: ['barbell'], intensity: 'mod', mode: 'reps', sets: 4, repsMin: 5, repsMax: 8, rest: 150, load: 'Charge de travail',
+  caps: cp('poussee_verticale:1 gainage_anterieur:.3'), prim: ['deltoide_ant', 'triceps'], sec: ['trapezes', 'grand_droit'], acts: acts('S'), pattern: 'poussee', diff: 3,
+  cues: ['Fessiers et abdos serrés, barre au-dessus de la tête, sans cambrer.'], why: 'Force de poussée verticale.', src: 'Musculation classique' });
+X('barbell-row', 'Rowing barre', '🚣', { kind: 'pull', group: 'tirer', needs: ['barbell'], intensity: 'mod', mode: 'reps', sets: 4, repsMin: 6, repsMax: 10, rest: 120, load: 'Charge de travail',
+  caps: cp('tirage_horizontal:1'), prim: ['grand_dorsal', 'rhomboides'], sec: ['biceps', 'lombaires', 'deltoide_post'], acts: acts('S'), pattern: 'rowing', diff: 3,
+  cues: ['Buste penché, dos plat, tire la barre vers le nombril.'], why: 'Tirage horizontal lourd.', src: 'Musculation classique' });
+X('db-row', 'Rowing haltère à un bras', '🚣', { kind: 'pull', group: 'tirer', needs: ['weights'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, perSide: true, rest: 75,
+  caps: cp('tirage_horizontal:.9'), prim: ['grand_dorsal', 'rhomboides'], sec: ['biceps'], acts: acts('SC'), pattern: 'rowing', diff: 2,
+  cues: ['Main et genou en appui sur un banc, tire le coude vers la hanche.'], why: 'Tirage horizontal unilatéral.', src: 'Musculation classique' });
+X('lat-pulldown', 'Tirage vertical à la poulie', '⬇️', { kind: 'pull', group: 'tirer', needs: ['machine'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 90,
+  caps: cp('tirage_vertical:.9'), prim: ['grand_dorsal'], sec: ['biceps', 'trapezes'], acts: acts('S'), pattern: 'traction', diff: 2,
+  cues: ['Tire la barre vers le haut de la poitrine, épaules basses.'], why: 'Tirage vertical à charge réglable.', src: 'Musculation classique' });
+X('leg-press', 'Presse à cuisses', '🦵', { kind: 'legs', group: 'jambes', needs: ['machine'], mode: 'reps', sets: 3, repsMin: 10, repsMax: 12, rest: 90,
+  caps: cp('force_jambes:.9'), prim: ['quadriceps', 'grand_fessier'], sec: ['adducteurs'], acts: acts('S'), pattern: 'squat', diff: 2,
+  cues: ['Bas du dos collé au dossier, amplitude contrôlée.'], why: 'Force des jambes guidée.', src: 'Musculation classique' });
+X('hip-thrust', 'Hip thrust', '🌉', { kind: 'legs', group: 'jambes', needs: ['barbell', 'bench'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 90,
+  caps: cp('chaine_posterieure:.9 explosivite:.2'), prim: ['grand_fessier'], sec: ['ischios'], acts: acts('S'), pattern: 'charniere', diff: 2,
+  cues: ['Haut du dos sur le banc, pousse les hanches vers le haut, menton rentré.'], why: 'Force des fessiers.', src: 'Musculation classique' });
+X('walking-lunge', 'Fentes marchées', '🚶', { kind: 'legs', group: 'jambes', needs: [], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, perSide: true, rest: 75,
+  caps: cp('force_jambes:.8 equilibre:.3'), prim: ['quadriceps', 'grand_fessier'], sec: ['adducteurs', 'mollets'], acts: acts('SCR'), pattern: 'fente', diff: 2,
+  cues: ['Grand pas, genou arrière proche du sol, buste droit.'], why: 'Force et stabilité des jambes.', src: 'Renforcement classique' });
+X('goblet-squat', 'Squat gobelet', '🏺', { kind: 'legs', group: 'jambes', needs: ['weights'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 75,
+  caps: cp('force_jambes:.8 mobilite_hanches:.2'), prim: ['quadriceps', 'grand_fessier'], sec: ['grand_droit', 'adducteurs'], acts: acts('SC'), pattern: 'squat', diff: 1,
+  cues: ['Haltère contre la poitrine, descends entre les genoux.'], why: 'Apprendre le squat avec une charge légère.', src: 'Musculation classique' });
+X('kb-swing', 'Swing kettlebell', '🔔', { kind: 'plyo', group: 'jambes', needs: ['kettlebell'], intensity: 'mod', mode: 'reps', sets: 4, repsMin: 12, repsMax: 15, rest: 60,
+  caps: cp('chaine_posterieure:.8 explosivite:.6'), prim: ['grand_fessier', 'ischios'], sec: ['lombaires', 'grand_droit', 'avant_bras_flech'], acts: acts('SC'), pattern: 'charniere', diff: 2,
+  cues: ['Mouvement de hanches, pas de squat : les bras ne font que guider.'], why: 'Puissance de la chaîne postérieure.', src: 'Renforcement classique' });
+X('db-bench', 'Développé haltères', '🏋️', { kind: 'antagonist', group: 'pousser', needs: ['weights', 'bench'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 90,
+  caps: cp('poussee_horizontale:.9 stabilite_epaules:.2'), prim: ['pectoraux'], sec: ['triceps', 'deltoide_ant'], acts: acts('S'), pattern: 'poussee', diff: 2,
+  cues: ['Descente contrôlée, coudes à 45° du buste.'], why: 'Poussée horizontale avec liberté des épaules.', src: 'Musculation classique' });
+X('farmer-carry', 'Marche du fermier', '🧺', { kind: 'core', group: 'gainage', needs: ['weights'], mode: 'time', sets: 3, secMin: 30, secMax: 45, rest: 60,
+  caps: cp('pince:.6 gainage_lateral:.5 endurance_doigts:.3'), prim: ['avant_bras_flech', 'trapezes'], sec: ['obliques', 'grand_fessier'], acts: acts('SCB'), pattern: 'portage', diff: 2,
+  cues: ['Charges lourdes dans chaque main, marche droit, épaules basses.'], why: 'Prise et gainage en mouvement.', src: 'Renforcement classique' });
+X('face-pull', 'Face pull (élastique)', '🎗️', { kind: 'prehab', group: 'epaules', needs: ['band'], mode: 'reps', sets: 3, repsMin: 12, repsMax: 15, rest: 45,
+  caps: cp('stabilite_epaules:.8 tirage_horizontal:.4'), prim: ['deltoide_post', 'rhomboides'], sec: ['coiffe', 'trapezes'], acts: acts('SCBVN'), pattern: 'prevention', diff: 1,
+  cues: ['Tire l’élastique vers le front, coudes hauts, pouces vers l’arrière.'], why: 'Arrière des épaules et coiffe : équilibre les poussées.', src: 'Prévention classique' });
+X('pallof-press', 'Pallof press (élastique)', '🎗️', { kind: 'core', group: 'gainage', needs: ['band'], mode: 'reps', sets: 3, repsMin: 10, repsMax: 12, perSide: true, rest: 45,
+  caps: cp('gainage_lateral:.8 gainage_anterieur:.4'), prim: ['obliques'], sec: ['grand_droit'], acts: acts('SCR'), pattern: 'gainage', diff: 1,
+  cues: ['Élastique sur le côté, tends les bras devant toi sans tourner le buste.'], why: 'Gainage anti-rotation.', src: 'Renforcement classique' });
+
+/* ───── Renforcement / préparation physique (peu ou pas de matériel) ───── */
+X('bird-dog', 'Bird dog', '🐕', { kind: 'core', group: 'gainage', needs: [], mode: 'reps', sets: 3, repsMin: 8, repsMax: 10, perSide: true, rest: 30,
+  caps: cp('gainage_anterieur:.5 chaine_posterieure:.4 equilibre:.3'), prim: ['lombaires', 'grand_fessier'], sec: ['grand_droit', 'deltoide_post'], acts: acts('CRNS'), pattern: 'gainage', diff: 1,
+  cues: ['À quatre pattes, tends bras et jambe opposés sans bouger le bassin.'], why: 'Stabilité du tronc à faible charge.', src: 'Renforcement classique' });
+X('plank', 'Planche sur les avant-bras', '🧱', { kind: 'core', group: 'gainage', needs: [], mode: 'time', sets: 3, secMin: 30, secMax: 60, rest: 45,
+  caps: cp('gainage_anterieur:.8'), prim: ['grand_droit'], sec: ['obliques', 'deltoide_ant'], acts: acts('CSRN'), pattern: 'gainage', diff: 1,
+  cues: ['Corps aligné, fessiers serrés, respiration régulière.'], why: 'Gainage de base.', src: 'Renforcement classique' });
+X('mountain-climber', 'Mountain climbers', '⛰️', { kind: 'core', group: 'gainage', needs: [], intensity: 'mod', mode: 'time', sets: 3, secMin: 30, secMax: 40, rest: 45,
+  caps: cp('gainage_anterieur:.5 endurance_aerobie:.4'), prim: ['grand_droit', 'flechisseurs_hanche'], sec: ['quadriceps', 'deltoide_ant'], acts: acts('CR'), pattern: 'circuit', diff: 1,
+  cues: ['En appui sur les mains, ramène les genoux vers la poitrine en alternance.'], why: 'Gainage dynamique et cardio.', src: 'Renforcement classique' });
+X('burpee', 'Burpees', '💥', { kind: 'plyo', group: 'jambes', needs: [], intensity: 'mod', mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 60,
+  caps: cp('endurance_aerobie:.5 explosivite:.5'), prim: ['quadriceps', 'pectoraux'], sec: ['grand_droit', 'grand_fessier'], acts: acts('C'), pattern: 'circuit', diff: 2,
+  cues: ['Descends en planche, reviens, saute bras en l’air.'], why: 'Condition physique générale.', src: 'Renforcement classique' });
+X('squat-bw', 'Squat au poids du corps', '🦵', { kind: 'legs', group: 'jambes', needs: [], mode: 'reps', sets: 3, repsMin: 15, repsMax: 20, rest: 45,
+  caps: cp('force_jambes:.6 mobilite_hanches:.2'), prim: ['quadriceps', 'grand_fessier'], sec: ['adducteurs'], acts: acts('CR'), pattern: 'squat', diff: 1,
+  cues: ['Talons au sol, poitrine haute, descends aussi bas que confortable.'], why: 'Base de la force des jambes.', src: 'Renforcement classique' });
+X('wall-sit', 'Chaise contre le mur', '🪑', { kind: 'legs', group: 'jambes', needs: [], mode: 'time', sets: 3, secMin: 30, secMax: 60, rest: 45,
+  caps: cp('force_jambes:.6'), prim: ['quadriceps'], sec: ['grand_fessier'], acts: acts('CRB'), pattern: 'squat', diff: 1,
+  cues: ['Dos au mur, cuisses parallèles au sol.'], why: 'Isométrie des quadriceps, sans impact.', src: 'Renforcement classique' });
+X('superman', 'Superman', '🦸', { kind: 'core', group: 'gainage', needs: [], mode: 'reps', sets: 3, repsMin: 10, repsMax: 12, rest: 30,
+  caps: cp('chaine_posterieure:.6'), prim: ['lombaires', 'grand_fessier'], sec: ['trapezes', 'deltoide_post'], acts: acts('CN'), pattern: 'gainage', diff: 1,
+  cues: ['À plat ventre, décolle bras et jambes 2 s, redescends.'], why: 'Renforce l’arrière du tronc.', src: 'Renforcement classique' });
+X('band-row', 'Tirage à l’élastique', '🎗️', { kind: 'pull', group: 'tirer', needs: ['band'], mode: 'reps', sets: 3, repsMin: 12, repsMax: 15, rest: 45,
+  caps: cp('tirage_horizontal:.8 stabilite_epaules:.3'), prim: ['rhomboides', 'grand_dorsal'], sec: ['biceps', 'deltoide_post'], acts: acts('CN'), pattern: 'rowing', diff: 1,
+  cues: ['Élastique fixé devant, tire les coudes vers l’arrière.'], why: 'Tirage horizontal sans barre.', src: 'Renforcement classique' });
+X('jump-rope', 'Corde à sauter', '🪢', { kind: 'plyo', group: 'jambes', needs: ['rope'], mode: 'time', sets: 4, secMin: 60, secMax: 60, rest: 45,
+  caps: cp('endurance_aerobie:.6 coordination:.4 explosivite:.2'), prim: ['mollets'], sec: ['quadriceps', 'tibial'], acts: acts('CRB'), pattern: 'circuit', diff: 1,
+  cues: ['Petits sauts sur l’avant du pied, poignets qui tournent.'], why: 'Cardio et réactivité des chevilles.', src: 'Renforcement classique' });
+X('box-jump', 'Sauts sur box', '📦', { kind: 'plyo', group: 'jambes', needs: ['box'], intensity: 'mod', mode: 'reps', sets: 4, repsMin: 4, repsMax: 6, rest: 90,
+  caps: cp('explosivite:1'), prim: ['quadriceps', 'grand_fessier'], sec: ['mollets'], acts: acts('CSRB'), pattern: 'saut', diff: 2,
+  cues: ['Saute sur la box, atterris doucement, redescends en marchant.'], why: 'Explosivité avec un atterrissage protégé.', src: 'Pliométrie classique' });
+
+/* ───── Mobilité et récupération (intensité faible) ───── */
+X('mob-hips', 'Mobilité 90/90 des hanches', '🧘', { kind: 'mobility', group: 'jambes', needs: [], mode: 'time', sets: 2, secMin: 45, secMax: 60, perSide: true, rest: 15,
+  caps: cp('mobilite_hanches:1'), prim: ['grand_fessier', 'adducteurs'], sec: ['flechisseurs_hanche'], acts: acts('BVSCRN'), pattern: 'mobilite', diff: 1,
+  cues: ['Assis, jambes à 90°, redresse le buste puis bascule doucement.'], why: 'Rotation des hanches.', src: 'Mobilité classique' });
+X('mob-hamstrings', 'Étirement actif des ischio-jambiers', '🧘', { kind: 'mobility', group: 'jambes', needs: [], mode: 'time', sets: 2, secMin: 45, secMax: 45, rest: 15,
+  caps: cp('mobilite_hanches:.8'), prim: ['ischios'], sec: ['mollets'], acts: acts('BVSCRN'), pattern: 'mobilite', diff: 1,
+  cues: ['Jambe tendue sur un support bas, bascule le bassin vers l’avant, dos long.'], why: 'Souplesse de l’arrière des jambes.', src: 'Mobilité classique' });
+X('mob-thoracic', 'Rotations thoraciques', '🌀', { kind: 'mobility', group: 'epaules', needs: [], mode: 'reps', sets: 2, repsMin: 8, repsMax: 10, perSide: true, rest: 15,
+  caps: cp('mobilite_epaules:.7'), prim: ['trapezes', 'rhomboides'], sec: ['obliques'], acts: acts('BVSCRN'), pattern: 'mobilite', diff: 1,
+  cues: ['Allongé sur le côté, ouvre le bras du dessus en suivant la main du regard.'], why: 'Mobilité du haut du dos.', src: 'Mobilité classique' });
+X('mob-shoulders', 'Passages d’épaules à l’élastique', '🎗️', { kind: 'mobility', group: 'epaules', needs: ['band'], mode: 'reps', sets: 2, repsMin: 10, repsMax: 12, rest: 15,
+  caps: cp('mobilite_epaules:1 stabilite_epaules:.3'), prim: ['deltoide_ant', 'deltoide_post'], sec: ['coiffe', 'pectoraux'], acts: acts('BVSCN'), pattern: 'mobilite', diff: 1,
+  cues: ['Bras tendus, fais passer l’élastique au-dessus de la tête puis derrière, sans forcer.'], why: 'Amplitude des épaules.', src: 'Mobilité classique' });
+X('mob-ankles', 'Mobilité des chevilles', '🦶', { kind: 'mobility', group: 'jambes', needs: [], mode: 'reps', sets: 2, repsMin: 10, repsMax: 10, perSide: true, rest: 15,
+  caps: cp('equilibre:.3 technique_course:.3'), prim: ['mollets', 'tibial'], sec: [], acts: acts('BVSCR'), pattern: 'mobilite', diff: 1,
+  cues: ['Genou vers le mur, talon au sol, va-et-vient doux.'], why: 'Chevilles mobiles pour courir et grimper.', src: 'Mobilité classique' });
+X('recov-walk', 'Marche active', '🚶', { kind: 'recovery', group: 'jambes', needs: [], mode: 'time', sets: 1, secMin: 600, secMax: 1200, rest: 0, flex: [300, 1800],
+  caps: cp('endurance_aerobie:.3'), prim: ['quadriceps'], sec: ['mollets'], acts: acts('BVSCR'), pattern: 'recuperation', diff: 1,
+  cues: ['Marche à allure facile, respiration nasale.'], why: 'Récupération active légère.', src: 'Récupération classique' });
+
+/* ───── Course à pied ───── */
+X('run-easy', 'Course en endurance fondamentale', '🏃', { kind: 'run', group: 'jambes', needs: [], mode: 'time', sets: 1, secMin: 1200, secMax: 2700, rest: 0, flex: [600, 3600],
+  caps: cp('endurance_aerobie:1'), prim: ['quadriceps', 'mollets'], sec: ['ischios', 'grand_fessier'], acts: acts('R'), pattern: 'course', diff: 1,
+  cues: ['Allure où tu peux parler par phrases complètes.'], why: 'Base de toute progression en course.', src: 'Entraînement course classique' });
+X('run-short', 'Footing court', '🏃', { kind: 'run', group: 'jambes', needs: [], mode: 'time', sets: 1, secMin: 480, secMax: 900, rest: 0, flex: [240, 1200],
+  caps: cp('endurance_aerobie:.7'), prim: ['quadriceps', 'mollets'], sec: ['ischios'], acts: acts('R'), pattern: 'course', diff: 1,
+  cues: ['Très facile, pour s’échauffer ou récupérer.'], why: 'Volume facile.', src: 'Entraînement course classique' });
+X('run-long', 'Sortie longue', '🏞️', { kind: 'run', group: 'jambes', needs: [], minLevel: 1, mode: 'time', sets: 1, secMin: 3600, secMax: 5400, rest: 0, flex: [2700, 7200],
+  caps: cp('endurance_aerobie:1'), prim: ['quadriceps', 'mollets'], sec: ['ischios', 'grand_fessier'], acts: acts('R'), pattern: 'course', diff: 3,
+  cues: ['Allure facile du début à la fin, hydratation.'], why: 'Développe l’endurance fondamentale.', src: 'Entraînement course classique' });
+X('run-tempo', 'Course au seuil (tempo)', '🏃', { kind: 'run', group: 'jambes', needs: [], intensity: 'mod', mode: 'time', sets: 3, secMin: 480, secMax: 600, rest: 120,
+  caps: cp('seuil:1 endurance_aerobie:.4'), prim: ['quadriceps', 'mollets'], sec: ['ischios'], acts: acts('R'), pattern: 'course', diff: 3,
+  cues: ['Allure « confortablement difficile » : quelques mots seulement.'], why: 'Tenir une allure soutenue plus longtemps.', src: 'Entraînement course classique' });
+X('run-intervals', 'Fractionné court 30/30', '⚡', { kind: 'run', group: 'jambes', needs: [], intensity: 'high', minLevel: 1, mode: 'time', sets: 10, secMin: 30, secMax: 30, rest: 30,
+  caps: cp('vitesse:.8 seuil:.5'), prim: ['quadriceps', 'mollets', 'ischios'], sec: ['grand_fessier'], acts: acts('R'), pattern: 'course', diff: 3,
+  cues: ['30 s rapide mais contrôlé, 30 s en trottinant.'], bad: ['Partir trop vite sur les premières.'], why: 'Vitesse et capacité à répéter.', src: 'Entraînement course classique' });
+X('run-intervals-long', 'Fractionné long (3 min)', '⏱️', { kind: 'run', group: 'jambes', needs: [], intensity: 'high', minLevel: 1, mode: 'time', sets: 5, secMin: 180, secMax: 180, rest: 120,
+  caps: cp('seuil:.9 vitesse:.4'), prim: ['quadriceps', 'mollets'], sec: ['ischios'], acts: acts('R'), pattern: 'course', diff: 3,
+  cues: ['Allure soutenue régulière sur chaque répétition.'], why: 'Travail proche du seuil haut.', src: 'Entraînement course classique' });
+X('run-hills', 'Côtes', '⛰️', { kind: 'run', group: 'jambes', needs: ['hill'], intensity: 'high', mode: 'time', sets: 6, secMin: 30, secMax: 60, rest: 90,
+  caps: cp('force_jambes:.6 seuil:.5 explosivite:.3'), prim: ['quadriceps', 'grand_fessier', 'mollets'], sec: ['ischios'], acts: acts('R'), pattern: 'course', diff: 3,
+  cues: ['Monte avec des foulées régulières, redescends en marchant ou trottinant.'], why: 'Force spécifique et puissance aérobie.', src: 'Entraînement course classique' });
+X('run-strides', 'Lignes droites (accélérations)', '💨', { kind: 'run', group: 'jambes', needs: [], intensity: 'mod', mode: 'reps', sets: 6, repsMin: 1, repsMax: 1, unit: 'accélération 80 m', repSec: 20, rest: 60,
+  caps: cp('vitesse:.7 technique_course:.5'), prim: ['quadriceps', 'ischios'], sec: ['mollets', 'grand_fessier'], acts: acts('R'), pattern: 'course', diff: 2,
+  cues: ['Accélère progressivement jusqu’à 90 % de ta vitesse, relâché.'], why: 'Vitesse et relâchement sans fatigue excessive.', src: 'Entraînement course classique' });
+X('run-drills', 'Éducatifs de course', '👟', { kind: 'run', group: 'jambes', needs: [], mode: 'time', sets: 4, secMin: 30, secMax: 30, rest: 30,
+  caps: cp('technique_course:1 coordination:.4'), prim: ['flechisseurs_hanche', 'mollets'], sec: ['ischios', 'tibial'], acts: acts('R'), pattern: 'course', diff: 1,
+  cues: ['Montées de genoux, talons-fesses, foulées bondissantes légères.'], why: 'Posture et économie de course.', src: 'Entraînement course classique' });
+
+/* ───── Natation ───── */
+X('swim-warm', 'Nage facile d’échauffement', '🏊', { kind: 'swim', group: 'epaules', needs: ['pool'], mode: 'time', sets: 1, secMin: 300, secMax: 600, rest: 0, flex: [180, 900],
+  caps: cp('endurance_aerobie:.5 technique_nage:.3'), prim: ['grand_dorsal', 'deltoide_ant'], sec: ['triceps'], acts: acts('N'), pattern: 'nage', diff: 1,
+  cues: ['Nage souple, alterne les nages si tu veux.'], why: 'Monter en température dans l’eau.', src: 'Entraînement natation classique' });
+X('swim-drills', 'Éducatifs de crawl (rattrapé, point mort)', '🎯', { kind: 'swim', group: 'epaules', needs: ['pool'], mode: 'reps', sets: 6, repsMin: 1, repsMax: 1, unit: 'longueurs de 25 m', repSec: 40, rest: 20,
+  caps: cp('technique_nage:1'), prim: ['grand_dorsal', 'deltoide_ant'], sec: ['grand_droit'], acts: acts('N'), pattern: 'nage', diff: 1,
+  cues: ['Une main attend l’autre devant (rattrapé), allonge chaque mouvement.'], why: 'Améliore la glisse et le placement.', src: 'Entraînement natation classique' });
+X('swim-kick', 'Battements avec planche', '🦵', { kind: 'swim', group: 'jambes', needs: ['pool', 'pullbuoy'], mode: 'reps', sets: 6, repsMin: 1, repsMax: 1, unit: 'longueurs de 25 m', repSec: 45, rest: 20,
+  caps: cp('technique_nage:.4 endurance_aerobie:.4'), prim: ['quadriceps', 'flechisseurs_hanche'], sec: ['mollets', 'grand_droit'], acts: acts('N'), pattern: 'nage', diff: 1,
+  cues: ['Battements depuis les hanches, chevilles souples.'], why: 'Jambes et position horizontale.', src: 'Entraînement natation classique' });
+X('swim-pull', 'Bras seuls avec pull-buoy', '💪', { kind: 'swim', group: 'epaules', needs: ['pool', 'pullbuoy'], mode: 'reps', sets: 6, repsMin: 1, repsMax: 1, unit: 'longueurs de 50 m', repSec: 70, rest: 20,
+  caps: cp('technique_nage:.6 tirage_horizontal:.4 endurance_aerobie:.4'), prim: ['grand_dorsal', 'triceps'], sec: ['deltoide_ant', 'deltoide_post'], acts: acts('N'), pattern: 'nage', diff: 2,
+  cues: ['Pull-buoy entre les cuisses, traction longue jusqu’à la hanche.'], why: 'Force et technique de la traction aquatique.', src: 'Entraînement natation classique' });
+X('swim-endurance', 'Nage continue', '🌊', { kind: 'swim', group: 'epaules', needs: ['pool'], intensity: 'mod', mode: 'time', sets: 1, secMin: 600, secMax: 1500, rest: 0, flex: [300, 2400],
+  caps: cp('endurance_aerobie:1 technique_nage:.3'), prim: ['grand_dorsal'], sec: ['deltoide_ant', 'triceps', 'quadriceps'], acts: acts('N'), pattern: 'nage', diff: 2,
+  cues: ['Allure régulière, respiration calée.'], why: 'Endurance dans l’eau.', src: 'Entraînement natation classique' });
+X('swim-intervals', '50 m rapides', '⚡', { kind: 'swim', group: 'epaules', needs: ['pool'], intensity: 'high', minLevel: 1, mode: 'reps', sets: 8, repsMin: 1, repsMax: 1, unit: 'longueurs de 50 m', repSec: 55, rest: 30,
+  caps: cp('vitesse:.9 seuil:.5'), prim: ['grand_dorsal', 'triceps'], sec: ['quadriceps', 'deltoide_ant'], acts: acts('N'), pattern: 'nage', diff: 3,
+  cues: ['Rapide mais propre, récupération complète.'], why: 'Vitesse de nage.', src: 'Entraînement natation classique' });
+X('swim-breathing', 'Respiration tous les 3 temps', '🌬️', { kind: 'swim', group: 'epaules', needs: ['pool'], mode: 'reps', sets: 4, repsMin: 1, repsMax: 1, unit: 'longueurs de 50 m', repSec: 75, rest: 20,
+  caps: cp('technique_nage:.8 endurance_aerobie:.3'), prim: ['grand_dorsal'], sec: ['obliques'], acts: acts('N'), pattern: 'nage', diff: 1,
+  cues: ['Respire alternativement à droite et à gauche, expire dans l’eau.'], why: 'Coordination respiratoire.', src: 'Entraînement natation classique' });
+
+/* ───── Annotations des exercices historiques (escalade, renfo) ───── */
+const ANN = {
+  'dalle-pieds-silencieux': ['technique_pieds:1 equilibre:.4', ['mollets'], ['tibial', 'grand_droit'], 'BV', 'grimpe', 1],
+  'dalle-precision': ['technique_pieds:1', ['mollets'], ['tibial'], 'BV', 'grimpe', 1],
+  'dalle-equilibre-un-pied': ['equilibre:1 technique_pieds:.5', ['moyen_fessier', 'mollets'], ['grand_droit'], 'BV', 'grimpe', 2],
+  'dalle-lente': ['technique_escalade:1 endurance_doigts:.4', ['avant_bras_flech'], ['grand_droit'], 'BV', 'grimpe', 1],
+  'dalle-hanches': ['technique_escalade:1 mobilite_hanches:.4', ['obliques', 'moyen_fessier'], ['grand_droit'], 'BV', 'grimpe', 2],
+  'dalle-transferts': ['technique_escalade:.8 equilibre:.6', ['quadriceps', 'grand_fessier'], ['mollets'], 'BV', 'grimpe', 1],
+  'dalle-mobilite-hanches': ['mobilite_hanches:1', ['adducteurs'], ['grand_fessier'], 'BVC', 'mobilite', 1],
+  'hang-active': ['force_doigts:.8 controle_scapulaire:.3', ['avant_bras_flech'], ['grand_dorsal', 'trapezes'], 'BV', 'suspension', 2],
+  'hang-max': ['force_doigts:1', ['avant_bras_flech'], ['grand_dorsal'], 'BV', 'suspension', 4],
+  'hang-repeaters': ['endurance_doigts:1 force_doigts:.5', ['avant_bras_flech'], ['grand_dorsal'], 'BV', 'suspension', 3],
+  'wall-reglettes': ['force_doigts:.9 technique_escalade:.3', ['avant_bras_flech'], ['grand_dorsal', 'biceps'], 'B', 'grimpe', 3],
+  'wall-traverse-reglettes': ['endurance_doigts:.8 force_doigts:.3', ['avant_bras_flech'], ['biceps'], 'BV', 'grimpe', 2],
+  'finger-extensions': ['endurance_doigts:.2 stabilite_epaules:.1', ['avant_bras_ext'], [], 'BVC', 'prevention', 1],
+  'wrist-extension': ['endurance_doigts:.2 stabilite_epaules:.1', ['avant_bras_ext'], ['avant_bras_flech'], 'BVCS', 'prevention', 1],
+  'dev-power-blocs': ['puissance_haut:1 force_doigts:.5 gainage_anterieur:.4', ['grand_dorsal', 'avant_bras_flech'], ['biceps', 'grand_droit'], 'B', 'grimpe', 4],
+  'dev-pieds-coupes': ['gainage_anterieur:.9 technique_escalade:.5', ['grand_droit', 'flechisseurs_hanche'], ['grand_dorsal'], 'B', 'grimpe', 3],
+  'dev-talons': ['technique_escalade:.8 chaine_posterieure:.3', ['ischios'], ['grand_fessier'], 'B', 'grimpe', 2],
+  pullup: ['tirage_vertical:1 blocage:.3', ['grand_dorsal', 'biceps'], ['trapezes', 'rhomboides', 'avant_bras_flech'], 'SCBV', 'traction', 2],
+  'inverted-row': ['tirage_horizontal:1', ['rhomboides', 'grand_dorsal'], ['biceps', 'deltoide_post'], 'SCBV', 'rowing', 1],
+  'pullup-heavy': ['tirage_vertical:1 blocage:.4', ['grand_dorsal', 'biceps'], ['avant_bras_flech', 'trapezes'], 'SCB', 'traction', 4],
+  lockoff: ['blocage:1 tirage_vertical:.4', ['biceps', 'grand_dorsal'], ['avant_bras_flech'], 'CB', 'traction', 3],
+  'knee-raise': ['gainage_anterieur:1 controle_scapulaire:.3', ['grand_droit', 'flechisseurs_hanche'], ['obliques', 'avant_bras_flech'], 'CBS', 'gainage', 2],
+  'front-lever-tuck': ['controle_scapulaire:.8 gainage_anterieur:.7 tirage_vertical:.3', ['grand_dorsal', 'grand_droit'], ['biceps', 'trapezes'], 'CB', 'levier', 4],
+  'hollow-hold': ['gainage_anterieur:1', ['grand_droit'], ['flechisseurs_hanche', 'obliques'], 'CBSVR', 'gainage', 1],
+  'side-plank': ['gainage_lateral:1', ['obliques'], ['moyen_fessier'], 'CBSVR', 'gainage', 1],
+  'dead-bug': ['gainage_anterieur:.8', ['grand_droit'], ['obliques', 'flechisseurs_hanche'], 'CBSVRN', 'gainage', 1],
+  arc: ['endurance_doigts:.8 endurance_aerobie:.6 technique_escalade:.4', ['avant_bras_flech'], ['grand_dorsal'], 'BV', 'grimpe', 1],
+  'four-by-four': ['endurance_doigts:1 puissance_haut:.3', ['avant_bras_flech', 'grand_dorsal'], ['biceps'], 'BV', 'grimpe', 3],
+  'endurance-intervals': ['endurance_doigts:1', ['avant_bras_flech'], ['grand_dorsal'], 'VB', 'grimpe', 2],
+  'endurance-circuit': ['endurance_aerobie:.6 tirage_vertical:.4 gainage_anterieur:.4', ['grand_dorsal', 'grand_droit'], ['quadriceps'], 'CBV', 'circuit', 2],
+  'limit-boulders': ['force_doigts:.8 puissance_haut:.8 technique_escalade:.6', ['avant_bras_flech', 'grand_dorsal'], ['biceps', 'grand_droit'], 'B', 'grimpe', 5],
+  'speed-known': ['coordination:.8 endurance_doigts:.3', ['quadriceps', 'grand_dorsal'], ['avant_bras_flech'], 'BV', 'grimpe', 2],
+  dynos: ['coordination:1 puissance_haut:.7 explosivite:.5', ['grand_dorsal', 'quadriceps'], ['grand_droit', 'avant_bras_flech'], 'B', 'grimpe', 4],
+  'jump-vertical': ['explosivite:1', ['quadriceps', 'grand_fessier'], ['mollets'], 'CSBR', 'saut', 2],
+  'pushup-explosive': ['explosivite:.6 poussee_horizontale:.7', ['pectoraux', 'triceps'], ['deltoide_ant'], 'CS', 'poussee', 3],
+  'explosive-pullup': ['puissance_haut:1 tirage_vertical:.6', ['grand_dorsal', 'biceps'], ['trapezes'], 'CB', 'traction', 4],
+  'step-up-explosive': ['explosivite:.8 force_jambes:.5', ['quadriceps', 'grand_fessier'], ['mollets'], 'CSR', 'saut', 2],
+  'skater-jumps': ['explosivite:.7 equilibre:.5', ['grand_fessier', 'moyen_fessier'], ['quadriceps', 'mollets'], 'CSR', 'saut', 2],
+  'squat-loaded': ['force_jambes:1', ['quadriceps', 'grand_fessier'], ['adducteurs', 'lombaires'], 'SC', 'squat', 3],
+  bulgarian: ['force_jambes:.9 equilibre:.4', ['quadriceps', 'grand_fessier'], ['adducteurs', 'moyen_fessier'], 'SCRB', 'fente', 3],
+  rdl: ['chaine_posterieure:1', ['ischios', 'grand_fessier'], ['lombaires'], 'SCR', 'charniere', 3],
+  'single-leg-rdl': ['chaine_posterieure:.7 equilibre:.6', ['ischios', 'grand_fessier'], ['moyen_fessier'], 'CRB', 'charniere', 2],
+  'calf-raise': ['explosivite:.3 equilibre:.2', ['mollets'], ['tibial'], 'CRS', 'mollets', 1],
+  cossack: ['mobilite_hanches:.8 force_jambes:.5', ['adducteurs', 'quadriceps'], ['grand_fessier'], 'CBR', 'squat', 2],
+  'calf-iso': ['equilibre:.4', ['mollets'], [], 'CRB', 'mollets', 1],
+  'glute-bridge': ['chaine_posterieure:.8', ['grand_fessier'], ['ischios'], 'CSRB', 'charniere', 1],
+  pushup: ['poussee_horizontale:1 gainage_anterieur:.2', ['pectoraux', 'triceps'], ['deltoide_ant', 'grand_dentele'], 'SCBVN', 'poussee', 1],
+  'pike-pushup': ['poussee_verticale:1', ['deltoide_ant', 'triceps'], ['grand_dentele', 'trapezes'], 'CB', 'poussee', 2],
+  dips: ['poussee_horizontale:.6 poussee_verticale:.4', ['triceps', 'pectoraux'], ['deltoide_ant'], 'SCB', 'poussee', 3],
+  'shoulder-press': ['poussee_verticale:1', ['deltoide_ant', 'triceps'], ['trapezes'], 'SCB', 'poussee', 2],
+  'band-pull-apart': ['stabilite_epaules:.8 tirage_horizontal:.3', ['deltoide_post', 'rhomboides'], ['trapezes'], 'CBVSN', 'prevention', 1],
+  'external-rotation': ['stabilite_epaules:1', ['coiffe'], ['deltoide_post'], 'CBVSN', 'prevention', 1],
+  ytw: ['stabilite_epaules:.8 controle_scapulaire:.5', ['trapezes', 'deltoide_post'], ['rhomboides', 'coiffe'], 'CBVS', 'prevention', 1],
+  'scap-pullup': ['controle_scapulaire:1 stabilite_epaules:.3', ['trapezes', 'grand_dorsal'], ['avant_bras_flech'], 'CBV', 'suspension', 1],
+  'reverse-fly': ['stabilite_epaules:.7 tirage_horizontal:.3', ['deltoide_post', 'rhomboides'], ['trapezes'], 'SCB', 'prevention', 1],
+  'wu-pulse': ['endurance_aerobie:.2', ['quadriceps'], ['mollets'], 'BVSCRN', 'echauffement', 1],
+  'wu-mob-upper': ['mobilite_epaules:.6', ['deltoide_ant', 'trapezes'], ['rhomboides'], 'BVSCN', 'echauffement', 1],
+  'wu-mob-lower': ['mobilite_hanches:.6', ['grand_fessier', 'adducteurs'], ['mollets'], 'BVSCR', 'echauffement', 1],
+  'wu-wrists': ['force_doigts:.1', ['avant_bras_flech'], ['avant_bras_ext'], 'BVSC', 'echauffement', 1],
+  'wu-scap-bar': ['controle_scapulaire:.4', ['trapezes'], ['grand_dorsal'], 'BVSC', 'echauffement', 1],
+  'wu-scap-band': ['controle_scapulaire:.4 stabilite_epaules:.3', ['trapezes', 'deltoide_post'], ['rhomboides'], 'BVSCN', 'echauffement', 1],
+  'wu-scap-floor': ['controle_scapulaire:.4 stabilite_epaules:.3', ['trapezes'], ['deltoide_post'], 'BVSC', 'echauffement', 1],
+  'wu-core': ['gainage_anterieur:.3', ['grand_droit'], ['obliques'], 'BVSCR', 'echauffement', 1],
+  'wu-climb': ['technique_escalade:.3', ['avant_bras_flech', 'grand_dorsal'], ['quadriceps'], 'BV', 'echauffement', 1],
+  'wu-hang': ['force_doigts:.2', ['avant_bras_flech'], [], 'BV', 'echauffement', 1],
+  'wu-jumps': ['explosivite:.2', ['mollets'], ['quadriceps'], 'BVSCR', 'echauffement', 1],
+  'cd-forearm': ['mobilite_epaules:.1', ['avant_bras_flech'], [], 'BVSC', 'retour', 1],
+  'cd-shoulders': ['mobilite_epaules:.3', ['pectoraux', 'deltoide_ant'], [], 'BVSCN', 'retour', 1],
+  'cd-hips': ['mobilite_hanches:.3', ['grand_fessier'], ['flechisseurs_hanche'], 'BVSCR', 'retour', 1],
+  'cd-breath': ['', [], [], 'BVSCRN', 'retour', 1],
+};
+for (const x of L) {
+  const a = ANN[x.id];
+  if (a) { x.caps = cp(a[0]); x.prim = a[1]; x.sec = a[2]; x.acts = acts(a[3]); x.pattern = a[4]; x.diff = a[5]; }
+  x.caps ||= {}; x.prim ||= []; x.sec ||= []; x.acts ||= []; x.pattern ||= ''; x.diff ||= (x.minLevel || 0) + 1;
+}
+
 export const LIBRARY = L;
-export const byId = (id) => L.find((x) => x.id === id) || null;
+export const LIB_BY_ID = new Map(L.map((x) => [x.id, x]));
+export const byId = (id) => LIB_BY_ID.get(id) || null;

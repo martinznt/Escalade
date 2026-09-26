@@ -83,7 +83,7 @@ export function exMinutes(ex) {
   if (ex.mode === 'time') work = avg(ex.secMin, ex.secMax);
   else {
     const reps = avg(ex.repsMin, ex.repsMax);
-    const per = /bloc|voie|essai|passage/i.test(ex.unit) ? 75 : /lancer|mouvement|tenue|lettre/i.test(ex.unit) ? 5 : 3.5;
+    const per = ex.repSec > 0 ? ex.repSec : /bloc|voie|essai|passage/i.test(ex.unit) ? 75 : /lancer|mouvement|tenue|lettre/i.test(ex.unit) ? 5 : 3.5;
     work = reps * per;
   }
   const seconds = ex.sets * (work * side + 15) + Math.max(0, ex.sets - 1) * ex.rest;
@@ -315,7 +315,8 @@ export function groupLoads(history, now = Date.now(), days = 30) {
 }
 
 export function analyze(history, now = Date.now()) {
-  const hist = [...(history || [])].filter((h) => h.startedAt > 0).sort((a, b) => b.startedAt - a.startedAt);
+  // Les séances datées dans le futur ne sont pas des séances réalisées : elles sont ignorées.
+  const hist = [...(history || [])].filter((h) => h.startedAt > 0 && h.startedAt <= now + 5 * 60000).sort((a, b) => b.startedAt - a.startedAt);
   const A = { n7: 0, n30: 0, hoursSinceAny: Infinity, hoursSinceHighFinger: Infinity, hoursSinceHighLegs: Infinity, lastRpe: 0, lastRpeHours: Infinity, avgMinutes: 0, lastSeen: new Map(), lastFocus: '', focusCounts: {} };
   const mins = [];
   for (const h of hist) {
@@ -512,7 +513,8 @@ export function generateSession(opts = {}, ctx = {}) {
     return true;
   };
 
-  const mainLib = LIBRARY.filter((x) => x.role === 'main');
+  // Seuls les exercices d'escalade historiques alimentent ce générateur (les exercices V2 multi-activités portent climb:false).
+  const mainLib = LIBRARY.filter((x) => x.role === 'main' && x.climb !== false);
   const used = new Set();
   const score = (x) => {
     const last = A.lastSeen.get(exKey(x.name));
@@ -743,7 +745,7 @@ export function swapExercise(session, exId, ctx = {}) {
   const level = levelFrom(settings);
   const inUse = new Set(session.exercises.map((e) => e.libId));
   const avoid = settings.avoid || {};
-  const cands = LIBRARY.filter((x) => x.role === lib.role && x.kind === lib.kind && x.id !== lib.id && !inUse.has(x.id) && x.minLevel <= level && x.needs.every((n) => eq[n])
+  const cands = LIBRARY.filter((x) => x.role === lib.role && x.kind === lib.kind && (x.climb !== false) === (lib.climb !== false) && x.id !== lib.id && !inUse.has(x.id) && x.minLevel <= level && x.needs.every((n) => eq[n])
     && !(x.risk === 'finger' && (avoid.fingers || (x.intensity === 'high' && level < 1))) && !(avoid.shoulders && (x.risk === 'shoulder' || SHOULDER_IDS.has(x.id))) && !(avoid.elbows && ELBOW_IDS.has(x.id)) && !(avoid.knees && KNEE_IDS.has(x.id)));
   if (!cands.length) return session;
   const pick = cands[Math.floor((ctx.rng ? ctx.rng() : Math.random()) * cands.length)];

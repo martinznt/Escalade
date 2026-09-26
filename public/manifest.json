@@ -1,15 +1,15 @@
 {
-  "name": "Seances entrainement",
-  "short_name": "Seances entrainement",
-  "description": "Plateforme sportive multi-activité : profil intelligent, analyse des forces et faiblesses, séances personnalisées et progression.",
+  "name": "Mes séances",
+  "short_name": "Mes séances",
+  "description": "Entraînement multi-activité : profil intelligent, séances générées et expliquées, progression personnelle, hors ligne.",
   "lang": "fr",
   "id": "/",
-  "start_url": "/",
+  "start_url": "/#/home/dash",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#111214",
-  "theme_color": "#111214",
+  "background_color": "#16110e",
+  "theme_color": "#16110e",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -29,5 +29,10 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "categories": [
+    "sports",
+    "health",
+    "fitness"
   ]
 }
