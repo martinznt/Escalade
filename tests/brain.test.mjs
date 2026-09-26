@@ -160,4 +160,17 @@ ok('mode Lab : comparaison avant / après avec avertissement de causalité', () 
   assert.equal(r.diff, 2); assert.match(r.disclaimer, /causalité/);
 });
 
+ok('anciennes entrées d’historique (séries en nombre, champs manquants) : aucune analyse ne plante', () => {
+  const odd = [
+    { id: 'o1', sessionName: 'Vieille', startedAt: NOW - 2 * DAY, durationSeconds: 1800, data: { rpe: 3, exercises: [{ name: 'Tractions', sets: 12 }, { name: 'Pompes', sets: '3' }, null, { name: 'Gainage' }] } },
+    { id: 'o2', sessionName: 'Autre', startedAt: NOW - 3 * DAY, durationSeconds: 600, data: { exercises: 12, swaps: 3, questionnaire: { likes: 2, felt: 'x' } } },
+    { id: 'o3', sessionName: 'Sans données', startedAt: NOW - 4 * DAY },
+  ];
+  const c = ctxOf({ history: odd, items: [act('strength'), it('goal', { type: 'custom', label: '20 tractions', target: 20, current: 12, status: 'active' })] });
+  for (const f of ['records', 'timeline', 'journal', 'achievements', 'loadAnalysis', 'regularity', 'undertrained', 'forgottenGoals', 'testReminders', 'learnedPreferences', 'habits', 'diagnostics', 'understandProfile', 'trainingMap', 'neverTried', 'todayOptions', 'atypicalSessions']) B[f](c);
+  B.benchmarks(c, 7); B.periodSummary(c, 'week'); B.muscleVolume(c, 30);
+  const t = c.history.find((h) => h.id === 'o1').data.exercises.find((e) => e.name === 'Tractions');
+  assert.equal(t.sets.length, 12); assert.equal(t.sets[0].reps, 0, 'aucune répétition inventée');
+});
+
 console.log(`\n${n} tests d’analyse OK`);

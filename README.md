@@ -1,4 +1,4 @@
-# Mes séances — v8.0
+# Mes séances — v8.0.1
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
@@ -31,7 +31,7 @@ Il n'y a aucun mot de passe global pour entrer sur le site : chaque personne cr�
 
 ```bash
 npm run check      # syntaxe de tous les fichiers JS + validation JSON
-npm test           # 13 suites unitaires / intégration Worker-D1 / sécurité / synchronisation (256 vérifications)
+npm test           # 14 suites unitaires / intégration Worker-D1 / sécurité / synchronisation (256 vérifications)
 npm run test:e2e   # navigateur réel (Playwright + Chromium) : 2 comptes, admin, hors ligne (36 étapes)
 ```
 

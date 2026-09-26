@@ -2,14 +2,14 @@
 // Le serveur est l'autorité pour toutes les permissions : l'utilisateur est toujours déterminé par sa session
 // (jamais par un identifiant envoyé par le client), et chaque requête SQL est paramétrée.
 import { SCHEMA, ADD_COLUMNS } from './schema.js';
-import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, summarizeHistory, clamp, uid } from './public/shared.js';
+import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
 import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 
-const APP_VERSION = '8.0.0';
+const APP_VERSION = '8.0.1';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -599,7 +599,7 @@ function cleanHistoryData(d) {
     })).filter((e) => e.name),
   };
 }
-const rowToHistory = (r) => ({ id: r.id, sessionId: r.session_id, sessionName: r.session_name, startedAt: r.started_at, durationSeconds: r.duration_seconds, data: safeParse(r.data_json) || {} });
+const rowToHistory = (r) => normalizeHistory({ id: r.id, sessionId: r.session_id, sessionName: r.session_name, startedAt: r.started_at, durationSeconds: r.duration_seconds, data: safeParse(r.data_json) || {} });
 async function historyGet(env, u) {
   const r = await db(env, 'SELECT id,session_id,session_name,started_at,duration_seconds,data_json FROM history WHERE user_id=? ORDER BY started_at DESC LIMIT 1500', u.id).all();
   return json({ ok: true, history: r.results.map(rowToHistory) });
@@ -910,7 +910,7 @@ async function cardFor(env, viewerId, targetId, username, tz) {
   }
   const wantData = prof.share_records;
   const r = await db(env, `SELECT session_name,started_at,duration_seconds${wantData ? ',data_json' : ''} FROM history WHERE user_id=? ORDER BY started_at DESC LIMIT 300`, targetId).all();
-  const rows = r.results.map((x) => ({ sessionName: x.session_name, startedAt: x.started_at, durationSeconds: x.duration_seconds, data: wantData ? safeParse(x.data_json) || {} : {} }));
+  const rows = r.results.map((x) => normalizeHistory({ sessionName: x.session_name, startedAt: x.started_at, durationSeconds: x.duration_seconds, data: wantData ? safeParse(x.data_json) || {} : {} }));
   const s = summarizeHistory(rows, Date.now(), tz);
   const share = safeParse(prof.share_json) || {};
   // Éléments du profil explicitement choisis par la personne (activités, objectifs, performances), rien d'autre.

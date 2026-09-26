@@ -62,7 +62,7 @@ function vDash() {
   const loop = S.lastLoop && Date.now() - S.lastLoop.at < 15 * 60000 ? S.lastLoop : null;
   return h`${!S.settings.onboarded ? vOnboarding() : ''}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée — ce qui change dans ton profil</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<p class="tiny muted">Ces données alimentent tes analyses et tes prochaines séances générées.</p><button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
-    ${blocks.map((b) => BLOCK_VIEWS[b]?.() || '')}
+    ${blocks.map((b) => { try { return BLOCK_VIEWS[b]?.() || ''; } catch (e) { console.error(e); return card(DASH_BLOCKS[b] || b, h`<p class="small warn-t">Ce bloc n’a pas pu s’afficher : ${e.message}</p><p class="tiny muted">Le reste de l’accueil fonctionne. Tu peux le signaler dans Paramètres › Signaler un bug.</p>`); } })}
     <div class="row wrapf"><button class="btn pri" data-act="genOpen">✨ Générer une séance</button><button class="btn" data-act="newSeanceHome">＋ Créer une séance</button><button class="btn" data-act="homeSub" data-id="cal">📅 Calendrier</button></div>`;
 }
 ACT.loopClose = () => { S.lastLoop = null; render(); };

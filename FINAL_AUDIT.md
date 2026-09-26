@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Mes séances v8.0
+# FINAL_AUDIT — Mes séances v8.0.1
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -73,7 +73,7 @@ Exécutées automatiquement au premier appel du Worker, une fois par instance de
 | `tests/engine.test.mjs` | Générateur d'escalade historique et import de texte | 38 OK |
 | `npm run test:e2e` | Navigateur réel Chromium (Playwright), téléphone 390×844 | 36 étapes OK |
 
-Total : **256 vérifications unitaires / intégration + 36 étapes E2E, toutes vertes.**
+Total (8.0.1 : + test de robustesse) : **256 vérifications unitaires / intégration + 36 étapes E2E, toutes vertes.**
 En plus : une visite automatisée de 28 écrans + onglets d'objectif avec données réalistes, qui échoue si une page
 contient « [object Object] », « undefined », « NaN », des entités HTML doublement échappées ou un défilement horizontal
 (aucune anomalie).
@@ -268,6 +268,23 @@ compte (connexion, séances, historique intacts) ; anciens réglages convertis (
 objectifs, activités, métriques) une seule fois ; réglages vides ou corrompus sans erreur ; données locales v7 du
 navigateur (file d'attente comprise) reprises au premier démarrage ; le Worker V2 conserve les anciennes clés de
 réglages qu'un client V2 ne connaît pas.
+
+---
+
+## Correctif 8.0.1 (après la première mise en ligne)
+
+- **Symptôme** : sur un compte réel, l'accueil affichait « Cet écran n’a pas pu s’afficher — number 12 is not iterable ».
+- **Cause** : d'anciennes entrées d'historique (écrites par des versions précédentes) contenaient un nombre là où les
+  analyses attendent une liste (ex. `sets: 12` au lieu de la liste des séries). Le message exact a été reproduit en
+  remplaçant chaque champ par 12 sur la version 8.0.0.
+- **Correction** : toute séance réalisée est normalisée à la lecture (serveur, cache de l'appareil et analyses :
+  `normalizeHistory`) ; un nombre de séries devient autant de séries faites, sans répétition ni charge inventée ;
+  les données de profil sont revalidées par le schéma avant chaque analyse ; chaque bloc de l'accueil est isolé
+  (un bloc en erreur n'empêche plus l'affichage des autres) ; l'écran d'erreur affiche un détail technique à joindre à
+  un signalement.
+- **Test ajouté** : `tests/robustness.test.mjs` remplace tour à tour chaque champ des données (historique, profil,
+  calendrier, séances, exercices personnels) par un nombre, une chaîne, `null` ou un objet vide, et vérifie qu'aucune
+  analyse ne plante. Il échouait sur la version 8.0.0 et passe sur la 8.0.1.
 
 ## 16. Limitations réelles restantes
 

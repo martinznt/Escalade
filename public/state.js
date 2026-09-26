@@ -11,13 +11,13 @@
 //  - une opération définitivement refusée n'est jamais effacée en silence : elle va dans « actions en échec »
 //    (Réessayer / Abandonner) et un message l'annonce.
 
-import { uid, normalizeSession, mergeSeances, readStored } from './shared.js';
+import { uid, normalizeSession, normalizeHistory, mergeSeances, readStored } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
 import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
 import { toast, tz, $ } from './ui.js';
 
-export const APP_VERSION = '8.0.0';
+export const APP_VERSION = '8.0.1';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
 export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {} };
 export const S = {
@@ -80,7 +80,7 @@ export async function loadLocal() {
   if (!d) d = ls.get('sea:data:' + S.user.id, null) || migrateV7Local();
   if (d) {
     S.seances = { items: (d.seances?.items || []).map(normalizeSession), tomb: d.seances?.tomb || {} };
-    S.history = d.history || []; S.events = d.events || []; S.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
+    S.history = (Array.isArray(d.history) ? d.history : []).map(normalizeHistory).filter(Boolean); S.events = (Array.isArray(d.events) ? d.events : []).filter((e) => e && typeof e === 'object'); S.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
     S.personal = d.personal || []; S.commonEx = d.commonEx || [];
     S.items = new Map((d.items || []).map((it) => [itemKey(it.c, it.id), it]));
     S.itemsCursor = d.itemsCursor || 0; S.lastSync = d.lastSync || 0;
@@ -265,7 +265,7 @@ export async function syncAll() {
     const failedH = S.failed.filter((f) => f.path === '/api/history' && f.method === 'POST').map((f) => ({ ...f.body, _failed: true }));
     const byId = new Map(hist.history.filter((x) => !delH.has(x.id)).map((x) => [x.id, x]));
     for (const x of [...localPendingH, ...failedH]) if (x?.id) byId.set(x.id, x);
-    S.history = [...byId.values()].sort((a, b) => b.startedAt - a.startedAt);
+    S.history = [...byId.values()].map(normalizeHistory).filter(Boolean).sort((a, b) => b.startedAt - a.startedAt);
     const localPendingE = pendingBodies('/api/calendar'), delE = pendingDeletes('/api/calendar/');
     const byE = new Map(cal.events.filter((x) => !delE.has(x.id)).map((x) => [x.id, x]));
     for (const x of localPendingE) if (x?.id) byE.set(x.id, x);

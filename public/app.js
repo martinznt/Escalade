@@ -27,7 +27,13 @@ function doRender() {
   if (!S.loaded) { app.innerHTML = h`<main class="wrap">${skeleton(4)}</main>`.s; return; }
   let body;
   try { body = pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
-  catch (e) { console.error(e); body = h`<div class="card bad-b"><h3>Cet écran n’a pas pu s’afficher</h3><p class="small">${e.message}</p><p class="tiny muted">Tes données ne sont pas touchées. Tu peux signaler ce problème dans Paramètres › Signaler un bug.</p><button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button></div>`; }
+  catch (e) {
+    console.error(e);
+    const where = String(e?.stack || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/https?:\/\/[^/]+\//, '')).join(' · ');
+    body = h`<div class="card bad-b"><h3>Cet écran n’a pas pu s’afficher</h3><p class="small">${e.message}</p><p class="tiny muted">Tes données ne sont pas touchées. Tu peux signaler ce problème dans Paramètres › Signaler un bug (le détail ci-dessous aide à le corriger).</p>
+      <details class="how mini"><summary>Détail technique</summary><p class="tiny">${S.tab}/${S.sub[S.tab] || ''} — ${where || 'aucun'}</p></details>
+      <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
+  }
   app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"> Mes séances</span>${syncBadge()}</div></header>
     <main class="wrap" id="main">${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
