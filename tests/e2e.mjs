@@ -220,6 +220,37 @@ await step('export JSON', async () => {
   assert.equal(data.app, 'mes-seances'); assert.ok(data.items.some((i) => i.c === 'perf')); assert.ok(data.history.length === 1);
   assert.ok(!JSON.stringify(data).includes('secret-admin-de-test'));
 });
+await step('calendrier : planifier une séance, prévu visible, enregistré sur le serveur', async () => {
+  await a.tab('home'); await a.sub('homeSub', 'cal'); await A.waitForSelector('[data-act=calDay].today');
+  await a.click('[data-act=calDay].today'); await A.waitForSelector('#sheet form[data-submit=addEvent]');
+  await a.click('#sheet form[data-submit=addEvent] button[type=submit]'); await A.waitForSelector('#sheet >> text=Prévu');
+  await a.click('#sheet [data-act=closeSheet].btn');
+  await A.waitForSelector('[data-act=calDay].today i.plan');
+  await poll(async () => (await a.api('GET', '/api/calendar')).data.events.length === 1, 12000, 'événement sur le serveur');
+});
+await step('import CSV : correspondance proposée, vérifiée, import sans doublon', async () => {
+  await a.tab('settings'); await a.sub('setSub', 'data');
+  const csv = 'Date;Séance;Exercice;Séries;Reps\n2026-01-05;Import test;Squats;3;10\n2026-01-05;Import test;Pompes;2;12\n';
+  await A.setInputFiles('input[data-change=csvFile]', { name: 'hist.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await A.waitForSelector('[data-act=csvImport]:not([disabled])');
+  await a.click('[data-act=csvImport]'); await a.confirm();
+  await poll(async () => (await a.api('GET', '/api/history')).data.history.some((h) => h.sessionName === 'Import test'), 12000, 'import CSV synchronisé');
+  await A.setInputFiles('input[data-change=csvFile]', { name: 'hist.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await A.waitForSelector('[data-act=csvImport]:not([disabled])'); await a.click('[data-act=csvImport]'); await a.confirm();
+  await A.waitForSelector('#toast.show:has-text("déjà présent")');
+  await A.waitForTimeout(1500);
+  assert.equal((await a.api('GET', '/api/history')).data.history.filter((h) => h.sessionName === 'Import test').length, 1);
+});
+await step('mode Lab et timeline', async () => {
+  await a.tab('progress'); await a.sub('progSub', 'lab'); await a.click('[data-act=labNew]');
+  await A.fill('#sheet input[name=title]', 'Gainage 2×/semaine'); await A.fill('#sheet input[name=before]', '30'); await A.fill('#sheet input[name=after]', '45');
+  await A.selectOption('#sheet select[name=metricId]', 'hollow_hold');
+  await a.click('#sheet form[data-submit=labSave] button[type=submit]');
+  await A.waitForSelector('text=Gainage 2×/semaine'); assert.match(await a.text('main'), /causalité/);
+  await a.sub('progSub', 'timeline'); await A.waitForSelector('text=Première séance');
+  await a.sub('progSub', 'journal'); await A.waitForSelector('form[data-submit=jnote]');
+  await a.noOverflow('progrès');
+});
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');
@@ -321,7 +352,7 @@ await step('retour en ligne : tout est synchronisé, sans doublon', async () => 
   assert.equal(items.filter((i) => i.c === 'perf' && i.d.metricId === 'max_pompes').length, 1);
   assert.equal(items.filter((i) => i.c === 'jnote').length, 1);
   const s = (await a2.api('GET', '/api/sync')).data.items; assert.equal(s.filter((x) => x.name === 'Créée hors ligne').length, 1);
-  assert.equal((await a2.api('GET', '/api/history')).data.history.length, 1, 'pas de doublon d’historique');
+  assert.equal((await a2.api('GET', '/api/history')).data.history.length, 2, 'pas de doublon d’historique (séance jouée + import CSV)');
 });
 await step('déconnexion puis reconnexion : données intactes', async () => {
   const a2 = H(A2);

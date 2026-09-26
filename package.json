@@ -1,11 +1,11 @@
 {
-  "name": "seances-entrainement",
+  "name": "mes-seances",
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check worker.js && node --check schema.js && for f in public/*.js; do node --check \"$f\"; done",
-    "test": "node --test tests/engine.test.mjs tests/worker.test.mjs tests/legacy-upgrade.test.mjs tests/sports.test.mjs tests/commands.test.mjs tests/outbox.test.mjs tests/assets.test.mjs",
-    "test:e2e": "node tests/e2e.mjs"
+    "check": "for f in worker.js schema.js server/*.js public/*.js tests/*.mjs; do node --check \"$f\" || exit 1; done && node -e \"for (const f of ['public/manifest.json','wrangler.json','package.json']) JSON.parse(require('fs').readFileSync(f,'utf8'))\"",
+    "test": "for f in tests/*.test.mjs; do echo \"── $f\"; node --no-warnings \"$f\" || exit 1; done",
+    "test:e2e": "node --no-warnings tests/e2e.mjs"
   },
   "devDependencies": {
     "playwright": "^1.55.0"
