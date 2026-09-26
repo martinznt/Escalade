@@ -4,8 +4,8 @@
 // Les anciens réglages ne sont JAMAIS supprimés (settings_json reste intact).
 // Pur JavaScript, sans DOM : testé dans tests/migration.test.mjs.
 
-import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
-import { ACTIVITIES, BUILTIN_STYLES } from './model.js';
+import { BUILTIN_SYSTEMS, gradeSnapshot } from '../public/grading.js';
+import { ACTIVITIES, BUILTIN_STYLES } from '../public/model.js';
 
 const norm = (s) => String(s || '').toLocaleLowerCase('fr-FR').normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 const safeId = (s) => String(s || '').replace(/[^\w:.-]/g, '_').slice(0, 60);

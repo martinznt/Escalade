@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../worker.js';
 import { makeD1 } from './d1shim.mjs';
 import { Client, makeEnv, ok, done } from './helpers.mjs';
-import { legacyItems, gradeFromText } from '../public/migrate.js';
+import { legacyItems, gradeFromText } from '../server/migrate.js';
 import { cleanItem } from '../public/items.js';
 
 console.log('Ancien schéma (v5) complété sans perte');

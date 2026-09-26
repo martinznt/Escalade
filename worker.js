@@ -4,7 +4,7 @@
 import { SCHEMA, ADD_COLUMNS } from './schema.js';
 import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, summarizeHistory, clamp, uid } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
-import { legacyItems } from './public/migrate.js';
+import { legacyItems } from './server/migrate.js';
 import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';

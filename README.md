@@ -1,50 +1,39 @@
-# Seances entrainement — v7.2
+# Mes séances — v8.0
 
-Application PWA de suivi et génération de séances sportives, pensée pour l'escalade mais conçue comme une plateforme multi-activité.
+Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
+escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
+activité personnalisée. Chaque recommandation est expliquée (faits, estimations, données manquantes) ; rien n'est inventé.
 
-## Nouveautés v7.2 (audit de fiabilité)
-Corrections de bugs réels trouvés en creusant au-delà des tests existants (détail complet dans AUDIT.md) :
-- **Critique** : le Worker bloquait `/commands.js` et `/outbox.js` (liste blanche incomplète) — l'application aurait cassé au chargement pour tout le monde. Corrigé.
-- **Perte de données confirmée** : les objectifs (`goals`) n'étaient jamais réellement enregistrés côté serveur (liste blanche de nettoyage des réglages incomplète) — perdus au changement d'appareil ou à la réinstallation. Corrigé.
-- Deux race conditions corrigées (rate limit du login, inscription concurrente sur un même pseudo).
-- Historique : une collision d'identifiant (très improbable) pouvait silencieusement ne rien enregistrer sans le signaler ; corrigé.
-- Basketball et Cyclisme retirés des activités préconfigurées (hors périmètre V1 demandé) — toujours possibles en activité personnalisée.
-- Les scores du profil sportif devinés automatiquement (sans note personnelle) sont maintenant clairement marqués comme des estimations (« ≈ »), jamais présentés comme une mesure.
-- `npm test` couvre désormais aussi la cohérence des fichiers servis (`tests/assets.test.mjs`), qui aurait détecté le bug critique ci-dessus automatiquement.
+Le rapport complet d'audit, de tests et de limitations est dans **`FINAL_AUDIT.md`**.
 
-## Nouveautés v7.0
-- Profil sportif intelligent et extensible.
-- Activités natives (V1) : escalade bloc, escalade voie, musculation/renforcement, course, natation. Basketball et cyclisme ne sont volontairement pas préconfigurés en V1 (créables en activité personnalisée).
-- Ajout d'activités personnalisées et de catégories personnalisées.
-- Ajout/modification/suppression d'indicateurs sportifs.
-- Détection de domaine : une information comme « max tractions » est rattachée au tirage, tandis que « max pompes » est rattachée à la poussée.
-- Analyse des domaines d'une activité pour identifier les forces et les axes à travailler.
-- Générateur avec choix entre travail des points faibles et progression des points forts.
-- Générateur adapté aux activités personnalisées à partir de leurs catégories.
-- Profil escalade historique conservé.
-- Rate-limit atomique amélioré.
-- API de modification/suppression avec contrôle réel du nombre de lignes modifiées.
-- File offline : les erreurs définitives sont conservées dans `failedOutbox` au lieu d'être perdues.
-- Cache PWA v7.0.
+## Architecture en bref
 
-## Nouveautés v7.1
-- **Pourquoi ?** : les raisons déjà calculées par le générateur (`meta.why`) sont maintenant affichées dans un bloc dépliable après chaque séance générée, au lieu d'être calculées puis jetées.
-- **Que faire aujourd'hui ?** (`suggestToday` dans `engine.js`) : quand rien n'est planifié, l'accueil propose 1 à 3 options concrètes (événement du jour, repos si séance très récente, séance du jour, version allégée si la dernière séance était dure) — chacune avec sa raison. Ne présume jamais de la forme du jour : propose une alternative plutôt que de deviner.
-- **Commandes en langage naturel** (`public/commands.js`) : parseur déterministe, sans IA externe, pour « Fais une séance de 20 minutes pour les jambes », « Remplace les tractions », « Ajoute 5 minutes de gainage », « Montre mes records », « Supprime ma dernière séance » (confirmation obligatoire). Accessible via le bouton 🗣️ Commande sur l'accueil. Une phrase non reconnue ne déclenche jamais d'action inventée.
-- **Robustesse de la file d'attente hors-ligne** (`public/outbox.js`) : après investigation, la plupart des opérations étaient déjà protégées contre les doublons (contraintes d'unicité + conversion en 409 côté Worker). Ajout d'un filet de sécurité générique : une opération qui échoue avec une erreur serveur (5xx) plus de 6 fois de suite est désormais écartée (au lieu de bloquer indéfiniment toutes les opérations suivantes), et signalée clairement. Le Diagnostic affiche maintenant l'opération en tête de file et les dernières actions écartées, y compris hors ligne.
-- Nouveaux tests : `tests/commands.test.mjs` (parseur de commandes), `tests/outbox.test.mjs` (protection anti-blocage) — voir « Audit » ci-dessous pour le détail de ce qui a été vérifié et ce qui reste à faire.
+| Partie | Fichiers |
+|---|---|
+| Serveur (Cloudflare Worker) | `worker.js` (API, sécurité, idempotence), `schema.js` (tables D1 + migrations), `server/publish.js` (nettoyage avant publication), `server/migrate.js` (reprise des anciennes données) |
+| Interface (modules ES, sans dépendance) | `public/app.js`, `public/views-*.js`, `public/player.js`, `public/ui.js`, `public/state.js` (stockage local, file hors ligne, synchronisation) |
+| Logique métier (pure, testée sous Node) | `public/model.js` (capacités, muscles, métriques, figures), `public/library.js` (catalogue), `public/brain.js` (analyses), `public/generator.js` + `public/engine.js` (générateurs), `public/grading.js` (cotations), `public/estimate.js`, `public/csv.js`, `public/search.js`, `public/commands.js`, `public/items.js`, `public/outbox.js` |
+| Hors ligne | `public/sw.js` (précache versionné, identique à la liste servie par le Worker) |
 
-## Installation Cloudflare
-1. Mettre les fichiers à la racine du dépôt GitHub.
-2. Conserver `wrangler.json` et les bindings D1 existants.
-3. Déployer avec `npx wrangler deploy`.
+## Déploiement Cloudflare
+
+1. Garder `wrangler.json` (bindings `DB` pour D1, `SEANCES_KV` pour l'ancienne version, `ASSETS` pour `public/`).
+2. Définir le secret d'administration (jamais dans le code ni dans le navigateur) :
+   `npx wrangler secret put EDIT_PASSWORD`
+   Optionnel : `npx wrangler secret put INVITE_CODE` pour réserver l'inscription aux personnes ayant un code.
+3. Déployer : `npx wrangler deploy`. Les tables D1 sont créées et mises à niveau automatiquement au premier appel
+   (ajouts uniquement, aucune donnée supprimée).
+4. Pour devenir administrateur : se connecter avec son compte, puis Paramètres › Administration › saisir `EDIT_PASSWORD`.
+
+Il n'y a aucun mot de passe global pour entrer sur le site : chaque personne crée son compte.
 
 ## Tests
+
 ```bash
-npm test
-npm run check
-npm run test:e2e
+npm run check      # syntaxe de tous les fichiers JS + validation JSON
+npm test           # 13 suites unitaires / intégration Worker-D1 / sécurité / synchronisation (256 vérifications)
+npm run test:e2e   # navigateur réel (Playwright + Chromium) : 2 comptes, admin, hors ligne (36 étapes)
 ```
 
-`npm test` exécute les tests moteur, Worker/sécurité, migration legacy, profil multi-activité, commandes naturelles, file d'attente hors-ligne et cohérence des fichiers servis (100 vérifications, 13 suites).
-Le test E2E nécessite Playwright et un navigateur Chromium installé.
+Les tests Worker utilisent une base D1 simulée par `node:sqlite` (Node 22+). Le test E2E démarre un serveur local
+(`tests/server.mjs`) qui exécute le vrai `worker.js` et sert `public/` comme le ferait Cloudflare.

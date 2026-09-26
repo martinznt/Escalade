@@ -27,9 +27,8 @@ await ok('chaque module importé est autorisé par le Worker (sinon 404 en ligne
 await ok('chaque module importé est précaché par le Service Worker (sinon panne hors ligne)', () => { for (const f of visited) assert.ok(SHELL.has('/' + f), '/' + f + ' absent de SHELL'); });
 await ok('liste blanche du Worker et précache identiques', () => { assert.deepEqual([...PUBLIC].sort(), [...SHELL].sort()); });
 await ok('chaque fichier autorisé existe réellement', () => { for (const p of PUBLIC) if (p !== '/') assert.ok(existsSync(pub(p.slice(1))), p); });
-await ok('aucun fichier public inutile ou oublié (hors modules serveur)', () => {
-  const serverOnly = new Set(['migrate.js']);
-  for (const f of readdirSync(path.join(root, 'public'))) if (!serverOnly.has(f)) assert.ok(PUBLIC.has('/' + f), `public/${f} n’est pas servi : fichier orphelin ?`);
+await ok('aucun fichier public inutile ou oublié', () => {
+  for (const f of readdirSync(path.join(root, 'public'))) assert.ok(PUBLIC.has('/' + f), `public/${f} n’est pas servi : fichier orphelin ?`);
 });
 await ok('ressources de index.html présentes', () => { for (const m of html.matchAll(/(?:href|src)="\/([\w.-]+)"/g)) assert.ok(PUBLIC.has('/' + m[1]), m[1]); });
 await ok('manifeste valide avec icônes existantes', () => { const m = JSON.parse(read('public/manifest.json')); assert.equal(m.name, 'Mes séances'); for (const i of m.icons) assert.ok(existsSync(pub(i.src.slice(1)))); assert.ok(m.icons.some((i) => i.purpose === 'maskable')); });
