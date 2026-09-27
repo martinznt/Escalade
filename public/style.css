@@ -260,7 +260,7 @@ ul.clean.tight{margin:4px 0 0}ul.clean.tight li{background:var(--card)} .chip .l
 .ustat{display:grid;justify-items:end;text-align:right;font-size:.78rem;min-width:56px}.ustat b{font-size:1.05rem}
 
 /* ═════════ Visite guidée immersive ═════════ */
-#tour{position:fixed;inset:0;z-index:90;pointer-events:none}
+#tour{position:fixed;inset:0;z-index:90}
 #tour .tour-spot{position:fixed;border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.62),0 0 0 3px var(--accent);transition:all .35s cubic-bezier(.2,.8,.2,1);animation:tourPulse 1.6s ease-in-out infinite;pointer-events:none}
 @keyframes tourPulse{50%{box-shadow:0 0 0 9999px rgba(0,0,0,.62),0 0 0 7px color-mix(in srgb,var(--accent) 45%,transparent)}}
 #tour .tour-bubble{position:fixed;pointer-events:auto;background:var(--card);color:var(--text);border-radius:18px;padding:16px 16px 12px;box-shadow:0 12px 40px rgba(0,0,0,.35);display:grid;gap:8px;transition:top .3s ease,left .3s ease;animation:tourIn .3s ease}
@@ -280,3 +280,5 @@ body.touring{overflow:hidden}
 .newslist>li{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:14px;background:var(--card2)}
 .newslist .nd{flex:none;font-size:.75rem;font-weight:700;color:var(--on-accent,#fff);background:var(--accent);border-radius:999px;padding:3px 9px;white-space:nowrap}
 .newslist b{display:block;line-height:1.35}.newslist ul{margin:6px 0 0;padding-left:18px;font-size:.9rem;color:var(--muted)}
+#tour .tour-x{position:absolute;top:8px;right:8px;border:0;background:transparent;color:var(--muted);font-size:1rem;width:32px;height:32px;border-radius:50%;cursor:pointer}
+#tour .tour-x:hover{background:var(--card2)}

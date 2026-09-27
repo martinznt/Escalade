@@ -45,7 +45,7 @@ function waitFor(sel, ms = 1500) {
 function draw(el) {
   const [, , , title, text] = STEPS[T.i], root = document.getElementById('tour'); if (!root) return;
   const last = T.i === STEPS.length - 1;
-  root.innerHTML = h`<div class="tour-spot"></div><div class="tour-bubble tour"><i class="tour-arrow"></i>
+  root.innerHTML = h`<div class="tour-spot"></div><div class="tour-bubble tour"><i class="tour-arrow"></i><button class="tour-x" data-act="tourEnd" aria-label="Quitter la visite">✕</button>
     <div class="tour-step">${T.i + 1} / ${STEPS.length}</div><h3>${title}</h3><p>${text}</p>
     <div class="dots">${STEPS.map((_, k) => h`<i class="${k === T.i ? 'on' : ''}"></i>`)}</div>
     <div class="row">${T.i > 0 ? h`<button class="btn sm" data-act="tourPrev">‹ Retour</button>` : h`<button class="btn sm ghost" data-act="tourEnd">Passer</button>`}<span class="grow"></span>

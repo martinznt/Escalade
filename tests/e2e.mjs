@@ -12,6 +12,11 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 
 const env = makeEnv();
+// Historique GitHub simulé pour « Voir les nouveautés » (aucun appel réseau pendant les tests).
+const realFetch = globalThis.fetch;
+globalThis.fetch = (u, o) => String(u).startsWith('https://api.github.com/') ? Promise.resolve(new Response(JSON.stringify([
+  { commit: { message: 'Visite guidée plus immersive\n\n- Des flèches montrent chaque bouton', committer: { date: new Date(Date.now() + 60000).toISOString() } }, parents: [{}] },
+]))) : realFetch(u, o);
 const srv = await startServer(env);
 const BASE = srv.base;
 const browser = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') && process.env.PW_EXEC ? { executablePath: process.env.PW_EXEC } : {});
@@ -73,8 +78,15 @@ await step('fiche de profil (tout sur une page) : sports et lieu, puis visite gu
   await a.click('[data-act=setPick][data-q=places][data-v=maison]');
   await a.click('[data-act=setupFinish]'); await A.waitForSelector('#sheet.open [data-act=setupThanks]');
   assert.match(await a.text('#sheet'), /Escalade — bloc, Renforcement/);
-  await a.click('[data-act=setupThanks]'); await A.waitForSelector('#sheet.open .tour');
-  await a.click('.tour [data-act=tourEnd]'); await A.waitForTimeout(200);
+  await a.click('[data-act=setupThanks]'); await A.waitForSelector('#tour .tour-bubble');
+  assert.match(await a.text('#tour .tour-step'), /^1 \/ \d+$/);
+  for (let k = 0; k < 3; k++) await a.click('#tour [data-act=tourNext]');
+  await A.waitForFunction(() => location.hash.startsWith('#/library/generate'), null, { timeout: 5000 }); // la visite va elle-même sur la page
+  await A.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
+  const spot = await A.evaluate(() => { const r = document.querySelector('#tour .tour-spot').getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+  assert.ok(spot, 'élément mis en lumière');
+  await a.click('#tour .tour-x'); await A.waitForSelector('#tour', { state: 'detached' });
+  await A.waitForFunction(() => location.hash.startsWith('#/home'), null, { timeout: 5000 });
   assert.equal(await a.count('[data-act=setupStart]'), 0, 'profil marqué comme complété');
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'main' && i.d.setupDone), 12000, 'profil enregistré sur le serveur');
 });
@@ -405,7 +417,7 @@ await step('mode invité : questionnaire en QCM, « finir plus tard », aucune d
   await G.waitForSelector('.setup'); await g.click('[data-act=setPick][data-q=acts][data-v=running]'); await g.click('[data-act=setupNext]:not([disabled])');
   await g.click('[data-act=setPick][data-q=level][data-v=nsp]'); await G.waitForSelector('text=séances par semaine');
   await g.click('[data-act=setupLater]'); await G.waitForSelector('.quick');
-  await G.waitForSelector('#sheet.open .tour'); await g.click('.tour [data-act=tourEnd]'); await G.waitForTimeout(200);
+  await G.waitForSelector('#tour .tour-bubble'); await g.click('#tour .tour-x'); await G.waitForSelector('#tour', { state: 'detached' });
   assert.equal(await g.count('.syncbadge.guest'), 1);
   assert.match(await g.text('main'), /profil n’est pas encore complet/);
   await g.tab('library'); await g.sub('libSub', 'common'); await G.waitForSelector('text=Compte nécessaire');
@@ -441,7 +453,12 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   await Promise.all([G.waitForNavigation({ timeout: 20000 }), g.click('#updbar [data-act=updNow]')]);
   await G.waitForSelector('nav.tabs');
   await poll(async () => (await G.evaluate(async () => (await caches.keys()).join(','))).includes('deploy-e2e-2'), 15000, 'nouveau cache installé');
-  assert.equal(await g.count('#updbar'), 0, 'bandeau disparu après la mise à jour');
+  await G.waitForSelector('#updbar.fresh [data-act=updWhat]', { timeout: 10000 }); // « L'app a été mise à jour »
+  await g.click('#updbar [data-act=updWhat]'); await G.waitForSelector('#sheet.open .newslist li');
+  assert.match(await g.text('#sheet .newslist'), /Visite guidée plus immersive[\s\S]*flèches/);
+  assert.equal(await g.count('#updbar'), 0, 'bandeau disparu une fois les nouveautés vues');
+  await g.click('#sheet [data-act=closeSheet]'); await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
+  assert.equal(await g.count('#updbar'), 0, 'pas de bandeau tant qu’il n’y a rien de nouveau');
 });
 await step('aucune erreur JavaScript dans les navigateurs', async () => assert.deepEqual(errors, []));
 console.log(`\n${n} étapes E2E OK`);
