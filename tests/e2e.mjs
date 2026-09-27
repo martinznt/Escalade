@@ -225,7 +225,7 @@ await step('carte d’entraînement et « comprendre mon profil »', async () =>
   await a.tab('profile'); await a.sub('profSub', 'map'); await A.waitForSelector('.capmap .cap');
   await A.locator('.capmap .cap').first().click(); await A.waitForSelector('#sheet >> text=Comment le sais-tu');
   await a.click('#sheet [data-act=closeSheet].btn');
-  await a.sub('profSub', 'understand'); await A.waitForSelector('text=Mesuré'); assert.match(await a.text('main'), /Tractions strictes max : 8/);
+  await a.sub('profSub', 'understand'); await A.waitForSelector('.statgrid'); await a.click('[data-act=uOpen][data-id="Mesuré"]'); await A.waitForSelector('#u-Mesuré[open]'); assert.match(await a.text('main'), /Tractions strictes max : 8/);
 });
 await step('export JSON', async () => {
   await a.tab('settings'); await a.sub('setSub', 'data');

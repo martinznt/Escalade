@@ -295,6 +295,9 @@ réglages qu'un client V2 ne connaît pas.
   séance). « Mettre à jour » sauvegarde tout, active la nouvelle version et recharge ; « ✕ » masque le bandeau 3 h.
 - Plus besoin de changer `APP_VERSION` pour qu'une modification arrive sur les téléphones.
 - Tests : worker (injection de l'identifiant), E2E (déploiement simulé → bandeau → nouvelle version installée), 41 étapes.
+- **Profil plus visuel** : l'onglet s'ouvre sur un résumé (sports, séances, objectifs, mesures, points forts / à travailler
+  en pastilles) et des tuiles par rubrique ; « Ce que l'app sait » devient 4 compteurs colorés, 3 actions courtes
+  (« Saisir ») et des listes repliées ; « Ma carte » replie habitudes, matériel et progression.
 
 ## Évolution 8.2.0 — plus joli, plus léger, assistant IA
 

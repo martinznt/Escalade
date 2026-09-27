@@ -21,7 +21,7 @@ export const APP_VERSION = '8.2.1';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
 export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {} };
 export const S = {
-  user: null, tab: 'home', sub: { home: 'dash', progress: 'summary', library: 'seances', profile: 'understand', settings: 'main' }, param: '',
+  user: null, tab: 'home', sub: { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }, param: '',
   settings: { ...DEFAULT_SETTINGS }, seances: { items: [], tomb: {} }, seancesDirty: false, seancesVer: 0,
   history: [], events: [], personal: [], commonEx: [], items: new Map(), dirtyItems: new Set(), itemsCursor: 0,
   outbox: [], failed: [], conflicts: [], sync: 'idle', syncing: false, syncAgain: false, lastSync: 0, lastError: '', loaded: false,
