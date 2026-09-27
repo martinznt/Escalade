@@ -69,6 +69,15 @@ export const SCHEMAS = {
     result: ['e', ['flash', 'send', 'work', 'top', 'attempt', 'fail'], 'attempt'], attempts: ['n', 1, 999, 1], styles: ['ids', 12], styleText: ['s', 60],
     date: ['n', 0, 9e15, 0], context: ['obj', CONTEXT], note: ['s', 300],
   },
+  // Projet d'escalade : un bloc / une voie qu'on travaille sur plusieurs séances, jusqu'à la réussite.
+  project: {
+    kind: ['e', ['bloc', 'voie'], 'bloc'], name: ['s', 80], grade: ['obj', GRADE_SNAPSHOT], gradeText: ['s', 20], place: ['s', 80],
+    status: ['e', ['active', 'done', 'archived'], 'active'], tries: ['list', { date: ['n', 0, 9e15, 0], n: ['n', 1, 99, 1] }, 200],
+    holds: ['list', { x: ['n', 0, 1, 0], y: ['n', 0, 1, 0], t: ['e', ['main', 'pied', 'depart', 'top'], 'main'] }, 80],
+    hasPhoto: ['b'], startedAt: ['n', 0, 9e15, 0], doneAt: ['n', 0, 9e15, 0], note: ['s', 300],
+  },
+  // Photo (JPEG réduit, en data URL) liée à un projet : même identifiant que le projet.
+  photo: { data: ['s', 90000], w: ['n', 1, 4000, 1], h: ['n', 1, 4000, 1] },
   gradesys: {
     name: ['s', 60], activity: ['e', ['bloc', 'voie', 'autre'], 'bloc'], kind: ['e', ['ordered', 'colors', 'numeric'], 'ordered'],
     levels: ['list', { id: ['id'], label: ['s', 30], color: ['color'], order: ['n', 0, 999, 0] }, 60],

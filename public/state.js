@@ -186,8 +186,11 @@ export function restoreConflict(i) {
 }
 async function syncItems() {
   const dirty = [...S.dirtyItems].map((k) => S.items.get(k)).filter(Boolean);
-  for (let i = 0; i < dirty.length; i += 200) {
-    const chunk = dirty.slice(i, i + 200).map((x) => ({ ...x }));
+  // Envois de 200 éléments au plus et d'environ 600 Ko au plus (les photos de voies sont plus lourdes).
+  const chunks = []; let cur = [], size = 0;
+  for (const x of dirty) { const n = JSON.stringify(x).length; if (cur.length && (cur.length >= 200 || size + n > 600000)) { chunks.push(cur); cur = []; size = 0; } cur.push({ ...x }); size += n; }
+  if (cur.length) chunks.push(cur);
+  for (const chunk of chunks) {
     const r = await api('POST', '/api/items', { changes: chunk });
     for (const a of r.applied || []) { const k = itemKey(a.c, a.id), cur = S.items.get(k); if (cur && cur.u === a.u) S.dirtyItems.delete(k); }
     for (const c of r.conflicts || []) {

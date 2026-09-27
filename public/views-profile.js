@@ -9,15 +9,16 @@ import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addL
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
 import { openGenerator } from './views-library.js';
+import { vCarnet } from './views-climb.js';
 import { byId } from './library.js';
 
-const SUBS = [['understand', 'Ce que l’app sait'], ['map', 'Ma carte'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Escalade'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const SUBS = [['understand', 'Ce que l’app sait'], ['map', 'Ma carte'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
 const TILES = { understand: ['🔎', 'Ce que l’app sait', 'et comment'], map: ['🗺️', 'Ma carte', 'mes capacités'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
-  climbing: ['🧗', 'Escalade', 'cotations, blocs'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['🧰', 'Matériel', 'lieux, équipement'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
+  climbing: ['🧗', 'Carnet', 'blocs, voies, projets'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['🧰', 'Matériel', 'lieux, équipement'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
   if (sub === 'home') return vHub();
-  const views = { understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: vClimbing, goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
+  const views = { understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(vClimbAdvanced()), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
   const [ic, title] = TILES[sub];
   return h`<div class="row subhead"><button class="btn sm ghost" data-act="profSub" data-id="home" aria-label="Retour au profil">‹ Profil</button><h1 class="grow">${ic} ${title}</h1></div>
     <div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
@@ -192,7 +193,7 @@ SUBMIT.perfSave = (f) => {
 ACT.perfDel = async (el) => { const p = item('perf', el.dataset.id); if (p && (await ask('Supprimer cette performance ?', { ok: 'Supprimer', danger: true }))) { delItem('perf', p.id); render(); } };
 
 /* ═════════ Escalade : systèmes de cotation, styles, maxima, journal ═════════ */
-function vClimbing() {
+function vClimbAdvanced() {
   const c = ctx();
   const userSys = Object.values(c.systems).filter((s) => !s.builtin);
   const maxPerfs = c.perfs.filter((p) => p.metricId === 'max_bloc' || p.metricId === 'max_voie');
@@ -206,10 +207,7 @@ function vClimbing() {
       ${userSys.map((s) => h`<div class="item"><div class="grow"><b>${s.name}</b> ${s.archived ? tag('archivé') : ''}<div class="tiny muted">${s.activity} · ${s.levels.length} niveaux · ${s.maps.length} correspondance(s)</div><div class="lvlrow">${sortedLevels(s).slice(0, 12).map((l) => raw(`<span class="lvl" style="${l.color ? `background:${l.color}` : ''}">${l.label.replace(/[<>&"]/g, '')}</span>`))}</div></div><button class="btn sm" data-act="sysEdit" data-id="${s.id}">✎</button></div>`)}</div>
     <div class="card"><div class="row between"><h3>Styles</h3><button class="btn sm" data-act="styleNew">＋ Style</button></div>
       <div class="chips">${Object.values(c.styles).filter((s) => !s.archived).map((s) => s.builtin ? h`<span class="chip static">${s.label}</span>` : chip(false, s.label + ' ✎', `data-act="styleEdit" data-id="${s.id}"`))}</div>
-      ${Object.values(c.styles).some((s) => s.archived) ? h`<p class="tiny muted">Archivés (conservés dans l’historique) : ${Object.values(c.styles).filter((s) => s.archived).map((s) => s.label).join(', ')}</p>` : ''}</div>
-    <div class="card"><div class="row between"><h3>Journal de grimpe</h3><button class="btn sm pri" data-act="ascNew">＋ Bloc / voie</button></div>
-      ${c.ascents.slice(0, 20).map((a) => h`<div class="item"><div class="grow"><b>${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label ? snapshotText(a.grade, c.systems) : a.gradeText || ''}</b>${a.name ? h` — ${a.name}` : ''}<div class="tiny muted">${({ flash: 'flash', send: 'réussi', work: 'réussi après travail', top: 'top', attempt: 'essai', fail: 'échec' })[a.result]} · ${a.attempts} essai(s)${a.styles?.length ? ' · ' + a.styles.map((s) => c.styles[s]?.label || s).join(', ') : a.styleText ? ' · ' + a.styleText : ''} · ${fmtDay(a.date)}</div></div><button class="btn danger sm ic" data-act="ascDel" data-id="${a.id}" aria-label="Supprimer">✕</button></div>`)}
-      ${c.ascents.length ? '' : h`<p class="muted small">Note tes blocs et voies pour suivre ton niveau et tes styles.</p>`}</div>`;
+      ${Object.values(c.styles).some((s) => s.archived) ? h`<p class="tiny muted">Archivés (conservés dans l’historique) : ${Object.values(c.styles).filter((s) => s.archived).map((s) => s.label).join(', ')}</p>` : ''}</div>`;
 }
 ACT.sysNew = () => openSheet(h`<h2 style="margin:0">Nouveau système de cotation</h2><p class="muted small">Pars d’un modèle puis modifie librement les niveaux, leur ordre, leurs couleurs et les correspondances.</p>
   ${Object.entries(GRADE_TEMPLATES).map(([k, t]) => h`<button class="item pick" data-act="sysFromTpl" data-id="${k}"><div class="grow"><b>${t.name}</b><div class="tiny muted">${t.levels.join(' · ') || 'vide'}</div></div></button>`)}<button class="btn" data-act="closeSheet">Annuler</button>`);

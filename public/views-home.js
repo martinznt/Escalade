@@ -84,7 +84,7 @@ function vDash() {
     <p class="tiny muted center">✎ en haut pour choisir ce qui s’affiche ici.</p>`;
 }
 ACT.goLib = () => go('library', 'seances');
-ACT.goCarnet = () => go('profile', 'climbing');
+ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
 ACT.loopClose = () => { S.lastLoop = null; render(); };
 ACT.genOpen = () => openGenerator({});
 ACT.newSeanceHome = () => ACT.newSeance();

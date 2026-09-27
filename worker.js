@@ -20,7 +20,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -556,7 +556,7 @@ async function itemsPost(request, env, u) {
     const it = cleanItem(raw);
     if (!it) { rejected.push({ c: String(raw?.c || '').slice(0, 20), id: cleanId(raw?.id), error: 'Élément invalide (collection ou identifiant).' }); continue; }
     const data = JSON.stringify(it.d);
-    if (data.length > 20000) { rejected.push({ c: it.c, id: it.id, error: 'Élément trop volumineux.' }); continue; }
+    if (data.length > (it.c === 'photo' ? 95000 : 20000)) { rejected.push({ c: it.c, id: it.id, error: 'Élément trop volumineux.' }); continue; }
     if (it.u > Date.now() + DAY) { rejected.push({ c: it.c, id: it.id, error: 'Date de modification invalide.' }); continue; }
     clean.push({ ...it, data });
   }
