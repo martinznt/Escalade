@@ -137,3 +137,27 @@ export async function aiGoal(env, { text, profile }) {
   if (!goal) { const e = new Error('L’assistant n’a pas compris cet objectif. Reformule-le.'); e.status = 502; throw e; }
   return goal;
 }
+
+/* ───────── Intention, force ou faiblesse écrite avec ses mots → capacités ───────── */
+export function buildIntent(text, activityId, kind) {
+  const capList = Object.entries(CAPACITIES).map(([id, c]) => `${id} (${c.label})`).join(', ');
+  const what = kind === 'strength' ? 'un point fort à faire progresser' : kind === 'weakness' ? 'un point faible à travailler' : 'une intention de séance (ce que la personne veut travailler)';
+  return [{ role: 'system', content: `Tu es un entraîneur sportif francophone. Réponds UNIQUEMENT par un objet JSON valide.
+L'utilisateur décrit ${what}. Donne-lui un nom court et relie-le aux capacités qu'il faut entraîner.
+Format : {"label":"nom court (max 40 caractères)","emoji":"1 emoji","summary":"1 phrase simple","caps":[{"id":"...","w":0.8}]}
+Capacités autorisées (1 à 4, identifiants exacts) : ${capList}.
+Sport : ${ACTIVITIES[activityId]?.label || 'non précisé'}.` }, { role: 'user', content: str(text, 200) }];
+}
+export function cleanIntent(x, text = '') {
+  if (!x || typeof x !== 'object') return null;
+  const c = caps(x.caps);
+  if (!Object.keys(c).length) return null;
+  return { label: str(x.label, 40) || str(text, 40), emoji: str(x.emoji, 8) || '✨', summary: str(x.summary, 200), caps: c };
+}
+export async function aiIntent(env, { text, activityId, kind }) {
+  if (!env.AI?.run) { const e = new Error('Assistant non activé sur ce serveur.'); e.status = 503; throw e; }
+  const r = cleanIntent(extractJson(await env.AI.run(env.AI_MODEL || DEFAULT_MODEL, { messages: buildIntent(text, activityId, kind), max_tokens: 300, temperature: 0.2 })), text);
+  if (!r) { const e = new Error('L’assistant n’a pas su relier ça à un entraînement. Reformule.'); e.status = 502; throw e; }
+  return r;
+}
+export const cleanCaps = caps;

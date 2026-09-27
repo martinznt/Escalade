@@ -13,6 +13,7 @@ import { normalizeEx, normalizeSession, uid, exKey, clamp } from './shared.js';
 import { LIBRARY, byId, FOCUS } from './library.js';
 import { CAPACITIES, ACTIVITIES, INTENTIONS, EQUIPMENT } from './model.js';
 import { bodyAdjust } from './body-rules.js';
+import { muscleCaps, zoneRisk } from './intentions.js';
 import { generateSession as climbGenerate, exMinutes, sessionMinutes, progressHint, analyze, levelFrom } from './engine.js';
 import { profileCapacities, strengthsWeaknesses, availableEquipment, goalCaps, goalLabel, capVolume, relevantCaps, undertrained, exCaps, capacityState, perfsOf, confWord, STATUS_WORD, DAY } from './brain.js';
 import { bestReferenceLevel, levelFromReference } from './grading.js';
@@ -91,8 +92,9 @@ function customPool(activityId, ctx) {
 export function fingerComplaint(ctx) {
   return ctx.history.some((h) => ctx.now - h.startedAt < 3 * DAY && (h.data?.questionnaire?.answers || []).some((a) => a.q === 'doigts' && /douleur|gêne/i.test(a.a)));
 }
-export function candidates(activityId, ctx, { eq, level, light, noPlyo = false }) {
+export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, zones = [] }) {
   const A = analyze(ctx.history, ctx.now), avoid = { ...(ctx.settings?.avoid || {}) };
+  for (const z of zones) if (['fingers', 'shoulders', 'elbows', 'knees'].includes(z)) avoid[z] = true;
   const complaint = fingerComplaint(ctx);
   const base = ACTIVITIES[activityId] ? LIBRARY.filter((x) => x.role === 'main' && x.acts.includes(activityId)) : customPool(activityId, ctx).pool;
   const ok = [], excluded = [];
@@ -110,6 +112,7 @@ export function candidates(activityId, ctx, { eq, level, light, noPlyo = false }
     if (avoid.shoulders && (x.risk === 'shoulder' || SHOULDER.has(x.id))) why.push('épaules à ménager (ton réglage)');
     if (avoid.elbows && ELBOW.has(x.id)) why.push('coudes à ménager (ton réglage)');
     if (avoid.knees && KNEE.has(x.id)) why.push('genoux à ménager (ton réglage)');
+    why.push(...zoneRisk(x, zones));
     (why.length ? excluded : ok).push(why.length ? { x, why } : x);
   }
   return { ok, excluded };
@@ -134,7 +137,16 @@ export function planSession(opts = {}, ctx) {
   const sw = strengthsWeaknesses(states);
   const targets = {}, reasons = {};
   const add = (id, w, r) => { targets[id] = (targets[id] || 0) + w; (reasons[id] ||= []).push(r); };
-  if (goal) for (const { id, w } of goalCaps(goal, ctx)) { const st = byCap[id] || capacityState(id, ctx); add(id, w * (st.level == null ? 1 : 1.25 - st.level / 4), `requise pour « ${goalLabel(goal)} » (poids ${w})${st.level != null ? ` · ${STATUS_WORD[st.status]}` : ' · niveau non renseigné'}`); }
+  // Choix détaillés de la séance (plusieurs à la fois) : objectifs, intentions, forces, faiblesses, muscles.
+  const pickGoals = (opts.goalIds || []).map((id) => ctx.goals.find((g) => g.id === id)).filter(Boolean);
+  const custom = pickGoals.length || (opts.intents || []).length || (opts.strengthCaps || []).length || (opts.weakCaps || []).length || (opts.muscles || []).length;
+  for (const g of pickGoals) for (const { id, w } of goalCaps(g, ctx)) add(id, w, `objectif « ${goalLabel(g)} »`);
+  for (const it of opts.intents || []) for (const [c, w] of Object.entries(it.caps || {})) if (CAPACITIES[c] || ctx.categories[c]) add(c, w * 1.1, `intention « ${it.label} »`);
+  for (const c of opts.strengthCaps || []) add(c, 1, 'point fort que tu as choisi');
+  for (const c of opts.weakCaps || []) add(c, 1.2, 'point faible que tu as choisi');
+  for (const [c, w] of Object.entries(muscleCaps(opts.muscles || []))) add(c, w * 0.8, 'muscles que tu as choisis');
+  if (custom) { /* déjà ciblé par la personne */ }
+  else if (goal) for (const { id, w } of goalCaps(goal, ctx)) { const st = byCap[id] || capacityState(id, ctx); add(id, w * (st.level == null ? 1 : 1.25 - st.level / 4), `requise pour « ${goalLabel(goal)} » (poids ${w})${st.level != null ? ` · ${STATUS_WORD[st.status]}` : ' · niveau non renseigné'}`); }
   else if (mode === 'strengths') {
     const list = sw.strengths.length ? sw.strengths : states.filter((s) => s.level != null).sort((a, b) => b.level - a.level).slice(0, 2);
     for (const s of list.slice(0, 3)) add(s.capId, s.relevance || 0.7, `point fort à faire progresser (${STATUS_WORD[s.status]}, confiance ${confWord(s.confidence)})`);
@@ -158,7 +170,7 @@ export function planSession(opts = {}, ctx) {
   if (light) { add('mobilite_hanches', 0.6, 'mode léger / récupération'); add('mobilite_epaules', 0.5, 'mode léger / récupération'); }
   for (const [id, p] of Object.entries(opts.priorities || {})) { if (Number(p) <= 0) delete targets[id]; else targets[id] = Number(p); if (!reasons[id]) reasons[id] = ['priorité choisie']; else reasons[id].push('priorité modifiée par toi'); }
 
-  const { ok, excluded } = isClimbing(activityId) ? { ok: [], excluded: [] } : candidates(activityId, ctx, { eq, level, light, noPlyo: bodyAdj.noPlyo });
+  const { ok, excluded } = isClimbing(activityId) ? { ok: [], excluded: [] } : candidates(activityId, ctx, { eq, level, light, noPlyo: bodyAdj.noPlyo, zones: opts.avoidZones || [] });
   const trainable = (id) => isClimbing(activityId) || ok.some((x) => (x.caps?.[id] || 0) >= 0.3);
   const missing = [];
   for (const id of Object.keys(targets)) if (!trainable(id)) { missing.push(`${capName(id, ctx)} : aucun exercice compatible avec ton matériel ou ton niveau aujourd’hui.`); delete targets[id]; }
@@ -180,7 +192,7 @@ export function planSession(opts = {}, ctx) {
     intentions: opts.intentions || [], priorities: opts.priorities || {}, envId: env?.id || '', envName: env?.name || '', equipment: [...eq], level, levelHow,
     distribution, blocks, difficulty: { value: est, text: `${est}/5 — intensité ${intensityWord} (niveau pris en compte : ${['débutant', 'intermédiaire', 'avancé'][level]}, ${levelHow})` },
     constraints, missing, seed, capId: opts.capId || '', bodyReasons: bodyAdj.reasons, restFactor: bodyAdj.restFactor, circuit: !!bodyAdj.circuit,
-    intentionText: goal ? `Avancer vers « ${goalLabel(goal)} »` : light ? 'Séance légère : technique, mobilité, travail doux' : mode === 'strengths' ? 'Faire progresser tes points forts' : 'Travailler tes axes de progrès',
+    intentionText: custom ? `Séance sur mesure : ${[...pickGoals.map(goalLabel), ...(opts.intents || []).map((i) => i.label)].slice(0, 3).join(', ') || 'tes choix'}` : goal ? `Avancer vers « ${goalLabel(goal)} »` : light ? 'Séance légère : technique, mobilité, travail doux' : mode === 'strengths' ? 'Faire progresser tes points forts' : 'Travailler tes axes de progrès',
   };
   if (!isClimbing(activityId)) {
     const dry = selectMain(plan, ctx, ok);

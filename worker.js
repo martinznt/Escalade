@@ -5,7 +5,7 @@ import { SCHEMA, ADD_COLUMNS } from './schema.js';
 import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
-import { aiDraft, aiChat, aiGoal } from './server/ai.js';
+import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps } from './server/ai.js';
 import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
@@ -21,7 +21,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -424,6 +424,18 @@ async function routeAuthed(request, env, url, auth, secure) {
     catch (e) { console.error('ai-goal', e?.message); return json({ error: e.status ? e.message : 'L’assistant n’a pas pu répondre.' }, e.status === 502 ? 502 : 503); }
   }
   if (p === '/api/push/subscribe' && m === 'POST') return pushSubscribe(request, env, u);
+  if (p === '/api/ai/intent' && m === 'POST') {
+    const b = await readJson(request, 3000), text = str(b?.text, 200), kind = ['intent', 'strength', 'weakness'].includes(b?.kind) ? b.kind : 'intent';
+    if (text.length < 2) return fail('Écris ce que tu veux travailler.');
+    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Tu as beaucoup utilisé l’assistant : réessaie un peu plus tard.', 429);
+    try { return json({ ok: true, intent: await aiIntent(env, { text, activityId: str(b?.activityId, 60), kind }) }); }
+    catch (e) { console.error('ai-intent', e?.message); return json({ error: e.status ? e.message : 'L’assistant n’a pas pu répondre.' }, e.status === 502 ? 502 : 503); }
+  }
+  // Intentions communes (lecture pour tous) et propositions (envoyées aux administrateurs)
+  if (p === '/api/community/intents' && m === 'GET') return json({ ok: true, intents: ((await db(env, 'SELECT id,activity,label,emoji,caps_json FROM community_intents ORDER BY created_at').all()).results || []).map((r) => ({ id: r.id, activityId: r.activity, label: r.label, emoji: r.emoji, caps: safeParse(r.caps_json) || {} })) });
+  if (p === '/api/proposals' && m === 'POST') return proposalCreate(request, env, u);
+  if (p === '/api/proposals/mine' && m === 'GET') return json({ ok: true, proposals: (await db(env, 'SELECT id,kind,activity,label,detail,status,reply,created_at FROM proposals WHERE user_id=? ORDER BY created_at DESC LIMIT 50', u.id).all()).results || [] });
   if (p === '/api/push/subscribe' && m === 'DELETE') { const b = await readJson(request, 2000); await db(env, 'DELETE FROM push_subs WHERE endpoint=? AND user_id=?', str(b?.endpoint, 800), u.id).run(); return json({ ok: true }); }
   if (p === '/api/push/test' && m === 'POST') {
     if (await limited(env, 'push-t:' + u.id, 5, 3600000)) return fail('Déjà testé plusieurs fois : réessaie plus tard.', 429);
@@ -440,6 +452,10 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (!u.isAdmin) return fail('Droit administrateur requis.', 403);
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
     if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
+    if (p === '/api/admin/proposals' && m === 'GET') return json({ ok: true, proposals: ((await db(env, `SELECT p.id,p.kind,p.activity,p.label,p.detail,p.payload_json,p.status,p.reply,p.created_at,u.username FROM proposals p LEFT JOIN users u ON u.id=p.user_id WHERE p.status=? ORDER BY p.created_at DESC LIMIT 100`, url.searchParams.get('status') === 'done' ? 'done' : 'open').all()).results || []).map((r) => ({ ...r, payload: safeParse(r.payload_json) || {}, payload_json: undefined })) });
+    if ((x = p.match(/^\/api\/admin\/proposals\/([\w-]{1,64})$/)) && m === 'POST') return proposalReview(request, env, u, x[1]);
+    if (p === '/api/admin/intents' && m === 'POST') { const b = await readJson(request, 4000); const r = await intentCreate(env, u, b); return r.error ? fail(r.error) : json({ ok: true, id: r.id }); }
+    if ((x = p.match(/^\/api\/admin\/intents\/([\w-]{1,64})$/)) && m === 'DELETE') { await db(env, 'DELETE FROM community_intents WHERE id=?', x[1]).run(); return json({ ok: true }); }
     if ((x = p.match(/^\/api\/admin\/bugs\/([\w-]{1,64})$/)) && m === 'POST') return adminBugStatus(request, env, x[1]);
     return fail('Route inconnue.', 404);
   }
@@ -510,7 +526,7 @@ async function deleteAccount(request, env, auth, secure) {
   if (!b || !row || !safeEq(await passHash(String(b.password ?? ''), row.password_salt), row.password_hash)) return fail('Mot de passe incorrect.', 403);
   const id = auth.user.id;
   // Données privées supprimées ; contributions à la bibliothèque commune conservées de façon anonyme (auteur : compte supprimé).
-  await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
+  await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs', 'proposals'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
     .concat([
       db(env, 'DELETE FROM follows WHERE follower_id=? OR followee_id=?', id, id),
       db(env, 'UPDATE common_exercises SET created_by=NULL WHERE created_by=?', id),
@@ -893,6 +909,43 @@ async function pushSubscribe(request, env, u) {
   await db(env, `INSERT INTO push_subs(endpoint,user_id,days,hour,tz,last_day,created_at) VALUES(?,?,?,?,?,'',?)
     ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id,days=excluded.days,hour=excluded.hour,tz=excluded.tz`, ep.href, u.id, JSON.stringify(days), hour, tz, Date.now()).run();
   return json({ ok: true, days, hour, tz });
+}
+/* Intentions communes et propositions des utilisateurs */
+async function intentCreate(env, u, b) {
+  const label = str(b?.label, 40), caps = cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps);
+  if (label.length < 2 || !Object.keys(caps).length) return { error: 'Nom et au moins une capacité nécessaires.' };
+  const activity = /^[\w:.-]{0,60}$/.test(String(b?.activityId || '')) ? String(b?.activityId || '') : '';
+  const id = 'ci-' + uid().slice(0, 12);
+  await db(env, 'INSERT INTO community_intents(id,activity,label,emoji,caps_json,created_by,created_at) VALUES(?,?,?,?,?,?,?)', id, activity, label, str(b?.emoji, 8) || '✨', JSON.stringify(caps), u.id, Date.now()).run();
+  return { id };
+}
+async function proposalCreate(request, env, u) {
+  const b = await readJson(request, 6000);
+  const kind = ['intent', 'category', 'idea'].includes(b?.kind) ? b.kind : 'idea', label = str(b?.label, 80), detail = str(b?.detail, 1000);
+  if (label.length < 2) return fail('Donne au moins un nom à ta proposition.');
+  if (await limited(env, 'prop:' + u.id, 10, DAY)) return fail('Tu as déjà fait beaucoup de propositions aujourd’hui : merci ! Réessaie demain.', 429);
+  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps) };
+  const id = 'pr-' + uid().slice(0, 12), activity = /^[\w:.-]{0,60}$/.test(String(b?.activityId || '')) ? String(b?.activityId || '') : '';
+  await db(env, 'INSERT INTO proposals(id,user_id,kind,activity,label,detail,payload_json,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)', id, u.id, kind, activity, label, detail, JSON.stringify(payload), 'open', Date.now()).run();
+  // Prévenir les administrateurs (notification sur leurs appareils abonnés ; best effort)
+  try {
+    const subs = (await db(env, "SELECT s.endpoint FROM push_subs s JOIN users a ON a.id=s.user_id WHERE a.is_admin=1 AND s.user_id<>? LIMIT 20", u.id).all()).results || [];
+    for (const x of subs) { const r = await sendPush(env, x.endpoint); if (r === 'gone') await db(env, 'DELETE FROM push_subs WHERE endpoint=?', x.endpoint).run(); }
+  } catch (e) { console.error('notif admin', e?.message); }
+  return json({ ok: true, id });
+}
+async function proposalReview(request, env, u, id) {
+  const b = await readJson(request, 3000), decision = b?.decision === 'accept' ? 'accept' : b?.decision === 'refuse' ? 'refuse' : '';
+  if (!decision) return fail('Décision invalide.');
+  const p = await db(env, 'SELECT id,kind,activity,label,payload_json,status FROM proposals WHERE id=?', id).first();
+  if (!p) return fail('Proposition introuvable.', 404);
+  if (p.status !== 'open') return fail('Déjà traitée.', 409);
+  if (decision === 'accept' && p.kind === 'intent') {
+    const pl = safeParse(p.payload_json) || {}, r = await intentCreate(env, u, { label: p.label, emoji: pl.emoji, caps: Object.entries(pl.caps || {}).map(([cid, w]) => ({ id: cid, w })), activityId: p.activity });
+    if (r.error) return fail('Impossible d’ajouter cette intention : ' + r.error);
+  }
+  await db(env, 'UPDATE proposals SET status=?,reply=?,reviewed_by=?,reviewed_at=? WHERE id=?', 'done', (decision === 'accept' ? '✓ Acceptée. ' : '✗ Refusée. ') + str(b?.reply, 300), u.id, Date.now(), id).run();
+  return json({ ok: true });
 }
 async function aiChatRoute(request, env, u) {
   const b = await readJson(request, 12000);

@@ -458,3 +458,8 @@ html[data-vibe=neon][data-mode=dark] .btn.pri{box-shadow:0 0 18px color-mix(in s
 .bodyf{display:grid;gap:10px}.bodyf .grid3{gap:8px}.bnum{display:grid;gap:4px;font-size:.85rem}.bnum .unitbox input{width:100%}
 .chips.fit .chip{font-size:.85rem}
 @media(max-width:420px){.bodyf .grid3{grid-template-columns:1fr 1fr 1fr}}
+
+/* ═════════ Séance du jour : choix détaillés ═════════ */
+.gsecs{display:grid;gap:6px}.gsec{margin:0}.gsec>summary{font-weight:700}.gsecb{display:grid;gap:8px;padding-top:6px}
+.chip.add{border-style:dashed;color:var(--accent)}
+.item.prop{align-items:flex-start;gap:10px}

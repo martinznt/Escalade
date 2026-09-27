@@ -252,10 +252,16 @@ await step('historique réellement enregistré sur le serveur (durée, pause, qu
 });
 await step('générateur : simulation, priorités, génération expliquée, enregistrement', async () => {
   await a.tab('library'); await a.sub('libSub', 'generate');
-  await a.click('[data-act=gSet][data-k=activityId][data-v=conditioning]'); await a.click('details.genmore > summary'); await a.click('[data-act=gSet][data-k=mode][data-v=goal]');
-  await A.waitForSelector('select[data-change=gGoal]'); const gid = await A.evaluate(() => document.querySelector('select[data-change=gGoal] option:nth-child(2)').value);
-  await A.selectOption('select[data-change=gGoal]', gid); await a.click('[data-act=gSet][data-k=minutes][data-v="20"]');
-  await a.click('[data-act=genPlan]'); await A.waitForSelector('#genplan');
+  await a.click('[data-act=gSet][data-k=activityId][data-v=conditioning]');
+  await a.click('[data-act=gForme][data-v=exhausted]'); await a.click('[data-act=gFeel][data-v=hard]'); await A.waitForSelector('text=Tu te sens épuisé');
+  await a.click('[data-act=gForme][data-v=ok]'); await a.click('[data-act=gFeel][data-v=mod]');
+  // Plusieurs choix : un objectif, une intention, un muscle, une zone à ménager
+  await a.click('[data-act=gOpen][data-k=goals]'); await A.locator('[data-act=gPick][data-k=goalIds]').first().click();
+  await a.click('[data-act=gOpen][data-k=intents]'); await a.click('[data-act=gPick][data-k=intentIds][data-v=gainage]');
+  await a.click('[data-act=gOpen][data-k=muscles]'); await a.click('[data-act=gPick][data-k=muscles][data-v=cuisses]');
+  await a.click('[data-act=gOpen][data-k=zones]'); await a.click('[data-act=gPick][data-k=zones][data-v=wrists]');
+  await a.click('[data-act=gSet][data-k=minutes][data-v="20"]');
+  await a.click('[data-act=genPlan]'); await A.waitForSelector('#genplan'); assert.match(await a.text('#genplan'), /sur mesure/i);
   assert.match(await a.text('#genplan'), /Simulation avant génération/i); assert.match(await a.text('#genplan'), /Matériel nécessaire/);
   await A.locator('#genplan [data-act=prio][data-d="1"]').first().click(); await A.waitForSelector('#genplan');
   await a.click('[data-act=genDo]'); await A.waitForSelector('#genresult');

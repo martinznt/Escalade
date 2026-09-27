@@ -43,4 +43,12 @@ ok('objectif écrit (assistant) : capacités et mesures autorisées seulement, c
   assert.equal(cleanGoal({ label: 'x', caps: [{ id: 'endurance_aerobie' }], metricId: 'inconnue', target: 9 }).target, null);
   assert.equal(cleanGoal({ label: 'rien', caps: [] }), null, 'rien d’exploitable : refusé');
 });
+ok('séance sur mesure : muscles et intentions choisis ciblés, zones ménagées exclues', () => {
+  const c = ctxWith({});
+  const p = G.planSession({ activityId: 'conditioning', minutes: 40, seed: 7, muscles: ['cuisses'], intents: [{ label: 'Gainage', caps: { gainage_anterieur: 1 } }], avoidZones: ['wrists'] }, c);
+  const ids = p.distribution.map((d) => d.capId); assert.ok(ids.includes('force_jambes') && ids.includes('gainage_anterieur'), ids.join(','));
+  assert.match(p.intentionText, /sur mesure/);
+  const s = G.generateFromPlan(p, c).session;
+  assert.ok(!s.exercises.some((e) => e.block === 'main' && /pompe|dips/i.test(e.name)), 'aucune pompe : poignets ménagés');
+});
 console.log(`\n${n} tests OK`);

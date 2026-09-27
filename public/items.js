@@ -49,7 +49,9 @@ export const SCHEMAS = {
   // Activité personnalisée ou activation d'une activité native (preset = identifiant natif).
   activity: { label: ['s', 60], emoji: ['s', 8], preset: ['s', 40], aliases: ['strs', 20, 60], archived: ['b'] },
   // Catégorie d'une activité (native ou personnalisée). Sans capacité liée, la catégorie est elle-même un nœud du graphe.
-  category: { activityId: ['id'], label: ['s', 60], description: ['s', 180], caps: ['caps', 8], archived: ['b'], emoji: ['s', 8], guide: ['s', 600], howTo: ['strs', 6, 220], source: ['e', ['', 'ia'], ''] },
+  category: { activityId: ['id'], label: ['s', 60], description: ['s', 180], caps: ['caps', 8], archived: ['b'], emoji: ['s', 8], guide: ['s', 600], howTo: ['strs', 6, 220], source: ['e', ['', 'ia'], ''],
+    // Ajout personnel depuis « Séance du jour » : intention, ou force / faiblesse écrite avec ses mots.
+    kind: ['e', ['', 'intent', 'focus'], ''], side: ['e', ['', 'strength', 'weakness'], ''] },
   // Définition d'une métrique personnalisée (ce qui est mesuré).
   metric: { label: ['s', 80], unit: ['s', 20], kind: ['e', ['reps', 'load', 'time', 'distance', 'grade', 'pace', 'score', 'other'], 'other'], dir: ['e', [1, -1], 1], activityId: ['id'], caps: ['caps', 8], gradeActivity: ['e', ['bloc', 'voie', ''], ''], archived: ['b'] },
   // Performance : une valeur observée à un moment donné pour une métrique.

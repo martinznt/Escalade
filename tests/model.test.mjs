@@ -50,7 +50,7 @@ await ok('styles d’escalade structurés (identifiants, activité)', () => { as
 console.log('Schéma des données (items)');
 const SAMPLES = {
   activity: { label: 'Tennis', emoji: '🎾', preset: '', aliases: ['tennis'], archived: false },
-  category: { activityId: 'custom-1', label: 'Service', description: 'd', caps: [{ id: 'explosivite', w: 0.5 }], archived: false, emoji: '🎾', guide: 'g', howTo: ['a'], source: 'ia' },
+  category: { activityId: 'custom-1', label: 'Service', description: 'd', caps: [{ id: 'explosivite', w: 0.5 }], archived: false, emoji: '🎾', guide: 'g', howTo: ['a'], source: 'ia' , kind: 'intent', side: ''},
   metric: { label: 'Service', unit: 'km/h', kind: 'pace', dir: 1, activityId: 'custom-1', caps: [{ id: 'cat-1', w: 1 }], gradeActivity: '', archived: false },
   perf: { metricId: 'max_bloc', unknown: false, unit: '', date: 1, source: 'measured', grade: { systemId: 'font', systemName: 'Font', levelId: 'l5', label: '6A', order: 5, total: 24, color: '#aabbcc' }, styles: ['st-dalle', 'st-u-x'], context: { env: 'e1', place: 'Salle', kind: 'salle' }, note: 'n', side: 'gauche' },
   goal: { type: 'grade', label: 'G', skillId: '', metricId: 'max_bloc', target: 3, current: 1, unit: '', gradeTarget: { systemId: 'font', systemName: 'F', levelId: 'l9', label: '6C', order: 9, total: 24, color: '' }, activityId: '', caps: [], status: 'done', deadline: '2026-12-31', startedAt: 1, doneAt: 2, note: '' },
