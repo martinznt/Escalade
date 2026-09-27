@@ -11,11 +11,33 @@ import { anatomySvg } from './anatomy.js';
 import { openGenerator } from './views-library.js';
 import { byId } from './library.js';
 
-const SUBS = [['understand', 'Comprendre'], ['map', 'Ma carte'], ['activities', 'Activités'], ['perfs', 'Performances'], ['climbing', 'Escalade'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Public']];
+const SUBS = [['understand', 'Ce que l’app sait'], ['map', 'Ma carte'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Escalade'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const TILES = { understand: ['🔎', 'Ce que l’app sait', 'et comment'], map: ['🗺️', 'Ma carte', 'mes capacités'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
+  climbing: ['🧗', 'Escalade', 'cotations, blocs'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['🧰', 'Matériel', 'lieux, équipement'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 export function vProfile() {
-  const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'understand';
+  const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
+  if (sub === 'home') return vHub();
   const views = { understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: vClimbing, goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
-  return h`<h1>Mon profil</h1><p class="small muted sub">Ce que l’app sait de toi et comment elle le sait. Tout est modifiable.</p><div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
+  const [ic, title] = TILES[sub];
+  return h`<div class="row subhead"><button class="btn sm ghost" data-act="profSub" data-id="home" aria-label="Retour au profil">‹ Profil</button><h1 class="grow">${ic} ${title}</h1></div>
+    <div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
+}
+/* ═════════ Accueil du profil : l'essentiel en un coup d'œil, puis des tuiles ═════════ */
+function vHub() {
+  const c = ctx(), acts = Object.values(c.activities), st = profileCapacities(c), sw = strengthsWeaknesses(st), goals = activeGoals(c);
+  const known = st.filter((x) => x.level != null).length;
+  const counts = { understand: known ? `${known} capacité${known > 1 ? 's' : ''}` : '', activities: acts.length || '', perfs: c.perfs.filter((p) => !p.unknown).length || '', goals: goals.length || '', equipment: c.envs.length || '' };
+  const climbing = acts.some((a) => a.id.startsWith('climbing'));
+  const tiles = Object.entries(TILES).filter(([k]) => k !== 'climbing' || climbing);
+  const pill = (x, cls) => h`<button class="chip ${cls}" data-act="capOpen" data-id="${x.capId}">${x.label}</button>`;
+  return h`<section class="card hero phero"><div class="row"><div class="avatar">${acts[0]?.emoji || '🙂'}</div><div class="grow"><h1>${S.user.guest ? 'Mon profil' : S.user.username}</h1>
+      <div class="chips">${acts.length ? acts.map((a) => h`<span class="chip static">${a.emoji} ${a.label}</span>`) : h`<button class="chip" data-act="setupStart" data-id="quiz">＋ Choisir mes sports</button>`}</div></div></div>
+    <div class="stats"><span>🏋️ ${c.history.length} séance${c.history.length > 1 ? 's' : ''}</span><span>🎯 ${goals.length} objectif${goals.length > 1 ? 's' : ''}</span><span>📏 ${c.perfs.filter((p) => !p.unknown).length} mesure(s)</span></div></section>
+    ${sw.strengths.length || sw.weaknesses.length ? h`<div class="grid2 sw2">
+      <section class="card ok-b"><span class="kicker ok-t">💪 Tes points forts</span><div class="chips">${sw.strengths.length ? sw.strengths.slice(0, 3).map((x) => pill(x, 'okc')) : h`<span class="small muted">Bientôt…</span>`}</div></section>
+      <section class="card warn-b"><span class="kicker warn-t">🌱 À travailler</span><div class="chips">${sw.weaknesses.length ? sw.weaknesses.slice(0, 3).map((x) => pill(x, 'warnc')) : h`<span class="small muted">Rien de flagrant</span>`}</div></section></div>`
+      : h`<section class="card flat row"><span class="grow small">🧩 Ajoute une ou deux mesures pour voir tes points forts.</span><button class="btn sm pri" data-act="profSub" data-id="perfs">Ajouter</button></section>`}
+    <div class="tiles">${tiles.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>`;
 }
 ACT.profSub = (el) => { go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
 const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;
@@ -24,16 +46,17 @@ const statusTag = (s) => tag(STATUS_WORD[s.status], s.status === 'fort' ? 'ok' :
 /* ═════════ Comprendre mon profil ═════════ */
 function vUnderstand() {
   const u = understandProfile(ctx());
-  const sec = (title, cls, items, emptyText) => h`<section class="card"><h3>${title}</h3>${items.length ? h`<ul class="small">${items.slice(0, 20).map((x) => h`<li>${x}</li>`)}</ul>` : h`<p class="muted small">${emptyText}</p>`}</section>`;
-  return h`<p class="muted small">Ce que l’application sait de toi, d’où vient chaque information et ce qui manque. Les estimations ne sont jamais présentées comme des mesures.</p>
-    ${sec('📏 Mesuré', 'ok', u.measured, 'Aucune mesure : ajoute un test dans Performances.')}
-    ${sec('🗣️ Déclaré par toi', '', u.declared, 'Rien de déclaré pour l’instant.')}
-    ${sec('🧮 Calculé à partir de ton historique', 'info', u.calculated, 'Pas encore de séance enregistrée.')}
-    ${sec('≈ Inféré / estimé', 'warn', u.inferred, 'Aucune capacité estimable pour l’instant.')}
-    ${sec('💡 Recommandé', 'acc', u.recommended, 'Aucune recommandation.')}
-    ${sec('❔ Données manquantes', 'muted', u.missing, 'Rien d’essentiel ne manque.')}
-    <details class="card"><summary><b>Comment les capacités sont déterminées</b></summary><ol class="small">${u.method.map((m) => h`<li>${m}</li>`)}</ol></details>`;
+  const stats = [['📏', 'Mesuré', u.measured, 'ok'], ['🗣️', 'Déclaré', u.declared, 'info'], ['🧮', 'Calculé', u.calculated, ''], ['≈', 'Estimé', u.inferred, 'warn']];
+  const list = (items) => h`<ul class="clean">${items.slice(0, 12).map((x) => h`<li>${x}</li>`)}</ul>${items.length > 12 ? h`<p class="tiny muted">… et ${items.length - 12} autre(s)</p>` : ''}`;
+  const todo = testReminders(ctx()).slice(0, 3);
+  return h`<div class="statgrid">${stats.map(([ic, l, items, cls]) => h`<button class="stat2 ${cls}" data-act="uOpen" data-id="${l}"><b>${items.length}</b><span>${ic} ${l}</span></button>`)}</div>
+    ${todo.length ? h`<section class="card acc-b"><span class="kicker">✅ Pour mieux te connaître</span>${todo.map((t) => h`<div class="todo row"><span class="grow">📏 ${t.label}</span><button class="btn sm pri" data-act="perfAdd" data-id="${t.metricId}">Saisir</button></div>`)}</section>` : ''}
+    ${stats.map(([ic, l, items]) => h`<details class="card fold" id="u-${l}"><summary><span>${ic} ${l}</span><em>${items.length}</em></summary>${items.length ? list(items) : h`<p class="small muted">Rien pour l’instant.</p>`}</details>`)}
+    ${u.missing.length ? h`<details class="card fold"><summary><span>❔ Ce qui manque</span><em>${u.missing.length}</em></summary>${list(u.missing)}</details>` : ''}
+    <details class="card fold"><summary><span>💡 Comment l’app décide</span></summary><ol class="small">${u.method.map((m) => h`<li>${m}</li>`)}</ol></details>`;
 }
+
+ACT.uOpen = (el) => { const d = document.getElementById('u-' + el.dataset.id); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } };
 
 /* ═════════ Ma carte d'entraînement + graphe ═════════ */
 function vMap() {
@@ -47,9 +70,9 @@ function vMap() {
       ${!m.capacities.length ? h`<p class="muted small">Choisis une activité ou un objectif pour faire apparaître tes capacités.</p>` : ''}</div>
     <div class="card"><h3>Muscles travaillés (30 jours)</h3>${raw(anatomySvg({ heat: muscleVolume(c, 30) }))}<p class="tiny muted center">Plus la zone est marquée, plus elle a été sollicitée (exercices réalisés + ressenti du questionnaire).</p></div>
     <div class="card"><h3>Objectifs</h3>${m.goals.length ? m.goals.map((g) => h`<button class="item pick" data-act="goalOpen" data-id="${g.goal.id}"><div class="grow"><b>${g.label}</b>${meter(g.progress.pct || 0)}<div class="tiny muted">${g.progress.text}</div></div></button>`) : h`<p class="muted small">Aucun objectif actif.</p>`}</div>
-    <div class="card"><h3>Habitudes</h3>${m.habits.length ? m.habits.map((x) => h`<p class="small">• ${x.text}</p>`) : h`<p class="muted small">Pas encore assez de séances pour repérer des habitudes.</p>`}</div>
-    <div class="card"><h3>Matériel et environnements</h3><p class="small">${m.envs.length ? m.envs.join(', ') : 'Aucun environnement'} · disponible : ${m.equipment.join(', ') || 'rien'}</p></div>
-    <div class="card"><h3>Progression récente</h3>${m.progression.length ? m.progression.map((r) => h`<p class="small">🏆 ${r.label} : ${r.text} (${fmtDay(r.date)})</p>`) : h`<p class="muted small">Aucun record encore.</p>`}<p class="small muted">${m.regularity.text}</p></div>`;
+    <details class="card fold"><summary><span>🔁 Habitudes</span><em>${m.habits.length}</em></summary>${m.habits.length ? h`<ul class="clean">${m.habits.map((x) => h`<li>${x.text}</li>`)}</ul>` : h`<p class="muted small">Pas encore assez de séances.</p>`}</details>
+    <details class="card fold"><summary><span>🧰 Matériel</span><em>${m.equipment.length}</em></summary><div class="chips">${m.envs.map((e) => h`<span class="chip static">📍 ${e}</span>`)}${m.equipment.map((e) => h`<span class="chip static">${e}</span>`)}</div></details>
+    <details class="card fold"><summary><span>🏆 Progression récente</span><em>${m.progression.length}</em></summary>${m.progression.length ? h`<ul class="clean">${m.progression.map((r) => h`<li><b>${r.label}</b> · ${r.text} <span class="muted">(${fmtDay(r.date)})</span></li>`)}</ul>` : h`<p class="muted small">Aucun record encore.</p>`}</details>`;
 }
 ACT.capOpen = (el) => {
   const c = ctx(), g = graphFromCap(el.dataset.id, c), st = capacityState(el.dataset.id, c);

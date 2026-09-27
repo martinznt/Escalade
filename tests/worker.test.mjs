@@ -339,4 +339,14 @@ await ok('suppression du compte : données privées effacées, contributions com
   assert.equal(env.DB.raw.prepare("SELECT COUNT(*) c FROM shared_sessions WHERE scope='public'").get().c, 0, 'séances publiques supprimées');
   assert.equal((await A.get('/api/auth/me')).status, 401);
 });
+await ok('mise à jour : sw.js porte l’identifiant du déploiement, /api/version l’expose (sans compte)', async () => {
+  const e1 = makeEnv({ CF_VERSION_METADATA: { id: 'deploy-aaa' }, ASSETS: { fetch: async () => new Response("const BUILD = 'dev';\nconst CACHE = 'x-' + BUILD;", { headers: { 'Content-Type': 'text/javascript' } }) } });
+  const sw = await (await worker.fetch(new Request(ORIGIN + '/sw.js'), e1)).text();
+  assert.match(sw, /const BUILD = "deploy-aaa";/);
+  const v = await (await worker.fetch(new Request(ORIGIN + '/api/version'), e1)).json();
+  assert.equal(v.build, 'deploy-aaa');
+  e1.CF_VERSION_METADATA = { id: 'deploy-bbb' };
+  assert.match(await (await worker.fetch(new Request(ORIGIN + '/sw.js'), e1)).text(), /deploy-bbb/);
+  const e2 = makeEnv(); assert.ok((await (await worker.fetch(new Request(ORIGIN + '/api/version'), e2)).json()).build, 'repli sur la version de l’application');
+});
 done('tests Worker / D1 / sécurité');

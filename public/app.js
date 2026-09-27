@@ -40,9 +40,9 @@ function doRender() {
     <main class="wrap" id="main">${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
 }
-setRenderer(doRender);
+setRenderer(() => { doRender(); renderUpdateBar(); });
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
-ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'seances', profile: 'understand', settings: 'main' }[id]; const keep = S.tab === id ? base : S.sub[id]; go(id, ['seance', 'shared-edit', 'common-detail', 'import'].includes(keep) ? base : keep || base); };
+ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }[id]; const keep = S.tab === id ? base : S.sub[id]; go(id, ['seance', 'shared-edit', 'common-detail', 'import'].includes(keep) ? base : keep || base); };
 ACT.goSync = () => go('settings', 'sync');
 ACT.goAccount = () => go('settings', 'main');
 ACT.closeSheet = () => closeSheet();
@@ -172,13 +172,52 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', () => { writePending(); persistNow(); });
 
 /* ═════════ Démarrage ═════════ */
+/* ═════════ Mises à jour : chaque déploiement (modification sur GitHub) est proposé dans le site et l'app ═════════ */
+const UPD = { reg: null, boot: '', available: false, later: 0 };
+function showUpdate() { UPD.available = true; renderUpdateBar(); }
+function renderUpdateBar() {
+  let bar = document.getElementById('updbar');
+  const hidden = !UPD.available || S.player || Date.now() < UPD.later;
+  if (hidden) { bar?.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'updbar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
+  bar.innerHTML = h`<span>✨ <b>Nouvelle version disponible</b></span><button class="btn pri sm" data-act="updNow">Mettre à jour</button><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button>`.s;
+}
+ACT.updNow = async () => {
+  if (S.player) { toast('Termine ta séance, puis mets à jour.'); return; }
+  writePending(); await persistNow();
+  sessionStorage.setItem('sea:user-update', '1');
+  const w = UPD.reg?.waiting;
+  if (w) { w.postMessage('SKIP_WAITING'); setTimeout(() => location.reload(), 4000); } // rechargement au changement de version (ou au plus tard 4 s)
+  else location.reload();
+};
+ACT.updLater = () => { UPD.later = Date.now() + 3 * 3600000; renderUpdateBar(); };
+/** Vérifie s'il existe une version plus récente sur le serveur (sans compte, sans cache). */
+async function checkUpdate() {
+  try { await UPD.reg?.update(); } catch { /* hors ligne */ }
+  try {
+    const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return;
+    const { build } = await r.json();
+    if (!UPD.boot) UPD.boot = build; else if (build && build !== UPD.boot) showUpdate();
+  } catch { /* hors ligne : on réessaiera */ }
+}
+window.__seaCheckUpdate = checkUpdate;
 function registerSW() {
+  checkUpdate(); setInterval(checkUpdate, 20 * 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
   if (!('serviceWorker' in navigator)) return;
-  const had = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('/sw.js').then((r) => r.update().catch(() => {})).catch(() => {});
+  navigator.serviceWorker.register('/sw.js').then((reg) => {
+    UPD.reg = reg;
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate();
+    reg.addEventListener('updatefound', () => {
+      const w = reg.installing; if (!w) return;
+      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(); });
+    });
+  }).catch(() => {});
+  let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // Nouvelle version : rechargement une seule fois, jamais pendant une séance ni avec une saisie en cours.
-    if (had && !S.player && !sessionStorage.getItem('sea:reloaded')) { sessionStorage.setItem('sea:reloaded', '1'); writePending(); persistNow().finally(() => location.reload()); }
+    // Nouvelle version activée : rechargement si l'utilisateur l'a demandée, jamais pendant une séance.
+    if (reloading || S.player) return;
+    if (sessionStorage.getItem('sea:user-update')) { reloading = true; sessionStorage.removeItem('sea:user-update'); location.reload(); }
   });
 }
 async function start() {
