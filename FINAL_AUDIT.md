@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.9.0
+# FINAL_AUDIT — Séances entraînement v8.10.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -549,7 +549,7 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
 - La pastille de l'icône 🔔 compte les notifications non vues.
 - Les notifications vues sont enregistrées dans le compte (item `config/inbox`), donc elles restent vues sur tous les appareils. L'ancienne date « tout lu » de l'appareil est toujours prise en compte.
 
-### Listes au lieu des barres d'onglets
+## Évolution 8.10.0 : listes au lieu des barres d’onglets
 - Les barres d'onglets horizontales disparaissent. Bibliothèque, Progrès et Profil prennent le format en liste des paramètres (une rubrique par ligne, avec une courte description), et chaque rubrique a sa page avec un bouton retour.
 - **Bibliothèque** : « ＋ Nouvelle séance », puis la liste Mes séances, Sur mesure, Séances prêtes, Exercices, Partagées, Rechercher, avec le nombre de séances et d'exercices.
 - **Progrès** : le résumé reste en haut (l'essentiel d'un coup d'œil), puis « Aller plus loin » liste Historique, Records, Frise, Journal, Analyses et Lab.

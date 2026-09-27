@@ -39,12 +39,16 @@ export const NEWS = [
     ['library', 'generate', '[data-act=gFmt][data-v=custom]', '🧩 Ton format', 'Compose ta séance partie par partie, règle le temps de chacune, change l’ordre, puis garde ce format pour la prochaine fois.'],
     ['', '', '', '▶ Pendant la séance', 'Le lecteur affiche la partie en cours et le temps qu’il lui reste.'],
   ] },
-  { v: '8.9.0', date: '2026-09-29', title: 'Une app plus simple à parcourir', why: 'Chaque chose a sa place : la séance du jour en premier, des listes claires au lieu des barres d’onglets, un seul bouton pour créer une séance.', steps: [
+  { v: '8.9.0', date: '2026-09-29', title: 'Une app plus simple à parcourir', why: 'Chaque chose a sa place : la séance du jour en premier, un seul bouton pour créer une séance, des paramètres rangés par rubrique.', steps: [
     ['home', 'dash', '.quick .qa.pri', '🎯 En premier', 'La séance du jour est tout en haut : un toucher et c’est parti.'],
-    ['library', 'home', '.setmenu', '📚 En liste, sans barre', 'Bibliothèque et Progrès s’ouvrent sur une liste claire, comme les paramètres. Chaque rubrique a sa page, avec un retour.'],
-    ['library', 'home', '[data-act=newChoose]', '＋ Un seul bouton', 'Pour créer une séance : sur mesure, prête, à la main, collée, ou avec un ami. Tout est ici.'],
+    ['library', 'seances', '[data-act=newChoose]', '＋ Un seul bouton', 'Pour créer une séance : sur mesure, prête, à la main, collée, ou avec un ami. Tout est ici.'],
     ['home', 'dash', '[data-act=allOpen]', '☰ Menu', 'Toutes les fonctions, rangées par thème, sont dans ce menu.'],
     ['settings', 'main', '.setmenu', '⚙️ Paramètres rangés', 'Une rubrique par ligne : affichage, séance, notifications, données, aide.'],
+  ] },
+  { v: '8.10.0', date: '2026-09-29', title: 'Des listes claires, sans barres d’onglets', why: 'Bibliothèque, Progrès et Profil prennent le format des paramètres : une rubrique par ligne, une page par rubrique. Et les notifications se cochent « vu ».', steps: [
+    ['library', 'home', '.setmenu', '📚 En liste', 'La Bibliothèque s’ouvre sur une liste claire. Chaque rubrique a sa page, avec un retour.'],
+    ['progress', 'summary', '.setmenu', '📈 Aller plus loin', 'Le résumé reste en haut ; historique, records et analyses sont dans la liste en dessous.'],
+    ['home', 'dash', '[data-act=notifOpen]', '🔔 « ✓ Vu »', 'Coche chaque notification une fois lue : les nouvelles restent en avant, les autres se rangent plus bas.'],
   ] },
 ];
 

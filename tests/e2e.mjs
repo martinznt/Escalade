@@ -638,7 +638,7 @@ await step('après une mise à jour : visite des nouveautés, seulement ce qui a
   await G.evaluate(() => localStorage.setItem('sea:news-toured', JSON.stringify('8.3.0'))); await G.reload(); await G.waitForSelector('nav.tabs');
   await G.waitForSelector('#updbar [data-act=newsTour]', { timeout: 10000 }); await g.click('#updbar [data-act=newsTour]');
   await G.waitForSelector('#tour .tour-bubble'); assert.match(await g.text('#tour .tour-bubble'), /Consignes à chaque série/);
-  assert.match(await g.text('#tour .tour-step'), new RegExp('^1 / ' + (await G.evaluate(async () => { const m = await import('/news.js'); return m.NEWS.filter((n) => n.v > '8.3.0').reduce((t, n) => t + n.steps.length, 0); })) + '$'), 'seulement les nouveautés des versions pas encore vues');
+  assert.match(await g.text('#tour .tour-step'), new RegExp('^1 / ' + (await G.evaluate(async () => { const m = await import('/news.js'); const num = (v) => v.split('.').reduce((t, x) => t * 1000 + Number(x), 0); return m.NEWS.filter((n) => num(n.v) > num('8.3.0')).reduce((t, n) => t + n.steps.length, 0); })) + '$'), 'seulement les nouveautés des versions pas encore vues');
   await g.click('#tour [data-act=tourNext]'); await g.click('#tour [data-act=tourNext]');
   await G.waitForFunction(() => location.hash.startsWith('#/settings/help'), null, { timeout: 5000 });
   await G.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
