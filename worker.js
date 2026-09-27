@@ -10,7 +10,7 @@ import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 
-const APP_VERSION = '8.2.0';
+const APP_VERSION = '8.2.1';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -47,10 +47,18 @@ export default {
 };
 
 /* ═════════════ Fichiers statiques ═════════════ */
+/** Identifiant du déploiement : fourni par Cloudflare (binding version_metadata), sinon la version de l'application. */
+const buildId = (env) => String(env.CF_VERSION_METADATA?.id || APP_VERSION).replace(/[^\w.-]/g, '').slice(0, 40) || APP_VERSION;
 async function serveAsset(request, env, url) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Méthode non autorisée', { status: 405, headers: SECURITY_HEADERS });
   if (!PUBLIC_FILES.has(url.pathname)) return new Response('Introuvable', { status: 404, headers: SECURITY_HEADERS });
-  const res = await env.ASSETS.fetch(request);
+  let res = await env.ASSETS.fetch(request);
+  // Service Worker : on y injecte l'identifiant du déploiement Cloudflare. Chaque déploiement (même sans changer
+  // APP_VERSION) modifie donc sw.js : le navigateur détecte la nouvelle version et l'app propose la mise à jour.
+  if (url.pathname === '/sw.js' && res.ok && request.method === 'GET') {
+    const text = (await res.text()).replace("const BUILD = 'dev';", `const BUILD = ${JSON.stringify(buildId(env))};`);
+    res = new Response(text, { status: 200, headers: res.headers });
+  }
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) headers.set(k, v);
   // Pas de cache HTTP long : le Service Worker gère le hors-ligne, et une nouvelle version doit arriver immédiatement.
@@ -217,7 +225,8 @@ async function authenticate(request, env) {
 /* ═════════════ Routeur API ═════════════ */
 async function handleApi(request, env, url) {
   const p = url.pathname, m = request.method;
-  if (p === '/api/health') return json({ ok: true, db: !!env.DB, version: APP_VERSION, inviteRequired: !!env.INVITE_CODE, adminConfigured: !!env.EDIT_PASSWORD });
+  if (p === '/api/version') return new Response(JSON.stringify({ version: APP_VERSION, build: buildId(env) }), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
+  if (p === '/api/health') return json({ ok: true, db: !!env.DB, version: APP_VERSION, build: buildId(env), inviteRequired: !!env.INVITE_CODE, adminConfigured: !!env.EDIT_PASSWORD });
   if (!env.DB) return fail('Base de données non configurée (binding D1 « DB »).', 500);
 
   if (m !== 'GET' && m !== 'HEAD') {

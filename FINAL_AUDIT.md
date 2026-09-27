@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.2.0
+# FINAL_AUDIT — Séances entraînement v8.2.1
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -285,6 +285,16 @@ réglages qu'un client V2 ne connaît pas.
 - **Test ajouté** : `tests/robustness.test.mjs` remplace tour à tour chaque champ des données (historique, profil,
   calendrier, séances, exercices personnels) par un nombre, une chaîne, `null` ou un objet vide, et vérifie qu'aucune
   analyse ne plante. Il échouait sur la version 8.0.0 et passe sur la 8.0.1.
+
+## Évolution 8.2.1 — mises à jour proposées automatiquement
+
+- Chaque déploiement Cloudflare (par exemple après une modification sur GitHub) a un identifiant unique
+  (binding `version_metadata`). Le serveur l'injecte dans `sw.js` et l'expose sur `GET /api/version` (sans compte).
+- L'app (site et application installée) vérifie à l'ouverture, au retour sur l'app et toutes les 20 min ; si une version
+  plus récente existe, un bandeau « ✨ Nouvelle version disponible — Mettre à jour » s'affiche (jamais pendant une
+  séance). « Mettre à jour » sauvegarde tout, active la nouvelle version et recharge ; « ✕ » masque le bandeau 3 h.
+- Plus besoin de changer `APP_VERSION` pour qu'une modification arrive sur les téléphones.
+- Tests : worker (injection de l'identifiant), E2E (déploiement simulé → bandeau → nouvelle version installée), 41 étapes.
 
 ## Évolution 8.2.0 — plus joli, plus léger, assistant IA
 

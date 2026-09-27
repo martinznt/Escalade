@@ -409,6 +409,17 @@ await step('invité → compte : les données locales sont transférées sur le 
   await poll(async () => (await g.api('GET', '/api/sync')).data.items.some((x) => x.name === 'Séance invitée'), 15000, 'séance invitée transférée');
   await poll(async () => (await g.api('GET', '/api/items?since=0')).data.items.some((x) => x.c === 'activity' && x.d.preset === 'running'), 15000, 'profil invité transféré');
 });
+await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jour ») puis installé', async () => {
+  await G.waitForFunction(() => navigator.serviceWorker?.controller, null, { timeout: 15000 });
+  await G.evaluate(() => window.__seaCheckUpdate());
+  env.CF_VERSION_METADATA = { id: 'deploy-e2e-2' }; // simulation d'une modification poussée sur GitHub
+  await G.evaluate(() => window.__seaCheckUpdate());
+  await G.waitForSelector('#updbar [data-act=updNow]', { timeout: 20000 });
+  await Promise.all([G.waitForNavigation({ timeout: 20000 }), g.click('#updbar [data-act=updNow]')]);
+  await G.waitForSelector('nav.tabs');
+  await poll(async () => (await G.evaluate(async () => (await caches.keys()).join(','))).includes('deploy-e2e-2'), 15000, 'nouveau cache installé');
+  assert.equal(await g.count('#updbar'), 0, 'bandeau disparu après la mise à jour');
+});
 await step('aucune erreur JavaScript dans les navigateurs', async () => assert.deepEqual(errors, []));
 console.log(`\n${n} étapes E2E OK`);
 await browser.close(); srv.server.close();
