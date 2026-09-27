@@ -22,6 +22,7 @@ import { onVisible, bigTap, startPlayer } from './player.js';
 import { catchLink, pendingLink, clearPending } from './share.js';
 import './duo.js';
 import './find-ui.js';
+import { syncContent, loadGlobal } from './content.js';
 import { setLang } from './i18n.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
@@ -61,7 +62,7 @@ function syncAppearance() {
   if (it && !it.del && it.u > localT) { window.__sea.save({ ...local, ...Object.fromEntries(Object.entries(it.d).filter(([, v]) => v)), _t: it.u, _owner: S.user.id }); return; }
   if (!it && mine && local._t && (S.lastSync || S.user.guest)) putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(local[k] ?? '') }), {}));
 }
-setRenderer(() => { syncAppearance(); setLang(S.settings?.lang); doRender(); renderUpdateBar(); checkBadges(); });
+setRenderer(() => { syncAppearance(); setLang(S.settings?.lang); syncContent(); doRender(); renderUpdateBar(); checkBadges(); });
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
 ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'home', profile: 'home', settings: 'main' }[id]; go(id, base); }; // un onglet s'ouvre toujours sur sa page d'accueil (sa liste de rubriques)
 ACT.goSync = () => go('settings', 'sync');
@@ -335,6 +336,7 @@ async function start() {
   const doIt = new URLSearchParams(location.search).get('do');
   if (doIt === 'timer' || doIt === 'gen') { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => { if (S.user) (doIt === 'timer' ? ACT.timerOpen : ACT.genOpen)?.(); }, 900); }
   registerSW();
+  loadGlobal(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadGlobal(); });
   catchLink();
   parseHash();
   const cached = ls.get('sea:user');

@@ -9,6 +9,7 @@ import { CAPACITIES, EQUIPMENT, ACTIVITIES } from './model.js';
 import { activeGoals, goalLabel, profileCapacities, STATUS_WORD } from './brain.js';
 import { PART_TYPES, PRESETS, MAX_TOTAL, cleanParts, presetParts, scaleParts, totalMinutes, partLabel, formatName, formatAdvice, parseFormats } from './format.js';
 import { sourcesLine } from './srcui.js';
+import { chooseScope, saveFormatGlobal } from './content.js';
 import { intentsFor, MUSCLE_GROUPS, AVOID_ZONES, FORMES, FEELS, resolveFeel, keywordCaps } from './intentions.js';
 
 const G = () => S.gen;
@@ -86,8 +87,14 @@ ACT.gFmtSave = () => {
   openSheet(h`<form data-submit="gFmtSaveGo" class="stack"><h2 style="margin:0">💾 Garder ce format</h2><p class="small muted">${g.parts.map((p) => `${partLabel(p.type)} ${p.minutes} min`).join(' · ')}</p>
     <label>Nom<input name="name" maxlength="40" required value="${formatName(g.parts).slice(0, 40)}"></label><button class="btn pri big">Garder</button></form>`);
 };
-SUBMIT.gFmtSaveGo = (f) => {
+SUBMIT.gFmtSaveGo = async (f) => {
   const g = G(), name = String(new FormData(f).get('name') || '').trim().slice(0, 40) || formatName(g.parts);
+  const scope = await chooseScope(`Garder le format « ${name} »`); if (!scope) return;
+  if (scope === 'all') {
+    const id = PRESETS.some(([pid]) => pid === g.fmtId) ? g.fmtId : 'g-' + uid().slice(0, 12);
+    try { await saveFormatGlobal(id, name, cleanParts(g.parts)); g.fmtId = id; toast('Format enregistré pour tout le monde'); render(); } catch (e) { toast(e.message, 4500, 'bad'); }
+    return;
+  }
   const list = savedFormats(); if (list.length >= 12) { toast('12 formats au maximum : supprime-en un.'); return; }
   const id = 'f-' + uid().slice(0, 12); list.push({ id, name, parts: cleanParts(g.parts) });
   putItem('config', 'formats', { formats: JSON.stringify(list) }); g.fmtId = id; closeSheet(); toast('Format gardé : il est dans la liste'); render();

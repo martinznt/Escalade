@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.11.0
+# FINAL_AUDIT — Séances entraînement v8.12.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -572,3 +572,29 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
 **Tests**
 - `tests/finder.test.mjs` (6 tests) : classement, synonymes, périmètre des paramètres, et existence de chaque rubrique et de chaque action visées.
 - E2E : 60 étapes.
+
+## Évolution 8.12.0 : tout se modifie, pour soi ou pour tout le monde
+
+**Contenu concerné** : exercices, séances prêtes, intentions par sport, formats de séance, en plus de la bibliothèque commune.
+
+**Pour moi** (tous les comptes)
+- Sur chaque exercice et chaque séance prête, « ✏️ Modifier » change le nom, l'emoji, les séries, les répétitions ou secondes, le repos, les consignes et le « pourquoi ». Pour une séance prête : la durée, les conseils, et les séries et repos de chaque exercice.
+- On peut aussi masquer un élément.
+- La modification est liée au compte (items `exedit` et `catedit`), et « ↺ Retirer ma modification » revient en arrière.
+
+**Pour tout le monde** (administrateurs seulement)
+- À chaque changement, l'app demande « Pour moi seulement » ou « Pour tout le monde ».
+- « Pour tout le monde » enregistre le changement sur le serveur (table `global_content`, route `PUT /api/admin/global/:type/:id`). Le droit administrateur est vérifié côté serveur, sur la session. Chaque champ est validé et borné (`server/global.js`), et les champs inconnus sont ignorés.
+- Tous les comptes lisent `GET /api/global`, même sans compte ou hors ligne (dernière version gardée sur l'appareil).
+- Les administrateurs peuvent aussi :
+  - ajouter un exercice pour tout le monde ;
+  - faire d'une de leurs séances une séance prête (sans leurs notes ni leurs charges) ;
+  - modifier, ajouter ou masquer une intention par sport ;
+  - garder un format de séance pour tout le monde.
+- Paramètres › Admin liste tous les changements (type, date, auteur), chacun avec « ↺ Annuler ».
+
+**Ordre d'application** (`public/global.js`) : d'abord le contenu d'origine, puis les changements pour tout le monde, puis les miens. Annuler redonne exactement l'original. Un exercice masqué reste connu des séances existantes, mais il n'est plus proposé.
+
+**Tests**
+- `tests/global.test.mjs` (9 tests) : validation, 403 pour un compte normal, 401 sans compte, lecture pour tous, couches et retour à l'original.
+- E2E à 61 étapes : un administrateur modifie pour tout le monde, un autre compte le voit, l'administrateur annule.

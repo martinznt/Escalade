@@ -54,6 +54,10 @@ export const NEWS = [
     ['home', 'dash', '.topicons [data-act=findOpen]', '🔍 Rechercher', 'Touche la loupe et écris ce que tu cherches : les résultats arrivent pendant que tu tapes, et un toucher t’y emmène.'],
     ['settings', 'main', 'input[data-input=setFind]', '⚙️ Chercher un réglage', 'Ici, la recherche ne montre que les paramètres, et le réglage trouvé est mis en lumière.'],
   ] },
+  { v: '8.12.0', date: '2026-09-29', title: 'Tout se modifie, pour toi ou pour tout le monde', why: 'Exercices et séances prêtes ont un bouton « ✏️ Modifier ». Les administrateurs choisissent à chaque fois : pour eux, ou pour tous les comptes.', steps: [
+    ['library', 'exercises', '#main [data-act=libInfo]', '✏️ Modifier', 'Ouvre un exercice ou une séance prête : « ✏️ Modifier » change le nom, les séries, le repos, les consignes… pour toi.'],
+    ['', '', '', '🌍 Pour tout le monde', 'Si tu es administrateur, l’app te demande à chaque changement : pour toi seulement, ou pour tout le monde. Et tout s’annule en un toucher.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

@@ -49,6 +49,8 @@ await ok('styles d’escalade structurés (identifiants, activité)', () => { as
 
 console.log('Schéma des données (items)');
 const SAMPLES = {
+  exedit: { name: 'Pompes', emoji: '💪', sets: 4, repsMin: 8, repsMax: 10, secMin: 0, secMax: 0, rest: 90, cues: ['Dos droit'], bad: ['Creuser'], why: 'pourquoi', hidden: false },
+  catedit: { name: 'Ma version', emoji: '🗂', why: 'w', minutes: 40, tips: ['t'], exjson: '[]', hidden: false },
   activity: { label: 'Tennis', emoji: '🎾', preset: '', aliases: ['tennis'], archived: false },
   category: { activityId: 'custom-1', label: 'Service', description: 'd', caps: [{ id: 'explosivite', w: 0.5 }], archived: false, emoji: '🎾', guide: 'g', howTo: ['a'], source: 'ia' , kind: 'intent', side: ''},
   metric: { label: 'Service', unit: 'km/h', kind: 'pace', dir: 1, activityId: 'custom-1', caps: [{ id: 'cat-1', w: 1 }], gradeActivity: '', archived: false },

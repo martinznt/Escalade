@@ -543,6 +543,22 @@ await step('l’admin modifie puis supprime la contribution ; pas d’accès aux
 /* ═════════ Hors ligne (compte A) ═════════ */
 console.log('Hors ligne');
 cur = A;
+await step('admin : modifier un exercice « pour tout le monde » (au choix), un autre compte le voit ; annuler', async () => {
+  cur = C; await c.tab('library'); await c.sub('libSub', 'exercises'); await C.locator('#main [data-act=libInfo]').first().click(); await C.waitForSelector('#sheet [data-act=gxEdit]');
+  await c.click('#sheet [data-act=gxEdit]'); const old = await C.inputValue('#sheet input[name=name]');
+  await C.fill('#sheet input[name=name]', old + ' (club)'); await c.click('#sheet form[data-submit=exEditGo] button.pri');
+  await C.waitForSelector('#sheet [data-act=scopePick][data-id=all]'); assert.match(await c.text('#sheet'), /Pour moi seulement[\s\S]*Pour tout le monde/);
+  await c.click('#sheet [data-act=scopePick][data-id=all]'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await b.sub('libSub', 'exercises');
+  await B.waitForSelector(`#main :text("${old} (club)")`, { timeout: 10000 });
+  await B.locator('#main [data-act=libInfo]').first().click(); await B.waitForSelector('#sheet [data-act=gxEdit]');
+  assert.equal(await b.count('#sheet [data-act=exHide]'), 0, 'un compte normal ne voit pas « Masquer pour tout le monde »');
+  await B.keyboard.press('Escape');
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]');
+  await c.click('[data-act=glReset]'); await c.confirm(); await C.waitForSelector('text=Rien n’a encore été changé');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await b.sub('libSub', 'exercises');
+  await B.waitForSelector(`#main :text-is("${old}")`, { timeout: 10000 });
+});
 await step('Service Worker actif, puis passage hors ligne : l’application s’ouvre avec les données', async () => {
   await A.evaluate(() => navigator.serviceWorker.ready); await A.reload(); await A.waitForSelector('nav.tabs'); await A.waitForTimeout(600);
   await ctxA.setOffline(true); await A.reload(); await A.waitForSelector('nav.tabs', { timeout: 10000 });

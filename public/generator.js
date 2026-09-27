@@ -97,7 +97,7 @@ export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, 
   const A = analyze(ctx.history, ctx.now), avoid = { ...(ctx.settings?.avoid || {}) };
   for (const z of zones) if (['fingers', 'shoulders', 'elbows', 'knees'].includes(z)) avoid[z] = true;
   const complaint = fingerComplaint(ctx);
-  const base = ACTIVITIES[activityId] ? LIBRARY.filter((x) => x.role === 'main' && x.acts.includes(activityId)) : customPool(activityId, ctx).pool;
+  const base = ACTIVITIES[activityId] ? LIBRARY.filter((x) => x.role === 'main' && !x.hidden && x.acts.includes(activityId)) : customPool(activityId, ctx).pool;
   const ok = [], excluded = [];
   for (const x of base) {
     const why = [];

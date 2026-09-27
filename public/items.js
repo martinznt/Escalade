@@ -45,7 +45,12 @@ function clean(schema, v) {
 const GRADE_SNAPSHOT = { systemId: ['id'], systemName: ['s', 60], levelId: ['id'], label: ['s', 30], order: ['n', 0, 999, 0], total: ['n', 0, 999, 0], color: ['color'] };
 const CONTEXT = { env: ['id'], place: ['s', 80], kind: ['e', ['salle', 'falaise', 'exterieur', 'maison', ''], ''] };
 
+// Modification « pour moi » d'un exercice ou d'une séance prête du catalogue (id = celui de l'élément modifié).
+const EX_EDIT = { name: ['s', 80], emoji: ['s', 8], sets: ['n', 1, 20, null], repsMin: ['n', 0, 500, null], repsMax: ['n', 0, 500, null], secMin: ['n', 0, 7200, null], secMax: ['n', 0, 7200, null], rest: ['n', 0, 3600, null],
+  cues: ['strs', 8, 200], bad: ['strs', 6, 200], why: ['s', 240], hidden: ['b'] };
+const CAT_EDIT = { name: ['s', 80], emoji: ['s', 8], why: ['s', 400], minutes: ['n', 5, 240, null], tips: ['strs', 5, 200], exjson: ['s', 4000], hidden: ['b'] };
 export const SCHEMAS = {
+  exedit: EX_EDIT, catedit: CAT_EDIT,
   // Activité personnalisée ou activation d'une activité native (preset = identifiant natif).
   activity: { label: ['s', 60], emoji: ['s', 8], preset: ['s', 40], aliases: ['strs', 20, 60], archived: ['b'] },
   // Catégorie d'une activité (native ou personnalisée). Sans capacité liée, la catégorie est elle-même un nœud du graphe.

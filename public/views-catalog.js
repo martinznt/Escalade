@@ -10,6 +10,7 @@ import { startPlayer } from './player.js';
 import { CATALOG, buildSession, rankCatalog, needsOf, rankExercises, EX_CATEGORIES } from './catalog.js';
 import { SOURCES } from './sources.js';
 import { sourcesLine } from './srcui.js';
+import { catalogEditButtons } from './content.js';
 export { sourcesLine };
 
 const GOAL_L = { endurance: 'Endurance', force: 'Force', poids: 'Perte de poids', forme: 'Forme', sante: 'Santé', climb: 'Escalade', mobilite: 'Mobilité' };
@@ -52,7 +53,7 @@ ACT.catOpen = (el) => {
     ${e.tips?.length ? h`<b class="small">Conseils</b><ul class="small">${e.tips.map((t) => h`<li>${t}</li>`)}</ul>` : ''}
     <b class="small">Déroulé</b><ol class="small catex">${s.exercises.map((x) => h`<li><b>${x.emoji} ${x.name}</b> — ${x.sets > 1 ? `${x.sets} × ` : ''}${x.mode === 'time' ? fmtDur(x.secMax) : `${x.repsMax} rép.`}${x.rest ? ` · repos ${fmtDur(x.rest)}` : ''}</li>`)}</ol>
     ${miss.length ? h`<p class="small warn-t">Matériel à prévoir : ${miss.map((n) => EQUIPMENT[n] || n).join(', ')}</p>` : ''}
-    <div class="grid2"><button class="btn pri big" data-act="catPlay" data-id="${e.id}">▶ Lancer</button><button class="btn big" data-act="catSave" data-id="${e.id}">💾 Garder</button></div></div>`, { wide: true });
+    <div class="grid2"><button class="btn pri big" data-act="catPlay" data-id="${e.id}">▶ Lancer</button><button class="btn big" data-act="catSave" data-id="${e.id}">💾 Garder</button></div>${catalogEditButtons(e)}</div>`, { wide: true });
 };
 ACT.catPlay = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; closeSheet(); startPlayer(buildSession(e), { fromGenerator: true }); };
 ACT.catSave = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; saveSeance({ ...buildSession(e), id: uid() }); closeSheet(); toast('Ajoutée à Mes séances'); };

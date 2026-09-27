@@ -70,6 +70,9 @@ const EN = {
   'Tes séances : lancer, modifier, planifier': 'Your sessions: start, edit, plan', 'L’app prépare une séance pour toi, au format que tu veux': 'The app builds a session for you, in the format you want',
   'Les séances publiées par la communauté': 'Sessions published by the community', 'Une séance, un exercice, une capacité…': 'A session, an exercise, an ability…',
   'Que cherches-tu ?': 'What are you looking for?', 'Rechercher un paramètre…': 'Search a setting…', 'Rechercher dans l’app': 'Search the app', 'Fonctions': 'Features', 'Exercice': 'Exercise',
+  'Pour qui ?': 'For whom?', 'Pour moi seulement': 'Just for me', 'Pour tout le monde': 'For everyone', 'Seul ton compte voit ce changement.': 'Only your account sees this change.',
+  'Tous les comptes le voient, dès leur prochaine ouverture de l’app.': 'Every account sees it the next time they open the app.', '✏️ Modifier': '✏️ Edit', '🙈 Masquer': '🙈 Hide', '↺ Retirer ma modification': '↺ Remove my change',
+  '↺ Annuler': '↺ Undo', 'Rien n’a encore été changé.': 'Nothing has been changed yet.', '＋ Ajouter une intention': '＋ Add a focus', 'Enregistrer pour tout le monde': 'Save for everyone',
   // Partage et séance à deux
   'Séance à deux': 'Partner session', 'Rejoindre la séance': 'Join the session', 'Rejoindre': 'Join', 'Copier le lien': 'Copy link', 'Envoyer…': 'Send…', 'Arrêter le mode à deux': 'Stop partner mode',
   'Lien et QR code': 'Link and QR code', 'Mon profil public': 'My public profile', 'Bibliothèque commune': 'Shared library', 'À deux': 'Partner', 'En attente': 'Waiting',
