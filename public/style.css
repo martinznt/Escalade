@@ -463,3 +463,4 @@ html[data-vibe=neon][data-mode=dark] .btn.pri{box-shadow:0 0 18px color-mix(in s
 .gsecs{display:grid;gap:6px}.gsec{margin:0}.gsec>summary{font-weight:700}.gsecb{display:grid;gap:8px;padding-top:6px}
 .chip.add{border-style:dashed;color:var(--accent)}
 .item.prop{align-items:flex-start;gap:10px}
+.garea{display:grid;gap:6px;padding:10px}.garea input[type=text],.garea input:not([type]){width:100%}

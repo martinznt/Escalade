@@ -4,7 +4,7 @@ import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, ho
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
 import { uid, normalizeEx, normalizeSession } from './shared.js';
-import { CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, metricTierText, metricsForCap } from './model.js';
+import { CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
 import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addLevel, moveLevel, removeLevel, renameLevel, setMapping, sortedLevels, gradeSnapshot, maximaSummary, snapshotText, REFERENCE, LEVEL_WORDS } from './grading.js';
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -434,22 +434,42 @@ function goalWhy(g) {
 /* ═════════ Matériel et environnements ═════════ */
 function vEquipment() {
   const c = ctx(), un = new Set(item('config', 'equipment')?.unavailable || []), main = item('config', 'main') || {};
-  return h`<div class="row wrapf"><button class="btn pri" data-act="envNew">＋ Environnement</button></div>
-    ${c.envs.length ? c.envs.map((e) => h`<div class="card"><div class="row between"><div><b>${e.name}</b> ${tag(ENV_TYPES[e.type] || e.type)} ${(main.envId ? main.envId === e.id : e.isDefault) ? tag('par défaut', 'acc') : ''}</div><button class="btn sm" data-act="envEdit" data-id="${e.id}">✎</button></div><p class="small muted">${e.equipment.map((k) => EQUIPMENT[k] || k).join(', ') || 'Aucun matériel'}</p>${(main.envId ? main.envId !== e.id : !e.isDefault) ? h`<button class="btn sm" data-act="envDefault" data-id="${e.id}">Utiliser par défaut</button>` : ''}</div>`) : empty('Aucun environnement. Décris où tu t’entraînes (maison, salle, extérieur, salle d’escalade, piscine, piste…) et ton matériel : le générateur ne proposera que ce qui est possible.')}
+  return h`<div class="row wrapf"><button class="btn pri" data-act="envNewGym">🧗 ＋ Ma salle d’escalade</button><button class="btn" data-act="envNew">＋ Autre lieu</button></div>
+    ${c.envs.length ? c.envs.map((e) => h`<div class="card"><div class="row between"><div><b>${e.name}</b> ${tag(ENV_TYPES[e.type] || e.type)}${e.city ? h` <span class="tiny muted">📍 ${e.city}</span>` : ''}${e.gradeSys && c.systems[e.gradeSys] ? h` <span class="tiny muted">· ${c.systems[e.gradeSys].name}</span>` : ''}${e.areas?.length ? h`<div class="tiny muted">${e.areas.map((a) => (GYM_AREAS[a.id]?.[0] || '') + ' ' + (GYM_AREAS[a.id]?.[1] || a.id)).join(' · ')}</div>` : ''} ${(main.envId ? main.envId === e.id : e.isDefault) ? tag('par défaut', 'acc') : ''}</div><button class="btn sm" data-act="envEdit" data-id="${e.id}">✎</button></div><p class="small muted">${e.equipment.map((k) => EQUIPMENT[k] || k).join(', ') || 'Aucun matériel'}</p>${(main.envId ? main.envId !== e.id : !e.isDefault) ? h`<button class="btn sm" data-act="envDefault" data-id="${e.id}">Utiliser par défaut</button>` : ''}</div>`) : empty('Aucun environnement. Décris où tu t’entraînes (maison, salle, extérieur, salle d’escalade, piscine, piste…) et ton matériel : le générateur ne proposera que ce qui est possible.')}
     <div class="card"><h3>Indisponible aujourd’hui</h3><p class="tiny muted">Une barre prise, pas de poutre ? Décoche-le : les séances générées s’adaptent et expliquent les remplacements.</p>
       <div class="chips">${[...new Set(c.envs.flatMap((e) => e.equipment))].map((k) => chip(!un.has(k), EQUIPMENT[k] || k, `data-act="eqToggle" data-id="${k}"`))}</div>${un.size ? h`<button class="btn sm" data-act="eqReset">Tout est disponible</button>` : ''}</div>`;
 }
 function envForm(e) {
   const t = e?.type || S.envType || 'maison', eq = new Set(e?.equipment || ENV_TEMPLATES[t] || []);
-  return h`<h2 style="margin:0">${e ? 'Modifier' : 'Nouvel'} environnement</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
-    <div class="grid2"><label>Nom<input name="name" required maxlength="60" value="${e?.name || ENV_TYPES[t]}"></label><label>Type<select name="type" data-change="envType">${Object.entries(ENV_TYPES).map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label></div>
-    <label>Matériel disponible</label><div class="chips">${Object.entries(EQUIPMENT).map(([k, l]) => h`<label class="chip ${eq.has(k) ? 'on' : ''}"><input type="checkbox" class="hidden" name="eq" value="${k}" ${eq.has(k) ? 'checked' : ''} data-change="chipToggle">${l}</label>`)}</div>
+  const eqChips = (name, keys, sel) => h`<div class="chips">${keys.map((k) => h`<label class="chip ${sel.has(k) ? 'on' : ''}"><input type="checkbox" class="hidden" name="${name}" value="${k}" ${sel.has(k) ? 'checked' : ''} data-change="chipToggle">${EQUIPMENT[k] || k}</label>`)}</div>`;
+  const head = h`<div class="grid2"><label>Nom<input name="name" required maxlength="60" value="${e?.name || ENV_TYPES[t]}" placeholder="${t === 'escalade' ? 'Ex. Arkose Montreuil' : ''}"></label><label>Type<select name="type" data-change="envType">${Object.entries(ENV_TYPES).map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label></div>`;
+  let body;
+  if (t === 'escalade') {
+    // Salle d'escalade précise : sa cotation, ses espaces et le matériel de chaque espace.
+    const c = ctx(), areas = new Map((e?.areas || []).map((a) => [a.id, a])), on = (id) => (e?.areas?.length ? areas.has(id) : ['bloc', 'entrainement'].includes(id));
+    const systems = Object.values(c.systems).filter((x) => !x.archived);
+    body = h`<label>Ville <span class="tiny muted">(facultatif)</span><input name="city" maxlength="60" value="${e?.city || ''}"></label>
+      <label>Cotation de la salle</label><div class="row wrapf"><select name="gradeSys" class="grow"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select><button class="btn sm" type="button" data-act="sysNew">＋ Créer (U1 → U8+, couleurs…)</button></div>
+      <label>Les espaces de la salle et leur matériel</label>
+      ${Object.entries(GYM_AREAS).map(([id, [ic, label, sugg]]) => { const a = areas.get(id), sel = new Set(a?.items || (e ? [] : sugg.slice(0, 2))); const keys = [...new Set([...sugg, ...sel])]; return h`<div class="card flat garea"><label class="chk"><input type="checkbox" name="areaOn" value="${id}" ${on(id) ? 'checked' : ''}> <b>${ic} ${label}</b></label>${eqChips('ar_' + id, keys, sel)}<input name="arn_${id}" maxlength="120" value="${a?.note || ''}" placeholder="Précision (facultatif) : ex. poutre Beastmaker 2000"></div>`; })}`;
+  } else body = h`<label>Matériel disponible</label>${eqChips('eq', Object.keys(EQUIPMENT), eq)}`;
+  return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle' : 'Nouvel environnement'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
+    ${head}${body}
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${e ? h`<button class="btn danger" type="button" data-act="envDel" data-id="${e.id}">Supprimer</button>` : ''}</div></form>`;
 }
 ACT.envNew = () => { S.envType = 'maison'; openSheet(envForm(null), { wide: true }); };
+ACT.envNewGym = () => { S.envType = 'escalade'; openSheet(envForm(null), { wide: true }); };
 ACT.envEdit = (el) => { const e = item('env', el.dataset.id); if (e) openSheet(envForm(e), { wide: true }); };
 CHG.envType = (el) => { if (!el.form.id.value) { S.envType = el.value; openSheet(envForm(null), { wide: true }); } };
-SUBMIT.envSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd); const first = !ctx().envs.length; putItem('env', d.id || 'env-' + uid().slice(0, 12), { name: d.name, type: d.type, equipment: fd.getAll('eq'), isDefault: d.id ? item('env', d.id)?.isDefault : first }); closeSheet(); buzzOk(); toast('Environnement enregistré'); render(); };
+SUBMIT.envSave = (f) => {
+  const fd = new FormData(f), d = Object.fromEntries(fd), first = !ctx().envs.length;
+  const base = { name: d.name, type: d.type, isDefault: d.id ? item('env', d.id)?.isDefault : first };
+  if (d.type === 'escalade') {
+    const areas = fd.getAll('areaOn').filter((id) => GYM_AREAS[id]).map((id) => ({ id, items: fd.getAll('ar_' + id), note: String(fd.get('arn_' + id) || '') }));
+    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', areas, equipment: [...new Set(areas.flatMap((a) => a.items))] });
+  } else putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, equipment: fd.getAll('eq') });
+  closeSheet(); buzzOk(); toast(d.type === 'escalade' ? 'Salle enregistrée' : 'Environnement enregistré'); render();
+};
 ACT.envDel = async (el) => { const e = item('env', el.dataset.id); if (e && (await ask(`Supprimer « ${e.name} » ?`, { danger: true, ok: 'Supprimer' }))) { delItem('env', e.id); closeSheet(); render(); } };
 ACT.envDefault = (el) => { putItem('config', 'main', { ...(item('config', 'main') || {}), envId: el.dataset.id }); toast('Environnement par défaut modifié'); render(); };
 ACT.eqToggle = (el) => { const conf = item('config', 'equipment') || {}, un = new Set(conf.unavailable || []); un.has(el.dataset.id) ? un.delete(el.dataset.id) : un.add(el.dataset.id); putItem('config', 'equipment', { ...conf, unavailable: [...un] }); render(); };

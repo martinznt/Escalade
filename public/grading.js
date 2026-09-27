@@ -25,6 +25,7 @@ export const REFERENCE = { bloc: 'font', voie: 'french' };
 /** Modèles proposés pour créer un système personnel (ensuite librement modifiable). */
 export const TEMPLATES = {
   u8: { name: 'Salle U1 → U8', activity: 'bloc', kind: 'ordered', levels: ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8'] },
+  u8plus: { name: 'Salle U1 → U8+ (avec des +)', activity: 'bloc', kind: 'ordered', levels: ['U1', 'U1+', 'U2', 'U2+', 'U3', 'U3+', 'U4', 'U4+', 'U5', 'U5+', 'U6', 'U6+', 'U7', 'U7+', 'U8', 'U8+'] },
   couleurs: {
     name: 'Couleurs de ma salle', activity: 'bloc', kind: 'colors',
     levels: ['Jaune', 'Vert', 'Bleu', 'Rose', 'Rouge', 'Noir', 'Blanc'], colors: ['#e9c46a', '#5aa469', '#4a78c2', '#e07aa6', '#c8423b', '#2b2b2b', '#e8e6e1'],

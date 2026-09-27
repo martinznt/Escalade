@@ -76,6 +76,13 @@ export const EQUIPMENT = {
   band: 'Élastique', rings: 'Anneaux', barbell: 'Barre et disques', kettlebell: 'Kettlebell', bench: 'Banc', pole: 'Espalier / poteau',
   box: 'Box / marche', rope: 'Corde à sauter', mat: 'Tapis de sol', machine: 'Machines de musculation', pool: 'Bassin de natation',
   pullbuoy: 'Pull-buoy / planche', track: 'Piste / terrain', hill: 'Côte', treadmill: 'Tapis de course',
+  campus: 'Campus board', boardwall: 'Mur à prises connectées (Moon, Kilter, Tension)', spraywall: 'Pan d’entraînement', autobelay: 'Enrouleurs (auto-assureurs)', leadwall: 'Mur de voies en tête', topwall: 'Voies en moulinette',
+};
+/** Espaces d'une salle d'escalade, avec le matériel qu'on y trouve souvent (on coche ce qui existe vraiment). */
+export const GYM_AREAS = {
+  bloc: ['🪨', 'Espace bloc', ['wall', 'mat']], voie: ['🧗', 'Mur de voies', ['leadwall', 'topwall', 'autobelay']],
+  entrainement: ['🏋️', 'Espace entraînement', ['hangboard', 'campus', 'boardwall', 'spraywall', 'bar', 'rings', 'band']], muscu: ['💪', 'Musculation', ['weights', 'kettlebell', 'barbell', 'bench', 'dips', 'box']],
+  etirement: ['🧘', 'Étirements', ['mat', 'band', 'rope']],
 };
 export const ENV_TYPES = { maison: 'Maison', salle: 'Salle de sport', exterieur: 'Extérieur', escalade: 'Salle d’escalade', piscine: 'Piscine', piste: 'Piste / terrain', autre: 'Autre' };
 // Modèles proposés à la création d'un environnement (l'utilisateur coche ensuite son matériel réel).

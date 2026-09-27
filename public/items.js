@@ -69,6 +69,7 @@ export const SCHEMAS = {
   ascent: {
     kind: ['e', ['bloc', 'voie'], 'bloc'], name: ['s', 80], grade: ['obj', GRADE_SNAPSHOT], gradeText: ['s', 20],
     result: ['e', ['flash', 'send', 'work', 'top', 'attempt', 'fail'], 'attempt'], attempts: ['n', 1, 999, 1], styles: ['ids', 12], styleText: ['s', 60],
+    nuance: ['e', ['', 'facile', 'moyen', 'dur'], ''],
     date: ['n', 0, 9e15, 0], context: ['obj', CONTEXT], note: ['s', 300],
   },
   // Projet d'escalade : un bloc / une voie qu'on travaille sur plusieurs séances, jusqu'à la réussite.
@@ -92,7 +93,9 @@ export const SCHEMAS = {
     maps: ['list', { levelId: ['id'], ref: ['id'], refLevel: ['s', 40] }, 150], archived: ['b'],
   },
   style: { label: ['s', 40], activity: ['s', 40], archived: ['b'] },
-  env: { name: ['s', 60], type: ['e', ['maison', 'salle', 'exterieur', 'escalade', 'piscine', 'piste', 'autre'], 'autre'], equipment: ['ids', 40], isDefault: ['b'], archived: ['b'] },
+  env: { name: ['s', 60], type: ['e', ['maison', 'salle', 'exterieur', 'escalade', 'piscine', 'piste', 'autre'], 'autre'], equipment: ['ids', 40], isDefault: ['b'], archived: ['b'],
+    // Salle précise : ville, cotation de la salle, espaces et leur matériel.
+    city: ['s', 60], gradeSys: ['id'], areas: ['list', { id: ['e', ['bloc', 'voie', 'entrainement', 'muscu', 'etirement'], 'bloc'], items: ['ids', 30], note: ['s', 120] }, 8] },
   // Préférence explicite ou confirmée : aime / neutre / évite (jamais une suppression automatique).
   pref: { key: ['s', 80], label: ['s', 80], value: ['e', ['aime', 'neutre', 'evite'], 'neutre'], source: ['e', ['explicit', 'habit', 'questionnaire'], 'explicit'], reason: ['s', 200] },
   // Niveau déclaré par l'utilisateur pour une capacité (-1 = « je ne sais pas »).

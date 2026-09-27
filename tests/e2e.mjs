@@ -145,6 +145,21 @@ await step('carnet : ajout rapide, pyramide, projet suivi jusqu’à la réussit
   await A.waitForSelector('text=Projets réussis (1)'); assert.match(await a.text('.pyr'), /6B\s*1/, 'la réussite du projet entre dans la pyramide');
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'project' && i.d.status === 'done' && i.d.tries.length), 12000, 'projet synchronisé');
 });
+await step('ma salle : cotation U1 → U8+, espaces et matériel ; bloc noté « U7 dur, dévers » dans cette salle', async () => {
+  await a.tab('profile'); await a.click('[data-act=profSub][data-id=equipment]'); await a.click('[data-act=envNewGym]'); await A.waitForSelector('#sheet input[name=city]');
+  await a.click('#sheet [data-act=sysNew]'); await a.click('[data-act=sysFromTpl][data-id=u8plus]'); await A.waitForSelector('#sheet form[data-submit=lvlSave]'); await a.click('#sheet [data-act=closeSheet].btn');
+  await a.click('[data-act=envNewGym]'); await A.fill('#sheet input[name=name]', 'Arkose Test'); await A.fill('#sheet input[name=city]', 'Montreuil');
+  const sysId = await A.evaluate(() => [...document.querySelectorAll('#sheet select[name=gradeSys] option')].find((o) => /U8\+/.test(o.textContent))?.value);
+  await A.selectOption('#sheet select[name=gradeSys]', sysId);
+  await A.click('#sheet .garea:has-text("Espace entraînement") label.chip:has-text("Campus")');
+  await a.click('#sheet button[type=submit]'); await A.waitForSelector('text=Arkose Test'); assert.match(await a.text('main'), /Montreuil/);
+  await a.tab('home'); await a.click('[data-act=goCarnet]'); await a.click('[data-act=ascQuick]'); await A.waitForSelector('.aq [data-act=aqEnv]');
+  await A.locator('.aq [data-act=aqEnv]', { hasText: 'Arkose Test' }).click();
+  await A.locator('.aq [data-act=aqGrade]', { hasText: /^U7$/ }).click(); await a.click('.aq [data-act=aqNuance][data-v=dur]');
+  await A.locator('.aq [data-act=aqStyle]', { hasText: 'Dévers' }).click(); await a.click('.aq [data-act=aqSave]');
+  await A.waitForSelector('text=réussi · dur'); assert.match(await a.text('main'), /U7[\s\S]*dur · Arkose Test/);
+  await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'ascent' && i.d.nuance === 'dur' && i.d.grade?.label === 'U7' && i.d.context?.place === 'Arkose Test' && i.d.styles.length), 12000, 'bloc synchronisé');
+});
 await step('programme : création en 4 questions, calendrier rempli, séance du jour avec la forme', async () => {
   await a.tab('home'); await a.click('.topicons [data-act=topCal]'); await a.click('[data-act=progNew]'); await A.waitForSelector('.pwiz');
   await a.click('.pwiz [data-act=pwSet][data-k=goal][data-v=force]'); await a.click('.pwiz [data-act=pwSet][data-k=weeks][data-v="4"]');

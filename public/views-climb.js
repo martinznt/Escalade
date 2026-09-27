@@ -1,6 +1,6 @@
 // views-climb.js — le carnet d'escalade : ajout rapide d'un bloc / d'une voie, pyramide de cotations, projets
 // (essais, photo avec les prises dessinées au doigt, réussite fêtée), test de doigts mensuel, journal.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, fmtDay, relDate, buzzOk, mmss } from './ui.js';
+import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, fmtDay, relDate, buzzOk, mmss } from './ui.js';
 import { S, ACT, SUBMIT, CHG, ctx, render, putItem, delItem, item, itemsOf } from './state.js';
 import { uid } from './shared.js';
 import { sortedLevels, gradeSnapshot, REFERENCE } from './grading.js';
@@ -50,7 +50,7 @@ function trend(ft) {
   const d = Math.round((list.at(-1).value - list.at(-2).value) * 10) / 10, u = ft.last.metricId === 'suspension_lestee' ? 'kg' : 's';
   return d > 0 ? h` <span class="ok-t">+${d} ${u} depuis le test précédent</span>` : d < 0 ? h` <span class="muted">(${d} ${u})</span>` : h` <span class="muted">(stable)</span>`;
 }
-const ascRow = (a) => h`<div class="item"><span class="gpill" ${a.grade?.color ? raw(`style="--lc:${esc(a.grade.color)}"`) : ''}>${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${RESULT_WORD[a.result] || a.result}${a.attempts > 1 ? ` · ${a.attempts} essais` : ''} · ${fmtDay(a.date)}</div></div><button class="btn ghost sm ic" data-act="ascDel" data-id="${a.id}" aria-label="Supprimer">✕</button></div>`;
+const ascRow = (a) => h`<div class="item"><span class="gpill" ${a.grade?.color ? raw(`style="--lc:${esc(a.grade.color)}"`) : ''}>${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${RESULT_WORD[a.result] || a.result}${a.nuance ? ` · ${a.nuance}` : ''}${a.attempts > 1 ? ` · ${a.attempts} essais` : ''}${a.context?.place ? ` · ${a.context.place}` : ''} · ${fmtDay(a.date)}</div></div><button class="btn ghost sm ic" data-act="ascDel" data-id="${a.id}" aria-label="Supprimer">✕</button></div>`;
 function projRow(p) {
   const s = projectStats(p), ph = p.hasPhoto ? item('photo', p.id) : null;
   return h`<div class="proj"><button class="proj-thumb" data-act="projOpen" data-id="${p.id}" aria-label="Ouvrir le projet">${ph?.data ? raw(`<img src="${esc(ph.data)}" alt="">`) : p.kind === 'voie' ? '🧗' : '🪨'}</button>
@@ -62,11 +62,17 @@ ACT.carnetKind = (el) => { C().kind = el.dataset.id; render(); };
 ACT.carnetPeriod = (el) => { C().period = el.dataset.id; render(); };
 
 /* ───────── Ajout rapide ───────── */
+const gyms = () => ctx().envs.filter((e) => ['escalade', 'exterieur'].includes(e.type) && !e.archived);
+const NUANCE = [['facile', '😌 facile'], ['moyen', '🙂 moyen'], ['dur', '😤 dur']];
 function aqBody() {
-  const q = S.aq, c = ctx(), sys = c.systems[q.systemId] || sysFor(q.kind);
+  const q = S.aq, c = ctx(), sys = c.systems[q.systemId] || sysFor(q.kind), gl = gyms(), lv = sortedLevels(sys).find((l) => l.id === q.levelId);
+  const styles = Object.values(c.styles).filter((x) => !x.archived && (!x.activity || /climb|escalade/.test(x.activity)));
   const results = [['flash', '⚡ Flash'], ['send', '✓ Réussi'], ['work', '💪 Après travail'], ['attempt', '… Pas encore']];
   return h`<div class="aq"><h2>Bloc ou voie</h2>${seg('aqKind', q.kind, [['bloc', '🪨 Bloc'], ['voie', '🧗 Voie']])}
+    ${gl.length ? h`<label>Où ?</label><div class="chips">${gl.map((e) => chip(q.env === e.id, `${e.type === 'exterieur' ? '🌄' : '🏢'} ${e.name}`, `data-act="aqEnv" data-v="${e.id}"`))}${chip(!q.env, 'Autre', 'data-act="aqEnv" data-v=""')}</div>` : h`<p class="tiny muted">Astuce : décris ta salle (Profil › Matériel › Ma salle d’escalade) pour avoir directement sa cotation.</p>`}
     <label>Niveau <span class="tiny muted">(${sys?.name || ''})</span></label>${gradeChips(sys, q.levelId, 'aqGrade')}
+    ${lv ? h`<label>Pour un ${lv.label}, c’était…</label><div class="chips">${NUANCE.map(([k, l]) => chip(q.nuance === k, l, `data-act="aqNuance" data-v="${k}"`))}</div>` : ''}
+    <label>Style <span class="tiny muted">(plusieurs choix)</span></label><div class="chips">${styles.map((st) => chip((q.styles || []).includes(st.id), st.label, `data-act="aqStyle" data-v="${st.id}"`))}</div>
     <label>Résultat</label><div class="chips">${results.map(([k, l]) => h`<button type="button" class="chip ${q.result === k ? 'on' : ''}" data-act="aqResult" data-v="${k}">${l}</button>`)}</div>
     ${q.result !== 'flash' ? h`<label>Essais</label><div class="stepper sm"><button type="button" data-act="aqAtt" data-d="-1" aria-label="Moins">−</button><b>${q.attempts}</b><button type="button" data-act="aqAtt" data-d="1" aria-label="Plus">+</button></div>` : ''}
     <details class="how mini"><summary>Plus de détails</summary><label>Nom<input id="aq-name" maxlength="80" value="${q.name || ''}" placeholder="Le jaune du dévers…"></label>
@@ -74,7 +80,15 @@ function aqBody() {
     <button class="btn pri big" data-act="aqSave" ${q.levelId ? '' : 'disabled'}>Enregistrer</button></div>`;
 }
 const aqDraw = () => { const n = $('#aq-name'); if (n) S.aq.name = n.value; openSheet(aqBody()); };
-ACT.ascQuick = () => { const kind = C().kind; S.aq = { kind, systemId: sysFor(kind)?.id, levelId: '', result: 'send', attempts: 1, name: '' }; openSheet(aqBody()); };
+ACT.ascQuick = () => {
+  const kind = C().kind, c = ctx(), lastEnv = c.ascents.find((a) => a.context?.env && c.envs.some((e) => e.id === a.context.env))?.context.env || gyms().find((e) => e.isDefault)?.id || gyms()[0]?.id || '';
+  const gym = c.envs.find((e) => e.id === lastEnv);
+  S.aq = { kind, env: lastEnv, systemId: (gym?.gradeSys && c.systems[gym.gradeSys] ? gym.gradeSys : sysFor(kind)?.id), levelId: '', result: 'send', attempts: 1, name: '', nuance: '', styles: [] };
+  openSheet(aqBody());
+};
+ACT.aqEnv = (el) => { const c = ctx(), g = c.envs.find((e) => e.id === el.dataset.v); S.aq.env = el.dataset.v; if (g?.gradeSys && c.systems[g.gradeSys]) { S.aq.systemId = g.gradeSys; S.aq.levelId = ''; } aqDraw(); };
+ACT.aqNuance = (el) => { S.aq.nuance = S.aq.nuance === el.dataset.v ? '' : el.dataset.v; aqDraw(); };
+ACT.aqStyle = (el) => { const l = (S.aq.styles ||= []), i = l.indexOf(el.dataset.v); if (i >= 0) l.splice(i, 1); else l.push(el.dataset.v); aqDraw(); };
 ACT.aqKind = (el) => { S.aq.kind = el.dataset.id; S.aq.systemId = sysFor(el.dataset.id)?.id; S.aq.levelId = ''; aqDraw(); };
 ACT.aqGrade = (el) => { S.aq.levelId = el.dataset.v; aqDraw(); };
 ACT.aqResult = (el) => { S.aq.result = el.dataset.v; if (el.dataset.v === 'flash') S.aq.attempts = 1; aqDraw(); };
@@ -83,7 +97,8 @@ CHG.aqSys = (el) => { S.aq.systemId = el.value; S.aq.levelId = ''; aqDraw(); };
 ACT.aqSave = () => {
   const q = S.aq, c = ctx(), n = $('#aq-name'); if (n) q.name = n.value;
   const grade = gradeSnapshot(c.systems[q.systemId], q.levelId); if (!grade) return toast('Choisis un niveau.');
-  putItem('ascent', 'asc-' + uid().slice(0, 14), { kind: q.kind, name: q.name.trim(), grade, result: q.result, attempts: q.result === 'flash' ? 1 : q.attempts, styles: [], date: Date.now(), note: '' });
+  const gym = c.envs.find((e) => e.id === q.env);
+  putItem('ascent', 'asc-' + uid().slice(0, 14), { kind: q.kind, name: q.name.trim(), grade, result: q.result, attempts: q.result === 'flash' ? 1 : q.attempts, styles: q.styles || [], nuance: q.nuance || '', date: Date.now(), note: '', context: gym ? { env: gym.id, place: gym.name, kind: gym.type === 'exterieur' ? 'exterieur' : 'salle' } : null });
   C().kind = q.kind; closeSheet(); buzzOk(); render();
   toast(SENT.has(q.result) ? `${grade.label} ajouté à ton carnet` : 'Essai noté. Tu l’auras la prochaine fois.');
 };
