@@ -162,9 +162,10 @@ await step('création manuelle d’une séance : exercices du catalogue, modific
 });
 await step('mode séance : séries, chrono, pause (non comptée), repos, fin', async () => {
   await a.click('[data-act=play]'); await A.waitForSelector('#player.open');
-  let guard = 0, sawRest = false, sawTimer = false, paused = false;
+  let guard = 0, sawRest = false, sawTimer = false, paused = false, cuesLater = 0;
   while (guard++ < 60) {
     if (await a.count('#player [data-act=pSave]')) break;
+    if (/Série [2-9] \//.test(await a.text('#player')) && await a.count('#player .cues li')) cuesLater++; // consignes aussi aux séries suivantes
     if (await a.count('#player [data-act=pRestSkip]')) { sawRest = true; await a.click('#player [data-act=pRestSkip]'); }
     else if (await a.count('#player [data-act=pWorkDone]')) {
       sawTimer = true;
@@ -175,6 +176,7 @@ await step('mode séance : séries, chrono, pause (non comptée), repos, fin', a
     await A.waitForTimeout(40);
   }
   assert.ok(sawRest && sawTimer && paused, 'repos, chrono et pause vus');
+  assert.ok(cuesLater > 0, 'consignes affichées à la 2e série');
   assert.match(await a.text('#player'), /de pause \(non comptée\)/);
 });
 await step('questionnaire adaptatif puis enregistrement', async () => {
@@ -460,6 +462,19 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   assert.equal(await g.count('#updbar'), 0, 'bandeau disparu une fois les nouveautés vues');
   await g.click('.news [data-act=closeSheet]'); await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
   assert.equal(await g.count('#updbar'), 0, 'pas de bandeau tant qu’il n’y a rien de nouveau');
+});
+await step('après une mise à jour : visite des nouveautés, seulement ce qui a changé', async () => {
+  await G.evaluate(() => localStorage.setItem('sea:news-toured', JSON.stringify('8.3.0'))); await G.reload(); await G.waitForSelector('nav.tabs');
+  await G.waitForSelector('#updbar [data-act=newsTour]', { timeout: 10000 }); await g.click('#updbar [data-act=newsTour]');
+  await G.waitForSelector('#tour .tour-bubble'); assert.match(await g.text('#tour .tour-bubble'), /Consignes à chaque série/);
+  assert.match(await g.text('#tour .tour-step'), /^1 \/ 3$/, 'seulement les nouveautés de la version');
+  await g.click('#tour [data-act=tourNext]'); await g.click('#tour [data-act=tourNext]');
+  await G.waitForFunction(() => location.hash.startsWith('#/settings/help'), null, { timeout: 5000 });
+  await G.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
+  await g.click('#tour [data-act=tourEnd]'); await G.waitForSelector('#tour', { state: 'detached' });
+  assert.equal(await G.evaluate(() => JSON.parse(localStorage.getItem('sea:news-toured'))), await G.evaluate(() => window.__seaVersion));
+  await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
+  assert.equal(await g.count('#updbar'), 0, 'plus proposée une fois faite');
 });
 /* ═════════ Déménagement vers la nouvelle adresse ═════════ */
 console.log('Nouvelle adresse');

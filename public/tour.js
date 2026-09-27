@@ -16,10 +16,11 @@ const STEPS = [
   ['settings', 'main', '.palette', '🎨 À ton image', 'Change les couleurs, le thème ou la taille du texte. Ça suit ton compte sur tous tes appareils.'],
   ['settings', 'help', '[data-act=helpTour]', '🧭 C’est parti !', 'Tu pourras relancer cette visite quand tu veux, ici. Bon entraînement 💪'],
 ];
-const T = { i: -1, onEnd: null, raf: 0 };
+const T = { i: -1, onEnd: null, raf: 0, steps: STEPS };
 
-export function startTour({ onEnd } = {}) {
-  T.onEnd = onEnd || null;
+/** steps : liste [onglet, sous-page, sélecteur (ou '' pour une bulle centrée), titre, texte] ; la visite complète par défaut. */
+export function startTour({ onEnd, steps } = {}) {
+  T.onEnd = onEnd || null; T.steps = steps?.length ? steps : STEPS;
   let root = document.getElementById('tour');
   if (!root) { root = document.createElement('div'); root.id = 'tour'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); document.body.appendChild(root); }
   document.body.classList.add('touring');
@@ -30,11 +31,11 @@ export const tourActive = () => T.i >= 0;
 function onKey(e) { if (T.i < 0) return; if (e.key === 'ArrowRight') show(T.i + 1); else if (e.key === 'ArrowLeft') show(T.i - 1); else if (e.key === 'Escape') end(); }
 async function show(i) {
   if (i < 0) return;
-  if (i >= STEPS.length) return end();
+  if (i >= T.steps.length) return end();
   T.i = i;
-  const [tab, sub, sel] = STEPS[i];
-  if (S.tab !== tab || S.sub[tab] !== sub) go(tab, sub);
-  const el = await waitFor(sel);
+  const [tab, sub, sel] = T.steps[i];
+  if (tab && (S.tab !== tab || S.sub[tab] !== sub)) go(tab, sub);
+  const el = sel ? await waitFor(sel) : (await new Promise((r) => setTimeout(r, 150)), null);
   if (T.i !== i) return; // l'utilisateur a déjà changé d'étape
   if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' });
   draw(el);
@@ -43,11 +44,11 @@ function waitFor(sel, ms = 1500) {
   return new Promise((res) => { const t0 = Date.now(); const tick = () => { const el = document.querySelector(sel); if (el && el.getBoundingClientRect().height > 0) return res(el); if (Date.now() - t0 > ms) return res(null); requestAnimationFrame(tick); }; tick(); });
 }
 function draw(el) {
-  const [, , , title, text] = STEPS[T.i], root = document.getElementById('tour'); if (!root) return;
-  const last = T.i === STEPS.length - 1;
+  const [, , , title, text] = T.steps[T.i], root = document.getElementById('tour'); if (!root) return;
+  const last = T.i === T.steps.length - 1;
   root.innerHTML = h`<div class="tour-spot"></div><div class="tour-bubble tour"><i class="tour-arrow"></i><button class="tour-x" data-act="tourEnd" aria-label="Quitter la visite">✕</button>
-    <div class="tour-step">${T.i + 1} / ${STEPS.length}</div><h3>${title}</h3><p>${text}</p>
-    <div class="dots">${STEPS.map((_, k) => h`<i class="${k === T.i ? 'on' : ''}"></i>`)}</div>
+    <div class="tour-step">${T.i + 1} / ${T.steps.length}</div><h3>${title}</h3><p>${text}</p>
+    <div class="dots">${T.steps.map((_, k) => h`<i class="${k === T.i ? 'on' : ''}"></i>`)}</div>
     <div class="row">${T.i > 0 ? h`<button class="btn sm" data-act="tourPrev">‹ Retour</button>` : h`<button class="btn sm ghost" data-act="tourEnd">Passer</button>`}<span class="grow"></span>
       ${last ? h`<button class="btn pri" data-act="tourEnd">C’est compris !</button>` : h`<button class="btn pri" data-act="tourNext">Suivant ›</button>`}</div></div>`.s;
   T.el = el; place();
