@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "for f in worker.js schema.js server/*.js public/*.js tests/*.mjs; do node --check \"$f\" || exit 1; done && node -e \"for (const f of ['public/manifest.json','wrangler.json','package.json']) JSON.parse(require('fs').readFileSync(f,'utf8'))\"",
+    "check": "for f in worker.js schema.js server/*.js pages/*.js public/*.js tests/*.mjs; do node --check \"$f\" || exit 1; done && node -e \"for (const f of ['public/manifest.json','wrangler.json','package.json']) JSON.parse(require('fs').readFileSync(f,'utf8'))\"",
     "test": "for f in tests/*.test.mjs; do echo \"── $f\"; node --no-warnings \"$f\" || exit 1; done",
     "test:e2e": "node --no-warnings tests/e2e.mjs"
   },
