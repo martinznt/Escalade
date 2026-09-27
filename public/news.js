@@ -17,11 +17,11 @@ export const NEWS = [
     ['home', 'dash', '[data-act=goCarnet]', '🧗 Ton carnet', 'Note un bloc en 3 touchers, regarde ta pyramide, suis tes projets avec photo.'],
     ['progress', 'summary', '.streak', '🔥 Ta série', 'Les semaines d’affilée où tu tiens ton rythme. La semaine en cours ne casse jamais ta série.'],
     ['home', 'cal', '[data-act=progNew], .prog', '📆 Programme', 'Un objectif sur plusieurs semaines : 4 questions et ton calendrier se remplit.'],
-    ['settings', 'main', '[data-change=remOn], .card h3', '🔔 Rappels', 'Choisis tes jours et ton heure : le téléphone te rappelle ta séance.'],
+    ['settings', 'notifs', '[data-change=remOn], .card h3', '🔔 Rappels', 'Choisis tes jours et ton heure : le téléphone te rappelle ta séance.'],
     ['', '', '', '🗣️ Coach vocal', 'Pendant la séance, active « Coach » : il annonce les séries, le repos et le décompte.'],
   ] },
   { v: '8.6.0', date: '2026-09-28', title: 'Ambiances, mise en page, séance sur mesure, salles, notifications', why: 'Une app à ton image (ambiances, place des éléments), des séances qui ciblent exactement ce que tu veux, ta salle et sa cotation, et toutes les nouveautés ici.', steps: [
-    ['settings', 'main', '.vibes', '🎨 Ambiances', 'Chaleureux, salle de muscu, grand air, minimal, néon… L’app change complètement d’allure.'],
+    ['settings', 'display', '.vibes', '🎨 Ambiances', 'Chaleureux, salle de muscu, grand air, minimal, néon… L’app change complètement d’allure.'],
     ['home', 'dash', '.topicons', '✏️ À ta façon', 'Les petites icônes en haut ouvrent les fonctions. Le crayon te laisse tout déplacer, agrandir ou colorer.'],
     ['library', 'generate', '.gsecs', '🎯 Séance sur mesure', 'Choisis tes objectifs, intentions, forces, faiblesses, muscles et zones à ménager. Tu peux même écrire les tiens.'],
     ['profile', 'body', '.bodyf', '🫀 Mon corps', 'Âge, poids, forme, souffle… Les séances s’adaptent (intensité, repos, pas de sauts si besoin).'],
@@ -32,12 +32,18 @@ export const NEWS = [
     ['library', 'seances', '[data-act=duoJoinAsk]', '👥 À deux', 'Pendant une séance, touche « À deux » : ton partenaire scanne le code et vos chronos avancent ensemble. Ici, tu rejoins la séance d’un ami.'],
     ['', '', '', '🔗 Partage par QR code', 'Sur une séance, « Partager » puis « Lien et QR code » : ton ami scanne et garde sa propre copie.'],
     ['home', 'dash', '.hero', '🌄 Accueil vivant', 'Le ciel suit l’heure de la journée. Dans Paramètres, tu peux ajouter un décor de saison.'],
-    ['settings', 'main', 'select[name=lang]', '🌍 English', 'L’app existe aussi en anglais (bêta). Sur ordinateur, le menu passe à gauche.'],
+    ['settings', 'display', 'select[name=lang]', '🌍 English', 'L’app existe aussi en anglais (bêta). Sur ordinateur, le menu passe à gauche.'],
   ] },
   { v: '8.8.0', date: '2026-09-29', title: 'Ton format de séance, jusqu’à 4 h', why: 'Choisis les parties de ta séance (échauffement, technique, renfo, étirements…), leur ordre et le temps de chacune, et garde tes formats.', steps: [
     ['library', 'generate', '[data-act=gDurOther]', '⏱ Durée libre', 'Des séances de 5 min à 4 h : touche « Autre durée » et écris le nombre de minutes.'],
     ['library', 'generate', '[data-act=gFmt][data-v=custom]', '🧩 Ton format', 'Compose ta séance partie par partie, règle le temps de chacune, change l’ordre, puis garde ce format pour la prochaine fois.'],
     ['', '', '', '▶ Pendant la séance', 'Le lecteur affiche la partie en cours et le temps qu’il lui reste.'],
+  ] },
+  { v: '8.9.0', date: '2026-09-29', title: 'Une app plus simple à parcourir', why: 'Chaque chose a sa place : la séance du jour en premier, un seul bouton pour créer une séance, des paramètres rangés par rubrique.', steps: [
+    ['home', 'dash', '.quick .qa.pri', '🎯 En premier', 'La séance du jour est tout en haut : un toucher et c’est parti.'],
+    ['library', 'seances', '[data-act=newChoose]', '＋ Un seul bouton', 'Pour créer une séance : sur mesure, prête, à la main, collée, ou avec un ami. Tout est ici.'],
+    ['home', 'dash', '[data-act=allOpen]', '☰ Menu', 'Toutes les fonctions, rangées par thème, sont dans ce menu.'],
+    ['settings', 'main', '.setmenu', '⚙️ Paramètres rangés', 'Une rubrique par ligne : affichage, séance, notifications, données, aide.'],
   ] },
 ];
 

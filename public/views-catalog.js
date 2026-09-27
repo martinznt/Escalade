@@ -60,7 +60,7 @@ ACT.catSave = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); i
 /* ───────── Top exercices ───────── */
 export function vBest() {
   const p = profileNeeds(), cat = (S.bestCat ||= 'tirer'), r = rankExercises({ need: p.need, level: p.level, equipment: p.equipment, acts: p.acts })[cat] || [];
-  return h`<p class="tiny muted">Les exercices les plus utiles pour toi dans chaque catégorie : d’après ce que tu veux travailler, ton niveau et ton matériel.</p>
+  return h`<button class="btn sm ghost setback" data-act="libSub" data-id="exercises">‹ Exercices</button><h2 style="margin:0">🏆 Top exercices pour toi</h2><p class="tiny muted">Les exercices les plus utiles pour toi dans chaque catégorie : d’après ce que tu veux travailler, ton niveau et ton matériel.</p>
     <div class="scrollx"><div class="chips nowrap">${EX_CATEGORIES.map(([k, l]) => chip(cat === k, l, `data-act="bestCat" data-v="${k}"`))}</div></div>
     ${r.length ? r.map((x, i) => h`<button class="card pick bestrow" data-act="libInfo" data-id="${x.lib.id}"><span class="rank">${i + 1}</span><div class="grow"><b>${x.lib.emoji} ${x.lib.name}</b>
       <div class="tiny muted">${x.hits.length ? `Pour toi : ${x.hits.join(', ')}` : Object.entries(x.lib.caps || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([c]) => CAPACITIES[c]?.label).join(', ')}${x.missing.length ? ` · matériel : ${x.missing.map((n) => EQUIPMENT[n] || n).join(', ')}` : ''}${x.tooHard ? ' · niveau plus avancé' : ''}</div></div></button>`) : h`<p class="small muted">Aucun exercice pour cette catégorie avec tes sports.</p>`}

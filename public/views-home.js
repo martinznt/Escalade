@@ -17,7 +17,7 @@ import { composePage } from './layout.js';
 import { programCard, fingerCard, activeProgram } from './views-program.js';
 import { programStatus } from './program.js';
 import { buildIcs } from './ics.js';
-import { vSetup, setupCard, installCard, reinstallCard, questionCard, maybeAskOnOpen } from './views-setup.js';
+import { vSetup, setupCard, installCard, reinstallCard, questionCard } from './views-setup.js';
 
 export const DASH_BLOCKS = {
   today: 'Que faire aujourd’hui ?', command: 'Commande', next: 'Prochaines séances', progress: 'Progression', goals: 'Objectifs', records: 'Records',
@@ -76,10 +76,11 @@ ACT.goProfile = (el) => go('profile', el.dataset.id);
 /* ═════════ Tableau de bord ═════════ */
 function vDash() {
   const loop = S.lastLoop && Date.now() - S.lastLoop.at < 15 * 60000 ? S.lastLoop : null;
-  maybeAskOnOpen();
-  const tile = (act, ic, title, sub, pri = false, id = '') => h`<button class="qa ${pri ? 'pri' : ''}" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><b>${title}</b><small>${sub}</small></button>`;
+  const tile = (act, ic, title, sub, pri = false, id = '') => (pri
+    ? h`<button class="qa pri" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><span class="qt"><b>${title}</b><small>${sub}</small></span><span class="qgo" aria-hidden="true">▶</span></button>`
+    : h`<button class="qa" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><b>${title}</b><small>${sub}</small></button>`);
   const safe = (b) => () => BLOCK_VIEWS[b]();
-  return h`${setupCard()}${questionCard()}${installCard()}
+  return h`${setupCard()}${installCard()}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
     <div class="${S.lay?.page === 'home' ? '' : 'home-grid'}">${composePage('home', {
       hero,
@@ -90,7 +91,7 @@ function vDash() {
       progress: () => tile('goProgress', '📈', 'Mes progrès', 'Historique et records', false, 'summary'),
       cal: safe('calendar'), coach: safe('command'), program: () => programCard() || '', finger: () => fingerCard() || '',
       streak: () => (S.history.length || ctx().ascents.length ? streakCard() : ''),
-      today: safe('today'), next: safe('next'), goals: safe('goals'), reco: safe('reco'), weekprog: safe('progress'), records: safe('records'),
+      question: () => questionCard(), today: safe('today'), next: safe('next'), goals: safe('goals'), reco: safe('reco'), weekprog: safe('progress'), records: safe('records'),
       regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'),
     })}</div>`;
 }

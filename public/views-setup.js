@@ -273,13 +273,8 @@ export function questionCard() {
   if (!x || !(setupDone() || mainConfig().setupLater)) return ''; // avant le questionnaire, la carte de bienvenue suffit
   return h`<section class="card qcard">${qBody(x)}</section>`;
 }
-/** Une fois par ouverture de l'app, la question s'affiche aussi en fenêtre (jamais pendant une séance ou une saisie). */
-export function maybeAskOnOpen() {
-  if (S.askedThisOpen || S.player || !S.user || document.body.classList.contains('touring')) return;
-  const x = currentQuestion(); if (!x || !(setupDone() || mainConfig().setupLater)) return;
-  S.askedThisOpen = true;
-  setTimeout(() => { if (!document.querySelector('#sheet.open, #dialog.open') && !S.player && !document.body.classList.contains('touring')) openSheet(qBody(x)); }, 1500);
-}
+/** La question reste dans sa carte de l'accueil : plus de fenêtre qui s'ouvre toute seule par-dessus (elle faisait doublon). */
+export function maybeAskOnOpen() {}
 ACT.qLater = (el) => { snooze(el.dataset.q); closeSheet(); render(); };
 ACT.qAnswer = (el) => {
   const id = el.dataset.q, v = el.dataset.v, now = Date.now(), cfg = mainConfig();

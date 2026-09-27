@@ -179,7 +179,7 @@ await step('séances prêtes : filtres, tri pour toi, sources consultables, lanc
   await A.keyboard.press('Escape'); await a.click('[data-act=catF][data-k=sport][data-v=running]');
   await A.locator('.catcard', { hasText: 'Renfo maison sans matériel' }).click(); await a.click('.catd [data-act=catSave]');
   await poll(async () => (await a.api('GET', '/api/sync')).data.items.some((x) => x.name === 'Renfo maison sans matériel'), 12000, 'séance gardée');
-  await a.sub('libSub', 'best'); await A.waitForSelector('.bestrow'); await a.click('[data-act=bestCat][data-v=doigts]'); await A.waitForSelector('.bestrow'); await a.sub('libSub', 'seances');
+  await a.sub('libSub', 'exercises'); await a.sub('libSub', 'best'); await A.waitForSelector('.bestrow'); await a.click('[data-act=bestCat][data-v=doigts]'); await A.waitForSelector('.bestrow'); await a.sub('libSub', 'seances');
   await a.tab('settings'); await a.sub('setSub', 'help'); await A.waitForSelector('text=Sources citées');
 });
 await step('programme : création en 4 questions, calendrier rempli, séance du jour avec la forme', async () => {
@@ -231,7 +231,7 @@ await step('matériel : ajout d’une barre et d’un élastique à la maison', 
   await a.click('#sheet button[type=submit]'); await A.waitForSelector('text=Barre de traction');
 });
 await step('création manuelle d’une séance : exercices du catalogue, modification, réordonnancement', async () => {
-  await a.tab('library'); await a.click('[data-act=newSeance]'); await A.waitForSelector('input[data-change=sName]');
+  await a.tab('library'); await a.click('[data-act=newChoose]'); await a.click('#sheet [data-act=newSeance]'); await A.waitForSelector('input[data-change=sName]');
   await A.fill('input[data-change=sName]', 'Tirage maison'); await A.press('input[data-change=sName]', 'Tab');
   for (const q of ['Gainage bateau', 'Tractions australiennes']) {
     await a.click('[data-act=exAdd]'); await A.fill('#sheet input[data-input=pickQ]', q); await A.waitForTimeout(100);
@@ -337,7 +337,7 @@ await step('« Que faire aujourd’hui ? » et tableau de bord personnalisé', a
   await A.reload(); await A.waitForSelector('h3:has-text("Records")');
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'layout' && /records/.test(i.d.lay)), 12000, 'mise en page liée au compte');
   // Retour à la base (deux validations)
-  await a.tab('settings'); await a.click('[data-act=layReset][data-scope=all]'); await confirm2(A);
+  await a.tab('settings'); await a.sub('setSub', 'display'); await a.click('[data-act=layReset][data-scope=all]'); await confirm2(A);
   await a.tab('home'); await A.waitForSelector('.quick [data-act=timerOpen]'); assert.equal(await a.count('h3:has-text("Records")'), 0);
 });
 await step('recherche intelligente et classique', async () => {
@@ -454,7 +454,7 @@ await step('séance à deux : code affiché, B rejoint, les chronos avancent ens
   cur = A; await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=play]').first().click(); await A.waitForSelector('#player.open');
   await a.click('#player [data-act=duoOpen]'); await A.waitForSelector('#sheet .duocode'); const code = (await a.text('#sheet .duocode')).trim(); assert.match(code, /^[A-Z2-9]{6}$/);
   await A.keyboard.press('Escape');
-  cur = B; await b.tab('library'); await b.sub('libSub', 'seances'); await b.click('[data-act=duoJoinAsk]'); await B.fill('#sheet input[name=code]', code.toLowerCase()); await b.click('#sheet button.pri');
+  cur = B; await b.tab('library'); await b.sub('libSub', 'seances'); await b.click('[data-act=newChoose]'); await b.click('#sheet [data-act=duoJoinAsk]'); await B.fill('#sheet input[name=code]', code.toLowerCase()); await b.click('#sheet button.pri');
   await B.waitForSelector('#player.open .duobar:has-text("Avec Alice")');
   await A.waitForSelector('#player .duobar:has-text("Avec Bob")', { timeout: 8000 });
   const where = (P) => P.evaluate(() => `${document.querySelector('#player .pl .muted.small')?.textContent.split('·')[0].trim()}|${document.querySelector('#ptimer.rest') ? 'repos' : 'série'}`);
@@ -520,7 +520,7 @@ await step('Service Worker actif, puis passage hors ligne : l’application s’
   await a.tab('library'); await a.sub('libSub', 'seances'); assert.ok(await a.count('text=Tirage maison') > 0);
 });
 await step('modifications hors ligne (séance, performance, note), fermeture puis réouverture', async () => {
-  await a.click('[data-act=newSeance]'); await A.waitForSelector('input[data-change=sName]'); await A.fill('input[data-change=sName]', 'Créée hors ligne'); await A.press('input[data-change=sName]', 'Tab');
+  await a.click('[data-act=newChoose]'); await a.click('#sheet [data-act=newSeance]'); await A.waitForSelector('input[data-change=sName]'); await A.fill('input[data-change=sName]', 'Créée hors ligne'); await A.press('input[data-change=sName]', 'Tab');
   await a.tab('profile'); await a.sub('profSub', 'perfs'); await a.click('[data-act=perfAdd]');
   await A.selectOption('#sheet select[name=metricId]', 'max_pompes'); await A.waitForSelector('#sheet input[name=value]'); await A.fill('#sheet input[name=value]', '25'); await a.click('#sheet button[type=submit]');
   await a.tab('progress'); await a.sub('progSub', 'journal'); await A.fill('form[data-submit=jnote] textarea', 'Note écrite hors ligne'); await a.click('form[data-submit=jnote] button');
@@ -549,8 +549,9 @@ await step('déconnexion puis reconnexion : données intactes', async () => {
 console.log('Autre appareil');
 await step('tout suit le compte sur un autre appareil : données, réglages et apparence', async () => {
   const a2 = H(A2);
-  await a2.tab('settings'); await a2.sub('setSub', 'main');
+  await a2.tab('settings'); await a2.sub('setSub', 'display');
   await A2.click('[data-act=appear][data-k=mode][data-v=light]'); await A2.click('[data-act=appearColor][data-id=granit]'); await A2.click('[data-act=appear][data-k=size][data-v=l]');
+  await a2.sub('setSub', 'main'); await a2.sub('setSub', 'session');
   await A2.fill('input[name=defaultRest]', '75'); await A2.dispatchEvent('input[name=defaultRest]', 'change');
   await poll(async () => (await a2.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'appearance' && i.d.palette === 'granit'), 15000, 'apparence enregistrée dans le compte');
   await poll(async () => (await a2.api('GET', '/api/settings')).data.settings.defaultRest === 75, 15000, 'réglages enregistrés dans le compte');
@@ -559,7 +560,7 @@ await step('tout suit le compte sur un autre appareil : données, réglages et a
   await D.fill('input[name=username]', 'Alice'); await D.fill('input[name=password]', 'motdepasse1'); await d.click('button[type=submit]');
   await D.waitForSelector('nav.tabs');
   await poll(async () => (await D.evaluate(() => [document.documentElement.dataset.mode, document.documentElement.dataset.palette, document.documentElement.dataset.size].join())) === 'light,granit,l', 15000, 'apparence appliquée sur le nouvel appareil');
-  await d.tab('settings'); await d.sub('setSub', 'main'); assert.equal(await D.inputValue('input[name=defaultRest]'), '75');
+  await d.tab('settings'); await d.sub('setSub', 'session'); assert.equal(await D.inputValue('input[name=defaultRest]'), '75');
   await d.tab('library'); await d.sub('libSub', 'seances'); await D.waitForSelector('text=Tirage maison');
   await ctxD.close(); cur = A2;
 });
@@ -577,18 +578,19 @@ await step('mode invité : questionnaire en QCM, « finir plus tard », aucune d
   await g.tab('library'); await g.sub('libSub', 'common'); await G.waitForSelector('text=Compte nécessaire');
 });
 await step('invité : création et enregistrement d’une séance, conservées au rechargement', async () => {
-  await g.tab('library'); await g.sub('libSub', 'seances'); await g.click('[data-act=newSeance]');
+  await g.tab('library'); await g.sub('libSub', 'seances'); await g.click('[data-act=newChoose]'); await g.click('#sheet [data-act=newSeance]');
   await G.waitForSelector('input[data-change=sName]');
   await G.fill('input[data-change=sName]', 'Séance invitée'); await G.press('input[data-change=sName]', 'Tab'); await G.waitForTimeout(400);
   await G.reload(); await G.waitForSelector('nav.tabs'); await g.tab('library'); await g.sub('libSub', 'seances');
   await G.waitForSelector('text=Séance invitée');
 });
-await step('petite question à l’écran : réponse en un toucher, enregistrée, question suivante', async () => {
+await step('petite question sur l’accueil : réponse en un toucher, enregistrée, question suivante (sans fenêtre)', async () => {
   await G.evaluate(() => localStorage.setItem('sea:q-snooze', '{}')); await G.evaluate(() => { location.hash = '#/home/dash'; }); await G.reload(); await G.waitForSelector('nav.tabs');
-  await G.waitForSelector('#sheet.open .qask', { timeout: 8000 });
-  const first = await g.text('#sheet .qask h3');
-  await g.click('#sheet [data-act=qAnswer]'); await G.waitForSelector('#sheet:not(.open)', { state: 'attached' });
-  await G.waitForSelector('.qcard'); assert.notEqual(await g.text('.qcard h3'), first, 'question suivante proposée');
+  await G.waitForSelector('.qcard .qask', { timeout: 8000 });
+  await G.waitForTimeout(1800); assert.equal(await g.count('#sheet.open .qask'), 0, 'plus de fenêtre qui s’ouvre toute seule');
+  const first = await g.text('.qcard h3');
+  await g.click('.qcard [data-act=qAnswer]');
+  await G.waitForFunction((t) => document.querySelector('.qcard h3')?.textContent !== t, first); assert.notEqual(await g.text('.qcard h3'), first, 'question suivante proposée');
   await g.click('.qcard [data-act=qLater]'); await G.waitForTimeout(200);
 });
 await step('invité → compte : les données locales sont transférées sur le nouveau compte', async () => {
@@ -679,8 +681,8 @@ await step('ancienne adresse → nouvelle : compte, réglages et séances retrou
   await P.fill('input[name=username]', 'Voyageur'); await P.fill('input[name=password]', 'motdepasse9'); await m.click('button[type=submit]');
   await P.waitForSelector('nav.tabs'); if (await m.count('[data-act=setupLater]')) await m.click('[data-act=setupLater]');
   if (await P.$('#tour')) await m.click('#tour .tour-x');
-  await m.tab('settings'); await m.click('[data-act=appearColor][data-id=foret]'); await P.waitForTimeout(300);
-  await m.tab('library'); await m.sub('libSub', 'seances'); await m.click('[data-act=newSeance]'); await P.waitForSelector('input[data-change=sName]');
+  await m.tab('settings'); await m.sub('setSub', 'display'); await m.click('[data-act=appearColor][data-id=foret]'); await P.waitForTimeout(300);
+  await m.tab('library'); await m.sub('libSub', 'seances'); await m.click('[data-act=newChoose]'); await m.click('#sheet [data-act=newSeance]'); await P.waitForSelector('input[data-change=sName]');
   await P.fill('input[data-change=sName]', 'Séance déménagée'); await P.press('input[data-change=sName]', 'Tab'); await P.waitForTimeout(600);
   delete env.MOVE_TO; // déménagement actif (adresse par défaut)
   await P.goto('about:blank'); await P.goto(OLDO + '/#/library/seances');
@@ -702,7 +704,7 @@ await step('ancienne adresse → nouvelle en mode invité : séances de l’appa
   env.MOVE_TO = '';
   await P.goto(OLDO + '/'); await P.waitForSelector('[data-act=guestStart]'); await m.click('[data-act=guestStart]');
   await P.waitForSelector('.setup'); await m.click('[data-act=setupLater]'); await P.waitForSelector('#tour .tour-x'); await m.click('#tour .tour-x');
-  await m.tab('library'); await m.sub('libSub', 'seances'); await m.click('[data-act=newSeance]'); await P.waitForSelector('input[data-change=sName]');
+  await m.tab('library'); await m.sub('libSub', 'seances'); await m.click('[data-act=newChoose]'); await m.click('#sheet [data-act=newSeance]'); await P.waitForSelector('input[data-change=sName]');
   await P.fill('input[data-change=sName]', 'Séance invitée voyage'); await P.press('input[data-change=sName]', 'Tab'); await P.waitForTimeout(600);
   delete env.MOVE_TO;
   await P.goto('about:blank'); await P.goto(OLDO + '/'); await P.waitForURL((u) => u.origin === NEWO, { timeout: 15000 });

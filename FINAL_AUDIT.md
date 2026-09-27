@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.8.0
+# FINAL_AUDIT — Séances entraînement v8.9.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -517,3 +517,28 @@ réglages qu'un client V2 ne connaît pas.
 **Tests**
 - `tests/format.test.mjs` : 9 tests, dont une séance d'escalade au format choisi et une séance de 2 h 30.
 - E2E : 59 étapes, dont une qui compose un format, règle 2 h 30 et vérifie l'ordre des parties.
+
+## Évolution 8.9.0 : une app plus simple à parcourir
+
+J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui a changé.
+
+**Accueil**
+- La « petite question » s'affichait deux fois (carte et fenêtre qui s'ouvrait toute seule). Il ne reste que la carte, placée après les raccourcis.
+- La séance du jour passe en premier, en grand, avec un bouton ▶. Mes séances, Minuteur et Carnet sont en dessous, sur une ligne.
+
+**Menu en haut** : l'icône ▦ devient ☰ « Menu ». Le menu, rangé par thème, s'enrichit de « Séances prêtes » et « Séance à deux ». Les raccourcis vers les rappels et l'affichage pointent vers les bonnes pages. Il y a moins d'icônes en double par défaut.
+
+**Bibliothèque**
+- Un seul bouton « ＋ Nouvelle séance » propose les façons de créer une séance, chacune expliquée en une ligne : sur mesure, prête, à la main, coller un texte, rejoindre un ami.
+- Il reste 5 onglets au lieu de 7. « Top exercices » se trouve dans Exercices, et la recherche passe dans une loupe 🔍.
+- Le catalogue affiche 15 exercices, avec un bouton « Voir les autres ».
+
+**Profil** : les tuiles sont rangées par thème (Moi, Mes résultats, Comprendre mes conseils, Partager). Deux noms deviennent plus parlants : « Mes capacités » et « Pourquoi ces conseils ».
+
+**Paramètres**
+- L'accueil des paramètres liste les rubriques, une par ligne, comme sur un téléphone : Affichage, Pendant la séance, Notifications, Mes données, Synchronisation, Aide, Signaler un bug.
+- Chaque rubrique a sa page, avec un bouton retour. L'onglet Paramètres rouvre toujours cette liste.
+
+**Mode ordinateur** : la séance du jour occupe deux colonnes.
+
+**Tests** : E2E à 59 étapes, adapté à la nouvelle navigation. Il vérifie aussi qu'aucune fenêtre de question ne s'ouvre toute seule.

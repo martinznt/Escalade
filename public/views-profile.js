@@ -16,9 +16,11 @@ import { GOALS, INTENT_OF } from './views-setup.js';
 import { profileSummary } from './views-coach.js';
 import { byId } from './library.js';
 
-const SUBS = [['body', 'Mon corps'], ['understand', 'Ce que l’app sait'], ['map', 'Ma carte'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
-const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Ce que l’app sait', 'et comment'], map: ['🗺️', 'Ma carte', 'mes capacités'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
+const SUBS = [['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
   climbing: ['🧗', 'Carnet', 'blocs, voies, projets'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['🧰', 'Matériel', 'lieux, équipement'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
+/** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
+const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment', 'prefs']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['map', 'understand']], ['Partager', ['public']]];
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
   if (sub === 'home') return vHub();
@@ -42,7 +44,7 @@ function vHub() {
       <section class="card ok-b"><span class="kicker ok-t">💪 Tes points forts</span><div class="chips">${sw.strengths.length ? sw.strengths.slice(0, 3).map((x) => pill(x, 'okc')) : h`<span class="small muted">Bientôt…</span>`}</div></section>
       <section class="card warn-b"><span class="kicker warn-t">🌱 À travailler</span><div class="chips">${sw.weaknesses.length ? sw.weaknesses.slice(0, 3).map((x) => pill(x, 'warnc')) : h`<span class="small muted">Rien de flagrant</span>`}</div></section></div>`
       : h`<section class="card flat row"><span class="grow small">🧩 Ajoute une ou deux mesures pour voir tes points forts.</span><button class="btn sm pri" data-act="profSub" data-id="perfs">Ajouter</button></section>`}
-    <div class="tiles">${tiles.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>`;
+    ${GROUPS.map(([title, ids]) => { const list = tiles.filter(([k]) => ids.includes(k)); return list.length ? h`<span class="kicker">${title}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; })}`;
 }
 ACT.profSub = (el) => { go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
 const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;

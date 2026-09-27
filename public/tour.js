@@ -13,7 +13,7 @@ const STEPS = [
   ['library', 'generate', '[data-act=genPlan]', '👀 Aperçu avant de commencer', '…puis l’app te montre ce qu’elle prévoit. Tu peux ajuster, puis lancer la séance ▶.'],
   ['progress', 'summary', '.kpis, .card.hero', '📈 Tes progrès', 'Tes chiffres et tes records apparaissent ici, comparés uniquement à toi-même.'],
   ['profile', 'home', '.tiles', '👤 Ton profil', 'Tout ce que l’app sait de toi : sports, mesures, objectifs, matériel. Touche une tuile pour la modifier.'],
-  ['settings', 'main', '.palette', '🎨 À ton image', 'Change les couleurs, le thème ou la taille du texte. Ça suit ton compte sur tous tes appareils.'],
+  ['settings', 'display', '.palette', '🎨 À ton image', 'Change les couleurs, le thème ou la taille du texte. Ça suit ton compte sur tous tes appareils.'],
   ['settings', 'help', '[data-act=helpTour]', '🧭 C’est parti !', 'Tu pourras relancer cette visite quand tu veux, ici. Bon entraînement 💪'],
 ];
 const T = { i: -1, onEnd: null, raf: 0, steps: STEPS };
