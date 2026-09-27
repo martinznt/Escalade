@@ -548,3 +548,10 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
 - Les nouvelles sont en haut, mises en avant avec l'étiquette « Nouveau ». Les notifications vues passent dans « Déjà vues », plus discrètes (repliées, moins de texte), et « ↺ Non vue » les remet en avant.
 - La pastille de l'icône 🔔 compte les notifications non vues.
 - Les notifications vues sont enregistrées dans le compte (item `config/inbox`), donc elles restent vues sur tous les appareils. L'ancienne date « tout lu » de l'appareil est toujours prise en compte.
+
+### Listes au lieu des barres d'onglets
+- Les barres d'onglets horizontales disparaissent. Bibliothèque, Progrès et Profil prennent le format en liste des paramètres (une rubrique par ligne, avec une courte description), et chaque rubrique a sa page avec un bouton retour.
+- **Bibliothèque** : « ＋ Nouvelle séance », puis la liste Mes séances, Sur mesure, Séances prêtes, Exercices, Partagées, Rechercher, avec le nombre de séances et d'exercices.
+- **Progrès** : le résumé reste en haut (l'essentiel d'un coup d'œil), puis « Aller plus loin » liste Historique, Records, Frise, Journal, Analyses et Lab.
+- **Profil** : les pages n'ont plus de barre, seulement un retour vers les tuiles.
+- Chaque onglet du bas s'ouvre sur sa page d'accueil.

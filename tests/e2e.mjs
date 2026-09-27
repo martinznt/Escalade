@@ -46,8 +46,18 @@ const H = (page) => ({
   text: (sel) => page.locator(sel).first().innerText(),
   count: (sel) => page.locator(sel).count(),
   confirm: async () => { await page.waitForSelector('#dialog.open [data-dlg="1"]'); await page.click('#dialog.open [data-dlg="1"]'); await page.waitForSelector('#dialog:not(.open)', { state: 'attached' }); },
-  tab: async (id) => { await page.click(`nav.tabs [data-id=${id}]`); await page.waitForTimeout(120); },
-  sub: async (act, id) => { await page.click(`[data-act=${act}][data-id=${id}]`); await page.waitForTimeout(120); },
+  // La Bibliothèque s'ouvre sur sa liste : les étapes qui l'utilisent partent de « Mes séances ».
+  tab: async (id) => { await page.click(`nav.tabs [data-id=${id}]`); await page.waitForTimeout(120); if (id === 'library') { await page.click('[data-act=libSub][data-id=seances]'); await page.waitForTimeout(120); } },
+  // Rubriques en liste : si la rubrique n'est pas à l'écran, on revient d'abord à la liste (bouton retour).
+  sub: async (act, id) => {
+    const sel = `[data-act=${act}][data-id=${id}]`, root = { libSub: 'home', progSub: 'summary', profSub: 'home', setSub: 'main' }[act];
+    if (!(await page.locator(sel).count()) && root) {
+      if (await page.locator(`[data-act=${act}][data-id=${root}]`).count()) await page.locator(`[data-act=${act}][data-id=${root}]`).first().click();
+      else await page.evaluate((hsh) => { location.hash = hsh; }, { libSub: '#/library/home', progSub: '#/progress/summary', profSub: '#/profile/home', setSub: '#/settings/main' }[act]);
+      await page.waitForTimeout(150);
+    }
+    await page.locator(sel).first().click(); await page.waitForTimeout(120);
+  },
   noOverflow: async (where) => { const ok = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1); assert.ok(ok, `défilement horizontal de page détecté (${where})`); },
   api: (method, path, body) => page.evaluate(async ([m, p, b]) => { const r = await fetch(p, { method: m, headers: b ? { 'Content-Type': 'application/json' } : {}, body: b ? JSON.stringify(b) : undefined }); let d = null; try { d = await r.json(); } catch {} return { status: r.status, data: d }; }, [method, path, body]),
   waitSynced: async () => { await page.waitForFunction(() => document.querySelector('.syncbadge.ok'), null, { timeout: 15000 }); },
@@ -146,7 +156,7 @@ await step('carnet : ajout rapide, pyramide, projet suivi jusqu’à la réussit
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'project' && i.d.status === 'done' && i.d.tries.length), 12000, 'projet synchronisé');
 });
 await step('ma salle : cotation U1 → U8+, espaces et matériel ; bloc noté « U7 dur, dévers » dans cette salle', async () => {
-  await a.tab('profile'); await a.click('[data-act=profSub][data-id=equipment]'); await a.click('[data-act=envNewGym]'); await A.waitForSelector('#sheet input[name=city]');
+  await a.tab('profile'); await a.sub('profSub', 'equipment'); await a.click('[data-act=envNewGym]'); await A.waitForSelector('#sheet input[name=city]');
   await a.click('#sheet [data-act=sysNew]'); await a.click('[data-act=sysFromTpl][data-id=u8plus]'); await A.waitForSelector('#sheet form[data-submit=lvlSave]'); await a.click('#sheet [data-act=closeSheet].btn');
   await a.click('[data-act=envNewGym]'); await A.fill('#sheet input[name=name]', 'Arkose Test'); await A.fill('#sheet input[name=city]', 'Montreuil');
   const sysId = await A.evaluate(() => [...document.querySelectorAll('#sheet select[name=gradeSys] option')].find((o) => /U8\+/.test(o.textContent))?.value);
@@ -211,18 +221,18 @@ await step('coach : question en un toucher, réponse affichée', async () => {
   assert.match(await a.text('.msg.assistant'), /Conseil du coach/); await a.click('#sheet .back'); await a.tab('profile');
 });
 await step('mon corps et mes objectifs : profil corporel, objectifs multiples, objectif écrit', async () => {
-  await a.tab('profile'); await a.click('[data-act=profSub][data-id=body]'); await A.waitForSelector('.bodyf');
+  await a.tab('profile'); await a.sub('profSub', 'body'); await A.waitForSelector('.bodyf');
   await A.fill('.bodyf input[data-k=age]', '34'); await A.press('.bodyf input[data-k=age]', 'Tab'); await A.waitForTimeout(200);
   await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); await A.waitForSelector('text=vite essoufflé');
   await a.click('[data-act=weighIn]'); await A.fill('#sheet input[name=kg]', '71.5'); await a.click('#sheet button[type=submit]'); await A.waitForSelector('text=71.5 kg');
-  await a.click('[data-act=profSub][data-id=goals]'); await a.click('[data-act=goalsToggle][data-id=poids]'); await a.click('[data-act=goalsToggle][data-id=climb]');
+  await a.sub('profSub', 'goals'); await a.click('[data-act=goalsToggle][data-id=poids]'); await a.click('[data-act=goalsToggle][data-id=climb]');
   await A.waitForSelector('[data-act=goalsToggle][data-id=poids].on');
   await a.click('[data-act=goalWrite]'); await A.fill('#sheet textarea[name=text]', 'Courir 10 km sans m’arrêter'); await a.click('#sheet button[type=submit]');
   await A.waitForSelector('#sheet [data-act=goalAiSave]', { timeout: 15000 }); assert.match(await a.text('#sheet'), /Endurance/i);
   await a.click('#sheet [data-act=goalAiSave]'); await A.waitForSelector('text=Courir 10 km');
   await poll(async () => { const it = (await a.api('GET', '/api/items?since=0')).data.items; return it.some((i) => i.c === 'config' && i.id === 'body' && i.d.age === 34 && i.d.breath === 'souvent') && it.some((i) => i.c === 'config' && i.id === 'main' && (i.d.goals || []).includes('poids')); }, 12000, 'profil corporel et objectifs sur le serveur');
-  await a.click('[data-act=profSub][data-id=body]'); await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); // on remet comme avant pour la suite
-  await a.click('[data-act=profSub][data-id=goals]'); await a.click('[data-act=goalsToggle][data-id=poids]');
+  await a.sub('profSub', 'body'); await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); // on remet comme avant pour la suite
+  await a.sub('profSub', 'goals'); await a.click('[data-act=goalsToggle][data-id=poids]');
 });
 await step('objectif complexe : front lever (arbre, blocages, chemins)', async () => {
   await a.sub('profSub', 'goals'); await a.click('[data-act=goalNewSkill][data-id=front_lever]');

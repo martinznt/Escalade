@@ -1,6 +1,6 @@
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
-import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
+import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, subHead, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
 import { linkSheet } from './share.js';
 import './duo.js';
 import './views-ai.js';
@@ -14,6 +14,7 @@ import { boostSession } from './program.js';
 import { vGenerateForm, genOptions } from './views-gen.js';
 import { vCatalog, vBest } from './views-catalog.js';
 import { sourcesLine } from './srcui.js';
+import { CATALOG } from './catalog.js';
 import { planSession, generateFromPlan, adaptDuration, alternatives, replaceExercise, rebuildForEquipment, newPossibilities, estimateLevel, LEVEL_LABEL, levelFor, BODY_WORDS } from './generator.js';
 import { availableEquipment, graphFromExercise, goalLabel, activeGoals, neverTried, exCaps, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -42,12 +43,27 @@ export function vLibrary() {
   if (sub === 'shared-edit' && S.sharedDraft) return vEditor(S.sharedDraft.session, 'shared');
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
-  const cur = ['seances', 'generate', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'seances';
-  const tab = sub === 'best' ? 'exercises' : cur;
-  return h`<h1>📚 Bibliothèque</h1><div class="row segrow"><div class="scrollx grow">${seg('libSub', tab, [['seances', '📋 Mes séances'], ['generate', '🎯 Sur mesure'], ['catalog', '🗂 Prêtes'], ['exercises', '💪 Exercices'], ['common', '🌍 Partagées']])}</div><button class="btn sm ic ${cur === 'search' ? 'on' : ''}" data-act="libSub" data-id="search" aria-label="Rechercher" title="Rechercher">🔍</button></div>
-    ${cur === 'seances' ? vSeances() : cur === 'generate' ? vGenerate() : cur === 'catalog' ? vCatalog() : cur === 'best' ? vBest() : cur === 'exercises' ? vExercises() : cur === 'common' ? vCommon() : vSearch()}`;
+  const cur = ['seances', 'generate', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'home';
+  if (cur === 'home') return vLibHome();
+  const views = { seances: vSeances, generate: vGenerate, catalog: vCatalog, best: vBest, exercises: vExercises, common: vCommon, search: vSearch };
+  if (cur === 'best') return views.best(); // a son propre retour vers Exercices
+  const [ic, t] = LIB_INFO[cur];
+  return h`${subHead('libSub', 'home', 'Bibliothèque', `${ic} ${t}`)}${views[cur]()}`;
 }
-ACT.libSub = (el) => { closeSheet(); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
+const LIB_INFO = {
+  seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
+  generate: ['🎯', 'Sur mesure', () => 'L’app prépare une séance pour toi, au format que tu veux'],
+  catalog: ['🗂', 'Séances prêtes', () => `${CATALOG.length} séances expliquées et sourcées`],
+  exercises: ['💪', 'Exercices', () => `${LIBRARY.length} exercices, et le top pour toi`],
+  common: ['🌍', 'Partagées', () => 'Les séances publiées par la communauté'],
+  search: ['🔍', 'Rechercher', () => 'Une séance, un exercice, une capacité…'],
+};
+/** Bibliothèque : créer une séance, puis la liste des rubriques (même format que les paramètres). */
+function vLibHome() {
+  return h`<h1>📚 Bibliothèque</h1><button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
+    ${menuList(Object.entries(LIB_INFO).map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
+}
+ACT.libSub = (el) => { closeSheet(); window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
 /* ═════════ Mes séances ═════════ */
 function vSeances() {
