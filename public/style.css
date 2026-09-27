@@ -150,3 +150,54 @@ html.hands .btn.big{min-height:84px;font-size:1.35rem}html.hands .stepper button
 .faq{border-top:1px solid var(--line);padding:8px 0}.faq summary{cursor:pointer;font-weight:600;min-height:32px}
 ol.steps{padding-left:1.3rem;display:grid;gap:6px}
 .sub{margin:-.2rem 0 .3rem}
+/* ═════ Thème 8.2 : plus léger, plus vivant, décontracté ═════ */
+:root{--r:20px;--r-sm:14px}
+html{-webkit-font-smoothing:antialiased}
+body{font-family:ui-rounded,"SF Pro Rounded","Nunito","Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;letter-spacing:.005em}
+h1{font-size:1.65rem;font-weight:800;letter-spacing:-.025em}h2{font-weight:800;letter-spacing:-.02em}h3{font-weight:750;font-size:1.04rem;letter-spacing:-.01em}
+html[data-mode=dark]{--card:#121214;--card2:#1d1d21;--line:#26262b;--glow:color-mix(in srgb,var(--accent) 35%,transparent)}
+html[data-mode=light]{--glow:color-mix(in srgb,var(--accent) 25%,transparent)}
+.card{border-radius:var(--r);padding:16px;gap:10px;background:linear-gradient(180deg,color-mix(in srgb,var(--card) 100%,#fff 2%),var(--card));border-color:var(--line);animation:rise .28s ease both}
+html[data-mode=light] .card{box-shadow:0 1px 2px #0000000d,0 6px 20px #0000000a;border-color:transparent}
+.card.flat{background:var(--card2);animation:none}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.wrap>*:nth-child(2){animation-delay:.03s}.wrap>*:nth-child(3){animation-delay:.06s}.wrap>*:nth-child(4){animation-delay:.09s}.wrap>*:nth-child(5){animation-delay:.12s}
+/* Textes d'explication : 2 lignes, un toucher pour tout lire */
+.card p.tiny.muted,.card p.small.muted{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.card p.tiny.muted.x,.card p.small.muted.x{-webkit-line-clamp:unset;display:block}
+.btn{border-radius:999px;padding:10px 18px;font-weight:700;transition:transform .12s,box-shadow .2s,background .2s}
+.btn.pri{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 88%,#fff),var(--accent));box-shadow:0 6px 18px var(--glow)}
+.btn.big{min-height:58px;font-size:1.1rem}
+.btn.sm{border-radius:999px;padding:6px 12px}
+.chip{border-radius:999px;transition:transform .12s,background .15s}.chip:active{transform:scale(.95)}
+.chips.big .chip{min-height:44px;padding:9px 16px;font-size:.95rem;font-weight:600}
+.chip.ghost{background:transparent;border-style:dashed}
+.seg{border-radius:999px;padding:4px}.seg button{border-radius:999px}
+input,select,textarea{border-radius:14px}
+/* En-tête et onglets */
+header.top{background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(14px)}
+.brand{font-weight:800;letter-spacing:-.01em}.brand em{font-style:normal;color:var(--accent);font-weight:700}
+nav.tabs{left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));border:1px solid var(--line);border-radius:24px;padding:4px;background:color-mix(in srgb,var(--card) 88%,transparent);box-shadow:0 10px 30px #0008}
+nav.tabs button{border-radius:18px;min-height:52px}nav.tabs button.on{background:color-mix(in srgb,var(--accent) 18%,var(--card2));color:var(--text)}
+nav.tabs button.on .ico{transform:scale(1.12);transition:transform .2s}
+body{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+/* Accueil */
+.hero{position:relative;overflow:hidden;border:0!important;padding:20px 18px!important;background:radial-gradient(120% 140% at 100% 0%,color-mix(in srgb,var(--accent) 45%,transparent) 0%,transparent 55%),linear-gradient(160deg,color-mix(in srgb,var(--accent) 22%,var(--card)),var(--card))!important}
+.hero h1{margin:0;font-size:1.8rem}.hero .date{color:var(--muted);font-size:.85rem;text-transform:capitalize}
+.hero .stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}.hero .stats span{background:#ffffff14;border-radius:999px;padding:6px 12px;font-size:.85rem;font-weight:650}
+html[data-mode=light] .hero .stats span{background:#0000000d}
+.quick{gap:12px}.qa{border-radius:var(--r);min-height:108px;padding:16px 14px;background:var(--card);transition:transform .12s;animation:rise .3s ease both}
+.qa .qi{display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:var(--card2);font-size:1.4rem}
+.qa.pri{background:linear-gradient(150deg,color-mix(in srgb,var(--accent) 34%,var(--card)),var(--card));border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.qa.pri .qi{background:color-mix(in srgb,var(--accent) 30%,transparent)}
+.qcard{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))!important}
+.qask{display:grid;gap:10px}.qhead{display:flex;gap:12px;align-items:center}.qemoji{font-size:2rem;width:52px;height:52px;display:grid;place-items:center;border-radius:16px;background:var(--card2);flex:none}
+.kicker{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:800}.qask h3{margin:0;font-size:1.12rem}
+/* Assistant IA */
+.ai{display:grid;gap:12px}.ai-hero{display:flex;gap:12px;align-items:center}.ai-hero>span{font-size:2.2rem;width:58px;height:58px;display:grid;place-items:center;border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 40%,transparent),transparent);flex:none}.ai-hero h2{margin:0}
+.ai-cta{display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 22%,var(--card)),var(--card))!important;border-color:color-mix(in srgb,var(--accent) 40%,var(--line))!important}
+.ai-cta>span{font-size:1.6rem}.ai-cta b{display:block}.ai-cta small{color:var(--muted)}
+.exd summary{cursor:pointer;list-style:none}.tag.acc{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.setup .choice{border-radius:18px;transition:transform .1s,border-color .15s}.setup .choice:active{transform:scale(.98)}
+.pitch li{border-radius:var(--r)}
+.btn.sm{white-space:nowrap}

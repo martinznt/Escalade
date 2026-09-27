@@ -1,15 +1,16 @@
-// worker.js — API + service des fichiers du site « Mes séances » (Cloudflare Workers + D1 + KV).
+// worker.js — API + service des fichiers du site « Séances entraînement » (Cloudflare Workers + D1 + KV).
 // Le serveur est l'autorité pour toutes les permissions : l'utilisateur est toujours déterminé par sa session
 // (jamais par un identifiant envoyé par le client), et chaque requête SQL est paramétrée.
 import { SCHEMA, ADD_COLUMNS } from './schema.js';
 import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
+import { aiDraft } from './server/ai.js';
 import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 
-const APP_VERSION = '8.1.0';
+const APP_VERSION = '8.2.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -18,7 +19,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -327,6 +328,7 @@ async function routeAuthed(request, env, url, auth, secure) {
 
   // Signalements de bugs
   if (p === '/api/bugs' && m === 'POST') return bugCreate(request, env, u);
+  if (p === '/api/ai/draft' && m === 'POST') return aiDraftRoute(request, env, u);
   if (p === '/api/bugs/mine' && m === 'GET') return bugMine(env, u);
 
   // Administration (droit vérifié côté serveur à chaque appel ; l'activation se fait avec EDIT_PASSWORD)
@@ -760,6 +762,16 @@ async function sharedDelete(env, u, id) {
 }
 
 /* ═════════════ Signalements de bugs ═════════════ */
+/* ═════════ Assistant IA (Workers AI) : proposition d'exercice ou de capacité, relue par l'utilisateur ═════════ */
+async function aiDraftRoute(request, env, u) {
+  const b = await readJson(request, 4000);
+  const text = str(b?.text, 300), kind = ['exercise', 'capacity', 'auto'].includes(b?.kind) ? b.kind : 'auto';
+  if (text.length < 2) return fail('Décris en quelques mots ce que tu veux créer.');
+  if (!env.AI?.run) return json({ error: 'Assistant IA non activé sur ce serveur.', unavailable: true }, 503);
+  if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Tu as beaucoup utilisé l’assistant : réessaie un peu plus tard.', 429);
+  try { const r = await aiDraft(env, { kind, text, activityId: str(b?.activityId, 60) }); return json({ ok: true, draft: r.draft, source: 'ia' }); }
+  catch (e) { console.error('ai', e?.message); return json({ error: e.status ? e.message : 'L’assistant IA n’a pas pu répondre. Réessaie dans un instant.', unavailable: e.status === 503 }, e.status === 502 ? 502 : 503); }
+}
 async function bugCreate(request, env, u) {
   const b = await readJson(request, 30000);
   if (!b) return fail('Données invalides.');

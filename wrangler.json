@@ -20,5 +20,8 @@
       "binding": "SEANCES_KV",
       "id": "31069536a98340b08806589d340ae9c8"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  }
 }

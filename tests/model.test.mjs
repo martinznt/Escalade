@@ -50,7 +50,7 @@ await ok('styles d’escalade structurés (identifiants, activité)', () => { as
 console.log('Schéma des données (items)');
 const SAMPLES = {
   activity: { label: 'Tennis', emoji: '🎾', preset: '', aliases: ['tennis'], archived: false },
-  category: { activityId: 'custom-1', label: 'Service', description: 'd', caps: [{ id: 'explosivite', w: 0.5 }], archived: false },
+  category: { activityId: 'custom-1', label: 'Service', description: 'd', caps: [{ id: 'explosivite', w: 0.5 }], archived: false, emoji: '🎾', guide: 'g', howTo: ['a'], source: 'ia' },
   metric: { label: 'Service', unit: 'km/h', kind: 'pace', dir: 1, activityId: 'custom-1', caps: [{ id: 'cat-1', w: 1 }], gradeActivity: '', archived: false },
   perf: { metricId: 'max_bloc', unknown: false, unit: '', date: 1, source: 'measured', grade: { systemId: 'font', systemName: 'Font', levelId: 'l5', label: '6A', order: 5, total: 24, color: '#aabbcc' }, styles: ['st-dalle', 'st-u-x'], context: { env: 'e1', place: 'Salle', kind: 'salle' }, note: 'n', side: 'gauche' },
   goal: { type: 'grade', label: 'G', skillId: '', metricId: 'max_bloc', target: 3, current: 1, unit: '', gradeTarget: { systemId: 'font', systemName: 'F', levelId: 'l9', label: '6C', order: 9, total: 24, color: '' }, activityId: '', caps: [], status: 'done', deadline: '2026-12-31', startedAt: 1, doneAt: 2, note: '' },
@@ -64,7 +64,7 @@ const SAMPLES = {
   jnote: { date: 1, text: 'note' },
   swap: { from: 'Pompes', to: 'Dips', date: 1, where: 'player' },
   habit: { key: 'swap:pompes', decision: 'accepted' },
-  config: { blocks: ['today', 'records'], envId: 'e1', durations: ['20'], unavailable: ['bar'], perWeek: 3, goal: 'force', intent: 'force', setupDone: true, setupLater: 5, setupHidden: false, tourDone: true },
+  config: { blocks: ['today', 'records'], envId: 'e1', durations: ['20'], unavailable: ['bar'], perWeek: 3, climbPerWeek: 2, goal: 'force', intent: 'force', setupDone: true, asked: ['bloc'], setupLater: 5, setupHidden: false, tourDone: true },
 };
 await ok('chaque collection a un échantillon testé', () => assert.deepEqual(Object.keys(SAMPLES).sort(), [...COLLECTIONS].sort()));
 await ok('aller-retour exact de chaque collection (aucune clé utile supprimée par la liste blanche)', () => {

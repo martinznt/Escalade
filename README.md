@@ -1,4 +1,4 @@
-# Mes séances — v8.1.0
+# Séances entraînement — v8.2.0
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
@@ -18,12 +18,13 @@ Le rapport complet d'audit, de tests et de limitations est dans **`FINAL_AUDIT.m
 ## Déploiement Cloudflare
 
 1. Garder `wrangler.json` (bindings `DB` pour D1, `SEANCES_KV` pour l'ancienne version, `ASSETS` pour `public/`).
-2. Définir le secret d'administration (jamais dans le code ni dans le navigateur) :
+2. L'assistant IA utilise Workers AI (binding `AI` déjà déclaré dans `wrangler.json`, rien à configurer ; modèle modifiable avec la variable `AI_MODEL`).
+3. Définir le secret d'administration (jamais dans le code ni dans le navigateur) :
    `npx wrangler secret put EDIT_PASSWORD`
    Optionnel : `npx wrangler secret put INVITE_CODE` pour réserver l'inscription aux personnes ayant un code.
-3. Déployer : `npx wrangler deploy`. Les tables D1 sont créées et mises à niveau automatiquement au premier appel
+4. Déployer : `npx wrangler deploy`. Les tables D1 sont créées et mises à niveau automatiquement au premier appel
    (ajouts uniquement, aucune donnée supprimée).
-4. Pour devenir administrateur : se connecter avec son compte, puis Paramètres › Administration › saisir `EDIT_PASSWORD`.
+5. Pour devenir administrateur : se connecter avec son compte, puis Paramètres › Administration › saisir `EDIT_PASSWORD`.
 
 Il n'y a aucun mot de passe global pour entrer sur le site : chaque personne crée son compte.
 
@@ -31,8 +32,8 @@ Il n'y a aucun mot de passe global pour entrer sur le site : chaque personne cr�
 
 ```bash
 npm run check      # syntaxe de tous les fichiers JS + validation JSON
-npm test           # 14 suites unitaires / intégration Worker-D1 / sécurité / synchronisation (256 vérifications)
-npm run test:e2e   # navigateur réel (Playwright + Chromium) : 2 comptes, admin, hors ligne, mode invité (39 étapes)
+npm test           # 16 suites unitaires / intégration Worker-D1 / sécurité / synchronisation (256 vérifications)
+npm run test:e2e   # navigateur réel (Playwright + Chromium) : 2 comptes, admin, hors ligne, mode invité (40 étapes)
 ```
 
 Les tests Worker utilisent une base D1 simulée par `node:sqlite` (Node 22+). Le test E2E démarre un serveur local

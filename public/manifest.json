@@ -1,6 +1,6 @@
 {
-  "name": "Mes séances",
-  "short_name": "Mes séances",
+  "name": "Séances entraînement",
+  "short_name": "Séances",
   "description": "Entraînement multi-activité : profil intelligent, séances générées et expliquées, progression personnelle, hors ligne.",
   "lang": "fr",
   "id": "/",

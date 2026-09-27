@@ -1,4 +1,4 @@
-// app.js — point d'entrée de « Mes séances » (PWA, sans bibliothèque externe, fonctionne hors ligne).
+// app.js — point d'entrée de « Séances entraînement » (PWA, sans bibliothèque externe, fonctionne hors ligne).
 // Charge les vues, gère l'authentification, la navigation (onglets + adresse #/onglet/sous-vue/paramètre),
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
 import { h, raw, $, toast, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
@@ -36,7 +36,7 @@ function doRender() {
       <details class="how mini"><summary>Détail technique</summary><p class="tiny">${S.tab}/${S.sub[S.tab] || ''} — ${where || 'aucun'}</p></details>
       <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
   }
-  app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"> Mes séances</span>${syncBadge()}</div></header>
+  app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"> Séances <em>entraînement</em></span>${syncBadge()}</div></header>
     <main class="wrap" id="main">${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
 }
@@ -50,7 +50,7 @@ ACT.closeSheet = () => closeSheet();
 /* ═════════ Authentification ═════════ */
 function vAuth() {
   const reg = S.authMode === 'register', up = !!S.upgradeGuest;
-  return h`<main class="auth wrap"><div class="center"><img class="app-logo" src="/icon-192.png" alt="" width="84" height="84"><h1>Mes séances</h1>
+  return h`<main class="auth wrap"><div class="center"><img class="app-logo" src="/icon-192.png" alt="" width="84" height="84"><h1>Séances entraînement</h1>
       ${up ? h`<p class="muted">Crée ton compte : tout ce que tu as fait en mode invité (séances, historique, profil) y sera transféré.</p>` : h`<p class="lead">Ton coach d’entraînement personnel, gratuit.</p>`}</div>
     ${up ? '' : h`<ul class="pitch"><li><span>✨</span><div><b>Des séances faites pour toi</b><small>Escalade, muscu, renforcement, course, natation… selon ton niveau, ton temps et ton matériel.</small></div></li>
       <li><span>▶️</span><div><b>Guidé pendant l’effort</b><small>Chrono, repos, séries : il suffit de suivre l’écran.</small></div></li>
@@ -152,6 +152,8 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   Promise.resolve().then(() => fn(el, e)).catch((err) => { console.error(err); toast('Action impossible : ' + (err?.message || 'erreur inattendue'), 4500, 'bad'); });
 });
+// Textes d'explication repliés sur 2 lignes : un toucher les déplie (sans déclencher d'action).
+document.addEventListener('click', (e) => { const p = e.target.closest('.card p.tiny.muted, .card p.small.muted'); if (p && !e.target.closest('[data-act], a, button')) p.classList.toggle('x'); });
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-submit]'); if (!f) return;
   e.preventDefault();

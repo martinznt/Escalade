@@ -31,7 +31,7 @@ await ok('aucun fichier public inutile ou oublié', () => {
   for (const f of readdirSync(path.join(root, 'public'))) assert.ok(PUBLIC.has('/' + f), `public/${f} n’est pas servi : fichier orphelin ?`);
 });
 await ok('ressources de index.html présentes', () => { for (const m of html.matchAll(/(?:href|src)="\/([\w.-]+)"/g)) assert.ok(PUBLIC.has('/' + m[1]), m[1]); });
-await ok('manifeste valide avec icônes existantes', () => { const m = JSON.parse(read('public/manifest.json')); assert.equal(m.name, 'Mes séances'); for (const i of m.icons) assert.ok(existsSync(pub(i.src.slice(1)))); assert.ok(m.icons.some((i) => i.purpose === 'maskable')); });
+await ok('manifeste valide avec icônes existantes', () => { const m = JSON.parse(read('public/manifest.json')); assert.equal(m.name, 'Séances entraînement'); for (const i of m.icons) assert.ok(existsSync(pub(i.src.slice(1)))); assert.ok(m.icons.some((i) => i.purpose === 'maskable')); });
 await ok('version du cache du Service Worker alignée sur la version de l’application', () => {
   const v = read('public/state.js').match(/APP_VERSION = '([\d.]+)'/)[1];
   assert.equal(read('worker.js').match(/APP_VERSION = '([\d.]+)'/)[1], v);

@@ -6,6 +6,7 @@ import { h, openSheet, closeSheet, toast, buzzOk, chip, meter } from './ui.js';
 import { S, ACT, INPUT, render, go, putItem, item, itemsOf, ctx, saveSettings } from './state.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, SKILLS, CAPACITIES } from './model.js';
 import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
+import { nextQuestion, pendingQuestions, bucketValue } from './questions.js';
 import { canPrompt, isIOS, isInstalled, shouldOffer, dismissInstall, promptInstall, onInstallChange } from './install.js';
 
 /* ═════════ Configuration personnelle (item config « main ») ═════════ */
@@ -24,6 +25,7 @@ const STEPS = [
   { id: 'acts', multi: true, q: 'Quels sports pratiques-tu ?', help: 'Choisis-en un ou plusieurs. Tu pourras en ajouter d’autres (basket, vélo…) dans ton Profil.', opts: () => Object.entries(ACTIVITIES).map(([id, a]) => [id, `${a.emoji} ${a.label}`]) },
   { id: 'level', q: 'Comment décrirais-tu ton niveau ?', help: 'Une première idée suffit : l’app ajustera avec tes séances et tes mesures.', opts: () => LEVELS },
   { id: 'perWeek', q: 'Combien de séances par semaine aimerais-tu faire ?', opts: () => [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5 ou plus']] },
+  { id: 'climbPerWeek', q: 'Et combien de fois grimpes-tu par semaine ?', help: 'En salle ou en falaise, en moyenne. Ça aide l’app à doser le travail des doigts et la récupération.', when: (a) => (a.acts || []).some((x) => x.startsWith('climbing')), opts: () => [['0', 'Pas en ce moment'], ['1', '1 fois'], ['2', '2 fois'], ['3', '3 fois'], ['4', '4 fois ou plus']] },
   { id: 'minutes', q: 'Combien de temps as-tu en général pour une séance ?', opts: () => [['10', '10 min'], ['20', '20 min'], ['30', '30 min'], ['45', '45 min'], ['60', '1 h'], ['90', '1 h 30']] },
   { id: 'places', multi: true, q: 'Où t’entraînes-tu ?', help: 'L’app proposera seulement des exercices faisables avec le matériel de ces lieux (modifiable dans Profil › Matériel).', opts: () => Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre') },
   { id: 'goal', q: 'Qu’est-ce qui te motive le plus ?', opts: () => GOALS },
@@ -77,7 +79,7 @@ function initialAnswers() {
   const acts = Object.keys(c.activities).filter((id) => ACTIVITIES[id]);
   const places = [...new Set(c.envs.map((e) => e.type).filter((t) => ENV_TYPES[t] && t !== 'autre'))];
   const avoid = Object.entries(av).filter(([, v]) => v).map(([k]) => k);
-  return { i: 0, mode: 'quiz', a: { acts: acts.length ? acts : [], places, avoid, perWeek: cfg.perWeek ? String(Math.min(5, cfg.perWeek)) : undefined, minutes: cfg.durations?.[0] || undefined, goal: cfg.goal || undefined, marks: {} } };
+  return { i: 0, mode: 'quiz', a: { acts: acts.length ? acts : [], places, avoid, perWeek: cfg.perWeek ? String(Math.min(5, cfg.perWeek)) : undefined, climbPerWeek: cfg.climbPerWeek != null ? String(Math.min(4, cfg.climbPerWeek)) : undefined, minutes: cfg.durations?.[0] || undefined, goal: cfg.goal || undefined, marks: {} } };
 }
 export function openSetup(mode = 'quiz') { S.setup = initialAnswers(); S.setup.mode = mode; go('home', 'setup'); }
 ACT.setupStart = (el) => openSetup(el.dataset.id || 'quiz');
@@ -124,6 +126,7 @@ function summaryLines(a) {
   if (a.acts?.length) out.push('Sports : ' + a.acts.map((x) => ACTIVITIES[x]?.label || x).join(', '));
   if (a.level && a.level !== 'nsp') out.push('Niveau : ' + LEVELS.find(([k]) => k === a.level)[1].replace(/^\S+\s/, ''));
   if (a.perWeek) out.push(`Objectif de rythme : ${a.perWeek === '5' ? '5 ou plus' : a.perWeek} séance(s) par semaine`);
+  if (a.climbPerWeek != null) out.push(a.climbPerWeek === '0' ? 'Escalade : pas en ce moment' : `Escalade : ${a.climbPerWeek === '4' ? '4 fois ou plus' : a.climbPerWeek + ' fois'} par semaine`);
   if (a.minutes) out.push(`Durée habituelle : ${a.minutes} min`);
   if (a.places?.length) out.push('Lieux : ' + a.places.map((p) => ENV_TYPES[p]).join(', '));
   if (a.goal) out.push('Motivation : ' + (a.goal === 'figure' && a.skill ? `réussir la figure « ${SKILLS[a.skill]?.label} »` : GOALS.find(([k]) => k === a.goal)[1].replace(/^\S+\s/, '')));
@@ -157,6 +160,7 @@ export function applyAnswers(a) {
   }
   const patch = {};
   if (a.perWeek) { patch.perWeek = Number(a.perWeek); n++; }
+  if (a.climbPerWeek != null && a.climbPerWeek !== '') { patch.climbPerWeek = Number(a.climbPerWeek); n++; }
   if (a.minutes) { patch.durations = [String(a.minutes)]; S.settings.defaultMinutes = Number(a.minutes); S.gen.minutes = Number(a.minutes); n++; }
   if (a.goal) { patch.goal = a.goal; patch.intent = INTENT_OF[a.goal] || ''; S.gen.intentions = patch.intent ? [{ id: patch.intent, p: 2 }] : []; n++; }
   if (Object.keys(patch).length) saveMain(patch);
@@ -230,7 +234,7 @@ export function installCard({ force = false } = {}) {
 }
 ACT.installNow = async () => {
   const r = await promptInstall();
-  if (r === 'accepted') { toast('Installation en cours… Tu retrouveras « Mes séances » avec tes autres applications.', 5000); return; }
+  if (r === 'accepted') { toast('Installation en cours… Tu retrouveras « Séances entraînement » avec tes autres applications.', 5000); return; }
   if (r === 'ios') { iosHelp(); return; }
   if (r === 'unavailable') {
     openSheet(h`<h2 style="margin:0">Installer l’application</h2>
@@ -245,3 +249,54 @@ function iosHelp() {
     <ol class="small steps"><li>Ouvre ce site dans <b>Safari</b>.</li><li>Touche le bouton <b>Partager</b> (le carré avec une flèche ↑, en bas de l’écran).</li><li>Choisis <b>« Sur l’écran d’accueil »</b>, puis <b>Ajouter</b>.</li></ol>
     <p class="tiny muted">Sur iPhone, Apple n’autorise pas d’autre méthode : l’icône ouvre ensuite l’app en plein écran, comme une application.</p><button class="btn pri" data-act="closeSheet">Compris</button>`);
 }
+
+/* ═════════ « Petite question » : l'app demande ce qui lui manque, une question à la fois ═════════ */
+const SNOOZE_KEY = 'sea:q-snooze';
+const snoozed = () => { try { return JSON.parse(localStorage.getItem(SNOOZE_KEY) || '{}'); } catch { return {}; } };
+const snooze = (id, days = 3) => { const s = snoozed(); s[id] = Date.now() + days * 86400000; try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(s)); } catch { /* rien */ } };
+export const currentQuestion = () => (S.sub.home === 'setup' ? null : nextQuestion(ctx(), snoozed()));
+const qBody = (x) => h`<div class="qask"><div class="qhead"><span class="qemoji">${x.emoji}</span><div><span class="kicker">Petite question</span><h3>${x.text}</h3></div></div>
+  <div class="chips big">${x.options.map(([v, l]) => h`<button type="button" class="chip" data-act="qAnswer" data-q="${x.id}" data-v="${v}">${l}</button>`)}${x.nsp ? h`<button type="button" class="chip ghost" data-act="qAnswer" data-q="${x.id}" data-v="nsp">🤷 Je ne sais pas</button>` : ''}</div>
+  <details class="how mini"><summary>Pourquoi cette question ?</summary><p class="tiny">${x.why}</p></details>
+  <button class="btn ghost sm" data-act="qLater" data-q="${x.id}">Plus tard</button></div>`;
+export function questionCard() {
+  const x = currentQuestion();
+  if (!x || !(setupDone() || mainConfig().setupLater)) return ''; // avant le questionnaire, la carte de bienvenue suffit
+  return h`<section class="card qcard">${qBody(x)}</section>`;
+}
+/** Une fois par ouverture de l'app, la question s'affiche aussi en fenêtre (jamais pendant une séance ou une saisie). */
+export function maybeAskOnOpen() {
+  if (S.askedThisOpen || S.player || !S.user) return;
+  const x = currentQuestion(); if (!x || !(setupDone() || mainConfig().setupLater)) return;
+  S.askedThisOpen = true;
+  setTimeout(() => { if (!document.querySelector('#sheet.open, #dialog.open') && !S.player) openSheet(qBody(x)); }, 1500);
+}
+ACT.qLater = (el) => { snooze(el.dataset.q); closeSheet(); render(); };
+ACT.qAnswer = (el) => {
+  const id = el.dataset.q, v = el.dataset.v, now = Date.now(), cfg = mainConfig();
+  const done = (patch = {}) => saveMain({ ...patch, asked: [...new Set([...(cfg.asked || []), id])].slice(-30) });
+  const note = 'Réponse à une petite question';
+  switch (id) {
+    case 'acts': if (ACTIVITIES[v]) putItem('activity', 'act-' + v, { preset: v, label: ACTIVITIES[v].label, emoji: ACTIVITIES[v].emoji, archived: false }); done(); break;
+    case 'climbPerWeek': case 'perWeek': done({ [id]: Number(v) }); break;
+    case 'minutes': S.settings.defaultMinutes = Number(v); S.gen.minutes = Number(v); saveSettings(); done({ durations: [v] }); break;
+    case 'goal': done({ goal: v, intent: INTENT_OF[v] || '' }); break;
+    case 'place': if (ENV_TYPES[v]) putItem('env', 'env-' + v, { name: ENV_TYPES[v], type: v, equipment: ENV_TEMPLATES[v] || [], isDefault: !itemsOf('env').length }); done(); break;
+    case 'bloc': {
+      const sys = BUILTIN_SYSTEMS.font, lv = sys.levels.find((l) => l.label === v);
+      putItem('perf', 'q-max_bloc', v === 'nsp' || !lv ? { metricId: 'max_bloc', unknown: true, date: now, source: 'declared', note } : { metricId: 'max_bloc', grade: gradeSnapshot(sys, lv.id), date: now, source: 'declared', note });
+      done(); break;
+    }
+    case 'tractions': case 'pompes': {
+      const metricId = id === 'tractions' ? 'max_tractions' : 'max_pompes';
+      putItem('perf', 'q-' + metricId, v === 'nsp' ? { metricId, unknown: true, date: now, source: 'declared', note } : { metricId, value: bucketValue(v), date: now, source: 'declared', note: `${note} (au moins ${bucketValue(v)}, valeur approximative)` });
+      done(); break;
+    }
+    case 'avoid': S.settings.avoid = Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, k === v])); saveSettings(); done(); break;
+    default: done();
+  }
+  closeSheet(); buzzOk();
+  const left = pendingQuestions(ctx()).length;
+  toast(left ? 'Merci ! C’est noté 👍' : 'Merci ! L’app a tout ce qu’il lui faut 🎉', 2500);
+  render();
+};

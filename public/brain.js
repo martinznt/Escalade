@@ -781,6 +781,8 @@ export function understandProfile(ctx) {
     ...Object.values(ctx.capdecl).filter((d) => d.level >= 0).map((d) => `${CAPACITIES[d.capId]?.label || d.capId} : ${LEVEL_WORDS[d.level]}`),
     ...Object.values(ctx.activities).map((a) => `Activité suivie : ${a.label}`),
     ...ctx.goals.filter((g) => g.status === 'active').map((g) => `Objectif : ${goalLabel(g)}`),
+    ...(ctx.config.main?.perWeek ? [`Rythme souhaité : ${ctx.config.main.perWeek} séance(s) par semaine`] : []),
+    ...(ctx.config.main?.climbPerWeek != null ? [`Escalade : ${ctx.config.main.climbPerWeek} fois par semaine en moyenne`] : []),
   ];
   const s30 = ctx.history.filter((h) => ctx.now - h.startedAt <= 30 * DAY);
   const calculated = [`${ctx.history.length} séance(s) enregistrée(s), dont ${s30.length} sur 30 jours`, regularity(ctx).text, ...Object.entries(capVolume(ctx, 30)).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, x]) => `Volume 30 j — ${CAPACITIES[id]?.label || id} : ${round(x, 1)} séries pondérées`)];

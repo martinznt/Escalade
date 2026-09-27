@@ -20,7 +20,12 @@ const watch = (page, who) => {
   page.on('pageerror', (e) => errors.push(`[${who}] pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`[${who}] console: ${m.text()}`); });
 };
-const newCtx = async () => browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'allow', acceptDownloads: true });
+const newCtx = async ({ ask = false } = {}) => {
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'allow', acceptDownloads: true });
+  // Les « petites questions » sont testées à part : ailleurs, on les met en pause pour ne pas masquer l'écran.
+  if (!ask) await c.addInitScript(() => { if (!localStorage.getItem('sea:q-snooze')) localStorage.setItem('sea:q-snooze', JSON.stringify(Object.fromEntries(['acts', 'climbPerWeek', 'place', 'minutes', 'perWeek', 'bloc', 'tractions', 'pompes', 'goal', 'avoid'].map((k) => [k, 9e15])))); });
+  return c;
+};
 let n = 0, cur = null;
 /** Attend qu'une condition (évaluée côté Node) devienne vraie. */
 async function poll(fn, ms = 12000, what = 'condition') { const t0 = Date.now(); for (;;) { if (await fn()) return; if (Date.now() - t0 > ms) throw new Error('Délai dépassé : ' + what); await new Promise((r) => setTimeout(r, 300)); } }
@@ -45,10 +50,10 @@ const ctxA = await newCtx(); const A = await ctxA.newPage(); watch(A, 'A'); cur 
 console.log('Compte A');
 await step('première ouverture : page d’accueil claire (présentation, créer un compte, essayer sans compte), fond noir', async () => {
   await A.goto(BASE); await A.waitForSelector('[data-act=guestStart]');
-  assert.equal(await A.title(), 'Mes séances');
+  assert.equal(await A.title(), 'Séances entraînement');
   assert.match(await a.text('main'), /coach d’entraînement/); assert.equal(await a.count('[data-act=authPick][data-id=register]'), 1);
   assert.equal(await A.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(0, 0, 0)', 'mode sombre noir pur');
-  const man = await (await A.request.get(BASE + '/manifest.json')).json(); assert.equal(man.name, 'Mes séances'); assert.equal(man.display, 'standalone'); assert.equal(man.background_color, '#000000');
+  const man = await (await A.request.get(BASE + '/manifest.json')).json(); assert.equal(man.name, 'Séances entraînement'); assert.equal(man.display, 'standalone'); assert.equal(man.background_color, '#000000');
   await a.noOverflow('connexion');
 });
 await step('mauvais identifiants : message clair', async () => {
@@ -59,7 +64,7 @@ await step('mauvais identifiants : message clair', async () => {
 await step('inscription → accueil avec proposition de compléter le profil (aucune séance imposée)', async () => {
   await a.click('[data-act=authMode]'); await A.fill('input[name=username]', 'Alice'); await A.fill('input[name=password]', 'motdepasse1'); await a.click('button[type=submit]');
   await A.waitForSelector('nav.tabs'); await A.waitForSelector('[data-act=setupStart][data-id=quiz]');
-  assert.match(await a.text('h1'), /Bonjour Alice/);
+  assert.match(await a.text('h1'), /Alice/);
   assert.equal(await A.evaluate(async () => (await (await fetch('/api/sync')).json()).items.length), 0, 'aucune séance générique créée');
 });
 await step('fiche de profil (tout sur une page) : sports et lieu, puis visite guidée', async () => {
@@ -388,6 +393,14 @@ await step('invité : création et enregistrement d’une séance, conservées a
   await G.fill('input[data-change=sName]', 'Séance invitée'); await G.press('input[data-change=sName]', 'Tab'); await G.waitForTimeout(400);
   await G.reload(); await G.waitForSelector('nav.tabs'); await g.tab('library'); await g.sub('libSub', 'seances');
   await G.waitForSelector('text=Séance invitée');
+});
+await step('petite question à l’écran : réponse en un toucher, enregistrée, question suivante', async () => {
+  await G.evaluate(() => localStorage.setItem('sea:q-snooze', '{}')); await G.evaluate(() => { location.hash = '#/home/dash'; }); await G.reload(); await G.waitForSelector('nav.tabs');
+  await G.waitForSelector('#sheet.open .qask', { timeout: 8000 });
+  const first = await g.text('#sheet .qask h3');
+  await g.click('#sheet [data-act=qAnswer]'); await G.waitForSelector('#sheet:not(.open)', { state: 'attached' });
+  await G.waitForSelector('.qcard'); assert.notEqual(await g.text('.qcard h3'), first, 'question suivante proposée');
+  await g.click('.qcard [data-act=qLater]'); await G.waitForTimeout(200);
 });
 await step('invité → compte : les données locales sont transférées sur le nouveau compte', async () => {
   await g.tab('settings'); await g.click('[data-act=guestUpgrade]'); await G.waitForSelector('form[data-submit=register]');

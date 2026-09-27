@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Mes séances v8.1.0
+# FINAL_AUDIT — Séances entraînement v8.2.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -285,6 +285,30 @@ réglages qu'un client V2 ne connaît pas.
 - **Test ajouté** : `tests/robustness.test.mjs` remplace tour à tour chaque champ des données (historique, profil,
   calendrier, séances, exercices personnels) par un nombre, une chaîne, `null` ou un objet vide, et vérifie qu'aucune
   analyse ne plante. Il échouait sur la version 8.0.0 et passe sur la 8.0.1.
+
+## Évolution 8.2.0 — plus joli, plus léger, assistant IA
+
+- **Nom** : « Séances entraînement » (titre, application installée « Séances »).
+- **Visuel** : cartes arrondies avec relief léger, en-tête d'accueil coloré (salutation, séances de la semaine,
+  série de semaines), bouton principal lumineux, barre d'onglets flottante, apparitions douces ; les textes
+  d'explication sont réduits à 2 lignes et s'ouvrent d'un toucher ; accueil par défaut limité à l'essentiel
+  (Aujourd'hui, Prochaines séances, Objectifs, Recommandations courtes, Commande) — le reste reste ajoutable.
+- **Questionnaire** : question « Combien de fois grimpes-tu par semaine ? » dès qu'un sport d'escalade est choisi.
+- **Petites questions** (`public/questions.js`) : quand une information manque (sport, fréquence d'escalade, lieu,
+  durée, rythme, meilleur bloc, tractions, pompes, motivation, zone à ménager), l'app la demande par une question
+  à réponses en un toucher, en fenêtre à l'ouverture de l'accueil puis en carte ; « Je ne sais pas » et « Plus tard »
+  (3 jours) ; une réponse par tranche est enregistrée à sa valeur basse (jamais surestimée), comme *déclarée*.
+- **Assistant IA** (`server/ai.js`, route `POST /api/ai/draft`, Bibliothèque › Exercices et Profil › Activités) :
+  l'IA intégrée de Cloudflare (Workers AI, binding `AI`, modèle configurable par `AI_MODEL`) propose une fiche
+  d'exercice ou de capacité (ex. « clipage en escalade » : ce que c'est, pourquoi, comment la travailler, exercices,
+  mesure des progrès). Garanties : compte requis ; seul le texte tapé est envoyé ; réponse filtrée (identifiants
+  inconnus retirés, nombres bornés, HTML neutralisé) ; l'utilisateur relit avant d'enregistrer ; limites 6 / 10 min
+  et 40 / jour ; sans IA configurée, message clair et saisie manuelle possible.
+  Écart assumé par rapport au cahier des charges initial (« pas d'IA externe ») : demandé explicitement par le
+  propriétaire ; l'IA reste chez l'hébergeur (aucun service tiers ni clé), et n'est jamais utilisée pour les
+  analyses, qui restent déterministes et explicables.
+- Tests : `tests/ai.test.mjs` (10), `tests/questions.test.mjs` (9), E2E 40 étapes (petite question à l'écran).
+- Limite : le quota gratuit de Workers AI est limité par jour ; au-delà, l'assistant répond « réessaie plus tard ».
 
 ## Évolution 8.1.0 — prise en main par tous
 

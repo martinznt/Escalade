@@ -49,7 +49,7 @@ export const SCHEMAS = {
   // Activité personnalisée ou activation d'une activité native (preset = identifiant natif).
   activity: { label: ['s', 60], emoji: ['s', 8], preset: ['s', 40], aliases: ['strs', 20, 60], archived: ['b'] },
   // Catégorie d'une activité (native ou personnalisée). Sans capacité liée, la catégorie est elle-même un nœud du graphe.
-  category: { activityId: ['id'], label: ['s', 60], description: ['s', 180], caps: ['caps', 8], archived: ['b'] },
+  category: { activityId: ['id'], label: ['s', 60], description: ['s', 180], caps: ['caps', 8], archived: ['b'], emoji: ['s', 8], guide: ['s', 600], howTo: ['strs', 6, 220], source: ['e', ['', 'ia'], ''] },
   // Définition d'une métrique personnalisée (ce qui est mesuré).
   metric: { label: ['s', 80], unit: ['s', 20], kind: ['e', ['reps', 'load', 'time', 'distance', 'grade', 'pace', 'score', 'other'], 'other'], dir: ['e', [1, -1], 1], activityId: ['id'], caps: ['caps', 8], gradeActivity: ['e', ['bloc', 'voie', ''], ''], archived: ['b'] },
   // Performance : une valeur observée à un moment donné pour une métrique.
@@ -95,8 +95,8 @@ export const SCHEMAS = {
   config: {
     blocks: ['strs', 20, 30], envId: ['id'], durations: ['strs', 10, 10], unavailable: ['ids', 40],
     // Premiers pas (questionnaire de profil, visite guidée) : réponses déclarées par l'utilisateur.
-    perWeek: ['n', 1, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', ''], ''], intent: ['s', 30],
-    setupDone: ['b'], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
+    perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', ''], ''], intent: ['s', 30],
+    setupDone: ['b'], asked: ['strs', 30, 30], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);
