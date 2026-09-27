@@ -559,6 +559,25 @@ await step('admin : modifier un exercice « pour tout le monde » (au choix), un
   cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await b.sub('libSub', 'exercises');
   await B.waitForSelector(`#main :text-is("${old}")`, { timeout: 10000 });
 });
+await step('idée d’un utilisateur (système de cotation) → notification de l’admin → ouverte au bon endroit → ajoutée pour tout le monde', async () => {
+  cur = B; await b.tab('profile'); await B.evaluate(() => { location.hash = '#/profile/climbing'; }); await B.waitForTimeout(300);
+  await B.evaluate(() => { const d = document.querySelector('#main details.card.how'); if (d && !d.open) d.querySelector('summary').click(); });
+  await B.waitForSelector('[data-act=sysNew]'); await b.click('[data-act=sysNew]'); await b.click('#sheet [data-act=sysFromTpl][data-id=u8]'); await B.keyboard.press('Escape');
+  await B.evaluate(() => { const d = document.querySelector('#main details.card.how'); if (d && !d.open) d.querySelector('summary').click(); });
+  await b.click('[data-act=propose][data-k=grading]'); await B.fill('#sheet textarea[name=detail]', 'Ma salle'); await b.click('#sheet form[data-submit=proposeGo] button.pri');
+  await B.waitForSelector('#toast.show:has-text("proposition")');
+  cur = C; await c.tab('home'); await c.click('.topicons [data-act=notifOpen]'); await C.waitForSelector('#sheet [data-act=propOpen]', { timeout: 10000 });
+  assert.match(await c.text('#sheet'), /Bob propose/);
+  await c.click('#sheet [data-act=propOpen]'); await C.waitForFunction(() => location.hash.startsWith('#/profile/climbing'));
+  await C.waitForSelector('#sheet button[value=accept]'); await c.click('#sheet button[value=accept]'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('profile'); await B.evaluate(() => { location.hash = '#/profile/climbing'; }); await B.waitForTimeout(300);
+  await B.evaluate(() => { const d = document.querySelector('#main details.card.how'); if (d && !d.open) d.querySelector('summary').click(); });
+  await B.waitForSelector('#main .tag:has-text("pour tous")', { timeout: 10000 });
+  await b.click('[data-act=ascNew]').catch(() => {});
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset][data-k=grading]'); await c.click('[data-act=glReset][data-k=grading]'); await c.confirm();
+  await c.tab('settings'); await c.sub('setSub', 'updates'); await C.waitForSelector('.upd [data-act=notifTour]'); assert.ok(await c.count('.upd') >= 10, 'toutes les mises à jour listées');
+  await B.keyboard.press('Escape');
+});
 await step('Service Worker actif, puis passage hors ligne : l’application s’ouvre avec les données', async () => {
   await A.evaluate(() => navigator.serviceWorker.ready); await A.reload(); await A.waitForSelector('nav.tabs'); await A.waitForTimeout(600);
   await ctxA.setOffline(true); await A.reload(); await A.waitForSelector('nav.tabs', { timeout: 10000 });

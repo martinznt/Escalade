@@ -54,6 +54,28 @@ await ok('retour à l’original : l’élément disparaît de la liste', async 
   assert.equal((await V.get('/api/global')).data.items.some((x) => x.kind === 'catalog'), false);
 });
 
+console.log('Propositions');
+await ok('proposer un système de cotation : validé, envoyé aux administrateurs ; incomplet refusé', async () => {
+  assert.equal((await B.post('/api/proposals', { kind: 'grading', label: 'Unibloc', data: { name: 'Unibloc', levels: [] } })).status, 400);
+  const r = await B.post('/api/proposals', { kind: 'grading', label: 'Unibloc', detail: 'ma salle', data: { name: 'Unibloc', activity: 'bloc', levels: [{ id: 'a', label: 'U1', order: 0 }, { id: 'b', label: 'U2', order: 1 }], evil: 1 } });
+  assert.equal(r.status, 200);
+  const list = (await A.get('/api/admin/proposals')).data.proposals; const p = list.find((x) => x.label === 'Unibloc');
+  assert.ok(p); assert.equal(p.payload.data.levels.length, 2); assert.equal(p.payload.data.evil, undefined);
+  assert.equal((await B.get('/api/admin/proposals')).status, 403);
+});
+await ok('accepter : ajouté pour tout le monde ; l’auteur reçoit la réponse ; refuser n’ajoute rien', async () => {
+  const p = (await A.get('/api/admin/proposals')).data.proposals.find((x) => x.label === 'Unibloc');
+  const r = await A.post(`/api/admin/proposals/${p.id}`, { decision: 'accept', reply: 'Merci' });
+  assert.equal(r.status, 200); assert.match(r.data.added, /^g-/);
+  const g = (await V.get('/api/global')).data.items.find((x) => x.kind === 'grading');
+  assert.equal(g.data.name, 'Unibloc'); assert.equal(g.data.levels.length, 2);
+  assert.match((await B.get('/api/proposals/mine')).data.proposals.find((x) => x.id === p.id).reply, /Acceptée/);
+  const s2 = await B.post('/api/proposals', { kind: 'style', label: 'Aplat', data: { label: 'Aplat', activity: 'bloc' } });
+  const n0 = (await V.get('/api/global')).data.items.length;
+  await A.post(`/api/admin/proposals/${s2.data.id}`, { decision: 'refuse' });
+  assert.equal((await V.get('/api/global')).data.items.length, n0);
+});
+
 console.log('Application dans l’app');
 const n0 = LIBRARY.length, c0 = CATALOG.length, first = LIBRARY.find((x) => x.role === 'main');
 await ok('pour tout le monde : modifié, ajouté, masqué ; pour moi : par-dessus', () => {

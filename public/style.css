@@ -556,3 +556,6 @@ html[data-motion=off] .scene *{animation:none!important}
 #setfindres{display:grid;gap:8px}#setfindres:empty{display:none}.setmenu.hidden{display:none}
 .found{outline:2px solid var(--accent);outline-offset:4px;border-radius:12px;animation:foundpulse 1.2s ease 2}
 @keyframes foundpulse{50%{outline-color:transparent}}
+/* Visite longue : une barre de progression au lieu d'une rangée de points */
+.tour-bubble .tbar{height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin:6px 0}.tour-bubble .tbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.tour-bubble .dots{flex-wrap:wrap}

@@ -1,9 +1,10 @@
 // content.js — modifier le contenu de l'app : exercices, séances prêtes, intentions, formats.
 // Tout le monde peut modifier « pour moi » (lié à son compte). Un administrateur choisit à chaque fois :
 // « pour moi » ou « pour tout le monde » (enregistré sur le serveur, appliqué à tous les comptes).
-import { h, openSheet, closeSheet, toast, ask, menuList } from './ui.js';
-import { S, ACT, SUBMIT, api, ls, render, itemsOf, putItem, delItem, item } from './state.js';
-import { uid } from './shared.js';
+import { h, raw, openSheet, closeSheet, toast, ask, menuList, relDate } from './ui.js';
+import { S, ACT, SUBMIT, api, ls, render, itemsOf, putItem, delItem, item, go } from './state.js';
+import { uid, normalizeEx } from './shared.js';
+import { parseFormats, PART_TYPES } from './format.js';
 import { applyLayers, isBuiltin } from './global.js';
 import { byId } from './library.js';
 import { CATALOG } from './catalog.js';
@@ -147,6 +148,12 @@ ACT.catHide = async (el) => {
   try { await putGlobal('catalog', e.id, { hidden: true }); toast('Masquée pour tout le monde'); } catch (err) { toast(err.message, 4500, 'bad'); }
 };
 /** Administrateur : une de ses séances devient une séance prête, pour tout le monde. */
+function seanceAsCatalog(s) {
+  const ex = s.exercises.filter((e) => e.libId && byId(e.libId)).map((e) => ({ libId: e.libId, sets: e.sets, amount: e.mode === 'time' ? e.secMax : e.repsMax, rest: e.rest, block: e.block === 'main' ? '' : e.block }));
+  if (!ex.length) return null;
+  const works = [...new Set(s.exercises.flatMap((e) => Object.entries(e.caps || byId(e.libId)?.caps || {}).filter(([, w]) => w >= 0.6).map(([k]) => k)))].filter((k) => CAPACITIES[k]).slice(0, 5);
+  return { name: s.name, emoji: s.emoji || '🗂', activity: s.activity || 'conditioning', level: 0, minutes: Math.max(5, Math.round(sessionMinutes(s))), goals: [], works, why: s.objectives?.[0] || 'Séance proposée par la communauté.', tips: [], sources: [], ex };
+}
 export async function seanceToCatalog(s) {
   if (!isAdmin()) return;
   const ex = s.exercises.filter((e) => e.libId && byId(e.libId)).map((e) => ({ libId: e.libId, sets: e.sets, amount: e.mode === 'time' ? e.secMax : e.repsMax, rest: e.rest, block: e.block === 'main' ? '' : e.block }));
@@ -199,3 +206,80 @@ ACT.glReset = async (el) => { if (!(await ask('Annuler ce changement pour tout l
 /** Formats : un administrateur peut garder un format pour tout le monde (nouveau ou à la place d'un format tout prêt). */
 export async function saveFormatGlobal(id, name, parts) { await putGlobal('format', id, { data: { name, parts } }); }
 export { isAdmin };
+
+/* ───────── Proposer à tout le monde (ou publier directement, pour un administrateur) ───────── */
+/** Ce qu'on peut partager avec tout le monde, à partir de ce que la personne a créé. */
+const SHARE = {
+  grading: (id) => { const s = item('gradesys', id); return s && { label: s.name, activityId: s.activity, data: { name: s.name, activity: s.activity, kind: s.kind, levels: s.levels, maps: s.maps } }; },
+  style: (id) => { const s = item('style', id); return s && { label: s.label, activityId: s.activity, data: { label: s.label, activity: s.activity } }; },
+  exercise: (id) => {
+    const p = (S.personal || []).find((x) => x.id === id); if (!p) return null;
+    const e = normalizeEx({ ...p.data, name: p.name });
+    return { label: p.name, activityId: e.acts?.[0] || '', data: { name: p.name, emoji: e.emoji, mode: e.mode, sets: e.sets, repsMin: e.repsMin, repsMax: e.repsMax, secMin: e.secMin, secMax: e.secMax, rest: e.rest, perSide: e.perSide, cues: e.ok, bad: e.bad, why: e.why, acts: e.acts?.length ? e.acts : ['conditioning'], needs: e.needs, caps: Object.keys(e.caps || {}).length ? e.caps : { gainage_anterieur: 0.5 }, group: e.group } };
+  },
+  catalog: (id) => { const s = (S.seances?.items || []).find((x) => x.id === id); const d = s && seanceAsCatalog(s); return d && { label: s.name, activityId: s.activity, data: d }; },
+  format: (id) => { const f = parseFormats(item('config', 'formats')?.formats).find((x) => x.id === id); return f && { label: f.name, data: { name: f.name, parts: f.parts } }; },
+};
+const WHAT = { grading: 'système de cotation', style: 'style', exercise: 'exercice', catalog: 'séance prête', format: 'format de séance', intent: 'intention', category: 'catégorie', idea: 'idée' };
+/** Bouton sous un élément créé par la personne : proposer (tout le monde) ou publier (administrateur). */
+export function shareButton(kind, id) {
+  if (!S.user || S.user.guest) return '';
+  return isAdmin() ? h`<button class="btn sm" data-act="pubGlobal" data-k="${kind}" data-id="${id}">🌍 Pour tout le monde</button>`
+    : h`<button class="btn sm" data-act="propose" data-k="${kind}" data-id="${id}">💡 Proposer à tout le monde</button>`;
+}
+ACT.pubGlobal = async (el) => {
+  const x = SHARE[el.dataset.k]?.(el.dataset.id); if (!x) { toast('Impossible : il manque des informations.'); return; }
+  if (!(await ask(`Ajouter « ${x.label} » pour tout le monde ?`, { ok: 'Oui, pour tout le monde', detail: 'Tous les comptes le verront. Tu pourras l’annuler dans Paramètres › Admin.' }))) return;
+  try { await putGlobal(el.dataset.k, 'g-' + uid().slice(0, 12), { data: x.data }); closeSheet(); toast('Ajouté pour tout le monde'); } catch (e) { toast(e.message, 4500, 'bad'); }
+};
+ACT.propose = (el) => {
+  const x = SHARE[el.dataset.k]?.(el.dataset.id); if (!x) { toast('Impossible : il manque des informations.'); return; }
+  S.propDraft = { kind: el.dataset.k, ...x };
+  openSheet(h`<form data-submit="proposeGo" class="stack"><h2 style="margin:0">💡 Proposer à tout le monde</h2>
+    <p class="small">Ton ${WHAT[el.dataset.k]} « ${x.label} » sera envoyé aux administrateurs. S’ils l’acceptent, tout le monde pourra l’utiliser.</p>
+    <label>Un mot pour expliquer (facultatif)<textarea name="detail" rows="3" maxlength="600" placeholder="Ex. c’est la cotation de ma salle, beaucoup de grimpeurs y vont"></textarea></label>
+    <button class="btn pri big">Envoyer la proposition</button></form>`);
+};
+SUBMIT.proposeGo = async (f) => {
+  const d = S.propDraft; if (!d) return;
+  try { await api('POST', '/api/proposals', { kind: d.kind, label: d.label, detail: String(new FormData(f).get('detail') || ''), data: d.data, activityId: d.activityId || '', from: d.kind }); closeSheet(); S.propDraft = null; toast('Merci ! Ta proposition est envoyée aux administrateurs'); }
+  catch (e) { toast(e.offline ? 'Connexion requise pour proposer.' : e.message, 4500, 'bad'); }
+};
+
+/* ───────── Administrateurs : ouvrir une proposition là où elle se trouve ───────── */
+const TARGET = { grading: 'profile/climbing', style: 'profile/climbing', exercise: 'library/exercises', catalog: 'library/catalog', format: 'library/generate', intent: 'library/generate', category: 'settings/admin', idea: 'settings/admin' };
+function preview(p) {
+  const d = p.payload?.data || {};
+  if (p.kind === 'grading') return h`<div class="lvlrow">${(d.levels || []).map((l) => raw(`<span class="lvl" style="${l.color ? `background:${l.color}` : ''}">${String(l.label).replace(/[<>&"]/g, '')}</span>`))}</div><p class="tiny muted">${d.activity || ''} · ${(d.levels || []).length} niveaux · ${(d.maps || []).length} correspondance(s)</p>`;
+  if (p.kind === 'exercise') return h`<p class="small"><b>${d.emoji || ''} ${d.name}</b> · ${d.sets} × ${d.mode === 'time' ? `${d.secMax} s` : `${d.repsMax} rép.`} · repos ${d.rest} s</p>${(d.cues || []).length ? h`<ul class="small">${d.cues.map((x) => h`<li>${x}</li>`)}</ul>` : ''}`;
+  if (p.kind === 'catalog') return h`<p class="small"><b>${d.emoji || ''} ${d.name}</b> · ${d.minutes} min</p><ol class="small">${(d.ex || []).map((x) => h`<li>${byId(x.libId)?.name || x.libId} — ${x.sets} × ${x.amount}</li>`)}</ol>`;
+  if (p.kind === 'format') return h`<p class="small">${(d.parts || []).map((x) => `${PART_TYPES[x.type]?.emoji || ''} ${PART_TYPES[x.type]?.label || x.type} ${x.minutes} min`).join(' · ')}</p>`;
+  if (p.kind === 'style') return h`<p class="small">Style « ${d.label} »</p>`;
+  if (p.kind === 'intent') return h`<p class="small">${p.payload?.emoji || '🧭'} ${p.label}${p.activity ? ` · ${ACTIVITIES[p.activity]?.label || p.activity}` : ''}</p>`;
+  return '';
+}
+/** Ouvre la proposition : va d'abord à l'endroit d'où elle vient, puis montre ce qui est proposé. */
+ACT.propOpen = async (el) => {
+  if (!isAdmin()) return;
+  let p = (S.inbox?.adminList || S.admin?.props || []).find((x) => x.id === el.dataset.id);
+  if (!p) { try { p = (await api('GET', '/api/admin/proposals')).proposals.find((x) => x.id === el.dataset.id); } catch { /* hors ligne */ } }
+  if (!p) { toast('Proposition introuvable (déjà traitée ?)'); return; }
+  if (typeof p.payload_json === 'string' && !p.payload) try { p.payload = JSON.parse(p.payload_json); } catch { p.payload = {}; }
+  closeSheet();
+  const [t, sub] = (TARGET[p.kind] || 'settings/admin').split('/'); go(t, sub);
+  setTimeout(() => openSheet(h`<div class="stack"><span class="kicker">💡 Proposition · ${WHAT[p.kind] || 'idée'}</span><h2 style="margin:0">${p.label}</h2>
+    <p class="tiny muted">De ${p.username || 'un compte supprimé'} · ${relDate(p.created_at)}</p>${p.detail ? h`<p class="small">« ${p.detail} »</p>` : ''}${preview(p)}
+    <form data-submit="propDecide" class="stack"><input type="hidden" name="id" value="${p.id}"><label>Réponse à ${p.username || 'la personne'} (facultatif)<input name="reply" maxlength="300" placeholder="Merci !"></label>
+    <div class="grid2"><button class="btn pri" name="decision" value="accept">✓ Ajouter pour tout le monde</button><button class="btn danger" name="decision" value="refuse">✗ Refuser</button></div></form>
+    <p class="tiny muted">Une fois ajouté, tu peux encore le modifier ici avec ✏️, ou l’annuler dans Paramètres › Admin.</p></div>`, { wide: true }), 180);
+};
+SUBMIT.propDecide = async (f, e) => {
+  const d = Object.fromEntries(new FormData(f)), decision = (e?.submitter || document.activeElement)?.value || 'accept';
+  try {
+    await api('POST', `/api/admin/proposals/${encodeURIComponent(d.id)}`, { decision, reply: d.reply || '' });
+    closeSheet(); toast(decision === 'accept' ? 'Ajouté pour tout le monde ✓' : 'Proposition refusée');
+    if (S.inbox?.adminList) S.inbox.adminList = S.inbox.adminList.filter((x) => x.id !== d.id);
+    if (S.admin) S.admin.props = null;
+    await loadGlobal(); sig = ''; render();
+  } catch (err) { toast(err.message, 4500, 'bad'); }
+};

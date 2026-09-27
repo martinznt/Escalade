@@ -48,7 +48,7 @@ function draw(el) {
   const last = T.i === T.steps.length - 1;
   root.innerHTML = h`<div class="tour-spot"></div><div class="tour-bubble tour"><i class="tour-arrow"></i><button class="tour-x" data-act="tourEnd" aria-label="Quitter la visite">✕</button>
     <div class="tour-step">${T.i + 1} / ${T.steps.length}</div><h3>${title}</h3><p>${text}</p>
-    <div class="dots">${T.steps.map((_, k) => h`<i class="${k === T.i ? 'on' : ''}"></i>`)}</div>
+    ${T.steps.length > 12 ? h`<div class="tbar" aria-hidden="true"><i style="width:${Math.round(((T.i + 1) / T.steps.length) * 100)}%"></i></div>` : h`<div class="dots">${T.steps.map((_, k) => h`<i class="${k === T.i ? 'on' : ''}"></i>`)}</div>`}
     <div class="row">${T.i > 0 ? h`<button class="btn sm" data-act="tourPrev">‹ Retour</button>` : h`<button class="btn sm ghost" data-act="tourEnd">Passer</button>`}<span class="grow"></span>
       ${last ? h`<button class="btn pri" data-act="tourEnd">C’est compris !</button>` : h`<button class="btn pri" data-act="tourNext">Suivant ›</button>`}</div></div>`.s;
   T.el = el; place();

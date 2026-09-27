@@ -73,6 +73,9 @@ const EN = {
   'Pour qui ?': 'For whom?', 'Pour moi seulement': 'Just for me', 'Pour tout le monde': 'For everyone', 'Seul ton compte voit ce changement.': 'Only your account sees this change.',
   'Tous les comptes le voient, dès leur prochaine ouverture de l’app.': 'Every account sees it the next time they open the app.', '✏️ Modifier': '✏️ Edit', '🙈 Masquer': '🙈 Hide', '↺ Retirer ma modification': '↺ Remove my change',
   '↺ Annuler': '↺ Undo', 'Rien n’a encore été changé.': 'Nothing has been changed yet.', '＋ Ajouter une intention': '＋ Add a focus', 'Enregistrer pour tout le monde': 'Save for everyone',
+  '💡 Proposer à tout le monde': '💡 Suggest to everyone', '🌍 Pour tout le monde': '🌍 For everyone', 'Envoyer la proposition': 'Send the suggestion', 'Voir et décider': 'View and decide', '📍 Voir et décider': '📍 View and decide',
+  '✓ Ajouter pour tout le monde': '✓ Add for everyone', '✗ Refuser': '✗ Decline', '🧭 Lancer la visite': '🧭 Start the tour', 'Toutes les mises à jour': 'All updates', 'Ce qui a changé': 'What changed',
+  'L’évolution de l’app depuis le début, avec une visite pour chacune': 'How the app evolved, with a tour for each update', '💡 Proposer comme séance prête': '💡 Suggest as a ready-made session',
   // Partage et séance à deux
   'Séance à deux': 'Partner session', 'Rejoindre la séance': 'Join the session', 'Rejoindre': 'Join', 'Copier le lien': 'Copy link', 'Envoyer…': 'Send…', 'Arrêter le mode à deux': 'Stop partner mode',
   'Lien et QR code': 'Link and QR code', 'Mon profil public': 'My public profile', 'Bibliothèque commune': 'Shared library', 'À deux': 'Partner', 'En attente': 'Waiting',

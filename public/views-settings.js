@@ -9,6 +9,7 @@ import { describeOp } from './outbox.js';
 import { installCard, openSetup, showTour } from './views-setup.js';
 import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
+import { NEWS } from './news.js';
 import { vAdminContent } from './content.js';
 import { vSources } from './views-catalog.js';
 import { CAPACITIES, ACTIVITIES } from './model.js';
@@ -16,7 +17,7 @@ import { CAPACITIES, ACTIVITIES } from './model.js';
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
 export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
-const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['bug', 'Signaler un bug'], ['admin', 'Admin']];
+const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin']];
 /** Rubriques des paramètres : une ligne claire par rubrique, comme les réglages d'un téléphone. */
 const MENU = [
   ['display', '🎨', 'Affichage', 'Thème, ambiance, couleur, taille, langue, mise en page'],
@@ -25,6 +26,7 @@ const MENU = [
   ['data', '💾', 'Mes données', 'Exporter, importer un historique'],
   ['sync', '🔄', 'Synchronisation', 'État de l’envoi de tes données'],
   ['help', '❓', 'Aide', 'Visite guidée, questions fréquentes, sources'],
+  ['updates', '🆕', 'Toutes les mises à jour', 'L’évolution de l’app depuis le début, avec une visite pour chacune'],
   ['bug', '🐞', 'Signaler un bug', 'Un problème ? Dis-le nous'],
   ['admin', '🛡️', 'Admin', 'Réservé aux administrateurs'],
 ];
@@ -32,7 +34,7 @@ const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessair
 export function vSettings() {
   const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin'].includes(k)) : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, display: vDisplay, session: vSession, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   const title = sub === 'main' ? 'Paramètres' : subs.find(([k]) => k === sub)[1];
   return h`<h1>${title}</h1>${sub !== 'main' && !['display', 'session'].includes(sub) ? back() : ''}${views[sub]()}`;
 }
@@ -63,6 +65,15 @@ function prefs() {
   return { st, a, segA, tog };
 }
 const back = () => h`<button class="btn sm ghost setback" data-act="setSub" data-id="main">‹ Paramètres</button>`;
+/* ═════════ Toutes les mises à jour, de la plus récente à la première ═════════ */
+function vUpdates() {
+  const list = NEWS.slice().reverse();
+  return h`<p class="small muted">Chaque mise à jour a sa visite : elle montre, à l’écran, ce qui a changé. Idéal pour voir comment l’app a évolué.</p>
+    ${list.map((n, i) => h`<div class="card upd ${i === 0 ? 'acc-b' : ''}"><div class="row between"><span class="kicker">Version ${n.v}${i === 0 ? ' · la plus récente' : ''}</span><span class="tiny muted">${new Date(n.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
+      <h3 style="margin:.2em 0">${n.title}</h3><p class="small">${n.why}</p>
+      <div class="row wrapf"><button class="btn sm ${i === 0 ? 'pri' : ''}" data-act="notifTour" data-v="${n.v}">🧭 Lancer la visite (${n.steps.length} étape${n.steps.length > 1 ? 's' : ''})</button></div>
+      <details class="how mini"><summary>Ce qui a changé</summary><ul class="small">${n.steps.map((st) => h`<li><b>${st[3]}</b> : ${st[4]}</li>`)}</ul></details></div>`)}`;
+}
 /* ═════════ Affichage et mise en page ═════════ */
 function vDisplay() {
   const { st, a, segA, tog } = prefs();
@@ -297,7 +308,7 @@ function vAdminProposals() {
     ${S.admin.propErr ? h`<p class="err small">${S.admin.propErr}</p>` : !p ? skeleton(1) : p.length ? p.map((x) => h`<div class="item prop"><div class="grow"><b>${x.payload?.emoji || ''} ${x.label}</b> ${tag(x.kind === 'intent' ? 'intention' : x.kind === 'category' ? 'catégorie' : 'idée')}
         <div class="tiny muted">${x.username || 'compte supprimé'} · ${relDate(x.created_at)}${x.activity ? ' · ' + (ACTIVITIES[x.activity]?.label || x.activity) : ''}</div>
         ${x.detail ? h`<p class="small">${x.detail}</p>` : ''}${Object.keys(x.payload?.caps || {}).length ? h`<div class="chips">${Object.keys(x.payload.caps).map((c) => h`<span class="chip static">${capL(c)}</span>`)}</div>` : ''}${x.reply ? h`<p class="tiny">${x.reply}</p>` : ''}</div>
-      ${x.status === 'open' ? h`<div class="row tight"><button class="btn sm pri" data-act="propDo" data-id="${x.id}" data-d="accept">${x.kind === 'intent' ? 'Ajouter pour tous' : 'Accepter'}</button><button class="btn sm ghost" data-act="propDo" data-id="${x.id}" data-d="refuse">Refuser</button></div>` : ''}</div>`) : h`<p class="small muted">Rien à traiter.</p>`}
+      ${x.status === 'open' ? h`<div class="row tight"><button class="btn sm pri" data-act="propOpen" data-id="${x.id}">📍 Voir et décider</button><button class="btn sm pri" data-act="propDo" data-id="${x.id}" data-d="accept">${x.kind === 'intent' ? 'Ajouter pour tous' : 'Accepter'}</button><button class="btn sm ghost" data-act="propDo" data-id="${x.id}" data-d="refuse">Refuser</button></div>` : ''}</div>`) : h`<p class="small muted">Rien à traiter.</p>`}
     ${S.admin.cintents?.length ? h`<details class="how mini"><summary>Intentions communes (${S.admin.cintents.length})</summary>${S.admin.cintents.map((x) => h`<div class="item"><div class="grow small">${x.emoji} ${x.label} <span class="tiny muted">${x.activityId ? ACTIVITIES[x.activityId]?.label || x.activityId : 'tous sports'}</span></div><button class="btn sm ghost danger" data-act="cintentDel" data-id="${x.id}" aria-label="Retirer">✕</button></div>`)}</details>` : ''}</div>`;
 }
 ACT.propsReload = () => { S.admin.props = null; loadProps(); };

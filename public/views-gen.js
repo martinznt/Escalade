@@ -9,7 +9,7 @@ import { CAPACITIES, EQUIPMENT, ACTIVITIES } from './model.js';
 import { activeGoals, goalLabel, profileCapacities, STATUS_WORD } from './brain.js';
 import { PART_TYPES, PRESETS, MAX_TOTAL, cleanParts, presetParts, scaleParts, totalMinutes, partLabel, formatName, formatAdvice, parseFormats } from './format.js';
 import { sourcesLine } from './srcui.js';
-import { chooseScope, saveFormatGlobal } from './content.js';
+import { chooseScope, saveFormatGlobal, shareButton } from './content.js';
 import { intentsFor, MUSCLE_GROUPS, AVOID_ZONES, FORMES, FEELS, resolveFeel, keywordCaps } from './intentions.js';
 
 const G = () => S.gen;
@@ -58,7 +58,7 @@ function formatBox(g) {
       <div class="row between"><b>Total : ${durLabel(total)}</b>${total >= MAX_TOTAL ? h`<span class="tiny muted">4 h au maximum</span>` : ''}</div>
       <details class="how mini"><summary>＋ Ajouter une partie</summary><div class="chips">${Object.entries(PART_TYPES).map(([k, t]) => chip(false, `${t.emoji} ${t.label}`, `data-act="gPartAdd" data-v="${k}"`))}</div></details>
       ${formatAdvice(parts).map((a) => h`<p class="tiny warn-t">${a.text}</p>${a.sources.length ? sourcesLine(a.sources) : ''}`)}
-      <div class="row wrapf"><button type="button" class="btn sm" data-act="gFmtSave">💾 Garder ce format</button>${saved.some((f) => f.id === g.fmtId) ? h`<button type="button" class="btn sm danger" data-act="gFmtDel" data-v="${g.fmtId}">Supprimer ce format</button>` : ''}</div></div>`}`;
+      <div class="row wrapf"><button type="button" class="btn sm" data-act="gFmtSave">💾 Garder ce format</button>${saved.some((f) => f.id === g.fmtId) ? h`${S.user?.isAdmin ? '' : shareButton('format', g.fmtId)}<button type="button" class="btn sm danger" data-act="gFmtDel" data-v="${g.fmtId}">Supprimer ce format</button>` : ''}</div></div>`}`;
 }
 const reset = () => { S.gen.plan = null; S.gen.result = null; };
 const setParts = (parts) => { const g = G(); g.parts = cleanParts(parts); g.minutes = Math.max(5, totalMinutes(g.parts)); reset(); render(); };

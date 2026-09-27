@@ -213,7 +213,7 @@ document.addEventListener('click', (e) => { const p = e.target.closest('.card p.
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-submit]'); if (!f) return;
   e.preventDefault();
-  const fn = SUBMIT[f.dataset.submit]; if (fn) Promise.resolve().then(() => fn(f)).catch((err) => { console.error(err); toast('Enregistrement impossible : ' + (err?.message || 'erreur'), 4500, 'bad'); });
+  const fn = SUBMIT[f.dataset.submit]; if (fn) Promise.resolve().then(() => fn(f, e)).catch((err) => { console.error(err); toast('Enregistrement impossible : ' + (err?.message || 'erreur'), 4500, 'bad'); });
 });
 document.addEventListener('change', (e) => { const el = e.target.closest('[data-change]'); if (!el) return; const fn = CHG[el.dataset.change]; if (fn) try { fn(el); } catch (err) { console.error(err); toast(err.message, 4000, 'bad'); } });
 document.addEventListener('input', (e) => { const el = e.target.closest('[data-input]'); if (!el) return; const fn = INPUT[el.dataset.input]; if (fn) fn(el); });
