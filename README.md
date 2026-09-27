@@ -28,6 +28,18 @@ Le rapport complet d'audit, de tests et de limitations est dans **`FINAL_AUDIT.m
 
 Il n'y a aucun mot de passe global pour entrer sur le site : chaque personne crée son compte.
 
+## Adresse courte (gratuite) : `seances-entrainement.pages.dev`
+
+Le dossier `pages/` contient une porte d'entrée Cloudflare Pages qui transmet tout au Worker principal
+(liaison de service `APP`). Mise en place une seule fois dans Cloudflare :
+1. Workers & Pages › Créer › Pages › Importer un dépôt Git › `martinznt/Escalade`.
+2. Nom du projet : `seances-entrainement` · branche : `main` · préréglage : aucun · commande de build : vide ·
+   répertoire de sortie : `pages`.
+3. Projet Pages › Paramètres › Liaisons › Ajouter › Liaison de service : nom `APP`, service `seances-entrainement`.
+4. Redéployer (Déploiements › ⋯ › Réessayer le déploiement).
+
+L'ancienne adresse `workers.dev` continue de fonctionner ; les comptes et les données sont les mêmes.
+
 ## Mises à jour
 
 Chaque déploiement est détecté automatiquement (identifiant de version Cloudflare) : le site et l'application installée
