@@ -4,7 +4,8 @@ import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empt
 import { linkSheet } from './share.js';
 import './duo.js';
 import './views-ai.js';
-import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon, ls } from './state.js';
+import { cleanParts } from './format.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
@@ -72,6 +73,14 @@ function exRow(e, i, n, mode) {
 }
 export function blocksOf(s, mode) {
   const out = [];
+  // Séance au format choisi : les parties dans leur ordre (une même partie peut revenir plus loin).
+  if (s.exercises.some((e) => e.part)) {
+    let run = [];
+    const flush = () => { if (!run.length) return; const mins = Math.round(run.reduce((t, e) => t + exMinutes(e), 0)); out.push(h`<div class="blockhead">${run[0].part || BLOCKS[run[0].block]} · ~${mins} min</div>${run.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`); run = []; };
+    for (const e of s.exercises) { if (run.length && (e.part || e.block) !== (run[0].part || run[0].block)) flush(); run.push(e); }
+    flush();
+    return out;
+  }
   for (const b of ['warmup', 'main', 'cool']) {
     const list = s.exercises.filter((e) => e.block === b);
     if (!list.length) continue;
@@ -279,6 +288,9 @@ export function openGenerator(opts = {}) {
     S.gen.init = true;
     const cfg = item('config', 'main') || {};
     S.gen.minutes = Number(cfg.durations?.[0]) || S.settings.defaultMinutes || 30;
+    // Dernier format et dernière durée utilisés sur cet appareil (confort : rien d'important n'est perdu sans).
+    const last = ls.get('sea:gen-last');
+    if (last && Number(last.minutes) >= 5) { S.gen.minutes = Math.min(240, Number(last.minutes)); if (Array.isArray(last.parts) && last.parts.length) { S.gen.parts = cleanParts(last.parts); S.gen.fmtId = String(last.fmtId || 'custom').slice(0, 40); } S.gen.durOther = ![20, 30, 45, 60, 90, 120, 180].includes(S.gen.minutes) && !S.gen.parts; }
     if (!S.gen.intentions?.length && cfg.intent) S.gen.intentions = [{ id: cfg.intent, p: 2 }];
   }
   Object.assign(S.gen, { plan: null, result: null, saved: false, priorities: {} }, opts);
@@ -301,6 +313,7 @@ ACT.genPlan = () => {
   const g = S.gen;
   if (g.mode === 'goal' && !g.goalId) { toast('Choisis un objectif (ou une autre orientation).'); return; }
   const o = genOptions();
+  ls.set('sea:gen-last', { minutes: g.minutes, parts: o.parts, fmtId: g.fmtId || '' });
   g.plan = planSession({ activityId: g.activityId, mode: g.mode, goalId: g.mode === 'goal' ? g.goalId : '', capId: g.capId || '', minutes: g.minutes, intentions: g.intentions, envId: g.envId, priorities: g.priorities, seed: g.seed ?? Math.floor(Math.random() * 1e9), ...o }, ctx());
   g.boost = o.boost;
   g.seed = g.plan.seed; g.result = null; render(); setTimeout(() => $('#genplan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);

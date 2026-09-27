@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.7.0
+# FINAL_AUDIT — Séances entraînement v8.8.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -490,3 +490,30 @@ réglages qu'un client V2 ne connaît pas.
 **Tests**
 - Nouveaux fichiers : `tests/duo-share.test.mjs` (16 tests ; le QR est relu par jsQR, dépendance de développement) et `tests/look.test.mjs` (6 tests).
 - E2E : 58 étapes, dont le partage par lien et une séance à deux entre deux navigateurs.
+
+## Évolution 8.8.0 : format de séance à la carte, durée libre jusqu'à 4 h
+
+**Durée libre** : de 5 min à 4 h. Les boutons vont de 20 min à 3 h, et « Autre durée » permet d'écrire un nombre de minutes. Sans format choisi, les longues séances comptent maintenant plus d'exercices (jusqu'à 12).
+
+**Format de séance** (`public/format.js`, sans DOM, testé)
+- Les parties : échauffement, corps de séance, technique, renforcement, cardio, gainage, mobilité, étirements, retour au calme.
+- On règle l'ordre et le temps de chacune. Il y a des formats tout prêts, et on peut garder les siens (item `config/formats`, JSON revalidé à la lecture, 12 au plus).
+- Le générateur construit chaque partie pour son temps et dans l'ordre choisi, sans répéter un exercice d'une partie à l'autre.
+- En escalade, la partie principale reste la grimpe, et le renforcement puise dans les exercices de renforcement.
+
+**Conseils sourcés, jamais bloquants**
+- Pas d'échauffement avant l'effort : conseil sourcé soligard2008.
+- Étirements placés avant une partie d'effort : l'app met des mouvements dynamiques à cette place, et les étirements tenus restent en fin de séance (behm2016).
+
+**Affichage**
+- La séance s'affiche par partie, avec le temps de chacune.
+- Le lecteur indique la partie en cours, le temps qu'il lui reste et la partie suivante.
+- Le générateur retient, sur l'appareil, le dernier format et la dernière durée.
+
+**Correctifs**
+- Les zones à ménager et le « pas de sauts » du profil sont aussi appliqués à la génération finale, pas seulement à l'aperçu.
+- La visite guidée retrouve l'élément à montrer si la page se redessine pendant la visite.
+
+**Tests**
+- `tests/format.test.mjs` : 9 tests, dont une séance d'escalade au format choisi et une séance de 2 h 30.
+- E2E : 59 étapes, dont une qui compose un format, règle 2 h 30 et vérifie l'ordre des parties.

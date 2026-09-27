@@ -52,6 +52,7 @@ export function normalizeEx(x = {}) {
     intensity: ['low', 'mod', 'high'].includes(x.intensity) ? x.intensity : '',
     risk: ['finger', 'shoulder', 'elbow', 'knee'].includes(x.risk) ? x.risk : '',
     block: ['warmup', 'main', 'cool'].includes(x.block) ? x.block : 'main',
+    part: str(x.part, 40), // partie du format choisi (« 🧘 Étirements »…), vide sinon
     libId: str(x.libId, 40),
     isNew: !!x.isNew,
     // V2 : relations sémantiques (capacités pondérées, muscles principaux/secondaires), activités compatibles,

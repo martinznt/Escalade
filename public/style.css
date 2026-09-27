@@ -521,3 +521,8 @@ html[data-motion=off] .scene *{animation:none!important}
   .hero .scene{width:46%}
   #player .pl{max-width:720px;margin:0 auto}
 }
+/* Format de séance : parties et temps de chacune */
+.parts{display:grid;gap:8px}
+.partrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--line)}.partrow b.small{display:block;line-height:1.2;font-size:.85rem}.partrow .btn.ic{width:32px;height:32px;min-height:32px;padding:0}
+.stepper.sm{gap:2px}.stepper.sm button{width:30px;height:30px;font-size:1rem}.stepper.sm b{min-width:38px;text-align:center;font-size:.95rem}
+.durrow{align-items:center;gap:8px}.durin{width:96px;text-align:center;font-size:1.1rem}

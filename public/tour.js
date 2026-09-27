@@ -52,6 +52,8 @@ function draw(el) {
     <div class="row">${T.i > 0 ? h`<button class="btn sm" data-act="tourPrev">‹ Retour</button>` : h`<button class="btn sm ghost" data-act="tourEnd">Passer</button>`}<span class="grow"></span>
       ${last ? h`<button class="btn pri" data-act="tourEnd">C’est compris !</button>` : h`<button class="btn pri" data-act="tourNext">Suivant ›</button>`}</div></div>`.s;
   T.el = el; place();
+  // Deuxième placement un peu après : si la page s'est redessinée, la bulle suit l'élément.
+  const i0 = T.i; for (const ms of [350, 1000]) setTimeout(() => { if (T.i === i0) place(); }, ms);
   root.querySelector('.tour-bubble [data-act=tourNext], .tour-bubble [data-act=tourEnd]')?.focus({ preventScroll: true });
 }
 /** Place le halo sur l'élément et la bulle au-dessus ou en dessous, avec la flèche qui le pointe. */
@@ -61,6 +63,8 @@ function place() {
     const root = document.getElementById('tour'); if (!root || T.i < 0) return;
     const spot = root.querySelector('.tour-spot'), bub = root.querySelector('.tour-bubble'), arrow = root.querySelector('.tour-arrow');
     const vw = window.innerWidth, vh = window.innerHeight, pad = 8;
+    // La page a pu se redessiner (données arrivées entre-temps) : on retrouve l'élément.
+    if ((!T.el || !document.body.contains(T.el)) && T.steps[T.i]?.[2]) { const again = document.querySelector(T.steps[T.i][2]); if (again && again.getBoundingClientRect().height > 0) T.el = again; }
     if (!T.el || !document.body.contains(T.el)) {
       spot.style.cssText = `left:${vw / 2}px;top:${vh / 2}px;width:0;height:0`;
       bub.style.cssText = `left:16px;right:16px;top:${Math.max(16, vh / 2 - 120)}px`; arrow.style.display = 'none'; return;

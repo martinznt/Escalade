@@ -297,7 +297,7 @@ await step('générateur : simulation, priorités, génération expliquée, enre
   await a.click('[data-act=gOpen][data-k=intents]'); await a.click('[data-act=gPick][data-k=intentIds][data-v=gainage]');
   await a.click('[data-act=gOpen][data-k=muscles]'); await a.click('[data-act=gPick][data-k=muscles][data-v=cuisses]');
   await a.click('[data-act=gOpen][data-k=zones]'); await a.click('[data-act=gPick][data-k=zones][data-v=wrists]');
-  await a.click('[data-act=gSet][data-k=minutes][data-v="20"]');
+  await a.click('[data-act=gDur][data-v="20"]');
   await a.click('[data-act=genPlan]'); await A.waitForSelector('#genplan'); assert.match(await a.text('#genplan'), /sur mesure/i);
   assert.match(await a.text('#genplan'), /Simulation avant génération/i); assert.match(await a.text('#genplan'), /Matériel nécessaire/);
   await A.locator('#genplan [data-act=prio][data-d="1"]').first().click(); await A.waitForSelector('#genplan');
@@ -390,6 +390,19 @@ await step('mode Lab et timeline', async () => {
   await a.sub('progSub', 'timeline'); await A.waitForSelector('text=Première séance');
   await a.sub('progSub', 'journal'); await A.waitForSelector('form[data-submit=jnote]');
   await a.noOverflow('progrès');
+});
+await step('format de séance : parties au choix, durée libre (2 h 30), séance construite partie par partie', async () => {
+  await a.tab('library'); await a.sub('libSub', 'generate'); await A.waitForSelector('[data-act=gFmt][data-v=complet]');
+  await a.click('[data-act=gFmt][data-v=complet]'); await A.waitForSelector('.parts .partrow');
+  assert.equal(await a.count('.parts .partrow'), 5);
+  await a.click('[data-act=gDurOther]'); await A.fill('.durin', '150'); await A.press('.durin', 'Tab');
+  await A.waitForFunction(() => /Total : 2 h 30/.test(document.querySelector('.parts')?.textContent || ''));
+  await a.click('[data-act=gPartDel][data-i="3"]'); await A.waitForFunction(() => document.querySelectorAll('.parts .partrow').length === 4);
+  await a.click('[data-act=genPlan]'); await A.waitForSelector('#genplan'); assert.match(await a.text('#genplan'), /Technique/);
+  await a.click('[data-act=genDo]'); await A.waitForSelector('#genresult');
+  const heads = await A.$$eval('#genresult .blockhead', (x) => x.map((e) => e.textContent));
+  assert.ok(heads[0].includes('Échauffement') && heads.some((t) => t.includes('Technique')) && heads.at(-1).includes('Étirements'), heads.join(' | '));
+  await a.click('[data-act=gFmt][data-v=""]'); await a.click('[data-act=gDur][data-v="30"]');
 });
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
@@ -593,7 +606,8 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   await G.waitForSelector('#updbar [data-act=updNow]', { timeout: 20000 });
   await Promise.all([G.waitForNavigation({ timeout: 20000 }), g.click('#updbar [data-act=updNow]')]);
   await G.waitForSelector('nav.tabs');
-  await poll(async () => (await G.evaluate(async () => (await caches.keys()).join(','))).includes('deploy-e2e-2'), 15000, 'nouveau cache installé');
+  // La page peut se recharger une seconde fois (activation de la nouvelle version) : une lecture interrompue compte comme « pas encore ».
+  await poll(async () => (await G.evaluate(async () => (await caches.keys()).join(',')).catch(() => '')).includes('deploy-e2e-2'), 15000, 'nouveau cache installé');
   await G.waitForSelector('#updbar.fresh [data-act=updWhat]', { timeout: 20000 }); // « L'app a été mise à jour »
   await g.click('#updbar [data-act=updWhat]'); await G.waitForSelector('#sheet.open .newslist li');
   assert.match(await g.text('#sheet .newslist'), /Visite guidée plus immersive[\s\S]*flèches/);

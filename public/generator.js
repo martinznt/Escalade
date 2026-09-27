@@ -14,6 +14,7 @@ import { LIBRARY, byId, FOCUS } from './library.js';
 import { CAPACITIES, ACTIVITIES, INTENTIONS, EQUIPMENT } from './model.js';
 import { bodyAdjust } from './body-rules.js';
 import { muscleCaps, zoneRisk } from './intentions.js';
+import { PART_TYPES, cleanParts, totalMinutes, partLabel, stretchBeforeEffort } from './format.js';
 import { generateSession as climbGenerate, exMinutes, sessionMinutes, progressHint, analyze, levelFrom } from './engine.js';
 import { profileCapacities, strengthsWeaknesses, availableEquipment, goalCaps, goalLabel, capVolume, relevantCaps, undertrained, exCaps, capacityState, perfsOf, confWord, STATUS_WORD, DAY } from './brain.js';
 import { bestReferenceLevel, levelFromReference } from './grading.js';
@@ -42,7 +43,7 @@ export function budget(minutes, light = false) {
   if (m <= 20) return { warm: 3, main: m - 5, cool: 2, maxN: 3 };
   if (m <= 35) return { warm: 6, main: m - 9, cool: 3, maxN: 4 };
   const warm = Math.min(15, Math.round(m * 0.15)), cool = Math.min(8, Math.round(m * 0.08));
-  return { warm, main: m - warm - cool, cool, maxN: m <= 50 ? 5 : m <= 75 ? 6 : 7, light };
+  return { warm, main: m - warm - cool, cool, maxN: m <= 50 ? 5 : m <= 75 ? 6 : m <= 100 ? 7 : Math.min(12, Math.round(m / 14)), light };
 }
 const WARM = {
   strength: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'], conditioning: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'],
@@ -124,7 +125,8 @@ export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, 
  */
 export function planSession(opts = {}, ctx) {
   const activityId = opts.activityId || Object.keys(ctx.activities)[0] || 'conditioning';
-  const minutes = clamp(opts.minutes, 5, 240, 30), light = !!opts.light, mode = opts.mode || 'weaknesses';
+  const parts = cleanParts(opts.parts);
+  const minutes = parts.length ? Math.max(5, totalMinutes(parts)) : clamp(opts.minutes, 5, 240, 30), light = !!opts.light, mode = opts.mode || 'weaknesses';
   const eq = availableEquipment(ctx, opts.envId);
   const env = ctx.envs.find((e) => e.id === opts.envId) || ctx.defEnv;
   let { level, how: levelHow } = levelFor(activityId, ctx);
@@ -183,6 +185,7 @@ export function planSession(opts = {}, ctx) {
   let rest = B.main;
   distribution.slice(0, Math.min(3, B.maxN)).forEach((d, i, arr) => { const mm = i === arr.length - 1 ? rest : Math.round((B.main * d.pct) / 100); rest -= mm; blocks.push({ kind: 'main', label: d.label, minutes: mm, capId: d.capId, reason: d.reasons[0] }); });
   if (B.cool) blocks.push({ kind: 'cool', label: 'Retour au calme', minutes: B.cool, reason: 'Redescendre en douceur.' });
+  if (parts.length) blocks.splice(0, blocks.length, ...parts.map((p, i) => ({ kind: PART_TYPES[p.type].block, label: partLabel(p.type), minutes: p.minutes, reason: p.type === 'stretch' && stretchBeforeEffort(parts, i) ? 'Placée avant l’effort : mouvements dynamiques plutôt qu’étirements tenus.' : 'Partie choisie dans ton format.' })));
   const intensityWord = light ? 'légère' : level >= 2 ? 'soutenue' : level >= 1 ? 'modérée' : 'progressive';
   const est = Math.max(1, Math.min(5, (light ? 1 : 2) + level + ((opts.intentions || []).some((i) => ['force', 'puissance'].includes(i.id)) ? 1 : 0) + (minutes >= 75 ? 1 : 0) - (minutes <= 12 ? 1 : 0)));
   const constraints = excluded.filter((e) => e.why.some((w) => /doigts|jambes|ménager/.test(w))).slice(0, 4).map((e) => `${e.x.name} : ${e.why.join(', ')}`);
@@ -191,10 +194,11 @@ export function planSession(opts = {}, ctx) {
     activityId, activityLabel: ctx.activities[activityId]?.label || ACTIVITIES[activityId]?.label || activityId, minutes, light, mode, goalId: goal?.id || '', goalLabel: goal ? goalLabel(goal) : '',
     intentions: opts.intentions || [], priorities: opts.priorities || {}, envId: env?.id || '', envName: env?.name || '', equipment: [...eq], level, levelHow,
     distribution, blocks, difficulty: { value: est, text: `${est}/5 — intensité ${intensityWord} (niveau pris en compte : ${['débutant', 'intermédiaire', 'avancé'][level]}, ${levelHow})` },
+    parts, avoidZones: opts.avoidZones || [], noPlyo: !!bodyAdj.noPlyo,
     constraints, missing, seed, capId: opts.capId || '', bodyReasons: bodyAdj.reasons, restFactor: bodyAdj.restFactor, circuit: !!bodyAdj.circuit,
     intentionText: custom ? `Séance sur mesure : ${[...pickGoals.map(goalLabel), ...(opts.intents || []).map((i) => i.label)].slice(0, 3).join(', ') || 'tes choix'}` : goal ? `Avancer vers « ${goalLabel(goal)} »` : light ? 'Séance légère : technique, mobilité, travail doux' : mode === 'strengths' ? 'Faire progresser tes points forts' : 'Travailler tes axes de progrès',
   };
-  if (!isClimbing(activityId)) {
+  if (!isClimbing(activityId) && !parts.length) {
     const dry = selectMain(plan, ctx, ok);
     plan.preview = dry.items.map((i) => i.lib.name);
     plan.neededEquipment = [...new Set(dry.items.flatMap((i) => i.lib.needs || []))].map((n) => EQUIPMENT[n] || n);
@@ -203,10 +207,11 @@ export function planSession(opts = {}, ctx) {
 }
 
 /* ───────── Sélection des exercices principaux ───────── */
-function selectMain(plan, ctx, pool) {
-  const rng = mulberry32(plan.seed);
-  const targets = Object.fromEntries(plan.distribution.map((d) => [d.capId, d.weight]));
-  const B = budget(plan.minutes, plan.light);
+function selectMain(plan, ctx, pool, o = {}) {
+  const rng = mulberry32(plan.seed + (o.salt || 0));
+  const targets = o.targets || Object.fromEntries(plan.distribution.map((d) => [d.capId, d.weight]));
+  const B = o.mainMin ? { main: o.mainMin, maxN: Math.max(1, Math.min(12, Math.round(o.mainMin / 8))) } : budget(plan.minutes, plan.light);
+  const skip = o.exclude || new Set();
   const recent = new Set(); for (const h of ctx.history) if (ctx.now - h.startedAt < 3 * DAY) for (const e of h.data?.exercises || []) recent.add(exKey(e.name));
   const everDone = new Set(); for (const h of ctx.history) for (const e of h.data?.exercises || []) everDone.add(exKey(e.name));
   const covered = {}, patterns = {}, items = [];
@@ -224,7 +229,7 @@ function selectMain(plan, ctx, pool) {
   // Un exercice dont la durée minimale dépasse le temps restant n'est pas proposé (ex. sortie longue pour 30 min).
   const minMinutes = (x) => exMinutes(normalizeEx({ ...x, sets: x.mode === 'time' && x.flex ? 1 : Math.min(x.sets || 1, 2), secMin: x.flex ? x.flex[0] : x.secMin, secMax: x.flex ? x.flex[0] : x.secMin }));
   while (items.length < B.maxN && mins < B.main * 0.85) {
-    const avail = pool.filter((x) => !items.some((i) => i.lib.id === x.id) && minMinutes(x) <= Math.max(2, B.main - mins) * 1.15);
+    const avail = pool.filter((x) => !skip.has(x.id) && !items.some((i) => i.lib.id === x.id) && minMinutes(x) <= Math.max(2, B.main - mins) * 1.15);
     let best = null, bs = -Infinity;
     for (const x of avail) { const s = score(x); if (s > bs) { bs = s; best = x; } }
     if (!best || bs === -Infinity) break;
@@ -283,6 +288,72 @@ export function warmupFor(activityId, minutes = 5, eq = null) {
   return buildBlock(ids, 'warmup', minutes, {});
 }
 
+/** Allonge un bloc trop court (séries ou durée) pour remplir le temps prévu. */
+function fillBlock(list, minutes) {
+  let guard = 0;
+  while (list.length && list.reduce((t, x) => t + exMinutes(x), 0) < minutes * 0.85 && guard++ < 60) {
+    const e = list[guard % list.length];
+    if (e.mode === 'time' && e.secMin < 180) e.secMin = e.secMax = Math.min(180, Math.round(e.secMin * 1.25));
+    else if (e.sets < 5) e.sets++;
+    else if (guard > list.length * 6) break;
+  }
+  return list;
+}
+const STRETCH_STATIC = ['cd-hips', 'cd-shoulders', 'cd-forearm', 'mob-hamstrings', 'mob-hips'];
+const STRETCH_DYNAMIC = ['wu-mob-lower', 'wu-mob-upper', 'wu-wrists', 'mob-thoracic', 'mob-ankles', 'mob-shoulders'];
+const MOBILITY = ['mob-hips', 'mob-thoracic', 'mob-shoulders', 'mob-ankles', 'mob-hamstrings'];
+/** Séance au format choisi : chaque partie est construite pour son temps, dans l'ordre voulu. */
+function generateParts(plan, ctx, eq) {
+  const why = [], excluded = [], out = [], used = new Set();
+  const climbing = isClimbing(plan.activityId);
+  const pool = (act) => candidates(act, ctx, { eq, level: plan.level, light: plan.light, noPlyo: plan.noPlyo, zones: plan.avoidZones || [] });
+  const own = pool(plan.activityId), gym = climbing ? pool('conditioning') : own;
+  const planTargets = Object.fromEntries(plan.distribution.map((d) => [d.capId, d.weight]));
+  const has = (id) => byId(id) && byId(id).needs.every((n) => eq.has(n));
+  // Évite de refaire les mêmes exercices d'une partie à l'autre (sauf s'il n'y a rien d'autre).
+  const fresh = (ids) => { const f = ids.filter((id) => !used.has(id)); return f.length ? f : ids; };
+  plan.parts.forEach((p, i) => {
+    const T = PART_TYPES[p.type], label = partLabel(p.type), tag = (list) => list.map((e) => { used.add(e.libId); return normalizeEx({ ...e, part: label, block: T.block }); });
+    if (p.type === 'warmup') {
+      const ids = [...(WARM[plan.activityId] || (climbing ? ['wu-pulse', 'wu-mob-upper', 'wu-wrists', 'wu-scap-floor', 'wu-climb', 'wu-hang'] : WARM.custom))].filter(has);
+      out.push(...tag(fillBlock(buildBlock(fresh(ids), 'warmup', p.minutes, {}), p.minutes))); return;
+    }
+    if (p.type === 'stretch' || p.type === 'cool') {
+      const dyn = p.type === 'stretch' && stretchBeforeEffort(plan.parts, i);
+      const ids = (p.type === 'cool' ? ['cd-breath', ...(COOL[plan.activityId] || COOL.custom)] : dyn ? STRETCH_DYNAMIC : STRETCH_STATIC).filter(has);
+      if (dyn) why.push('Étirements placés avant l’effort : mouvements dynamiques (les étirements tenus longtemps juste avant baissent un peu la performance).');
+      out.push(...tag(fillBlock(buildBlock(fresh([...new Set(ids)]), 'cool', p.minutes, {}), p.minutes))); return;
+    }
+    if (p.type === 'mobility') { out.push(...tag(fillBlock(buildBlock(fresh(MOBILITY.filter(has)), 'main', p.minutes, {}), p.minutes))); return; }
+    if (p.type === 'main' && climbing) {
+      const settings = climbSettings(ctx, eq);
+      const r = climbGenerate({ size: p.minutes <= 38 ? 'petite' : p.minutes <= 62 ? 'moyenne' : 'grosse', focus: plan.light ? 'dalle' : 'surprise', feeling: plan.light ? 'fatigue' : 'normal', equipment: settings.equipment, seed: plan.seed + i }, { settings, history: ctx.history, now: ctx.now });
+      const items = r.session.exercises.filter((e) => e.block === 'main').map((ex) => ({ ex: normalizeEx(ex), lib: byId(ex.libId) || {} }));
+      fitTime(items, p.minutes); while (items.length > 1 && items.reduce((t, x) => t + exMinutes(x.ex), 0) > p.minutes * 1.15) items.pop();
+      for (const it of items) used.add(it.ex.libId);
+      why.push(...r.meta.why.slice(0, 2)); out.push(...tag(items.map((x) => x.ex))); return;
+    }
+    // Parties d'effort : ce que la partie cible (ou tes choix pour « Corps de séance »).
+    const src = p.type === 'technique' || p.type === 'main' ? own : gym;
+    let targets = p.type === 'main' ? planTargets : Object.fromEntries(Object.entries(T.caps || {}).filter(([c]) => src.ok.some((x) => (x.caps?.[c] || 0) >= 0.3)));
+    if (!Object.keys(targets).length) targets = planTargets;
+    const sel = selectMain(plan, ctx, src.ok, { mainMin: p.minutes, targets, exclude: used, salt: i + 1 });
+    if (!sel.items.length) { excluded.push(`${T.label} : aucun exercice compatible avec ton matériel aujourd’hui.`); return; }
+    fitTime(sel.items, p.minutes);
+    for (const it of sel.items) {
+      used.add(it.lib.id);
+      const m = Object.entries(it.lib.caps || {}).filter(([c]) => targets[c]).sort((a, b) => b[1] - a[1])[0];
+      it.ex.why = (m ? `${T.label} : travaille ${capName(m[0], ctx)}` : T.label).slice(0, 240);
+      const hint = progressHint(it.ex, ctx.history); if (hint) it.ex.note = `Dernière fois : ${hint.last}.${hint.next ? ' ' + hint.next + '.' : ''}`;
+      if (plan.restFactor && plan.restFactor !== 1) it.ex.rest = Math.round((it.ex.rest || 60) * plan.restFactor);
+      if (plan.circuit) it.ex.rest = Math.min(it.ex.rest || 45, 45);
+    }
+    why.push(...sel.items.map((it) => `${it.lib.name} : ${it.ex.why}.`));
+    out.push(...tag(sel.items.map((x) => x.ex)));
+  });
+  return { exercises: out, why, excluded };
+}
+
 /* ───────── Génération finale ───────── */
 export function generateFromPlan(plan, ctx) {
   const eq = new Set(plan.equipment);
@@ -294,7 +365,11 @@ export function generateFromPlan(plan, ctx) {
   inferences.push(`Niveau pris en compte : ${['débutant', 'intermédiaire', 'avancé'][plan.level]} (${plan.levelHow}).`);
   for (const d of plan.distribution) inferences.push(`${d.label} ciblé(e) à ${d.pct} % : ${d.reasons.join(' ; ')}.`);
   if (plan.goalLabel) facts.push(`Objectif sélectionné : ${plan.goalLabel}.`);
-  if (isClimbing(plan.activityId)) {
+  if (plan.parts?.length) {
+    const r = generateParts(plan, ctx, eq);
+    exercises = r.exercises; why.push(...r.why); excludedTxt.push(...r.excluded);
+    facts.push(`Format choisi : ${plan.parts.map((p) => `${PART_TYPES[p.type].label} ${p.minutes} min`).join(', ')}.`);
+  } else if (isClimbing(plan.activityId)) {
     const top = plan.distribution[0]?.capId;
     const FOCUS_OF = { force_doigts: 'reglette', pince: 'reglette', technique_pieds: 'dalle', equilibre: 'dalle', technique_escalade: 'dalle', tirage_vertical: 'devers', puissance_haut: 'devers', gainage_anterieur: 'devers', blocage: 'devers', endurance_doigts: 'resistance', endurance_aerobie: 'resistance', coordination: 'vitesse', explosivite: 'vitesse', force_jambes: 'jambes', stabilite_epaules: 'equilibre', mobilite_hanches: 'dalle' };
     const focus = plan.light ? 'dalle' : FOCUS_OF[top] || 'surprise';
@@ -312,7 +387,7 @@ export function generateFromPlan(plan, ctx) {
     }
     exercises = s.exercises;
   } else {
-    const { ok, excluded } = candidates(plan.activityId, ctx, { eq, level: plan.level, light: plan.light });
+    const { ok, excluded } = candidates(plan.activityId, ctx, { eq, level: plan.level, light: plan.light, noPlyo: plan.noPlyo, zones: plan.avoidZones || [] });
     for (const e of excluded.filter((e) => Object.keys(e.x.caps || {}).some((c) => plan.distribution.some((d) => d.capId === c && (e.x.caps[c] || 0) >= 0.6))).slice(0, 6)) excludedTxt.push(`${e.x.name} : ${e.why.join(', ')}.`);
     const { items, targets } = selectMain(plan, ctx, ok);
     if (!items.length) missing.push('Aucun exercice compatible trouvé : ajoute du matériel, un exercice personnel pour cette activité ou change les priorités.');

@@ -52,6 +52,10 @@ const EN = {
   'Doigts': 'Fingers', 'Coudes': 'Elbows', 'Poignets': 'Wrists', 'Dos, lombaires': 'Back, lower back', 'Genoux': 'Knees', 'Chevilles': 'Ankles',
   'Tirage': 'Pull', 'Poussée': 'Push', 'Jambes': 'Legs', 'Pourquoi le renforcement compte': 'Why strength training matters', 'Ça travaille': 'What it trains', 'Conseils': 'Tips', 'Déroulé': 'Plan',
   'débutant': 'beginner', 'intermédiaire': 'intermediate', 'avancé': 'advanced', 'pour toi': 'for you',
+  '3 · Format de la séance': '3 · Session format', '4 · Ce que je veux travailler': '4 · What I want to work on', 'Automatique': 'Automatic', 'Classique': 'Classic', 'Avec étirements': 'With stretching',
+  'Technique + physique': 'Technique + fitness', 'Cardio + renfo': 'Cardio + strength', 'Je compose': 'Build my own', 'Autre durée': 'Other length', 'Échauffement': 'Warm-up', 'Corps de séance': 'Main set', 'Technique': 'Technique',
+  'Renforcement': 'Strength', 'Étirements': 'Stretching', 'Retour au calme': 'Cool-down', '＋ Ajouter une partie': '＋ Add a part', 'Garder ce format': 'Keep this format', 'Supprimer ce format': 'Delete this format',
+  'L’app répartit le temps : échauffement, corps de séance, retour au calme.': 'The app splits the time: warm-up, main set, cool-down.', 'de 5 min à 4 h': 'from 5 min to 4 h',
   // Partage et séance à deux
   'Séance à deux': 'Partner session', 'Rejoindre la séance': 'Join the session', 'Rejoindre': 'Join', 'Copier le lien': 'Copy link', 'Envoyer…': 'Send…', 'Arrêter le mode à deux': 'Stop partner mode',
   'Lien et QR code': 'Link and QR code', 'Mon profil public': 'My public profile', 'Bibliothèque commune': 'Shared library', 'À deux': 'Partner', 'En attente': 'Waiting',
@@ -86,7 +90,7 @@ const WORDS = [
   [/\bSérie (\d+) \/ (\d+)/g, 'Set $1 / $2'], [/\bExercice (\d+) \/ (\d+)/g, 'Exercise $1 / $2'], [/\bcôté (\d) \/ 2/g, 'side $1 / 2'],
   [/^(\d+) séances? cette semaine$/, '$1 session(s) this week'], [/^(\d+)\/(\d+) séances? cette semaine$/, '$1/$2 sessions this week'], [/^Durée choisie : (\d+) min$/, 'Chosen length: $1 min'],
   [/^Ensuite : (.+)$/, 'Next: $1'], [/^Repos prévu : (.+)$/, 'Planned rest: $1'], [/^▶ Démarrer \((.+)\)$/, '▶ Start ($1)'], [/(\d+) semaines d’affilée/, '$1 weeks in a row'],
-  [/ rép\./g, ' reps'], [/ · repos /g, ' · rest '], [/\bmin (\d+)\b/g, 'min $1'],
+  [/^Total : (.+)$/, 'Total: $1'], [/ rép\./g, ' reps'], [/ · repos /g, ' · rest '], [/\bmin (\d+)\b/g, 'min $1'],
 ];
 const DAYS = { lundi: 'Monday', mardi: 'Tuesday', mercredi: 'Wednesday', jeudi: 'Thursday', vendredi: 'Friday', samedi: 'Saturday', dimanche: 'Sunday' };
 const MONTHS = { janvier: 'January', février: 'February', mars: 'March', avril: 'April', mai: 'May', juin: 'June', juillet: 'July', août: 'August', septembre: 'September', octobre: 'October', novembre: 'November', décembre: 'December' };

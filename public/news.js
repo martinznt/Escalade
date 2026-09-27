@@ -34,6 +34,11 @@ export const NEWS = [
     ['home', 'dash', '.hero', '🌄 Accueil vivant', 'Le ciel suit l’heure de la journée. Dans Paramètres, tu peux ajouter un décor de saison.'],
     ['settings', 'main', 'select[name=lang]', '🌍 English', 'L’app existe aussi en anglais (bêta). Sur ordinateur, le menu passe à gauche.'],
   ] },
+  { v: '8.8.0', date: '2026-09-29', title: 'Ton format de séance, jusqu’à 4 h', why: 'Choisis les parties de ta séance (échauffement, technique, renfo, étirements…), leur ordre et le temps de chacune, et garde tes formats.', steps: [
+    ['library', 'generate', '[data-act=gDurOther]', '⏱ Durée libre', 'Des séances de 5 min à 4 h : touche « Autre durée » et écris le nombre de minutes.'],
+    ['library', 'generate', '[data-act=gFmt][data-v=custom]', '🧩 Ton format', 'Compose ta séance partie par partie, règle le temps de chacune, change l’ordre, puis garde ce format pour la prochaine fois.'],
+    ['', '', '', '▶ Pendant la séance', 'Le lecteur affiche la partie en cours et le temps qu’il lui reste.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

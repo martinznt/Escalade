@@ -126,6 +126,8 @@ export const SCHEMAS = {
     breath: ['e', ['jamais', 'effort', 'escaliers', 'souvent', ''], ''], daily: ['e', ['assis', 'debout', 'physique', ''], ''],
     // Mise en page personnalisée (item « layout ») : JSON validé à la lecture (layout.js).
     lay: ['s', 9000],
+    // Formats de séance gardés (item « formats ») : JSON validé à la lecture (format.js).
+    formats: ['s', 6000],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);
