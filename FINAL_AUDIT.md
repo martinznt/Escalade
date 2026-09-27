@@ -598,3 +598,11 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
 **Tests**
 - `tests/global.test.mjs` (9 tests) : validation, 403 pour un compte normal, 401 sans compte, lecture pour tous, couches et retour à l'original.
 - E2E à 61 étapes : un administrateur modifie pour tout le monde, un autre compte le voit, l'administrateur annule.
+
+### Correctif : notification « nouvelle mise à jour » en retard
+- **Cause** : l'annonce ne partait qu'avec la tâche planifiée (toutes les 15 min, donc jusqu'à 15 min après la mise en ligne). La notification était aussi envoyée en priorité « normale », que les téléphones en économie d'énergie peuvent retarder de plusieurs minutes.
+- **Correctif**
+  - L'annonce part dès la première requête reçue après le déploiement (`ctx.waitUntil`, une vérification par instance du Worker). La tâche planifiée reste en secours.
+  - Les notifications sont envoyées en priorité haute (`Urgency: high`).
+  - Le changement de version est enregistré en « compare puis remplace » : même avec plusieurs requêtes simultanées, une seule annonce part.
+- **Tests** : `push-ics.test.mjs`, avec une seule annonce pour 3 requêtes simultanées, la priorité haute, et l'annonce dès la première requête.

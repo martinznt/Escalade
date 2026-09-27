@@ -25,7 +25,7 @@ export async function vapidAuth(env, endpoint, now = Date.now()) {
   const head = b64u(enc.encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
   const body = b64u(enc.encode(JSON.stringify({ aud, exp: Math.floor(now / 1000) + 12 * 3600, sub: env.PUSH_CONTACT || 'https://seances-sport.pages.dev' })));
   const sig = b64u(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, enc.encode(`${head}.${body}`)));
-  return { Authorization: `vapid t=${head}.${body}.${sig}, k=${pub}`, TTL: '3600', Urgency: 'normal', 'Content-Length': '0' };
+  return { Authorization: `vapid t=${head}.${body}.${sig}, k=${pub}`, TTL: '3600', Urgency: 'high', 'Content-Length': '0' }; // « high » : le téléphone ne la retarde pas en économie d'énergie
 }
 /** Envoie une notification vide. Retourne 'ok', 'gone' (abonnement expiré, à supprimer) ou 'error'. */
 export async function sendPush(env, endpoint, fetchFn = fetch) {
@@ -85,8 +85,10 @@ export async function updateNotice(env, build, fetchFn = fetch) {
   if (!build || build === 'dev') return 0;
   const row = await q(env, "SELECT value FROM system_state WHERE key='last_build'").first();
   if (row?.value === build) return 0;
-  await q(env, "INSERT INTO system_state(key,value) VALUES('last_build',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", build).run();
-  if (!row) return 0; // premier passage : on retient la version sans prévenir
+  if (!row) { await q(env, "INSERT INTO system_state(key,value) VALUES('last_build',?) ON CONFLICT(key) DO NOTHING", build).run(); return 0; } // premier passage : on retient la version sans prévenir
+  // Changement de version « compare puis remplace » : si deux requêtes arrivent en même temps, une seule prévient.
+  const r = await q(env, "UPDATE system_state SET value=? WHERE key='last_build' AND value=?", build, row.value).run();
+  if (!r.meta?.changes) return 0;
   return notifyType(env, 'update', { fetchFn });
 }
 /** Texte à afficher pour une notification reçue par un appareil (selon ce qui l'a déclenchée). */
