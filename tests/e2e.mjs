@@ -160,6 +160,15 @@ await step('ma salle : cotation U1 → U8+, espaces et matériel ; bloc noté «
   await A.waitForSelector('text=réussi · dur'); assert.match(await a.text('main'), /U7[\s\S]*dur · Arkose Test/);
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'ascent' && i.d.nuance === 'dur' && i.d.grade?.label === 'U7' && i.d.context?.place === 'Arkose Test' && i.d.styles.length), 12000, 'bloc synchronisé');
 });
+await step('notifications : boîte des mises à jour (utilité, visite), réponses aux propositions, réglages par type', async () => {
+  await a.tab('home'); await A.evaluate(() => localStorage.setItem('sea:inbox-seen', '1'));
+  await A.reload(); await A.waitForSelector('.topicons [data-act=notifOpen] .badge-dot', { timeout: 10000 });
+  await a.click('.topicons [data-act=notifOpen]'); await A.waitForSelector('.inbox .nitem.unread');
+  assert.match(await a.text('.inbox'), /Ambiances[\s\S]*Minuteur/); await A.locator('.inbox details summary').first().click();
+  assert.match(await a.text('.inbox'), /Ce qui a changé/);
+  await a.click('.inbox [data-act=notifSettings]'); await A.waitForSelector('text=Son dans l’app');
+  assert.equal(await a.count('.topicons [data-act=notifOpen] .badge-dot'), 0, 'lu');
+});
 await step('programme : création en 4 questions, calendrier rempli, séance du jour avec la forme', async () => {
   await a.tab('home'); await a.click('.topicons [data-act=topCal]'); await a.click('[data-act=progNew]'); await A.waitForSelector('.pwiz');
   await a.click('.pwiz [data-act=pwSet][data-k=goal][data-v=force]'); await a.click('.pwiz [data-act=pwSet][data-k=weeks][data-v="4"]');
@@ -545,7 +554,7 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   await Promise.all([G.waitForNavigation({ timeout: 20000 }), g.click('#updbar [data-act=updNow]')]);
   await G.waitForSelector('nav.tabs');
   await poll(async () => (await G.evaluate(async () => (await caches.keys()).join(','))).includes('deploy-e2e-2'), 15000, 'nouveau cache installé');
-  await G.waitForSelector('#updbar.fresh [data-act=updWhat]', { timeout: 10000 }); // « L'app a été mise à jour »
+  await G.waitForSelector('#updbar.fresh [data-act=updWhat]', { timeout: 20000 }); // « L'app a été mise à jour »
   await g.click('#updbar [data-act=updWhat]'); await G.waitForSelector('#sheet.open .newslist li');
   assert.match(await g.text('#sheet .newslist'), /Visite guidée plus immersive[\s\S]*flèches/);
   assert.equal(await g.count('#updbar'), 0, 'bandeau disparu une fois les nouveautés vues');

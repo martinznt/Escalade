@@ -8,10 +8,10 @@ export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager'
 const tz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris'; } catch { return 'Europe/Paris'; } };
 const unb64u = (s) => Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
 function prefs() {
-  const saved = ls.get(KEY, null); if (saved) return saved;
+  const saved = ls.get(KEY, null); if (saved) return { types: ['reminder', 'update', 'reply', 'admin'], silent: false, ...saved };
   const prog = [...S.items.values()].find((it) => it.c === 'program' && !it.del && it.d.status === 'active');
   const per = Number(item('config', 'main')?.perWeek) || 3;
-  return { on: false, days: prog ? prog.d.days.map(Number) : ({ 1: [2], 2: [1, 4], 3: [0, 2, 4], 4: [0, 1, 3, 5] }[Math.min(4, per)] || [0, 2, 4]), hour: '18:00' };
+  return { on: false, days: prog ? prog.d.days.map(Number) : ({ 1: [2], 2: [1, 4], 3: [0, 2, 4], 4: [0, 1, 3, 5] }[Math.min(4, per)] || [0, 2, 4]), hour: '18:00', types: ['reminder', 'update', 'reply', 'admin'], silent: false };
 }
 async function subscription(create) {
   const reg = await navigator.serviceWorker.ready;
@@ -23,22 +23,30 @@ async function save(p) {
   ls.set(KEY, p);
   if (!p.on) return;
   const sub = await subscription(true);
-  await api('POST', '/api/push/subscribe', { endpoint: sub.endpoint, days: p.days, hour: p.hour, tz: tz() });
+  await api('POST', '/api/push/subscribe', { endpoint: sub.endpoint, days: p.days, hour: p.hour, tz: tz(), types: p.types, silent: !!p.silent });
 }
 
+const TYPE_LABELS = [['reminder', '🏋️', 'Rappels d’entraînement', 'Les jours et à l’heure que tu choisis'], ['update', '✨', 'Nouvelles mises à jour', 'Quand l’app change, avec ce que ça apporte'], ['reply', '💬', 'Réponses à mes propositions', 'Quand un administrateur répond'], ['admin', '📬', 'Nouvelles propositions', 'Administrateurs seulement']];
 export function remindersCard() {
   const p = prefs();
   let body;
-  if (S.user?.guest) body = h`<p class="small muted">Crée un compte (gratuit) pour recevoir des rappels.</p>`;
-  else if (!pushSupported()) body = h`<p class="small muted">${isIOS() && !isInstalled() ? 'Sur iPhone, installe d’abord l’application sur l’écran d’accueil : les rappels marchent ensuite.' : 'Ce navigateur ne gère pas les notifications.'}</p>`;
+  if (S.user?.guest) body = h`<p class="small muted">Crée un compte (gratuit) pour recevoir des notifications.</p>`;
+  else if (!pushSupported()) body = h`<p class="small muted">${isIOS() && !isInstalled() ? 'Sur iPhone, installe d’abord l’application sur l’écran d’accueil : les notifications marchent ensuite.' : 'Ce navigateur ne gère pas les notifications.'}</p>`;
   else if (Notification.permission === 'denied') body = h`<p class="small warn-t">Les notifications sont bloquées pour ce site. Autorise-les dans les réglages du navigateur, puis reviens ici.</p>`;
-  else body = h`<label class="chk"><input type="checkbox" data-change="remOn" ${p.on ? 'checked' : ''}> Me rappeler de m’entraîner</label>
-    ${p.on ? h`<div class="chips days">${DAY_NAMES.map((d, i) => h`<button type="button" class="chip ${p.days.includes(i) ? 'on' : ''}" data-act="remDay" data-v="${i}">${d}</button>`)}</div>
-      <div class="row"><label class="grow">À quelle heure ?<select data-change="remHour">${Array.from({ length: 33 }, (_, k) => { const m = 6 * 60 + k * 30, v = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; return h`<option value="${v}" ${p.hour === v ? 'selected' : ''}>${v.replace(':', ' h ')}</option>`; })}</select></label>
-      <button class="btn sm" data-act="remTest">Tester</button></div>
-      <p class="tiny muted">Si un programme est en cours, le rappel te dit quelle séance faire.</p>` : ''}`;
-  return h`<div class="card"><h3>🔔 Rappels</h3>${body}</div>`;
+  else body = h`<label class="chk big"><input type="checkbox" data-change="remOn" ${p.on ? 'checked' : ''}> Recevoir des notifications sur cet appareil</label>
+    ${p.on ? h`<div class="ntypes">${TYPE_LABELS.filter(([k]) => k !== 'admin' || S.user?.isAdmin).map(([k, ic, l, d]) => h`<label class="ntype"><input type="checkbox" data-change="remType" value="${k}" ${p.types.includes(k) ? 'checked' : ''}><span class="nti">${ic}</span><span class="grow"><b>${l}</b><small>${d}</small></span></label>
+      ${k === 'reminder' && p.types.includes('reminder') ? h`<div class="nsub"><div class="chips days">${DAY_NAMES.map((dn, i) => h`<button type="button" class="chip ${p.days.includes(i) ? 'on' : ''}" data-act="remDay" data-v="${i}">${dn}</button>`)}</div>
+        <label>À quelle heure ?<select data-change="remHour">${Array.from({ length: 33 }, (_, x) => { const m = 6 * 60 + x * 30, v = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; return h`<option value="${v}" ${p.hour === v ? 'selected' : ''}>${v.replace(':', ' h ')}</option>`; })}</select></label>
+        <p class="tiny muted">Si un programme est en cours, le rappel te dit quelle séance faire.</p></div>` : ''}`)}</div>
+      <label class="chk"><input type="checkbox" data-change="remSilent" ${p.silent ? 'checked' : ''}> 🔕 Silencieuses (sans son ni vibration)</label>
+      <button class="btn sm" data-act="remTest">Envoyer une notification de test</button>` : ''}`;
+  return h`<div class="card"><h3>🔔 Notifications</h3>${body}</div>`;
 }
+CHG.remType = async (el) => {
+  const p = prefs(), t = new Set(p.types); if (el.checked) t.add(el.value); else t.delete(el.value);
+  try { await save({ ...p, types: [...t] }); } catch (e) { toast(e.message, 4000, 'bad'); } render();
+};
+CHG.remSilent = async (el) => { try { await save({ ...prefs(), silent: el.checked }); } catch (e) { toast(e.message, 4000, 'bad'); } };
 CHG.remOn = async (el) => {
   const p = prefs();
   if (el.checked) {

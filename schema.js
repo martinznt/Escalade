@@ -46,4 +46,8 @@ export const ADD_COLUMNS = [
   ['user_data', 'v2_migrated', 'INTEGER NOT NULL DEFAULT 0'],
   ['profiles', 'bio', "TEXT NOT NULL DEFAULT ''"],
   ['profiles', 'share_json', "TEXT NOT NULL DEFAULT '{}'"],
+  // Notifications : types choisis par appareil, message en attente, mode silencieux.
+  ['push_subs', 'types', "TEXT NOT NULL DEFAULT '[\"reminder\",\"update\",\"reply\",\"admin\"]'"],
+  ['push_subs', 'pending', "TEXT NOT NULL DEFAULT ''"],
+  ['push_subs', 'silent', 'INTEGER NOT NULL DEFAULT 0'],
 ];

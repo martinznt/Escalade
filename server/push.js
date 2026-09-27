@@ -54,15 +54,55 @@ const safeDays = (s) => { try { const d = JSON.parse(s); return Array.isArray(d)
 
 /** Tâche planifiée : envoie les rappels dus. */
 export async function runReminders(env, now = Date.now(), fetchFn = fetch) {
-  const subs = (await q(env, 'SELECT endpoint,user_id,days,hour,tz,last_day FROM push_subs').all()).results || [];
+  const subs = (await q(env, 'SELECT endpoint,user_id,days,hour,tz,last_day,types FROM push_subs').all()).results || [];
   let sent = 0;
   for (const s of subs) {
-    if (!isDue(s, now)) continue;
+    if (!wants(s, 'reminder') || !isDue(s, now)) continue;
+    await q(env, 'UPDATE push_subs SET pending=? WHERE endpoint=?', 'reminder', s.endpoint).run();
     const r = await sendPush(env, s.endpoint, fetchFn);
     if (r === 'gone') await q(env, 'DELETE FROM push_subs WHERE endpoint=?', s.endpoint).run();
     else { await q(env, 'UPDATE push_subs SET last_day=? WHERE endpoint=?', localNow(s.tz, now).ymd, s.endpoint).run(); if (r === 'ok') sent++; }
   }
   return sent;
+}
+
+export const TYPES = ['reminder', 'update', 'reply', 'admin'];
+export const wants = (sub, type) => { try { const t = JSON.parse(sub.types || '[]'); return Array.isArray(t) ? t.includes(type) : true; } catch { return true; } };
+/** Prévient les abonnés d'un type (et, si donné, seulement ceux de ces comptes). Le texte est lu ensuite par l'appareil. */
+export async function notifyType(env, type, { userIds = null, fetchFn = fetch, limit = 500 } = {}) {
+  const rows = (await q(env, 'SELECT endpoint,user_id,types FROM push_subs LIMIT ?', limit).all()).results || [];
+  let sent = 0;
+  for (const s of rows) {
+    if (!wants(s, type) || (userIds && !userIds.includes(s.user_id))) continue;
+    await q(env, 'UPDATE push_subs SET pending=? WHERE endpoint=?', type, s.endpoint).run();
+    const r = await sendPush(env, s.endpoint, fetchFn);
+    if (r === 'gone') await q(env, 'DELETE FROM push_subs WHERE endpoint=?', s.endpoint).run(); else if (r === 'ok') sent++;
+  }
+  return sent;
+}
+/** À chaque nouveau déploiement (identifiant de version différent) : notification « nouvelle mise à jour ». */
+export async function updateNotice(env, build, fetchFn = fetch) {
+  if (!build || build === 'dev') return 0;
+  const row = await q(env, "SELECT value FROM system_state WHERE key='last_build'").first();
+  if (row?.value === build) return 0;
+  await q(env, "INSERT INTO system_state(key,value) VALUES('last_build',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", build).run();
+  if (!row) return 0; // premier passage : on retient la version sans prévenir
+  return notifyType(env, 'update', { fetchFn });
+}
+/** Texte à afficher pour une notification reçue par un appareil (selon ce qui l'a déclenchée). */
+export async function messageFor(env, endpoint, userId, tz, now = Date.now()) {
+  const sub = endpoint ? await q(env, 'SELECT user_id,pending,silent FROM push_subs WHERE endpoint=?', endpoint).first() : null;
+  const mine = sub && (!userId || sub.user_id === userId);
+  const pending = mine ? sub.pending : '';
+  if (mine && pending) await q(env, "UPDATE push_subs SET pending='' WHERE endpoint=?", endpoint).run();
+  const silent = !!(mine && sub.silent);
+  if (pending === 'update') return { title: 'Nouvelle mise à jour disponible ✨', body: 'Ouvre l’app pour voir ce qui a changé et à quoi ça sert.', url: '/?news=1#/home/dash', silent };
+  if (pending === 'admin') return { title: 'Nouvelle proposition 📬', body: 'Quelqu’un propose une idée pour l’app. À valider dans Paramètres › Admin.', url: '/#/settings/admin', silent };
+  if (pending === 'reply' && userId) {
+    const r = await q(env, "SELECT label,reply FROM proposals WHERE user_id=? AND status='done' ORDER BY reviewed_at DESC LIMIT 1", userId).first();
+    return { title: 'Réponse à ta proposition', body: r ? `« ${r.label} » : ${r.reply}` : 'Un administrateur a répondu à ta proposition.', url: '/?news=1#/home/dash', silent };
+  }
+  return { ...(userId ? await reminderText(env, userId, tz, now) : { title: 'Séances entraînement', body: 'Petit rappel : un peu d’entraînement aujourd’hui ?', url: '/' }), silent };
 }
 
 /** Texte du rappel pour une personne : la séance du programme si elle est prévue aujourd'hui, sinon un mot simple. */

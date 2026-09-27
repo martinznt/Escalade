@@ -12,6 +12,7 @@ import './timer.js';
 import './views-coach.js';
 import { checkBadges } from './views-motiv.js';
 import { topIcons } from './layout.js';
+import { refreshInbox } from './inbox.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
@@ -210,7 +211,6 @@ function renderUpdateBar() {
   if (bar.innerHTML !== html.s) bar.innerHTML = html.s;
   bar.classList.toggle('fresh', !UPD.available);
 }
-ACT.notifOpen = () => ACT.updWhat();
 ACT.updSeen = () => { UPD.fresh = false; writeSeen(UPD.boot); markNewsToured(); renderUpdateBar(); };
 /** Visite des nouveautés : seulement ce qui a changé depuis la dernière visite (ou la dernière version, à la demande). */
 ACT.newsTour = () => {
@@ -288,6 +288,9 @@ async function start() {
   if (await maybeMove()) return; // ancienne adresse : redirection vers la nouvelle, avec les données de l'appareil
   if (await maybeClaim()) return;
   // Raccourcis de l'icône (appui long) : ?do=timer / ?do=gen
+  const newsParam = new URLSearchParams(location.search).get('news');
+  if (newsParam) { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => ACT.notifOpen?.(), 900); }
+  setTimeout(() => refreshInbox({ sound: true }), 1500);
   const doIt = new URLSearchParams(location.search).get('do');
   if (doIt === 'timer' || doIt === 'gen') { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => { if (S.user) (doIt === 'timer' ? ACT.timerOpen : ACT.genOpen)?.(); }, 900); }
   registerSW();

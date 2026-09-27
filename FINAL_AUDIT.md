@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.5.0
+# FINAL_AUDIT — Séances entraînement v8.6.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.

@@ -1,7 +1,7 @@
 // tests/push-ics.test.mjs — rappels (Web Push VAPID, cron, fuseaux) et export agenda (.ics).
 import assert from 'node:assert/strict';
 import worker from '../worker.js';
-import { localNow, isDue, runReminders, vapidAuth, unb64u } from '../server/push.js';
+import { localNow, isDue, runReminders, vapidAuth, unb64u, updateNotice, messageFor } from '../server/push.js';
 import { buildIcs, gcalLink } from '../public/ics.js';
 import { Client, makeEnv, ok, done } from './helpers.mjs';
 
@@ -64,5 +64,23 @@ await ok('agenda .ics : événements valides, heure locale, rappel 30 min avant 
   assert.match(ics, /^BEGIN:VCALENDAR\r\n/); assert.match(ics, /DTSTART:20260928T183000\r\n/); assert.match(ics, /DTEND:20260928T191500\r\n/);
   assert.match(ics, /SUMMARY:Force\\, semaine 2\; bonne séance/); assert.match(ics, /TRIGGER:-PT30M/); assert.ok(ics.split('\r\n').every((l) => l.length <= 75));
   assert.match(gcalLink({ title: 'X', date: '2026-09-28', time: '23:30', minutes: 60 }), /dates=20260928T233000\/20260929T003000/);
+});
+await ok('types : rappel non voulu = pas de rappel ; mise à jour annoncée une fois par déploiement ; message selon ce qui l’a déclenché', async () => {
+  const env = makeEnv(), u = new Client(env); await u.register('typeuser');
+  await u.post('/api/push/subscribe', { endpoint: EP + 'a', days: [0], hour: '18:00', types: ['update'], silent: true });
+  await u.post('/api/push/subscribe', { endpoint: EP + 'b', days: [0], hour: '18:00', types: ['reminder', 'update'] });
+  const calls = []; const f = async (url) => { calls.push(url); return new Response(null, { status: 201 }); };
+  assert.equal(await runReminders(env, Date.UTC(2026, 8, 28, 16, 10), f), 1); assert.deepEqual(calls, [EP + 'b'], 'seul l’appareil qui veut des rappels');
+  calls.length = 0;
+  assert.equal(await updateNotice(env, 'build-1', f), 0, 'premier déploiement : retenu sans prévenir');
+  assert.equal(await updateNotice(env, 'build-1', f), 0, 'même version : rien');
+  assert.equal(await updateNotice(env, 'build-2', f), 2); assert.equal(await updateNotice(env, 'dev', f), 0);
+  const uid = (await env.DB.prepare('SELECT id FROM users WHERE username=?').bind('typeuser').first()).id;
+  const m = await messageFor(env, EP + 'a', uid, 'Europe/Paris'); assert.match(m.title, /mise à jour/i); assert.equal(m.silent, true); assert.match(m.url, /news=1/);
+  const m2 = await messageFor(env, EP + 'a', uid, 'Europe/Paris'); assert.doesNotMatch(m2.title, /mise à jour/i, 'message consommé une seule fois');
+  const other = new Client(env); await other.register('autreuser');
+  const oid = (await env.DB.prepare('SELECT id FROM users WHERE username=?').bind('autreuser').first()).id;
+  await updateNotice(env, 'build-3', f);
+  assert.doesNotMatch((await messageFor(env, EP + 'a', oid, 'Europe/Paris')).title, /mise à jour/i, 'l’abonnement d’un autre compte ne révèle rien');
 });
 done();

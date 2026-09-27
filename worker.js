@@ -10,9 +10,9 @@ import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 import { changesRoute } from './server/changes.js';
-import { vapid, sendPush, runReminders, reminderText } from './server/push.js';
+import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.5.0';
+const APP_VERSION = '8.6.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -21,7 +21,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -49,7 +49,7 @@ export default {
   /** Tâche planifiée (cron, voir wrangler.json) : rappels d'entraînement. */
   async scheduled(event, env, ctx) {
     if (!env.DB) return;
-    const job = (async () => { await ensureSchema(env); const n = await runReminders(env); if (n) console.log('rappels envoyés', n); })().catch((e) => console.error('rappels', e?.message || e));
+    const job = (async () => { await ensureSchema(env); const n = await runReminders(env); if (n) console.log('rappels envoyés', n); const u = await updateNotice(env, buildId(env)); if (u) console.log('mise à jour annoncée', u); })().catch((e) => console.error('rappels', e?.message || e));
     if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
   },
 };
@@ -320,7 +320,7 @@ async function handleApi(request, env, url) {
   if (p === '/api/push/key' && m === 'GET') return json({ ok: true, key: (await vapid(env)).pub });
   if (p === '/api/push/message' && m === 'GET') {
     const a = await authenticate(request, env), tz = /^[\w/+-]{1,40}$/.test(url.searchParams.get('tz') || '') ? url.searchParams.get('tz') : 'Europe/Paris';
-    return json({ ok: true, ...(a ? await reminderText(env, a.user.id, tz) : { title: 'Séances entraînement', body: 'Petit rappel : un peu d’entraînement aujourd’hui ?', url: '/' }) });
+    return json({ ok: true, ...(await messageFor(env, str(url.searchParams.get('endpoint'), 800), a?.user.id || null, tz)) });
   }
   // Pages publiques (profil public, séance publiée) : lisibles sans compte, uniquement ce que la personne a choisi de publier.
   if (p.startsWith('/api/public/') && m === 'GET') return publicRoute(env, url, await authenticate(request, env));
@@ -638,6 +638,7 @@ function cleanSettings(o) {
   if (Array.isArray(o.climbingLogs)) out.climbingLogs = o.climbingLogs.slice(0, 500).map((x) => ({ id: str(x?.id, 64) || uid(), date: clamp(x?.date, 0, 9e15, Date.now()), type: str(x?.type, 30), grade: str(x?.grade, 20), result: ['send', 'attempt', 'flash', 'top', 'fail', 'work'].includes(x?.result) ? x.result : 'attempt', attempts: clamp(x?.attempts, 1, 999, 1), style: str(x?.style, 60), note: str(x?.note, 500) }));
   for (const k of ['sound', 'vibration', 'voice', 'keepAwake', 'handsFree', 'onboarded', 'autoBase', 'bigMode', 'autoWarm', 'season']) if (k in o) out[k] = bool(o[k]);
   if ('soundStyle' in o) out.soundStyle = ['bip', 'cloche', 'bois', 'doux'].includes(o.soundStyle) ? o.soundStyle : 'bip';
+  if ('notifSound' in o) out.notifSound = ['aucun', 'bip', 'cloche', 'bois', 'doux'].includes(o.notifSound) ? o.notifSound : 'doux';
   if ('volume' in o) out.volume = clamp(o.volume, 0, 100, 60);
   if ('lang' in o) out.lang = ['fr', 'en'].includes(o.lang) ? o.lang : 'fr';
   if ('defaultRest' in o) out.defaultRest = clamp(o.defaultRest, 0, 600, 60);
@@ -904,11 +905,12 @@ async function pushSubscribe(request, env, u) {
   if (ep.protocol !== 'https:' || !PUSH_HOSTS.test(ep.hostname) || ep.href.length > 800) return fail('Service de notification non reconnu.');
   const days = Array.isArray(b.days) ? [...new Set(b.days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
   const hour = /^([01]\d|2[0-3]):[0-5]\d$/.test(b.hour || '') ? b.hour : '18:00', tz = /^[\w/+-]{1,40}$/.test(b.tz || '') ? b.tz : 'Europe/Paris';
+  const types = Array.isArray(b.types) ? [...new Set(b.types.filter((t) => PUSH_TYPES.includes(t)))] : PUSH_TYPES, silent = b.silent ? 1 : 0;
   const n = await db(env, 'SELECT COUNT(*) c FROM push_subs WHERE user_id=? AND endpoint<>?', u.id, ep.href).first();
   if (Number(n?.c) >= 5) return fail('5 appareils au maximum reçoivent les rappels.', 409);
-  await db(env, `INSERT INTO push_subs(endpoint,user_id,days,hour,tz,last_day,created_at) VALUES(?,?,?,?,?,'',?)
-    ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id,days=excluded.days,hour=excluded.hour,tz=excluded.tz`, ep.href, u.id, JSON.stringify(days), hour, tz, Date.now()).run();
-  return json({ ok: true, days, hour, tz });
+  await db(env, `INSERT INTO push_subs(endpoint,user_id,days,hour,tz,last_day,created_at,types,silent) VALUES(?,?,?,?,?,'',?,?,?)
+    ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id,days=excluded.days,hour=excluded.hour,tz=excluded.tz,types=excluded.types,silent=excluded.silent`, ep.href, u.id, JSON.stringify(days), hour, tz, Date.now(), JSON.stringify(types), silent).run();
+  return json({ ok: true, days, hour, tz, types, silent: !!silent });
 }
 /* Intentions communes et propositions des utilisateurs */
 async function intentCreate(env, u, b) {
@@ -929,8 +931,8 @@ async function proposalCreate(request, env, u) {
   await db(env, 'INSERT INTO proposals(id,user_id,kind,activity,label,detail,payload_json,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)', id, u.id, kind, activity, label, detail, JSON.stringify(payload), 'open', Date.now()).run();
   // Prévenir les administrateurs (notification sur leurs appareils abonnés ; best effort)
   try {
-    const subs = (await db(env, "SELECT s.endpoint FROM push_subs s JOIN users a ON a.id=s.user_id WHERE a.is_admin=1 AND s.user_id<>? LIMIT 20", u.id).all()).results || [];
-    for (const x of subs) { const r = await sendPush(env, x.endpoint); if (r === 'gone') await db(env, 'DELETE FROM push_subs WHERE endpoint=?', x.endpoint).run(); }
+    const admins = ((await db(env, 'SELECT id FROM users WHERE is_admin=1 AND id<>? LIMIT 20', u.id).all()).results || []).map((r) => r.id);
+    if (admins.length) await notifyType(env, 'admin', { userIds: admins });
   } catch (e) { console.error('notif admin', e?.message); }
   return json({ ok: true, id });
 }
@@ -945,6 +947,8 @@ async function proposalReview(request, env, u, id) {
     if (r.error) return fail('Impossible d’ajouter cette intention : ' + r.error);
   }
   await db(env, 'UPDATE proposals SET status=?,reply=?,reviewed_by=?,reviewed_at=? WHERE id=?', 'done', (decision === 'accept' ? '✓ Acceptée. ' : '✗ Refusée. ') + str(b?.reply, 300), u.id, Date.now(), id).run();
+  const author = await db(env, 'SELECT user_id FROM proposals WHERE id=?', id).first();
+  if (author?.user_id) try { await notifyType(env, 'reply', { userIds: [author.user_id] }); } catch (e) { console.error('notif réponse', e?.message); }
   return json({ ok: true });
 }
 async function aiChatRoute(request, env, u) {
