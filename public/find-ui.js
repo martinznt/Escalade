@@ -11,7 +11,7 @@ const GROUPS = [['feature', 'Fonctions'], ['setting', 'Paramètres'], ['seance',
 function dynamicIndex() {
   const mine = (S.seances?.items || []).filter((s) => !s.archived).map((s) => ({ kind: 'seance', icon: s.emoji || '📋', title: s.name, sub: 'Mes séances', keys: s.activity || '', act: 'openSeance', id: s.id }));
   const cat = CATALOG.map((c) => ({ kind: 'catalog', icon: c.emoji, title: c.name, sub: `Séance prête · ${c.minutes} min`, keys: `${c.why} ${(c.goals || []).join(' ')}`, act: 'catOpen', id: c.id, to: 'library/catalog' }));
-  const ex = LIBRARY.filter((x) => x.role === 'main').map((x) => ({ kind: 'exercise', icon: x.emoji, title: x.name, sub: 'Exercice', keys: `${x.group || ''} ${(x.muscles || []).join(' ')}`, act: 'libInfo', id: x.id }));
+  const ex = LIBRARY.filter((x) => x.role === 'main' && !x.hidden).map((x) => ({ kind: 'exercise', icon: x.emoji, title: x.name, sub: 'Exercice', keys: `${x.group || ''} ${(x.muscles || []).join(' ')}`, act: 'libInfo', id: x.id }));
   return [...mine, ...cat, ...ex];
 }
 function results(q, scope) {

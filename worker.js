@@ -9,11 +9,12 @@ import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps } from './server/ai.js';
 import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
+import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server/global.js';
 import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo.js';
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.11.0';
+const APP_VERSION = '8.12.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -22,7 +23,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -307,6 +308,8 @@ async function handleApi(request, env, url) {
     if ((len > 0 || request.body) && ct && !/^application\/json\b/i.test(ct)) return fail('Format non accepté.', 415);
   }
   try { await ensureSchema(env); } catch (e) { console.error('schema', e); return fail('Initialisation de la base impossible.', 500); }
+  // Contenu modifié par les administrateurs pour tous les comptes : lisible par tout le monde (même sans compte).
+  if (p === '/api/global' && m === 'GET') return globalList(env);
 
   const secure = url.protocol === 'https:';
   if (p === '/api/auth/register' && m === 'POST') {
@@ -458,6 +461,11 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
     if (p === '/api/admin/proposals' && m === 'GET') return json({ ok: true, proposals: ((await db(env, `SELECT p.id,p.kind,p.activity,p.label,p.detail,p.payload_json,p.status,p.reply,p.created_at,u.username FROM proposals p LEFT JOIN users u ON u.id=p.user_id WHERE p.status=? ORDER BY p.created_at DESC LIMIT 100`, url.searchParams.get('status') === 'done' ? 'done' : 'open').all()).results || []).map((r) => ({ ...r, payload: safeParse(r.payload_json) || {}, payload_json: undefined })) });
     if ((x = p.match(/^\/api\/admin\/proposals\/([\w-]{1,64})$/)) && m === 'POST') return proposalReview(request, env, u, x[1]);
+    if ((x = p.match(/^\/api\/admin\/global\/(\w{1,20})\/([\w-]{1,64})$/))) {
+      if (!GLOBAL_KINDS.includes(x[1])) return fail('Type inconnu.', 400);
+      if (m === 'PUT') return globalPut(request, env, u, x[1], x[2]);
+      if (m === 'DELETE') { await db(env, 'DELETE FROM global_content WHERE kind=? AND id=?', x[1], x[2]).run(); return json({ ok: true }); }
+    }
     if (p === '/api/admin/intents' && m === 'POST') { const b = await readJson(request, 4000); const r = await intentCreate(env, u, b); return r.error ? fail(r.error) : json({ ok: true, id: r.id }); }
     if ((x = p.match(/^\/api\/admin\/intents\/([\w-]{1,64})$/)) && m === 'DELETE') { await db(env, 'DELETE FROM community_intents WHERE id=?', x[1]).run(); return json({ ok: true }); }
     if ((x = p.match(/^\/api\/admin\/bugs\/([\w-]{1,64})$/)) && m === 'POST') return adminBugStatus(request, env, x[1]);
@@ -536,6 +544,7 @@ async function deleteAccount(request, env, auth, secure) {
       db(env, 'UPDATE common_exercises SET created_by=NULL WHERE created_by=?', id),
       db(env, "DELETE FROM shared_sessions WHERE owner_id=? AND scope IN ('public','link')", id),
       db(env, 'DELETE FROM duo_rooms WHERE owner_id=?', id),
+      db(env, 'UPDATE global_content SET updated_by=NULL WHERE updated_by=?', id),
       db(env, "UPDATE shared_sessions SET owner_id=NULL WHERE owner_id=? AND scope='common'", id),
       db(env, 'DELETE FROM users WHERE id=?', id),
     ]));
@@ -977,6 +986,27 @@ async function duoRoom(request, env, u, code, join, m) {
     return json({ ok: true });
   }
   return fail('Méthode non autorisée.', 405);
+}
+
+/* ═════════════ Contenu global (administrateurs) ═════════════ */
+async function globalList(env) {
+  const r = (await db(env, 'SELECT g.kind,g.id,g.data_json,g.hidden,g.updated_at,us.username FROM global_content g LEFT JOIN users us ON us.id=g.updated_by ORDER BY g.updated_at').all()).results || [];
+  const items = r.map((x) => ({ kind: x.kind, id: x.id, hidden: !!x.hidden, data: x.hidden ? null : safeParse(x.data_json), updatedAt: x.updated_at, by: x.username || '' })).filter((x) => x.hidden || x.data);
+  return new Response(JSON.stringify({ ok: true, ver: Math.max(0, ...items.map((x) => x.updatedAt)), items }), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' } });
+}
+async function globalPut(request, env, u, kind, id) {
+  if (!GLOBAL_ID.test(id)) return fail('Identifiant invalide.');
+  const b = await readJson(request, 60000);
+  const hidden = !!b?.hidden, data = hidden ? null : cleanGlobal(kind, b?.data);
+  if (!hidden && !data) return fail('Données incomplètes ou invalides.');
+  const json_ = hidden ? '{}' : JSON.stringify(data);
+  if (json_.length > 40000) return fail('Trop volumineux.', 413);
+  const count = await db(env, 'SELECT COUNT(*) c FROM global_content').first();
+  if (Number(count?.c) >= 2000) return fail('Trop d’éléments modifiés.', 413);
+  const now = Date.now();
+  await db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data_json=excluded.data_json,hidden=excluded.hidden,updated_at=excluded.updated_at,updated_by=excluded.updated_by',
+    kind, id, json_, hidden ? 1 : 0, now, u.id).run();
+  return json({ ok: true, updatedAt: now, data });
 }
 
 async function proposalCreate(request, env, u) {

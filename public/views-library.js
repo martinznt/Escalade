@@ -15,6 +15,7 @@ import { vGenerateForm, genOptions } from './views-gen.js';
 import { vCatalog, vBest } from './views-catalog.js';
 import { sourcesLine } from './srcui.js';
 import { CATALOG } from './catalog.js';
+import { exerciseEditButtons, isAdmin as contentAdmin } from './content.js';
 import { planSession, generateFromPlan, adaptDuration, alternatives, replaceExercise, rebuildForEquipment, newPossibilities, estimateLevel, LEVEL_LABEL, levelFor, BODY_WORDS } from './generator.js';
 import { availableEquipment, graphFromExercise, goalLabel, activeGoals, neverTried, exCaps, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -137,7 +138,7 @@ function vEditor(s, mode) {
     <div class="card">${s.exercises.length ? blocksOf(s, 'edit') : h`<p class="muted">Aucun exercice. Ajoute-en un.</p>`}
       <div class="row wrapf"><button class="btn pri" data-act="exAdd">＋ Ajouter un exercice</button><button class="btn" data-act="sEquip">🧰 Matériel indisponible</button></div></div>
     ${shared ? '' : h`<div class="row wrapf"><button class="btn" data-act="sDup" data-id="${s.id}">⧉ Dupliquer</button><button class="btn" data-act="sTemplate" data-id="${s.id}">${s.template ? '★ Retirer des modèles' : '☆ Enregistrer comme modèle'}</button><button class="btn" data-act="sArchive" data-id="${s.id}">${s.archived ? '↩ Désarchiver' : '🗄 Archiver'}</button>
-      <button class="btn" data-act="planSeance" data-id="${s.id}">📅 Planifier</button><button class="btn" data-act="sText" data-id="${s.id}">📤 Texte</button><button class="btn" data-act="sPublish" data-id="${s.id}">🌍 Partager</button><button class="btn danger" data-act="sDelete" data-id="${s.id}">🗑 Supprimer</button></div>`}`;
+      <button class="btn" data-act="planSeance" data-id="${s.id}">📅 Planifier</button><button class="btn" data-act="sText" data-id="${s.id}">📤 Texte</button><button class="btn" data-act="sPublish" data-id="${s.id}">🌍 Partager</button><button class="btn danger" data-act="sDelete" data-id="${s.id}">🗑 Supprimer</button>${contentAdmin() ? h`<button class="btn" data-act="seanceToCatalog" data-id="${s.id}">🌍 En faire une séance prête</button>` : ''}</div>`}`;
 }
 ACT.backSeances = () => go('library', 'seances');
 const edit = (fn) => { const e = editing(); if (!e) return; e.save(fn(e.s)); };
@@ -225,7 +226,7 @@ ACT.exAdd = () => openSheet(h`<h2 style="margin:0">Ajouter un exercice</h2>
 function pickRows(q) {
   const n = String(q || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const e = editing(), act = e?.s.activity;
-  const lib = LIBRARY.filter((x) => x.role !== 'warmup' || true).filter((x) => !n || x.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(n)).sort((a, b) => Number(b.acts.includes(act)) - Number(a.acts.includes(act)));
+  const lib = LIBRARY.filter((x) => !x.hidden || S.user?.isAdmin).filter((x) => !n || x.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(n)).sort((a, b) => Number(b.acts.includes(act)) - Number(a.acts.includes(act)));
   const pers = S.personal.filter((p) => !n || p.name.toLowerCase().includes(n));
   return h`${pers.map((p) => h`<button class="item pick" data-act="exPick" data-kind="personal" data-id="${p.id}"><div class="ico">${p.data?.emoji || '💪'}</div><div class="grow"><b>${p.name}</b><div class="tiny muted">exercice personnel</div></div></button>`)}
     ${lib.slice(0, 40).map((x) => h`<button class="item pick" data-act="exPick" data-kind="lib" data-id="${x.id}"><div class="ico">${x.emoji}</div><div class="grow"><b>${x.name}</b><div class="tiny muted">${Object.keys(x.caps).slice(0, 2).map(capL).join(', ')}${x.needs.length ? ' · ' + x.needs.map((k) => EQUIPMENT[k] || k).join(', ') : ''}</div></div></button>`)}`;
@@ -386,7 +387,7 @@ function vExercises() {
   const lib = LIBRARY.filter((x) => x.role === 'main' && match(x.name) && (!act || x.acts.includes(act)) && (!cap || (x.caps[cap] || 0) >= 0.5));
   const c = ctx(), tried = neverTried(c, { activityId: act || undefined, level: 1 });
   const top = h`<button class="card pick row" data-act="libSub" data-id="best"><span class="catemoji">🏆</span><span class="grow"><b>Top exercices pour toi</b><small class="tiny muted" style="display:block">Les plus utiles par catégorie, selon ton profil</small></span><span class="chev">›</span></button>`;
-  return h`${top}<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>🤖</span><div><b>Créer un exercice avec l’assistant</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
+  return h`${top}${contentAdmin() ? h`<button class="btn" data-act="exNewGlobal">🌍 ＋ Exercice pour tout le monde</button>` : ''}<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>🤖</span><div><b>Créer un exercice avec l’assistant</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
     <input type="search" data-input="exQ" value="${q}" placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice">
     <div class="grid2"><select data-change="exAct" aria-label="Activité"><option value="">Toutes activités</option>${Object.entries(ACTIVITIES).map(([id, a]) => h`<option value="${id}" ${act === id ? 'selected' : ''}>${a.emoji} ${a.label}</option>`)}</select>
     <select data-change="exCap" aria-label="Capacité"><option value="">Toutes capacités</option>${Object.entries(CAPACITIES).map(([id, x]) => h`<option value="${id}" ${cap === id ? 'selected' : ''}>${x.label}</option>`)}</select></div>
@@ -413,7 +414,7 @@ export function exerciseSheet(ex, actions = '') {
     ${g.caps.length ? h`<details class="how mini"><summary>💪 Ce que ça travaille (${g.caps.length})</summary>${g.caps.map((c) => h`<div class="cbar"><span>${c.label}</span><div class="track"><i class="cur" style="width:${Math.round(c.w * 100)}%"></i></div><b></b></div>${c.goals.length ? h`<p class="tiny muted">→ utile pour ${c.goals.map((x) => x.label).join(', ')}</p>` : ''}`)}</details>` : ''}
     ${e.why && lib ? h`<p class="small muted">${lib.why}</p>` : ''}${actions}<button class="btn" data-act="closeSheet">Fermer</button>`;
 }
-ACT.libInfo = (el) => { const x = byId(el.dataset.id); if (!x) return; S.pickSrc = { kind: 'lib', id: x.id }; openSheet(exerciseSheet(x, h`<div class="row wrapf">${S.seances.items.length ? h`<select id="addTarget" aria-label="Séance cible">${S.seances.items.filter((s) => !s.archived).map((s) => h`<option value="${s.id}">${s.emoji} ${s.name}</option>`)}</select><button class="btn pri sm" data-act="addToSeance">＋ Ajouter</button>` : ''}<button class="btn sm" data-act="libKeep" data-id="${x.id}">Copier dans mes exercices</button></div>`), { wide: true }); };
+ACT.libInfo = (el) => { const x = byId(el.dataset.id); if (!x) return; S.pickSrc = { kind: 'lib', id: x.id }; openSheet(exerciseSheet(x, h`<div class="row wrapf">${S.seances.items.length ? h`<select id="addTarget" aria-label="Séance cible">${S.seances.items.filter((s) => !s.archived).map((s) => h`<option value="${s.id}">${s.emoji} ${s.name}</option>`)}</select><button class="btn pri sm" data-act="addToSeance">＋ Ajouter</button>` : ''}<button class="btn sm" data-act="libKeep" data-id="${x.id}">Copier dans mes exercices</button></div>${exerciseEditButtons(x)}`), { wide: true }); };
 ACT.addToSeance = () => {
   const s = getSeance($('#addTarget')?.value); const src = S.pickSrc; if (!s || !src) return;
   const base = src.kind === 'lib' ? byId(src.id) : S.personal.find((p) => p.id === src.id)?.data;

@@ -132,7 +132,7 @@ const catOf = (x) => (['run', 'swim', 'endurance'].includes(x.kind) ? 'cardio' :
 export function rankExercises({ need = {}, level = 0, equipment = null, acts = [] } = {}, lib = LIBRARY) {
   const out = {};
   for (const [cat] of EX_CATEGORIES) {
-    const pool = lib.filter((x) => x.role === 'main' && catOf(x) === cat && (!acts.length || x.acts.some((a) => acts.includes(a) || a === 'conditioning')));
+    const pool = lib.filter((x) => x.role === 'main' && !x.hidden && catOf(x) === cat && (!acts.length || x.acts.some((a) => acts.includes(a) || a === 'conditioning')));
     out[cat] = pool.map((x) => {
       let s = 0; const hits = [];
       for (const [c, w] of Object.entries(x.caps || {})) { const n = need[c] || 0.3; s += w * n; if ((need[c] || 0) >= 0.8 && w >= 0.5) hits.push(CAPACITIES[c]?.label || c); }
