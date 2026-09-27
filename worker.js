@@ -12,7 +12,7 @@ import { sanitizeForPublication } from './server/publish.js';
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, reminderText } from './server/push.js';
 
-const APP_VERSION = '8.4.1';
+const APP_VERSION = '8.5.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;

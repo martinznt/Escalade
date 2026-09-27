@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.4.1
+# FINAL_AUDIT — Séances entraînement v8.5.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -426,3 +426,22 @@ réglages qu'un client V2 ne connaît pas.
   (transfert du compte et des données comme pour le site). Hors ligne : « Réessayer », rien n'est perdu.
 - Sur la nouvelle adresse, l'accueil affiche « Dernière étape : installe la nouvelle application » (bouton Installer,
   « C'est fait ») jusqu'à l'installation. Test E2E ajouté (47 étapes).
+
+## Évolution 8.5.0 — séance, escalade, motivation, programme, rappels
+
+- **Séance** : coach vocal (exercice, série, repos, « encore 10 secondes », décompte) ; grand affichage (un toucher
+  valide) ; minuteur d'intervalles plein écran (7/3, suspensions max, Tabata, EMOM, gainage, libre) ; échauffement de
+  5 min ajouté aux séances faites à la main ; personnages animés par type de mouvement ; ceinture cardio Bluetooth
+  (profil standard Heart Rate, moyenne et max enregistrés) ; confettis sur record ; sons au choix et volume.
+- **Carnet d'escalade** : ajout rapide, pyramide (flash / réussi) par système principal — aucune conversion inventée —,
+  projets (essais par séance, photo réduite < 90 Ko avec prises marquées), test de doigts mensuel (20 mm).
+- **Motivation** : série de semaines bienveillante, 18 badges avec progression, bilan du mois en image (canvas).
+- **Programme** : 4 questions → calendrier, semaine légère toutes les 4, semaine bilan, séances générées le jour même,
+  réajustement des séances manquées ; « Comment tu te sens ? » (fatigué = plus doux, en forme = une série de plus) ;
+  alerte de volume « doigts » (repère, pas un avis médical) ; coach en discussion (Workers AI, résumé du profil visible,
+  réponses courtes, pas de diagnostic, 20 questions / 10 min).
+- **Rappels** : Web Push VAPID sans tiers (clés auto, stockées côté serveur), notification sans contenu (texte demandé
+  avec la session), cron 15 min, fuseau de la personne, hôtes de notification reconnus seulement ; export .ics ;
+  raccourcis de l'icône.
+- Serveur : l'historique garde la fréquence cardiaque et le lien au programme ; photos jusqu'à 95 Ko ; envois par 600 Ko.
+- Tests ajoutés : session-tools, climb, motivation, program, push-ics, coach ; E2E 52 étapes.
