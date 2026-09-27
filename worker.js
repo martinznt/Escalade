@@ -36,9 +36,20 @@ const SECURITY_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
+// Annonce d'une nouvelle version : dès la première requête reçue après le déploiement (sans attendre la tâche
+// planifiée de 15 min). Une seule vérification par instance du Worker ; la base garantit une seule annonce.
+let announcedBuild = '';
+function announceSoon(env, ctx) {
+  const b = buildId(env);
+  if (announcedBuild === b || !env.DB || !ctx?.waitUntil) return;
+  announcedBuild = b;
+  ctx.waitUntil(ensureSchema(env).then(() => updateNotice(env, b)).then((n) => { if (n) console.log('mise à jour annoncée', n); }).catch((e) => { announcedBuild = ''; console.error('annonce', e?.message || e); }));
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    announceSoon(env, ctx);
     try {
       const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : await serveAsset(request, env, url);
       if (url.protocol === 'https:') { const h = new Headers(res.headers); h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h }); }

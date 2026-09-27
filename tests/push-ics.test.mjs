@@ -83,4 +83,22 @@ await ok('types : rappel non voulu = pas de rappel ; mise à jour annoncée une 
   await updateNotice(env, 'build-3', f);
   assert.doesNotMatch((await messageFor(env, EP + 'a', oid, 'Europe/Paris')).title, /mise à jour/i, 'l’abonnement d’un autre compte ne révèle rien');
 });
+const envA = makeEnv(); { const u = new Client(envA); await u.register('annonce'); await u.post('/api/push/subscribe', { endpoint: EP + 'z', days: [0], hour: '18:00', types: ['update'] }); }
+await ok('nouvelle version : annoncée une seule fois même si plusieurs requêtes arrivent en même temps ; priorité haute', async () => {
+  const env = envA, f = async () => new Response(null, { status: 201 });
+  await updateNotice(env, 'build-8', f);
+  const r = await Promise.all([updateNotice(env, 'build-9', f), updateNotice(env, 'build-9', f), updateNotice(env, 'build-9', f)]);
+  assert.equal(r.filter((n) => n > 0).length, 1, 'une seule annonce');
+  assert.equal((await vapidAuth(env, 'https://fcm.googleapis.com/fcm/send/x')).Urgency, 'high');
+});
+await ok('annonce dès la première requête après le déploiement (sans attendre la tâche planifiée)', async () => {
+  const env = envA, worker = (await import('../worker.js')).default, waits = [];
+  const sent = []; const realFetch = globalThis.fetch; globalThis.fetch = async (u, o) => (String(u).startsWith(EP) ? (sent.push(u), new Response(null, { status: 201 })) : realFetch(u, o));
+  try {
+    env.CF_VERSION_METADATA = { id: 'deploy-immediat' };
+    await worker.fetch(new Request('https://site.test/api/version'), env, { waitUntil: (p) => waits.push(p) });
+    await Promise.all(waits);
+    assert.ok(sent.length >= 1, 'les appareils abonnés sont prévenus tout de suite');
+  } finally { globalThis.fetch = realFetch; delete env.CF_VERSION_METADATA; }
+});
 done();
