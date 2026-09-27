@@ -36,7 +36,7 @@ export function vLibrary() {
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
   const cur = ['seances', 'generate', 'exercises', 'common', 'search'].includes(sub) ? sub : 'seances';
-  return h`<h1>Bibliothèque</h1><p class="small muted sub">Tes séances : lance-les avec ▶, crée-en une ou laisse l’app en générer une pour toi.</p>${seg('libSub', cur, [['seances', 'Mes séances'], ['generate', '✨ Générer'], ['exercises', 'Exercices'], ['common', 'Partagées'], ['search', 'Recherche']])}
+  return h`<h1>📚 Bibliothèque</h1>${seg('libSub', cur, [['seances', '📋 Mes séances'], ['generate', '✨ Générer'], ['exercises', '💪 Exercices'], ['common', '🌍 Partagées'], ['search', '🔍 Recherche']])}
     ${cur === 'seances' ? vSeances() : cur === 'generate' ? vGenerate() : cur === 'exercises' ? vExercises() : cur === 'common' ? vCommon() : vSearch()}`;
 }
 ACT.libSub = (el) => { go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
@@ -284,17 +284,19 @@ function vGenerate() {
   if (!g.activityId) g.activityId = Object.keys(c.activities)[0] || 'conditioning';
   const goals = activeGoals(c), intents = new Map((g.intentions || []).map((x) => [x.id, x.p]));
   const eq = availableEquipment(c, g.envId);
-  return h`<div class="card"><h3>Paramètres</h3>
-      <b class="small">Activité</b><div class="chips">${activityOptions().map(([id, e, l]) => chip(g.activityId === id, `${e} ${l}`, `data-act="gSet" data-k="activityId" data-v="${id}"`))}</div>
-      <b class="small">Orientation</b><div class="chips">${chip(g.mode === 'weaknesses', '🎯 Travailler mes axes de progrès', 'data-act="gSet" data-k="mode" data-v="weaknesses"')}${chip(g.mode === 'strengths', '🚀 Faire progresser mes forces', 'data-act="gSet" data-k="mode" data-v="strengths"')}${chip(g.mode === 'goal', '🏁 Objectif spécifique', 'data-act="gSet" data-k="mode" data-v="goal"')}</div>
-      ${g.mode === 'goal' ? (goals.length ? h`<label>Objectif<select data-change="gGoal"><option value="">— choisir —</option>${goals.map((x) => h`<option value="${x.id}" ${g.goalId === x.id ? 'selected' : ''}>${goalLabel(x)}</option>`)}</select></label>` : h`<p class="small muted">Aucun objectif actif : crée-en un dans Profil › Objectifs.</p>`) : ''}
-      <b class="small">Durée</b><div class="chips">${[5, 10, 12, 15, 20, 30, 45, 60, 90].map((m) => chip(Number(g.minutes) === m, `${m} min`, `data-act="gSet" data-k="minutes" data-v="${m}"`))}</div>
-      <label class="inline">Autre durée <span class="unitbox small"><input type="number" inputmode="numeric" min="5" max="240" value="${g.minutes}" data-change="gMinutes" aria-label="Durée en minutes"><em>min</em></span></label>
-      <b class="small">Intentions (touche plusieurs fois pour la priorité)</b><div class="chips">${Object.entries(INTENTIONS).map(([id, I]) => chip(intents.has(id), `${I.emoji} ${I.label}${intents.has(id) ? ' ×' + intents.get(id) : ''}`, `data-act="gIntent" data-id="${id}"`))}</div>
-      <div class="grid2"><label>Environnement<select data-change="gEnv"><option value="">${c.defEnv ? 'Par défaut : ' + c.defEnv.name : 'Aucun décrit'}</option>${c.envs.map((e) => h`<option value="${e.id}" ${g.envId === e.id ? 'selected' : ''}>${e.name}</option>`)}</select></label>
-      <label class="chk" style="align-self:end"><input type="checkbox" data-change="gLight" ${g.light ? 'checked' : ''}> Séance légère / récupération</label></div>
-      <p class="tiny muted">Matériel pris en compte : ${eq.size ? [...eq].map((k) => EQUIPMENT[k] || k).join(', ') : 'aucun'}. Modifiable dans Profil › Matériel.</p>
-      <button class="btn pri big" data-act="genPlan">👁 Voir la simulation</button></div>
+  const more = g.mode !== 'weaknesses' || (g.intentions || []).length || g.envId || g.light || ![10, 20, 30, 45, 60, 90].includes(Number(g.minutes));
+  return h`<div class="card gen">
+      <span class="kicker">1 · Quel sport ?</span><div class="chips big">${activityOptions().map(([id, e, l]) => chip(g.activityId === id, `${e} ${l}`, `data-act="gSet" data-k="activityId" data-v="${id}"`))}</div>
+      <span class="kicker">2 · Combien de temps ?</span><div class="chips big">${[10, 20, 30, 45, 60, 90].map((m) => chip(Number(g.minutes) === m, m < 60 ? `${m} min` : m === 60 ? '1 h' : '1 h 30', `data-act="gSet" data-k="minutes" data-v="${m}"`))}</div>
+      <details class="fold genmore" ${more ? 'open' : ''}><summary><span>⚙️ Plus d’options</span><em>${[g.mode !== 'weaknesses', (g.intentions || []).length, g.envId, g.light].filter(Boolean).length || ''}</em></summary>
+        <b class="small">Orientation</b><div class="chips">${chip(g.mode === 'weaknesses', '🎯 Mes axes de progrès', 'data-act="gSet" data-k="mode" data-v="weaknesses"')}${chip(g.mode === 'strengths', '🚀 Mes forces', 'data-act="gSet" data-k="mode" data-v="strengths"')}${chip(g.mode === 'goal', '🏁 Un objectif', 'data-act="gSet" data-k="mode" data-v="goal"')}</div>
+        ${g.mode === 'goal' ? (goals.length ? h`<label>Objectif<select data-change="gGoal"><option value="">— choisir —</option>${goals.map((x) => h`<option value="${x.id}" ${g.goalId === x.id ? 'selected' : ''}>${goalLabel(x)}</option>`)}</select></label>` : h`<p class="small muted">Aucun objectif actif : crée-en un dans Profil › Objectifs.</p>`) : ''}
+        <b class="small">Autres durées</b><div class="chips">${[5, 12, 15].map((m) => chip(Number(g.minutes) === m, `${m} min`, `data-act="gSet" data-k="minutes" data-v="${m}"`))}<span class="unitbox small"><input type="number" inputmode="numeric" min="5" max="240" value="${g.minutes}" data-change="gMinutes" aria-label="Durée en minutes"><em>min</em></span></div>
+        <b class="small">Intentions <span class="tiny muted">(re-touche pour la priorité)</span></b><div class="chips">${Object.entries(INTENTIONS).map(([id, I]) => chip(intents.has(id), `${I.emoji} ${I.label}${intents.has(id) ? ' ×' + intents.get(id) : ''}`, `data-act="gIntent" data-id="${id}"`))}</div>
+        <label>Lieu<select data-change="gEnv"><option value="">${c.defEnv ? 'Par défaut : ' + c.defEnv.name : 'Aucun décrit'}</option>${c.envs.map((e) => h`<option value="${e.id}" ${g.envId === e.id ? 'selected' : ''}>${e.name}</option>`)}</select></label>
+        <label class="chk"><input type="checkbox" data-change="gLight" ${g.light ? 'checked' : ''}> 🧘 Séance légère / récupération</label>
+        <div class="chips">${eq.size ? [...eq].map((k) => h`<span class="chip static">🧰 ${EQUIPMENT[k] || k}</span>`) : h`<span class="small muted">Aucun matériel déclaré</span>`}</div></details>
+      <button class="btn pri big" data-act="genPlan">✨ Préparer ma séance</button></div>
     ${g.plan ? vPlan(g.plan) : ''}${g.result ? vGenResult(g.result) : ''}`;
 }
 ACT.gSet = (el) => { S.gen[el.dataset.k] = el.dataset.k === 'minutes' ? Number(el.dataset.v) : el.dataset.v; S.gen.plan = null; S.gen.result = null; S.gen.priorities = {}; render(); };
@@ -310,17 +312,21 @@ ACT.genPlan = () => {
   g.seed = g.plan.seed; g.result = null; render(); setTimeout(() => $('#genplan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
 };
 function vPlan(p) {
-  return h`<div id="genplan" class="card acc-b"><h3>👁 Simulation avant génération</h3>
-    <p><b>Intention :</b> ${p.intentionText} · ${p.activityLabel} · ${p.minutes} min${p.envName ? ' · ' + p.envName : ''}</p>
-    <b class="small">Capacités ciblées (modifie les priorités)</b>
-    ${p.distribution.length ? p.distribution.map((d) => h`<div class="item"><div class="grow"><b>${d.label}</b> <span class="muted small">${d.pct} %</span><div class="tiny muted">${d.reasons.join(' · ')}</div></div><div class="row tight"><button class="btn sm ic" data-act="prio" data-id="${d.capId}" data-d="-1" aria-label="Moins prioritaire">−</button><button class="btn sm ic" data-act="prio" data-id="${d.capId}" data-d="1" aria-label="Plus prioritaire">＋</button><button class="btn sm ic danger" data-act="prio" data-id="${d.capId}" data-d="0" aria-label="Retirer">✕</button></div></div>`) : h`<p class="muted small">Aucune capacité ciblable avec ce matériel.</p>`}
-    <details><summary class="small">＋ Ajouter une capacité</summary><div class="chips">${Object.entries(CAPACITIES).filter(([id]) => !p.distribution.some((d) => d.capId === id)).map(([id, c]) => chip(false, c.label, `data-act="prio" data-id="${id}" data-d="add"`))}</div></details>
-    <b class="small">Répartition</b><ul class="small">${p.blocks.map((b) => h`<li><b>${b.label}</b> ~${b.minutes} min — ${b.reason}</li>`)}</ul>
-    <p class="small"><b>Difficulté estimée :</b> ${p.difficulty.text}</p>
-    <p class="small"><b>Matériel nécessaire :</b> ${p.neededEquipment?.length ? p.neededEquipment.join(', ') : 'aucun'}</p>
-    ${p.preview?.length ? h`<p class="small muted">Exercices envisagés : ${p.preview.join(', ')}</p>` : ''}
-    ${p.constraints.length ? h`<details class="how"><summary>Contraintes respectées</summary><ul class="small">${p.constraints.map((x) => h`<li>${x}</li>`)}</ul></details>` : ''}
-    ${p.missing.length ? h`<p class="small warn-t">⚠ ${p.missing.join(' ')}</p>` : ''}
+  const total = p.blocks.reduce((t, b) => t + b.minutes, 0) || 1;
+  const dots = '●'.repeat(p.difficulty.value) + '○'.repeat(5 - p.difficulty.value);
+  return h`<div id="genplan" class="card acc-b plan"><span class="kicker">👀 Simulation avant génération</span>
+    <h3>${p.intentionText}</h3>
+    <div class="chips"><span class="chip static">⏱ ${p.minutes} min</span>${p.envName ? h`<span class="chip static">📍 ${p.envName}</span>` : ''}<span class="chip static" title="${p.difficulty.text}">📶 ${dots}</span></div>
+    <div class="blocksbar">${p.blocks.map((b) => h`<i class="${b.kind}" style="flex:${b.minutes}" title="${b.label} ${b.minutes} min"></i>`)}</div>
+    <div class="chips small-chips">${p.blocks.map((b) => h`<span class="chip static"><i class="dot ${b.kind}"></i>${b.label} · ${b.minutes}′</span>`)}</div>
+    <b class="small">🎯 Ce qui sera travaillé <span class="tiny muted">(± pour ajuster)</span></b>
+    ${p.distribution.length ? p.distribution.map((d) => h`<div class="prow"><div class="grow"><div class="row between"><b class="small">${d.label}</b><span class="tiny muted">${d.pct} %</span></div><div class="track"><i style="width:${d.pct}%"></i></div></div>
+      <button class="btn sm ic" data-act="prio" data-id="${d.capId}" data-d="-1" aria-label="Moins prioritaire">−</button><button class="btn sm ic" data-act="prio" data-id="${d.capId}" data-d="1" aria-label="Plus prioritaire">＋</button><button class="btn sm ic danger" data-act="prio" data-id="${d.capId}" data-d="0" aria-label="Retirer">✕</button></div>`) : h`<p class="small muted">Aucune capacité ciblée.</p>`}
+    <details class="how mini"><summary>＋ Ajouter une capacité</summary><div class="chips">${Object.entries(CAPACITIES).filter(([id]) => !p.distribution.some((d) => d.capId === id)).map(([id, c]) => chip(false, c.label, `data-act="prio" data-id="${id}" data-d="add"`))}</div></details>
+    ${p.preview?.length ? h`<div class="chips">${p.preview.map((x) => h`<span class="chip static">💪 ${x}</span>`)}</div>` : ''}
+    <p class="small">🧰 <b>Matériel nécessaire :</b> ${p.neededEquipment?.length ? p.neededEquipment.join(', ') : 'aucun'}</p>
+    ${p.missing.length ? h`<p class="small warn-t">⚠ ${p.missing[0]}</p>` : ''}
+    <details class="how mini"><summary>Pourquoi ces choix ?</summary><ul class="small">${p.distribution.map((d) => h`<li><b>${d.label}</b> : ${d.reasons.join(' · ')}</li>`)}${p.blocks.map((b) => h`<li><b>${b.label}</b> : ${b.reason}</li>`)}<li>${p.difficulty.text}</li>${p.constraints.map((x) => h`<li>${x}</li>`)}${p.missing.slice(1).map((x) => h`<li>${x}</li>`)}</ul></details>
     <button class="btn pri big" data-act="genDo">✨ Générer la séance</button></div>`;
 }
 ACT.prio = (el) => {
@@ -334,7 +340,7 @@ ACT.genDo = () => { const g = S.gen; if (!g.plan) return; g.result = generateFro
 function vGenResult(r) {
   const s = r.session;
   return h`<div id="genresult" class="card"><div class="row"><div class="ico acc">${s.emoji}</div><div class="grow"><h3>${s.name}</h3><div class="muted small">~${sessionMinutes(s)} min ${levelTag(r.meta.level)}</div></div></div>
-    ${howBox({ ...s.explain, note: 'Faits = données de ton profil et de ton historique ; estimations = ce que l’application en déduit. Aucune performance n’est inventée.' }, { open: true, title: 'Pourquoi cette séance ? (comment le sais-tu)' })}
+    ${howBox({ ...s.explain, note: 'Faits = données de ton profil et de ton historique ; estimations = ce que l’application en déduit. Aucune performance n’est inventée.' }, { open: false, title: 'Pourquoi cette séance ?' })}
     ${blocksOf(s, 'gen')}
     <div class="row wrapf"><button class="btn pri" data-act="play" data-gen="1">▶ Lancer</button><button class="btn" data-act="genSave" ${S.gen.saved ? 'disabled' : ''}>${S.gen.saved ? '✓ Enregistrée' : '💾 Enregistrer'}</button><button class="btn" data-act="genAgain">🔁 Autre proposition</button></div></div>`;
 }
