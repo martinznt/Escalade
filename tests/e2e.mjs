@@ -184,14 +184,14 @@ await step('historique réellement enregistré sur le serveur (durée, pause, qu
 });
 await step('générateur : simulation, priorités, génération expliquée, enregistrement', async () => {
   await a.tab('library'); await a.sub('libSub', 'generate');
-  await a.click('[data-act=gSet][data-k=activityId][data-v=conditioning]'); await a.click('[data-act=gSet][data-k=mode][data-v=goal]');
+  await a.click('[data-act=gSet][data-k=activityId][data-v=conditioning]'); await a.click('details.genmore > summary'); await a.click('[data-act=gSet][data-k=mode][data-v=goal]');
   await A.waitForSelector('select[data-change=gGoal]'); const gid = await A.evaluate(() => document.querySelector('select[data-change=gGoal] option:nth-child(2)').value);
   await A.selectOption('select[data-change=gGoal]', gid); await a.click('[data-act=gSet][data-k=minutes][data-v="20"]');
   await a.click('[data-act=genPlan]'); await A.waitForSelector('#genplan');
-  assert.match(await a.text('#genplan'), /Simulation avant génération/); assert.match(await a.text('#genplan'), /Matériel nécessaire/);
+  assert.match(await a.text('#genplan'), /Simulation avant génération/i); assert.match(await a.text('#genplan'), /Matériel nécessaire/);
   await A.locator('#genplan [data-act=prio][data-d="1"]').first().click(); await A.waitForSelector('#genplan');
   await a.click('[data-act=genDo]'); await A.waitForSelector('#genresult');
-  assert.match(await a.text('#genresult'), /Pourquoi cette séance/); assert.match(await a.text('#genresult'), /Faits/);
+  assert.match(await a.text('#genresult'), /Pourquoi cette séance/); await a.click('#genresult details.how > summary'); assert.match(await a.text('#genresult'), /Faits/);
   assert.ok(await a.count('#genresult .item.ex') >= 3);
   await A.locator('#genresult [data-act=exSwap]').first().click(); await A.waitForSelector('#sheet [data-act=exSwapDo]');
   assert.ok(await a.count('#sheet .why li') > 0, 'chaque alternative a sa raison');

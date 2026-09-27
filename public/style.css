@@ -228,3 +228,21 @@ details.fold>:not(summary){margin:0 16px 14px}
 ul.clean{list-style:none;padding:0;margin:0 16px 14px;display:grid;gap:6px}ul.clean li{padding:8px 12px;border-radius:12px;background:var(--card2);font-size:.86rem}
 .stat2{appearance:none;cursor:pointer;font:inherit}
 .phero .chip.static{min-height:30px;padding:4px 10px;font-size:.78rem}.todo.row{gap:8px}
+/* Progrès : tuiles chiffrées, bonnes nouvelles, barres */
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:2px;animation:rise .3s ease both}
+.kpi span{font-size:.8rem;color:var(--muted)}.kpi b{font-size:2rem;line-height:1.1;letter-spacing:-.02em}
+.kpi i{font-style:normal;font-size:.78rem;font-weight:700;color:var(--muted)}.kpi i.up{color:var(--ok)}.kpi i.down{color:var(--warn)}
+.win{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:var(--card2);font-size:.9rem}.win span{flex:none}
+.cbar{display:grid;grid-template-columns:minmax(0,38%) 1fr auto;gap:10px;align-items:center;font-size:.84rem}
+.cbar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbar b{min-width:2.4em;text-align:right}
+.cbar .track{position:relative;height:10px;border-radius:99px;background:var(--card2);overflow:hidden}
+.cbar .track i{position:absolute;left:0;top:0;bottom:0;border-radius:99px}.cbar .track i.prev{background:color-mix(in srgb,var(--text) 18%,transparent)}.cbar .track i.cur{background:var(--accent);height:6px;top:2px}
+.gen{gap:12px}.genmore{background:var(--card2);border:0}.genmore>:not(summary){margin:0 14px 12px}
+/* Simulation de séance */
+.plan{gap:12px}.plan h3{margin:0;font-size:1.1rem}
+.blocksbar{display:flex;gap:4px;height:14px;border-radius:99px;overflow:hidden}.blocksbar i{display:block;border-radius:99px}
+.blocksbar .warmup,.dot.warmup{background:#f59e0b}.blocksbar .main,.dot.main{background:var(--accent)}.blocksbar .cool,.dot.cool{background:#60a5fa}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.small-chips .chip{min-height:30px;padding:4px 10px;font-size:.78rem}
+.prow{display:flex;gap:6px;align-items:center}.prow .track{height:8px;border-radius:99px;background:var(--card2);overflow:hidden;margin-top:4px}.prow .track i{display:block;height:100%;background:var(--accent);border-radius:99px}

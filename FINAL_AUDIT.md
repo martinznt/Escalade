@@ -298,6 +298,11 @@ réglages qu'un client V2 ne connaît pas.
 - **Profil plus visuel** : l'onglet s'ouvre sur un résumé (sports, séances, objectifs, mesures, points forts / à travailler
   en pastilles) et des tuiles par rubrique ; « Ce que l'app sait » devient 4 compteurs colorés, 3 actions courtes
   (« Saisir ») et des listes repliées ; « Ma carte » replie habitudes, matériel et progression.
+- **Progrès plus visuel** : 4 tuiles chiffrées avec flèche d'évolution (7 / 30 / 90 jours), « bonnes nouvelles » en
+  pastilles, barres « ce que tu as travaillé », régularité en pastilles, détails et méthode de calcul repliés.
+- **Bibliothèque plus simple** : générateur en 2 questions (sport, durée) et un gros bouton, le reste dans « Plus
+  d'options » ; simulation en pastilles, barre de répartition colorée, raisons repliées ; « Pourquoi cette séance ? »
+  replié par défaut.
 
 ## Évolution 8.2.0 — plus joli, plus léger, assistant IA
 
