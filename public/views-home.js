@@ -11,7 +11,7 @@ import { adaptDuration, alternatives, replaceExercise, BODY_WORDS } from './gene
 import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { openGenerator, blocksOf } from './views-library.js';
 import { startPlayer } from './player.js';
-import { vSetup, setupCard, installCard, questionCard, maybeAskOnOpen } from './views-setup.js';
+import { vSetup, setupCard, installCard, reinstallCard, questionCard, maybeAskOnOpen } from './views-setup.js';
 
 export const DASH_BLOCKS = {
   today: 'Que faire aujourd’hui ?', command: 'Commande', next: 'Prochaines séances', progress: 'Progression', goals: 'Objectifs', records: 'Records',
@@ -29,7 +29,7 @@ const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  return h`${hero()}
+  return h`${reinstallCard()}${hero()}
     <div class="row between">${seg('homeSub', sub, [['dash', '🏠 Ma journée'], ['cal', '📅 Calendrier']])}${sub === 'dash' ? h`<button class="btn sm ghost" data-act="dashEdit" aria-label="Choisir les blocs affichés sur l’accueil">✎</button>` : ''}</div>
     ${sub === 'cal' ? vCalendar() : vDash()}`;
 }

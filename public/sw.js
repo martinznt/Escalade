@@ -4,7 +4,7 @@
 // La version du cache change à chaque déploiement : les anciens caches sont supprimés à l'activation.
 // Une nouvelle version attend que l'utilisateur touche « Mettre à jour » (message SKIP_WAITING), sauf à la toute première installation.
 const BUILD = 'dev'; // remplacé par le serveur par l'identifiant du déploiement Cloudflare
-const CACHE = 'mes-seances-v8-4-0-' + BUILD;
+const CACHE = 'mes-seances-v8-4-1-' + BUILD;
 const SHELL = ['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt'];
