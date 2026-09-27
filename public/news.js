@@ -8,9 +8,9 @@ export const NEWS = [
     ['settings', 'help', '[data-act=helpTour]', '🧭 Visite guidée', 'La visite va maintenant elle-même sur chaque page et te montre les boutons avec une flèche.'],
   ] },
   { v: '8.4.0', date: '2026-09-27', title: 'Nouvelle adresse, consignes à chaque série', why: 'Les consignes restent sous les yeux pendant toute la séance, et le site a une adresse courte.', steps: [
-    ['', '', '', '📋 Consignes à chaque série', 'Pendant une séance, les consignes de l’exercice restent affichées à chaque série — et même pendant le repos, pour préparer la suivante.'],
+    ['', '', '', '📋 Consignes à chaque série', 'Pendant une séance, les consignes de l’exercice restent affichées à chaque série, et même pendant le repos pour préparer la suivante.'],
     ['', '', '', '🏡 Nouvelle adresse', `Le site est maintenant sur ${location.host.endsWith('.pages.dev') ? location.host : 'seances-sport.pages.dev'}. L’ancienne adresse t’y amène toute seule, avec ton compte et tes réglages.`],
-    ['settings', 'help', '[data-act=newsTour]', '✨ Revoir les nouveautés', 'Après chaque mise à jour, une petite visite comme celle-ci te montre ce qui change. Tu peux la revoir ici.'],
+    ['settings', 'help', '[data-act=newsTour]', '🆕 Revoir les nouveautés', 'Après chaque mise à jour, une petite visite comme celle-ci te montre ce qui change. Tu peux la revoir ici.'],
   ] },
   { v: '8.5.0', date: '2026-09-27', title: 'Minuteur, carnet d’escalade, programme, rappels', why: 'S’entraîner avec un coach vocal, suivre ses blocs et ses projets, tenir un programme sur plusieurs semaines.', steps: [
     ['home', 'dash', '[data-act=timerOpen]', '⏱ Minuteur', 'Suspensions 7/3, Tabata, EMOM… en plein écran, avec bips et voix.'],
@@ -27,6 +27,12 @@ export const NEWS = [
     ['profile', 'body', '.bodyf', '🫀 Mon corps', 'Âge, poids, forme, souffle… Les séances s’adaptent (intensité, repos, pas de sauts si besoin).'],
     ['profile', 'equipment', '[data-act=envNewGym]', '🧗 Ta salle', 'Décris ta salle : sa cotation (U1 → U8+…), ses espaces et son matériel.'],
     ['home', 'dash', '[data-act=notifOpen]', '🔔 Notifications', 'Toutes les mises à jour et leur utilité sont ici. Choisis tes notifications dans Paramètres.'],
+  ] },
+  { v: '8.7.0', date: '2026-09-28', title: 'Entre amis, accueil vivant, mode ordinateur, anglais', why: 'Envoie une séance par QR code, entraîne-toi à deux avec les mêmes chronos, et profite d’un accueil qui suit l’heure et la saison.', steps: [
+    ['library', 'seances', '[data-act=duoJoinAsk]', '👥 À deux', 'Pendant une séance, touche « À deux » : ton partenaire scanne le code et vos chronos avancent ensemble. Ici, tu rejoins la séance d’un ami.'],
+    ['', '', '', '🔗 Partage par QR code', 'Sur une séance, « Partager » puis « Lien et QR code » : ton ami scanne et garde sa propre copie.'],
+    ['home', 'dash', '.hero', '🌄 Accueil vivant', 'Le ciel suit l’heure de la journée. Dans Paramètres, tu peux ajouter un décor de saison.'],
+    ['settings', 'main', 'select[name=lang]', '🌍 English', 'L’app existe aussi en anglais (bêta). Sur ordinateur, le menu passe à gauche.'],
   ] },
 ];
 

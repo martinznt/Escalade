@@ -42,6 +42,8 @@ function vMain() {
       <label>Ambiance</label><div class="vibes">${VIBES.map(([id, n, d]) => h`<button type="button" class="vibe ${(a.vibe || 'classique') === id ? 'on' : ''}" data-act="appear" data-k="vibe" data-v="${id}" data-vibe-preview="${id}"><span class="vprev"><i></i><i></i><i></i></span><b>${n}</b><small>${d}</small></button>`)}</div>
       <label>Couleur</label><div class="palette">${(a.vibe || 'classique') !== 'classique' ? h`<button type="button" class="sw none ${a.accent ? '' : 'on'}" title="Couleur de l’ambiance" aria-label="Couleur de l’ambiance" data-act="appearColor" data-v="">∅</button>` : ''}${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${((a.vibe || 'classique') === 'classique' ? a.palette === id && !a.accent : a.accent === c) ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appearColor" data-id="${id}" data-v="${c}"></button>`)}</div>
       <label>Taille du texte</label>${segA('size', [['s', 'Petit'], ['m', 'Normal'], ['l', 'Grand'], ['xl', 'Très grand']])}
+      ${tog(['season', '🍂 Décor de saison sur l’accueil (neige, fleurs, feuilles…)'])}
+      <label>Langue<select data-change="pref" name="lang"><option value="fr" ${st.lang !== 'en' ? 'selected' : ''}>Français</option><option value="en" ${st.lang === 'en' ? 'selected' : ''}>English (beta)</option></select></label>
       <details class="how mini"><summary>Plus d’options d’affichage</summary><label>Espacement</label>${segA('density', [['compact', 'Serré'], ['normal', 'Normal'], ['airy', 'Aéré']])}<label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</details></div>
     <div class="card"><h3>✏️ Mise en page</h3><p class="small muted">Choisis ce qui s’affiche, en grand ou en petite icône en haut, dans quel ordre et de quelle couleur. Le ✏️ en haut de chaque page fait pareil.</p>
       <div class="row wrapf"><button class="btn" data-act="layEditAt" data-to="home/dash">Accueil</button><button class="btn" data-act="layEditAt" data-to="progress/summary">Progrès</button><button class="btn" data-act="layEditAt" data-to="library/seances">Bibliothèque</button><button class="btn" data-act="layEditAt" data-to="profile/home">Profil</button></div>
@@ -68,7 +70,7 @@ ACT.guestQuit = async () => {
 
 /* ═════════ Aide ═════════ */
 const FAQ = [
-  ['Comment faire ma première séance ?', 'Sur l’Accueil, touche « ✨ Me proposer une séance », choisis la durée, puis « Voir la simulation » et « Générer ». Touche ensuite ▶ pour commencer : l’écran te guide exercice par exercice.'],
+  ['Comment faire ma première séance ?', 'Sur l’Accueil, touche « 🎯 Séance du jour », choisis la durée, puis « Voir la simulation » et « Générer ». Touche ensuite ▶ pour commencer : l’écran te guide exercice par exercice.'],
   ['Comment l’app choisit mes exercices ?', 'Elle utilise ce que tu lui as dit (sports, niveau, matériel, zones à ménager), tes séances passées et tes mesures. Chaque séance générée a un encadré « Pourquoi cette séance ? » qui explique ses choix.'],
   ['Je ne connais pas mon niveau, c’est grave ?', 'Non. Réponds « Je ne sais pas » : l’app reste prudente et apprend avec tes séances. Tu peux faire des petits tests plus tard (Profil › Performances).'],
   ['Où sont mes séances enregistrées ?', 'Dans l’onglet 📚 Bibliothèque. L’historique de ce que tu as fait est dans 📈 Progrès › Historique.'],
@@ -78,12 +80,12 @@ const FAQ = [
   ['Un problème ?', 'Va dans « 🐞 Signaler un bug » et décris ce qui s’est passé : le message arrive directement à l’administrateur.'],
 ];
 function vHelp() {
-  return h`<div class="card"><h3>🧭 Visite guidée</h3><p class="small">Revois en 30 secondes à quoi sert chaque onglet.</p><div class="row wrapf"><button class="btn pri" data-act="helpTour">Lancer la visite</button><button class="btn" data-act="newsTour">✨ Revoir les nouveautés</button></div></div>
+  return h`<div class="card"><h3>🧭 Visite guidée</h3><p class="small">Revois en 30 secondes à quoi sert chaque onglet.</p><div class="row wrapf"><button class="btn pri" data-act="helpTour">Lancer la visite</button><button class="btn" data-act="newsTour">🆕 Revoir les nouveautés</button></div></div>
     <div class="card"><h3>❓ Questions fréquentes</h3>${FAQ.map(([q, r]) => h`<details class="faq"><summary>${q}</summary><p class="small">${r}</p></details>`)}</div>${vSources()}`;
 }
 ACT.helpTour = () => showTour(0);
 ACT.soundTest = () => { beep(660, 120); setTimeout(() => beep(1040, 300), 350); };
-CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); };
+CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); if (el.name === 'lang') { render(); ACT.pRedraw?.(); } };
 function vNotifs() {
   const st = S.settings;
   return h`${remindersCard()}

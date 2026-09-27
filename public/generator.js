@@ -342,7 +342,7 @@ export function generateFromPlan(plan, ctx) {
   const now = ctx.now || Date.now();
   const name = plan.goalLabel ? `${plan.goalLabel} — ${plan.minutes} min` : `${plan.activityLabel} — ${plan.light ? 'séance légère' : plan.mode === 'strengths' ? 'points forts' : 'axes de progrès'} ${plan.minutes} min`;
   const session = normalizeSession({
-    id: uid(), name, emoji: ACTIVITIES[plan.activityId]?.emoji || ctx.activities[plan.activityId]?.emoji || '✨', goal: plan.goalId ? 'goal' : plan.mode, source: 'generated',
+    id: uid(), name, emoji: ACTIVITIES[plan.activityId]?.emoji || ctx.activities[plan.activityId]?.emoji || '🎯', goal: plan.goalId ? 'goal' : plan.mode, source: 'generated',
     durationMin: sessionMinutes({ exercises }), objectives: [plan.intentionText], activity: plan.activityId, intentions: plan.intentions,
     context: { env: plan.envId, envName: plan.envName, equipment: plan.equipment, plannedMin: plan.minutes, goalId: plan.goalId },
     notes: [
@@ -455,7 +455,7 @@ export function rebuildForEquipment(session, eqSet, ctx, level = 2) {
     const alts = alternatives(e, fake, { session: cur, level }).filter((a) => a.available);
     const alt = alts.find((a) => a.kinds.some((k) => ['capacite', 'materiel', 'mouvement', 'facile'].includes(k))) || alts.find((a) => a.kinds.includes('objectif'));
     const missTxt = miss.map((n) => EQUIPMENT[n] || n).join(', ');
-    if (alt) { const r = replaceExercise(cur, e.id, alt.lib.id, `${missTxt} indisponible — ${alt.reasons[0].toLowerCase()}`); cur = r.session; changes.push(`« ${e.name} » → « ${alt.lib.name} » (${missTxt} indisponible ; ${alt.reasons[0].toLowerCase()})`); }
+    if (alt) { const r = replaceExercise(cur, e.id, alt.lib.id, `${missTxt} indisponible, donc ${alt.reasons[0].toLowerCase()}`); cur = r.session; changes.push(`« ${e.name} » → « ${alt.lib.name} » (${missTxt} indisponible ; ${alt.reasons[0].toLowerCase()})`); }
     else { cur = normalizeSession({ ...cur, exercises: cur.exercises.filter((x) => x.id !== e.id) }); changes.push(`« ${e.name} » retiré : ${missTxt} indisponible et aucune alternative équivalente`); }
   }
   return { session: normalizeSession({ ...cur, context: { ...cur.context, equipment: [...eqSet] }, updatedAt: Date.now() }), changes };

@@ -21,6 +21,7 @@ import { vSettings, APPEAR_KEYS } from './views-settings.js';
 import { onVisible, bigTap, startPlayer } from './player.js';
 import { catchLink, pendingLink, clearPending } from './share.js';
 import './duo.js';
+import { setLang } from './i18n.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
 const VIEWS = { home: vHome, progress: vProgress, library: vLibrary, profile: vProfile, settings: vSettings };
@@ -59,7 +60,7 @@ function syncAppearance() {
   if (it && !it.del && it.u > localT) { window.__sea.save({ ...local, ...Object.fromEntries(Object.entries(it.d).filter(([, v]) => v)), _t: it.u, _owner: S.user.id }); return; }
   if (!it && mine && local._t && (S.lastSync || S.user.guest)) putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(local[k] ?? '') }), {}));
 }
-setRenderer(() => { syncAppearance(); doRender(); renderUpdateBar(); checkBadges(); });
+setRenderer(() => { syncAppearance(); setLang(S.settings?.lang); doRender(); renderUpdateBar(); checkBadges(); });
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
 ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }[id]; const keep = S.tab === id ? base : S.sub[id]; go(id, ['seance', 'shared-edit', 'common-detail', 'import'].includes(keep) ? base : keep || base); };
 ACT.goSync = () => go('settings', 'sync');
@@ -71,7 +72,7 @@ function vAuth() {
   const reg = S.authMode === 'register', up = !!S.upgradeGuest;
   return h`<main class="auth wrap"><div class="center"><img class="app-logo" src="/icon-192.png" alt="" width="84" height="84"><h1>Séances entraînement</h1>
       ${up ? h`<p class="muted">Crée ton compte : tout ce que tu as fait en mode invité (séances, historique, profil) y sera transféré.</p>` : h`<p class="lead">Ton coach d’entraînement personnel, gratuit.</p>`}</div>
-    ${up ? '' : h`<ul class="pitch"><li><span>✨</span><div><b>Des séances faites pour toi</b><small>Escalade, muscu, renforcement, course, natation… selon ton niveau, ton temps et ton matériel.</small></div></li>
+    ${up ? '' : h`<ul class="pitch"><li><span>🎯</span><div><b>Des séances faites pour toi</b><small>Escalade, muscu, renforcement, course, natation… selon ton niveau, ton temps et ton matériel.</small></div></li>
       <li><span>▶️</span><div><b>Guidé pendant l’effort</b><small>Chrono, repos, séries : il suffit de suivre l’écran.</small></div></li>
       <li><span>📈</span><div><b>Tu vois tes progrès</b><small>Historique, records et conseils expliqués simplement.</small></div></li></ul>`}
     ${up || S.authMode ? '' : h`<div class="stack"><button class="btn pri big" data-act="authPick" data-id="register">Créer mon compte gratuit</button><button class="btn big" data-act="authPick" data-id="login">J’ai déjà un compte</button>
@@ -240,7 +241,7 @@ function renderUpdateBar() {
   if (!bar) { bar = document.createElement('div'); bar.id = 'updbar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
   const tour = pendingNews().length > 0;
   const html = UPD.available
-    ? h`<div class="ut"><span>✨ <b>Nouvelle version disponible</b></span><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button></div>
+    ? h`<div class="ut"><span>🆕 <b>Nouvelle version prête</b></span><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button></div>
       <div class="ub"><button class="btn sm" data-act="updWhat">👀 Nouveautés</button><button class="btn pri sm" data-act="updNow">Mettre à jour</button></div>`
     : h`<div class="ut"><span>🎉 <b>L’app a été mise à jour</b></span><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button></div>
       <div class="ub">${tour ? h`<button class="btn sm" data-act="updWhat">👀 Détails</button><button class="btn pri sm" data-act="newsTour">🧭 Faire la visite</button>` : h`<button class="btn pri sm" data-act="updWhat">👀 Voir les nouveautés</button>`}</div>`;
@@ -261,14 +262,14 @@ ACT.updWhat = async () => {
   const since = UPD.since;
   const tour = pendingNews().length > 0;
   if (UPD.fresh) { UPD.fresh = false; writeSeen(UPD.boot); renderUpdateBar(); }
-  openSheet(h`<div class="news"><h2>✨ Quoi de neuf ?</h2>${skeleton(3)}</div>`);
+  openSheet(h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>${skeleton(3)}</div>`);
   let list = [];
   try { const r = await fetch('/api/changes'); if (r.ok) list = (await r.json()).changes || []; } catch { /* hors ligne */ }
   let recent = since ? list.filter((c) => c.date > since - 3600000) : [];
   const older = !recent.length;
   if (older) recent = list.slice(0, 4);
   const day = (t) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-  const body = h`<div class="news"><h2>✨ Quoi de neuf ?</h2>
+  const body = h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>
     ${recent.length ? h`<p class="small muted">${older ? 'Les dernières améliorations du site :' : `${recent.length} amélioration${recent.length > 1 ? 's' : ''} depuis ta dernière visite :`}</p>
       <ol class="newslist">${recent.slice(0, 8).map((c) => h`<li><span class="nd">${day(c.date)}</span><div><b>${c.title}</b>${c.points?.length ? h`<ul>${c.points.map((p) => h`<li>${p}</li>`)}</ul>` : ''}</div></li>`)}</ol>`
       : h`<p class="small muted">Petites améliorations et corrections. ${navigator.onLine ? '' : 'Connecte-toi à Internet pour voir le détail.'}</p>`}
@@ -307,7 +308,10 @@ function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('/sw.js').then((reg) => {
     UPD.reg = reg;
-    if (reg.waiting && navigator.serviceWorker.controller) showUpdate();
+    // Mise à jour demandée juste avant ce rechargement : si la nouvelle version attend encore, on l'active (sans reproposer le bandeau).
+    const asked = sessionStorage.getItem('sea:user-update');
+    if (reg.waiting && navigator.serviceWorker.controller) { if (asked) reg.waiting.postMessage('SKIP_WAITING'); else showUpdate(); }
+    else if (asked) sessionStorage.removeItem('sea:user-update');
     reg.addEventListener('updatefound', () => {
       const w = reg.installing; if (!w) return;
       w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(); });

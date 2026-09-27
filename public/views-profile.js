@@ -89,7 +89,7 @@ ACT.capOpen = (el) => {
     <b class="small">Muscles</b><p class="small">${g.muscles.map((x) => x.label).join(', ') || '—'}</p>
     <b class="small">→ Objectifs</b><div class="chips">${g.goals.length ? g.goals.map((x) => chip(false, x.label, x.skill ? `data-act="goalNewSkill" data-id="${x.id}"` : `data-act="goalOpen" data-id="${x.id}"`)) : h`<span class="muted small">—</span>`}</div>
     <b class="small">Mon niveau déclaré</b><div class="chips">${[[-1, 'Je ne sais pas'], [0, 'Débutant'], [1, 'Intermédiaire'], [2, 'Avancé']].map(([v, l]) => chip(c.capdecl[g.capId]?.level === v, l, `data-act="capDecl" data-id="${g.capId}" data-v="${v}"`))}</div>
-    <div class="row wrapf"><button class="btn pri" data-act="capTrain" data-id="${g.capId}">✨ Séance ciblée</button><button class="btn" data-act="closeSheet">Fermer</button></div>`, { wide: true });
+    <div class="row wrapf"><button class="btn pri" data-act="capTrain" data-id="${g.capId}">🎯 Séance ciblée</button><button class="btn" data-act="closeSheet">Fermer</button></div>`, { wide: true });
 };
 ACT.capDecl = (el) => { putItem('capdecl', 'cd-' + el.dataset.id, { capId: el.dataset.id, level: Number(el.dataset.v) }); toast(Number(el.dataset.v) === -1 ? 'Noté : « je ne sais pas ». Un test pourra aider.' : 'Niveau déclaré enregistré'); ACT.capOpen(el); render(); };
 ACT.capTrain = (el) => { closeSheet(); openGenerator({ mode: 'weaknesses', capId: el.dataset.id, priorities: { [el.dataset.id]: 3 }, autoPlan: true }); };
@@ -109,7 +109,7 @@ function vActivityCard(a) {
   const c = ctx(), native = ACTIVITIES[a.id];
   const cats = [...(native?.categories || []).map(([id, label, caps]) => ({ id: 'native:' + id, label, caps: caps.map((x) => ({ id: x, w: 1 })), native: true })), ...Object.values(c.categories).filter((x) => x.activityId === a.id)];
   const st = profileCapacities(c, a.id), sw = strengthsWeaknesses(st);
-  return h`<div class="card flat"><div class="row between wrapf"><b>${a.emoji} ${a.label}</b><div class="row tight"><button class="btn sm" data-act="aiCap" data-id="${a.id}">✨ Avec l’IA</button><button class="btn sm" data-act="catNew" data-id="${a.id}">＋ Catégorie</button></div></div>
+  return h`<div class="card flat"><div class="row between wrapf"><b>${a.emoji} ${a.label}</b><div class="row tight"><button class="btn sm" data-act="aiCap" data-id="${a.id}">🤖 Avec l’assistant</button><button class="btn sm" data-act="catNew" data-id="${a.id}">＋ Catégorie</button></div></div>
     <div class="chips">${cats.map((x) => x.native ? h`<span class="chip static" title="${x.caps.map((k) => capL(k.id)).join(', ')}">${x.label}</span>` : chip(false, `${x.emoji ? x.emoji + ' ' : ''}${x.label} ✎`, `data-act="catEdit" data-id="${x.id}"`))}</div>
     ${sw.strengths.length || sw.weaknesses.length ? h`<div class="chips">${sw.strengths.slice(0, 3).map((s) => h`<button class="chip okc" data-act="capOpen" data-id="${s.capId}">💪 ${s.label}</button>`)}${sw.weaknesses.slice(0, 3).map((s) => h`<button class="chip warnc" data-act="capOpen" data-id="${s.capId}">🌱 ${s.label}</button>`)}</div>` : ''}</div>`;
 }
@@ -120,10 +120,10 @@ ACT.actArchive = async (el) => { const a = item('activity', el.dataset.id); if (
 function catForm(cat, activityId) {
   const caps = new Set((cat?.caps || []).map((x) => x.id));
   return h`<h2 style="margin:0">${cat ? `${cat.emoji || ''} ${cat.label}` : 'Nouvelle catégorie'}</h2>
-    ${cat?.guide || cat?.howTo?.length ? h`<div class="card flat">${cat.source === 'ia' ? h`<span class="tag acc">✨ fiche créée avec l’IA</span>` : ''}${cat.guide ? h`<p class="small">${cat.guide}</p>` : ''}${cat.howTo?.length ? h`<b class="small">Comment la travailler</b><ul class="small">${cat.howTo.map((x) => h`<li>${x}</li>`)}</ul>` : ''}</div>` : ''}
+    ${cat?.guide || cat?.howTo?.length ? h`<div class="card flat">${cat.source === 'ia' ? h`<span class="tag acc">🤖 fiche créée avec l’assistant</span>` : ''}${cat.guide ? h`<p class="small">${cat.guide}</p>` : ''}${cat.howTo?.length ? h`<b class="small">Comment la travailler</b><ul class="small">${cat.howTo.map((x) => h`<li>${x}</li>`)}</ul>` : ''}</div>` : ''}
     <form data-submit="catSave" class="stack"><input type="hidden" name="id" value="${cat?.id || ''}"><input type="hidden" name="activityId" value="${activityId}">
     <label>Nom<input name="label" required maxlength="60" value="${cat?.label || ''}" placeholder="Ex. Service, appuis, montée…"></label><label>Description<input name="description" maxlength="180" value="${cat?.description || ''}"></label>
-    <label>Capacités liées (facultatif — sinon la catégorie est un nœud propre à l’activité)</label><div class="chips">${Object.entries(CAPACITIES).map(([id, x]) => h`<label class="chip ${caps.has(id) ? 'on' : ''}"><input type="checkbox" class="hidden" name="caps" value="${id}" ${caps.has(id) ? 'checked' : ''} data-change="chipToggle">${x.label}</label>`)}</div>
+    <label>Capacités liées (facultatif)</label><div class="chips">${Object.entries(CAPACITIES).map(([id, x]) => h`<label class="chip ${caps.has(id) ? 'on' : ''}"><input type="checkbox" class="hidden" name="caps" value="${id}" ${caps.has(id) ? 'checked' : ''} data-change="chipToggle">${x.label}</label>`)}</div>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${cat ? h`<button class="btn danger" type="button" data-act="catDel" data-id="${cat.id}">Supprimer</button>` : ''}</div></form>`;
 }
 ACT.aiCap = (el) => { S.ai = { activityId: el.dataset.id }; openAssistant('capacity'); };
@@ -372,7 +372,7 @@ function vGoalDetail(g) {
   return h`<div class="row"><button class="btn sm" data-act="goalBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2></div>
     <div class="card hero ghero"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
       ${sk ? h`<details class="how mini"><summary>C’est quoi, ${sk.label} ?</summary><p class="small">${sk.desc}</p></details>` : ''}
-      <div class="row"><button class="btn pri grow" data-act="goalTrain" data-id="${g.id}">✨ Séance pour cet objectif</button>
+      <div class="row"><button class="btn pri grow" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button>
       <details class="menu"><summary class="btn ic" aria-label="Plus d’actions">⋯</summary><div class="menu-list"><button class="btn" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="done">✅ Atteint</button><button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div></details></div></div>
     <div class="scrollx">${seg('goalTab', tab, tabs)}</div>${({ overview: goalOverview, blockers: goalBlockers, tree: goalTree, paths: goalPathsV, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[tab](g)}`;
 }

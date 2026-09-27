@@ -19,12 +19,12 @@ function showAssistant() {
   if (a.draft) return showDraft();
   openSheet(h`<div class="ai"><div class="ai-hero"><span>🤖</span><div><h2>Créer avec l’assistant</h2><p class="small muted">Écris quelques mots, l’IA prépare une fiche complète. Tu la relis avant de l’enregistrer.</p></div></div>
     <form data-submit="aiAsk" class="stack">
-      <div class="chips">${[['auto', '✨ Laisse l’IA choisir'], ['exercise', '💪 Un exercice'], ['capacity', '🎯 Une capacité à travailler']].map(([k, l]) => chip(a.kind === k, l, `data-act="aiKind" data-id="${k}"`))}</div>
+      <div class="chips">${[['auto', '🤖 Laisse l’assistant choisir'], ['exercise', '💪 Un exercice'], ['capacity', '🎯 Une capacité à travailler']].map(([k, l]) => chip(a.kind === k, l, `data-act="aiKind" data-id="${k}"`))}</div>
       <label>Ton idée<input name="text" required minlength="2" maxlength="300" autofocus placeholder="Ex. clipage en escalade" value="${a.text}"></label>
       <div class="chips">${EXAMPLES.map((x) => h`<button type="button" class="chip ghost" data-act="aiExample" data-v="${x}">${x}</button>`)}</div>
       <label>Pour quel sport ?<select name="activityId">${acts().map(([id, l]) => h`<option value="${id}" ${a.activityId === id ? 'selected' : ''}>${l}</option>`)}</select></label>
       ${a.error ? h`<p class="small warn-t">${a.error}</p>` : ''}
-      <button class="btn pri big" type="submit" ${a.loading ? 'disabled' : ''}>${a.loading ? '⏳ L’assistant réfléchit…' : '✨ Créer la fiche'}</button>
+      <button class="btn pri big" type="submit" ${a.loading ? 'disabled' : ''}>${a.loading ? '⏳ L’assistant réfléchit…' : 'Créer la fiche'}</button>
       ${a.error ? h`<button type="button" class="btn ghost" data-act="aiManual">Remplir moi-même sans l’IA</button>` : ''}
     </form><p class="tiny muted">Seul le texte que tu écris est envoyé à l’IA (hébergée chez Cloudflare), jamais tes performances ou ton historique.</p></div>`, { wide: true });
 }
@@ -62,7 +62,7 @@ function exBlock(e, editable) {
 }
 function showDraft() {
   const d = S.ai.draft, ia = !d.manual;
-  const badge = ia ? h`<span class="tag acc">✨ proposé par l’IA · confiance ${d.confidence}</span>` : h`<span class="tag">modèle à compléter</span>`;
+  const badge = ia ? h`<span class="tag acc">🤖 proposé par l’assistant · confiance ${d.confidence}</span>` : h`<span class="tag">modèle à compléter</span>`;
   const body = d.type === 'exercise'
     ? h`<form data-submit="aiSaveEx" class="stack">${badge}${exBlock(d, true)}
         ${d.safety ? h`<p class="tiny warn-t">⚠️ ${d.safety}</p>` : ''}

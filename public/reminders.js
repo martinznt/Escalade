@@ -26,7 +26,7 @@ async function save(p) {
   await api('POST', '/api/push/subscribe', { endpoint: sub.endpoint, days: p.days, hour: p.hour, tz: tz(), types: p.types, silent: !!p.silent });
 }
 
-const TYPE_LABELS = [['reminder', '🏋️', 'Rappels d’entraînement', 'Les jours et à l’heure que tu choisis'], ['update', '✨', 'Nouvelles mises à jour', 'Quand l’app change, avec ce que ça apporte'], ['reply', '💬', 'Réponses à mes propositions', 'Quand un administrateur répond'], ['admin', '📬', 'Nouvelles propositions', 'Administrateurs seulement']];
+const TYPE_LABELS = [['reminder', '🏋️', 'Rappels d’entraînement', 'Les jours et à l’heure que tu choisis'], ['update', '🆕', 'Nouvelles mises à jour', 'Quand l’app change, avec ce que ça apporte'], ['reply', '💬', 'Réponses à mes propositions', 'Quand un administrateur répond'], ['admin', '📬', 'Nouvelles propositions', 'Administrateurs seulement']];
 export function remindersCard() {
   const p = prefs();
   let body;

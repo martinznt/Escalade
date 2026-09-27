@@ -31,7 +31,7 @@ export const SPORT_INTENTS = {
 /** Intentions pour un sport : celles de base + celles ajoutées (personnelles ou communes) pour ce sport ou pour tous. */
 export function intentsFor(activityId, extra = []) {
   const base = SPORT_INTENTS[activityId] || SPORT_INTENTS.conditioning;
-  const more = extra.filter((x) => x && x.label && (!x.activityId || x.activityId === activityId)).map((x) => ({ id: x.id, emoji: x.emoji || '✨', label: x.label, caps: x.caps || {}, custom: x.source || 'perso' }));
+  const more = extra.filter((x) => x && x.label && (!x.activityId || x.activityId === activityId)).map((x) => ({ id: x.id, emoji: x.emoji || '📌', label: x.label, caps: x.caps || {}, custom: x.source || 'perso' }));
   return [...base, ...more];
 }
 export const MUSCLE_GROUPS = [['bras', 'Bras', ['biceps', 'triceps']], ['avantbras', 'Avant-bras et doigts', ['avant_bras_flech', 'avant_bras_ext']], ['epaules', 'Épaules', ['deltoide_ant', 'deltoide_post', 'coiffe']],

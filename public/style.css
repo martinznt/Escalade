@@ -489,3 +489,35 @@ html[data-vibe=neon][data-mode=dark] .btn.pri{box-shadow:0 0 18px color-mix(in s
 .duocode.sm{font-size:1.1rem}.duocode.in{width:100%;max-width:260px;text-align:center;text-transform:uppercase;padding:10px}
 .duobar{display:flex;align-items:center;gap:8px;justify-content:center;padding:6px 10px;margin:6px 0;border-radius:999px;background:color-mix(in srgb,var(--accent) 14%,var(--card));border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line))}
 .duobar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok,#3c3);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok,#3c3) 25%,transparent)}.duobar .dot.off{background:var(--bad,#c33)}
+/* Accueil vivant : ciel selon l'heure, décor de saison */
+.hero>:not(.scene){position:relative;z-index:1}
+.hero .scene{position:absolute;right:0;top:0;height:100%;width:58%;-webkit-mask-image:linear-gradient(to right,transparent,#000 45%);mask-image:linear-gradient(to right,transparent,#000 45%);opacity:.85;pointer-events:none}
+.scene .star{animation:twinkle 3s ease-in-out infinite}
+.scene .flake{animation:snow 8s linear infinite;transform-box:fill-box}
+.scene .leaf{animation:leaf 9s ease-in-out infinite;transform-box:fill-box}
+.scene .rays{animation:rays 6s ease-in-out infinite;transform-origin:center}
+@keyframes twinkle{50%{opacity:.25}}
+@keyframes snow{from{translate:0 -100px}to{translate:6px 100px}}
+@keyframes leaf{0%{translate:0 -20px;opacity:0}15%{opacity:1}100%{translate:-24px 60px;opacity:0}}
+@keyframes rays{50%{opacity:.15}}
+html[data-motion=off] .scene *{animation:none!important}
+@media (prefers-reduced-motion:reduce){.scene *{animation:none!important}}
+/* Accueil : conteneur des blocs (une colonne sur téléphone) */
+.home-grid{display:grid;gap:var(--gap)}
+/* Mode ordinateur : barre de navigation à gauche, contenu plus large, cartes de l'accueil sur deux colonnes */
+@media (min-width:1000px){
+  body{padding-bottom:24px;padding-left:220px}
+  nav.tabs{top:0;bottom:0;right:auto;width:220px;grid-template-columns:1fr;grid-auto-rows:min-content;align-content:start;gap:4px;padding:76px 12px 12px;border-top:0;border-right:1px solid var(--line)}
+  nav.tabs button{grid-auto-flow:column;justify-content:start;align-items:center;gap:12px;padding:10px 14px;font-size:.95rem;min-height:46px}
+  header.top{margin-left:-220px;padding-left:220px}
+  .wrap{max-width:1080px;padding:18px 28px 0}
+  header.top .wrap{padding:10px 28px}
+  #sheet .sheet,#dialog .dlg{max-width:620px;margin-left:auto;margin-right:auto}
+  #toast{left:236px}
+  #updbar{left:236px}
+  .home-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gap);align-items:start}
+  .home-grid>.hero,.home-grid>.wide,.home-grid>.quick{grid-column:1/-1}
+  .home-grid>.quick{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .hero .scene{width:46%}
+  #player .pl{max-width:720px;margin:0 auto}
+}

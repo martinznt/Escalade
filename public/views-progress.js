@@ -20,7 +20,7 @@ const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);
 
 function vSummary() {
   const c = ctx(), days = S.benchDays || 30, b = benchmarks(c, days), per = S.sumKind || 'week', s = periodSummary(c, per), reg = regularity(c), load = loadAnalysis(c);
-  if (!c.history.length) return h`<section class="card hero center"><div style="font-size:3rem">🌱</div><h2>Ta progression commence ici</h2><p>Fais ta première séance : tes chiffres, tes records et ta régularité apparaîtront ici.</p><button class="btn pri big" data-act="genOpen">✨ Me proposer une séance</button></section>`;
+  if (!c.history.length) return h`<section class="card hero center"><div style="font-size:3rem">🌱</div><h2>Ta progression commence ici</h2><p>Fais ta première séance : tes chiffres, tes records et ta régularité apparaîtront ici.</p><button class="btn pri big" data-act="genOpen">🎯 Me proposer une séance</button></section>`;
   const delta = (x) => (x == null ? '' : x > 0 ? h`<i class="up">▲ ${x} %</i>` : x < 0 ? h`<i class="down">▼ ${Math.abs(x)} %</i>` : h`<i>=</i>`);
   const kpi = (ic, label, v, d) => h`<div class="kpi"><span>${ic} ${label}</span><b>${v}</b>${delta(d)}</div>`;
   const maxCap = Math.max(1, ...b.capDiff.slice(0, 5).map((x) => Math.max(x.cur, x.prev)));
@@ -112,7 +112,7 @@ function vAnalyses() {
       ${u.items.length ? h`<details class="how mini"><summary>Comment lire ?</summary><p class="tiny">Barre pleine : ta part de volume. Ombre : ce que demandent tes activités et objectifs. ${u.text}</p></details>` : ''}</div>
     <div class="card"><h3>🎯 Objectifs délaissés</h3>${f.length ? f.map((x) => h`<div class="item"><div class="grow small">${x.days != null ? `« ${x.label} » : dernière séance liée il y a ${x.days} jours (${fmtDay(x.last)}).` : `« ${x.label} » : pas encore travaillé.`}</div><button class="btn sm" data-act="todayGoal" data-id="${x.goal.id}">Séance</button></div>`) : h`<p class="muted small">Tous tes objectifs actifs ont été travaillés récemment.</p>`}</div>
     <div class="card"><h3>📌 Séances atypiques</h3>${a.length ? a.map((x) => h`<div class="win"><span>📌</span>${x.text}</div>`) : h`<p class="muted small">Rien d’inhabituel 👍</p>`}</div>
-    ${w ? h`<div class="card"><h3>🤔 Pourquoi je stagne ? — ${w.goal}</h3>${w.hypotheses.map((x) => h`<details class="win fold2"><summary><b>💡 ${x.title}</b></summary><p class="small">${x.text}</p></details>`)}${howBox({ facts: w.facts, missing: w.missing })}</div>` : ''}`;
+    ${w ? h`<div class="card"><h3>🤔 Pourquoi je stagne sur « ${w.goal} » ?</h3>${w.hypotheses.map((x) => h`<details class="win fold2"><summary><b>💡 ${x.title}</b></summary><p class="small">${x.text}</p></details>`)}${howBox({ facts: w.facts, missing: w.missing })}</div>` : ''}`;
 }
 
 /* ═════════ Mode Lab : expériences personnelles ═════════ */

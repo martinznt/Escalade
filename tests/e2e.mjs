@@ -427,6 +427,33 @@ await step('l’original n’a pas changé ; modification directe par B refusée
   assert.equal((await b.api('DELETE', '/api/shared/' + commonId)).status, 403);
   assert.equal((await b.api('GET', '/api/admin/bugs')).status, 403, 'route admin refusée');
 });
+await step('partage par lien et QR code : B ouvre le lien et garde sa propre copie', async () => {
+  cur = A; await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').first().click();
+  await a.click('[data-act=sPublish]'); await a.click('#sheet [data-act=sPublishDo][data-scope=link]'); await A.waitForSelector('#sheet .qrbox svg');
+  const link = await A.inputValue('#shLink'); assert.match(link, /\/#\/s\/[\w-]+$/);
+  await A.keyboard.press('Escape');
+  assert.ok(!(await b.api('GET', '/api/shared?scope=common')).data.items.some((x) => link.endsWith(x.id)), 'lien absent de la bibliothèque commune');
+  cur = B; await B.goto(link); await B.waitForSelector('[data-act=linkSave]'); assert.match(await b.text('main'), /Séance partagée par Alice/);
+  await b.click('[data-act=linkSave]'); await B.waitForSelector('input[data-change=sName]');
+  assert.equal(await B.inputValue('input[data-change=sName]'), 'Tirage maison');
+});
+await step('séance à deux : code affiché, B rejoint, les chronos avancent ensemble', async () => {
+  cur = A; await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=play]').first().click(); await A.waitForSelector('#player.open');
+  await a.click('#player [data-act=duoOpen]'); await A.waitForSelector('#sheet .duocode'); const code = (await a.text('#sheet .duocode')).trim(); assert.match(code, /^[A-Z2-9]{6}$/);
+  await A.keyboard.press('Escape');
+  cur = B; await b.tab('library'); await b.sub('libSub', 'seances'); await b.click('[data-act=duoJoinAsk]'); await B.fill('#sheet input[name=code]', code.toLowerCase()); await b.click('#sheet button.pri');
+  await B.waitForSelector('#player.open .duobar:has-text("Avec Alice")');
+  await A.waitForSelector('#player .duobar:has-text("Avec Bob")', { timeout: 8000 });
+  const where = (P) => P.evaluate(() => `${document.querySelector('#player .pl .muted.small')?.textContent.split('·')[0].trim()}|${document.querySelector('#ptimer.rest') ? 'repos' : 'série'}`);
+  const before = await where(A);
+  await a.click('#player [data-act=pGo]'); if (await a.count('#player [data-act=pWorkDone]')) await a.click('#player [data-act=pWorkDone]');
+  const after = await where(A); assert.notEqual(after, before, 'A a avancé');
+  await poll(async () => (await where(B)) === after, 10000, 'B suit A');
+  await a.click('#player [data-act=pQuit]'); await a.confirm(); await A.waitForSelector('[data-act=pDiscard]'); await a.click('[data-act=pDiscard]'); await a.confirm();
+  await B.waitForSelector('#toast.show:has-text("terminée")', { timeout: 10000 });
+  await b.click('#player [data-act=pQuit]'); await b.confirm(); await B.waitForSelector('[data-act=pDiscard]'); await b.click('[data-act=pDiscard]'); await b.confirm();
+  await B.waitForSelector('#player:not(.open)', { state: 'attached' });
+});
 await step('B signale un bug depuis Paramètres', async () => {
   await b.tab('settings'); await b.sub('setSub', 'bug');
   await B.fill('form[data-submit=bugSend] input[name=title]', 'Bug <b>test</b>'); await B.fill('form[data-submit=bugSend] textarea', 'Le bouton ne répond pas <script>alert(1)</script>');

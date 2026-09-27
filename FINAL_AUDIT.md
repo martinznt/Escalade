@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.6.0
+# FINAL_AUDIT — Séances entraînement v8.7.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -445,3 +445,48 @@ réglages qu'un client V2 ne connaît pas.
   raccourcis de l'icône.
 - Serveur : l'historique garde la fréquence cardiaque et le lien au programme ; photos jusqu'à 95 Ko ; envois par 600 Ko.
 - Tests ajoutés : session-tools, climb, motivation, program, push-ics, coach ; E2E 52 étapes.
+
+## Évolution 8.6.0 : ambiances, mise en page, séance sur mesure, salles, notifications, sources
+
+- **Ambiances** : six ambiances complètes (classique, chaleureux, salle de muscu, grand air, minimal, néon), avec une couleur au choix.
+- **Mise en page par compte** : chaque élément peut s'afficher en grande carte ou en icône en haut, être déplacé et coloré. Chaque enregistrement demande deux confirmations, et on peut revenir à la mise en page de base.
+- **Profil corporel et objectifs multiples**, dont la perte de poids. Un objectif écrit librement est analysé par l'assistant (côté serveur, réponse filtrée), avec une solution de repli sans assistant.
+- **Générateur enrichi** :
+  - objectifs, intentions propres à chaque sport, forces et faiblesses, muscles, zones à ménager, forme du jour et ressenti visé ;
+  - les intentions proposées par les utilisateurs passent par une validation des administrateurs (droits vérifiés côté serveur).
+- **Salles d'escalade** : matériel par espace et cotation propre (U1 à U8+). Chaque bloc est noté facile, moyen ou dur pour sa cotation, avec son style.
+- **Notifications** : boîte des mises à jour, réglages par type, notification « nouvelle mise à jour » (Web Push VAPID, sans service tiers).
+- **Séances prêtes sourcées** et classement des exercices pour le profil. 18 références vérifiées, citées sous chaque conseil (`public/sources.js`).
+
+## Évolution 8.7.0 : entre amis, accueil vivant, mode ordinateur, anglais
+
+**Partage par lien et QR code**
+- Nouvelle portée `link` pour `shared_sessions` : la séance n'est lisible qu'avec son lien (`/api/public/s/:id`).
+- Elle n'apparaît jamais dans la bibliothèque commune ni sur le profil public. Seul son auteur la voit dans sa liste (`scope=link&mine=1`) et peut la retirer.
+- Données personnelles retirées comme pour toute publication (`sanitizeForPublication`).
+- Le QR code est dessiné dans l'app en SVG, avec `public/qr.js` (qrcode-generator 1.4.4, licence MIT, en-tête conservé) : aucun service extérieur.
+- La page d'arrivée propose de garder une copie indépendante ou de faire la séance. Sans compte, le lien est gardé le temps de se connecter.
+
+**Séance à deux** (`server/duo.js`, table `duo_rooms`)
+- Salon de 6 caractères tirés au hasard (crypto), sans 0/O/1/I. Il expire après 4 h et accueille 4 personnes au plus.
+- Seuls ses membres peuvent lire ou écrire l'état ; les autres reçoivent 403.
+- L'état partagé est nettoyé côté serveur : position dans la séance, phase, fin du chrono, pause. Répétitions, charges et notes ne circulent pas.
+- Synchronisation par sondage toutes les 2 s, avec compensation du décalage d'horloge.
+- Quand le partenaire valide une série, elle est comptée avec les valeurs affichées ; s'il passe un exercice, rien n'est compté.
+- Le salon est supprimé à la suppression du compte de son hôte.
+
+**Accueil vivant** (`public/scene.js`)
+- Le ciel suit l'heure (aube, jour, soir, nuit), le soleil ou la lune avancent dans la journée.
+- Décor de saison en option (neige, fleurs, soleil, feuilles). Les animations sont coupées si « Animations : non » ou si le système demande moins de mouvement.
+
+**Mode ordinateur** : à partir de 1000 px de large, la navigation passe à gauche et l'accueil s'affiche sur deux colonnes.
+
+**Anglais (bêta)** (`public/i18n.js`) : les textes connus des écrans principaux sont traduits à l'affichage. Ce qui n'est pas encore traduit reste en français. La voix du coach reste en français.
+
+**Ton plus naturel** : moins d'étincelles « IA » dans les boutons et des phrases d'accueil plus humaines, qui varient selon l'heure.
+
+**Correctif de mise à jour** : si l'app se rechargeait avant que la nouvelle version ne soit active, le bandeau « Nouvelle version » pouvait réapparaître juste après avoir mis à jour. La version en attente est maintenant activée directement.
+
+**Tests**
+- Nouveaux fichiers : `tests/duo-share.test.mjs` (16 tests ; le QR est relu par jsQR, dépendance de développement) et `tests/look.test.mjs` (6 tests).
+- E2E : 58 étapes, dont le partage par lien et une séance à deux entre deux navigateurs.

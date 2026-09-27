@@ -1,6 +1,7 @@
 // views-home.js — Accueil : tableau de bord personnalisable, « Que faire aujourd'hui ? », commandes en langage
 // naturel, calendrier visuel (planifié / réalisé), premier lancement.
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk } from './ui.js';
+import { sceneSvg, moodLine } from './scene.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings } from './state.js';
 import { uid, summarizeHistory } from './shared.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, EQUIPMENT, CAPACITIES } from './model.js';
@@ -49,9 +50,10 @@ function hero() {
   const pills = [target ? `${week.length}/${target} séance${target > 1 ? 's' : ''} cette semaine` : `${week.length} séance${week.length > 1 ? 's' : ''} cette semaine`];
   if (mins) pills.push(`⏱ ${mins} min`);
   if (streak >= 2) pills.push(`🔥 ${streak} semaines d’affilée`);
-  const mood = !c.history.length ? 'Prêt(e) pour ta première séance ?' : target && week.length >= target ? 'Objectif de la semaine atteint 🎉' : week.length ? 'Belle lancée, continue !' : 'Une petite séance aujourd’hui ?';
-  return h`<section class="card hero"><span class="date">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-    <h1>${hello}${S.user.guest ? '' : ' ' + S.user.username} 👋</h1><p>${mood}</p><div class="stats">${pills.map((p) => h`<span>${p}</span>`)}</div></section>`;
+  const now = new Date(), today = new Date(now); today.setHours(0, 0, 0, 0);
+  const mood = moodLine({ first: !c.history.length, done: c.history.some((x) => x.startedAt >= today.getTime()), target, weekCount: week.length, hour: hr, day: Math.floor(today.getTime() / 86400000) });
+  return h`<section class="card hero">${raw(sceneSvg(now, { season: !!S.settings.season }))}<span class="date">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+    <h1>${hello}${S.user.guest ? '' : ' ' + S.user.username}</h1><p>${mood}</p><div class="stats">${pills.map((p) => h`<span>${p}</span>`)}</div></section>`;
 }
 ACT.homeSub = (el) => go('home', el.dataset.id);
 
@@ -79,7 +81,7 @@ function vDash() {
   const safe = (b) => () => BLOCK_VIEWS[b]();
   return h`${setupCard()}${questionCard()}${installCard()}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
-    ${composePage('home', {
+    <div class="${S.lay?.page === 'home' ? '' : 'home-grid'}">${composePage('home', {
       hero,
       gen: () => tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true),
       seances: () => tile('goLib', '📚', 'Mes séances', 'Lancer, créer, modifier'),
@@ -90,7 +92,7 @@ function vDash() {
       streak: () => (S.history.length || ctx().ascents.length ? streakCard() : ''),
       today: safe('today'), next: safe('next'), goals: safe('goals'), reco: safe('reco'), weekprog: safe('progress'), records: safe('records'),
       regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'),
-    })}`;
+    })}</div>`;
 }
 ACT.goLib = () => go('library', 'seances');
 ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
@@ -109,7 +111,7 @@ const BLOCK_VIEWS = {
     const t = todayOptions(ctx(), { todayEvents: evs });
     return card('☀️ Que faire aujourd’hui ?', h`${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
       <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="tiny">${(o.how || []).map((x) => h`<li>${x}</li>`)}</ul></details></div>
-      ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}">✨</button>`}</div>`)}`);
+      ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}" aria-label="Préparer cette séance">▶</button>`}</div>`)}`);
   },
   command() {
     return card('🗣️ Dis-le simplement', h`<button class="btn coachbtn" data-act="coachOpen">💬 Poser une question au coach</button><form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Séance de 20 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>
@@ -148,7 +150,7 @@ const BLOCK_VIEWS = {
     for (const t of testReminders(c).slice(0, 2)) items.push({ icon: '📏', text: t.unknown ? `Faire le test : ${t.label.toLowerCase()}` : t.age != null ? `Refaire le test : ${t.label.toLowerCase()}` : `Mesurer : ${t.label.toLowerCase()}`, act: h`<button class="btn sm" data-act="perfAdd" data-id="${t.metricId}">Saisir</button>` });
     for (const u of undertrained(c).items.slice(0, 1)) items.push({ icon: '🧩', text: `Peu travaillé ces temps-ci : ${u.label.toLowerCase()}`, act: '' });
     for (const hb of habits(c).filter((x) => x.proposal).slice(0, 2)) items.push({ icon: '🔁', text: hb.text, act: h`<button class="btn sm pri" data-act="habitYes" data-k="${hb.key}">Oui</button><button class="btn sm" data-act="habitNo" data-k="${hb.key}">Non</button>` });
-    for (const n of neverTried(c).slice(0, 1)) items.push({ icon: '✨', text: `À essayer : ${n.lib.name}`, act: h`<button class="btn sm" data-act="libInfo" data-id="${n.lib.id}">Voir</button>` });
+    for (const n of neverTried(c).slice(0, 1)) items.push({ icon: '🆕', text: `À essayer : ${n.lib.name}`, act: h`<button class="btn sm" data-act="libInfo" data-id="${n.lib.id}">Voir</button>` });
     return card('💡 Recommandations', items.length ? items.map((x) => h`<div class="item"><div class="ico sm">${x.icon}</div><div class="grow small">${x.text}</div><div class="row tight">${x.act}</div></div>`) : h`<p class="muted small">Rien à signaler pour l’instant.</p>`);
   },
   load() {

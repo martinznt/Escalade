@@ -404,7 +404,7 @@ export function benchmarks(ctx, days) {
   return {
     days, cur, prev, deltas: { sessions: delta(cur.sessions, prev.sessions), minutes: delta(cur.minutes, prev.minutes), sets: delta(cur.sets, prev.sets) },
     capDiff: capDiff.slice(0, 8), trends,
-    text: `Comparaison des ${days} derniers jours avec les ${days} jours précédents — uniquement ton propre historique.`,
+    text: `Comparaison des ${days} derniers jours avec les ${days} jours d’avant, d’après ton historique seulement.`,
   };
 }
 

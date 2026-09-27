@@ -9,7 +9,7 @@ import { beep } from './sound.js';
 const SEEN = 'sea:inbox-seen';
 const t = (d) => new Date(d + 'T12:00:00').getTime();
 function entries() {
-  const out = NEWS.slice().reverse().map((n) => ({ id: 'v' + n.v, kind: 'update', at: t(n.date || '2026-09-27'), icon: '✨', title: n.title || `Version ${n.v}`, text: n.why || '', v: n.v, steps: n.steps }));
+  const out = NEWS.slice().reverse().map((n) => ({ id: 'v' + n.v, kind: 'update', at: t(n.date || '2026-09-27'), icon: '🆕', title: n.title || `Version ${n.v}`, text: n.why || '', v: n.v, steps: n.steps }));
   for (const p of S.inbox?.mine || []) if (p.status === 'done') out.push({ id: 'p' + p.id, kind: 'reply', at: p.reviewed_at || p.created_at, icon: /Accept/.test(p.reply) ? '✅' : '💬', title: `Ta proposition « ${p.label} »`, text: p.reply });
   if (S.user?.isAdmin && S.inbox?.adminOpen) out.push({ id: 'a' + S.inbox.adminOpen, kind: 'admin', at: S.inbox.adminAt || Date.now(), icon: '📬', title: `${S.inbox.adminOpen} proposition${S.inbox.adminOpen > 1 ? 's' : ''} à traiter`, text: 'Des utilisateurs proposent des intentions ou des idées.' });
   return out.sort((a, b) => b.at - a.at);
