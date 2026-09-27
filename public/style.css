@@ -282,3 +282,6 @@ body.touring{overflow:hidden}
 .newslist b{display:block;line-height:1.35}.newslist ul{margin:6px 0 0;padding-left:18px;font-size:.9rem;color:var(--muted)}
 #tour .tour-x{position:absolute;top:8px;right:8px;border:0;background:transparent;color:var(--muted);font-size:1rem;width:32px;height:32px;border-radius:50%;cursor:pointer}
 #tour .tour-x:hover{background:var(--card2)}
+#updbar{display:grid;gap:6px;border-radius:20px;padding:10px 10px 10px 16px}
+#updbar .ut{display:flex;align-items:center;gap:8px}#updbar .ut span{flex:1}
+#updbar .ub{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}

@@ -1,4 +1,4 @@
-# Séances entraînement — v8.2.1
+# Séances entraînement — v8.3.0
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
@@ -43,7 +43,10 @@ L'ancienne adresse `workers.dev` continue de fonctionner ; les comptes et les do
 ## Mises à jour
 
 Chaque déploiement est détecté automatiquement (identifiant de version Cloudflare) : le site et l'application installée
-affichent « Nouvelle version disponible — Mettre à jour ». Inutile de modifier un numéro de version.
+affichent « Nouvelle version — Mettre à jour ». Si l'app était fermée pendant la mise à jour, « 🎉 L'app a été mise à jour »
+s'affiche à la réouverture. « Voir les nouveautés » liste les dernières modifications : le titre de chaque commit et ses
+lignes « - … » (historique public du dépôt GitHub). Écris donc des titres de commit simples et parlants.
+Inutile de modifier un numéro de version.
 
 ## Tests
 

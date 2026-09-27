@@ -457,7 +457,7 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   await g.click('#updbar [data-act=updWhat]'); await G.waitForSelector('#sheet.open .newslist li');
   assert.match(await g.text('#sheet .newslist'), /Visite guidée plus immersive[\s\S]*flèches/);
   assert.equal(await g.count('#updbar'), 0, 'bandeau disparu une fois les nouveautés vues');
-  await g.click('#sheet [data-act=closeSheet]'); await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
+  await g.click('.news [data-act=closeSheet]'); await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
   assert.equal(await g.count('#updbar'), 0, 'pas de bandeau tant qu’il n’y a rien de nouveau');
 });
 await step('aucune erreur JavaScript dans les navigateurs', async () => assert.deepEqual(errors, []));

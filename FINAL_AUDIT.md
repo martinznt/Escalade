@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.2.1
+# FINAL_AUDIT — Séances entraînement v8.3.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -388,3 +388,18 @@ réglages qu'un client V2 ne connaît pas.
 - **Ancienne version KV** : ses séances personnelles ne peuvent être attribuées qu'au premier compte créé (elles
   n'avaient pas de propriétaire).
 - Limites de débit par IP : basées sur l'en-tête `CF-Connecting-IP` fourni par Cloudflare.
+
+## Évolution 8.3.0 — visite immersive et « Quoi de neuf ? »
+
+- **Visite guidée immersive** (`public/tour.js`) : l'app va elle-même sur chaque page (accueil, générateur, progrès,
+  profil, paramètres, aide), assombrit l'écran sauf l'élément expliqué (halo animé) et affiche une bulle avec une flèche
+  qui le pointe. Retour / Suivant / ✕, flèches du clavier et Échap ; suit la rotation et le défilement ; aucune fenêtre
+  (question, bandeau) ne s'ouvre par-dessus pendant la visite.
+- **Bandeau après chaque modification** : la dernière version vue est retenue sur l'appareil (`sea:seen-build`). Si le
+  site a été déployé depuis (même application fermée, mise à jour silencieuse), « 🎉 L'app a été mise à jour » s'affiche
+  une fois. Une version en attente affiche toujours « Nouvelle version — Mettre à jour ».
+- **Voir les nouveautés** : `GET /api/changes` (sans compte) lit l'historique public du dépôt GitHub, ne garde que les
+  titres et les puces (fusions, livrables zip, lignes techniques écartés), met en cache 10 min et renvoie une liste vide
+  en cas d'erreur. Aucune donnée d'utilisateur n'est envoyée à GitHub. Dépôt modifiable par `CHANGES_REPO` / `CHANGES_BRANCH`.
+- Tests : `tests/changes.test.mjs` (filtrage, cache, erreurs, route) ; E2E : la visite navigue seule jusqu'au générateur,
+  élément mis en lumière et flèche ; après la mise à jour, bandeau « mis à jour » → nouveautés → bandeau disparu.

@@ -194,8 +194,10 @@ function renderUpdateBar() {
   if (hidden) { bar?.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'updbar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
   const html = UPD.available
-    ? h`<span>✨ <b>Nouvelle version</b></span><button class="btn ghost sm" data-act="updWhat">Nouveautés</button><button class="btn pri sm" data-act="updNow">Mettre à jour</button><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button>`
-    : h`<span>🎉 <b>L’app a été mise à jour</b></span><button class="btn pri sm" data-act="updWhat">Voir les nouveautés</button><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button>`;
+    ? h`<div class="ut"><span>✨ <b>Nouvelle version disponible</b></span><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button></div>
+      <div class="ub"><button class="btn sm" data-act="updWhat">👀 Nouveautés</button><button class="btn pri sm" data-act="updNow">Mettre à jour</button></div>`
+    : h`<div class="ut"><span>🎉 <b>L’app a été mise à jour</b></span><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button></div>
+      <div class="ub"><button class="btn pri sm" data-act="updWhat">👀 Voir les nouveautés</button></div>`;
   if (bar.innerHTML !== html.s) bar.innerHTML = html.s;
   bar.classList.toggle('fresh', !UPD.available);
 }
