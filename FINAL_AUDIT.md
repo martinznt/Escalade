@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Mes séances v8.0
+# FINAL_AUDIT — Séances entraînement v8.2.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -73,7 +73,7 @@ Exécutées automatiquement au premier appel du Worker, une fois par instance de
 | `tests/engine.test.mjs` | Générateur d'escalade historique et import de texte | 38 OK |
 | `npm run test:e2e` | Navigateur réel Chromium (Playwright), téléphone 390×844 | 36 étapes OK |
 
-Total : **256 vérifications unitaires / intégration + 36 étapes E2E, toutes vertes.**
+Total (8.0.1 : + test de robustesse) : **256 vérifications unitaires / intégration + 36 étapes E2E, toutes vertes.**
 En plus : une visite automatisée de 28 écrans + onglets d'objectif avec données réalistes, qui échoue si une page
 contient « [object Object] », « undefined », « NaN », des entités HTML doublement échappées ou un défilement horizontal
 (aucune anomalie).
@@ -268,6 +268,70 @@ compte (connexion, séances, historique intacts) ; anciens réglages convertis (
 objectifs, activités, métriques) une seule fois ; réglages vides ou corrompus sans erreur ; données locales v7 du
 navigateur (file d'attente comprise) reprises au premier démarrage ; le Worker V2 conserve les anciennes clés de
 réglages qu'un client V2 ne connaît pas.
+
+---
+
+## Correctif 8.0.1 (après la première mise en ligne)
+
+- **Symptôme** : sur un compte réel, l'accueil affichait « Cet écran n’a pas pu s’afficher — number 12 is not iterable ».
+- **Cause** : d'anciennes entrées d'historique (écrites par des versions précédentes) contenaient un nombre là où les
+  analyses attendent une liste (ex. `sets: 12` au lieu de la liste des séries). Le message exact a été reproduit en
+  remplaçant chaque champ par 12 sur la version 8.0.0.
+- **Correction** : toute séance réalisée est normalisée à la lecture (serveur, cache de l'appareil et analyses :
+  `normalizeHistory`) ; un nombre de séries devient autant de séries faites, sans répétition ni charge inventée ;
+  les données de profil sont revalidées par le schéma avant chaque analyse ; chaque bloc de l'accueil est isolé
+  (un bloc en erreur n'empêche plus l'affichage des autres) ; l'écran d'erreur affiche un détail technique à joindre à
+  un signalement.
+- **Test ajouté** : `tests/robustness.test.mjs` remplace tour à tour chaque champ des données (historique, profil,
+  calendrier, séances, exercices personnels) par un nombre, une chaîne, `null` ou un objet vide, et vérifie qu'aucune
+  analyse ne plante. Il échouait sur la version 8.0.0 et passe sur la 8.0.1.
+
+## Évolution 8.2.0 — plus joli, plus léger, assistant IA
+
+- **Nom** : « Séances entraînement » (titre, application installée « Séances »).
+- **Visuel** : cartes arrondies avec relief léger, en-tête d'accueil coloré (salutation, séances de la semaine,
+  série de semaines), bouton principal lumineux, barre d'onglets flottante, apparitions douces ; les textes
+  d'explication sont réduits à 2 lignes et s'ouvrent d'un toucher ; accueil par défaut limité à l'essentiel
+  (Aujourd'hui, Prochaines séances, Objectifs, Recommandations courtes, Commande) — le reste reste ajoutable.
+- **Questionnaire** : question « Combien de fois grimpes-tu par semaine ? » dès qu'un sport d'escalade est choisi.
+- **Petites questions** (`public/questions.js`) : quand une information manque (sport, fréquence d'escalade, lieu,
+  durée, rythme, meilleur bloc, tractions, pompes, motivation, zone à ménager), l'app la demande par une question
+  à réponses en un toucher, en fenêtre à l'ouverture de l'accueil puis en carte ; « Je ne sais pas » et « Plus tard »
+  (3 jours) ; une réponse par tranche est enregistrée à sa valeur basse (jamais surestimée), comme *déclarée*.
+- **Assistant IA** (`server/ai.js`, route `POST /api/ai/draft`, Bibliothèque › Exercices et Profil › Activités) :
+  l'IA intégrée de Cloudflare (Workers AI, binding `AI`, modèle configurable par `AI_MODEL`) propose une fiche
+  d'exercice ou de capacité (ex. « clipage en escalade » : ce que c'est, pourquoi, comment la travailler, exercices,
+  mesure des progrès). Garanties : compte requis ; seul le texte tapé est envoyé ; réponse filtrée (identifiants
+  inconnus retirés, nombres bornés, HTML neutralisé) ; l'utilisateur relit avant d'enregistrer ; limites 6 / 10 min
+  et 40 / jour ; sans IA configurée, message clair et saisie manuelle possible.
+  Écart assumé par rapport au cahier des charges initial (« pas d'IA externe ») : demandé explicitement par le
+  propriétaire ; l'IA reste chez l'hébergeur (aucun service tiers ni clé), et n'est jamais utilisée pour les
+  analyses, qui restent déterministes et explicables.
+- Tests : `tests/ai.test.mjs` (10), `tests/questions.test.mjs` (9), E2E 40 étapes (petite question à l'écran).
+- Limite : le quota gratuit de Workers AI est limité par jour ; au-delà, l'assistant répond « réessaie plus tard ».
+
+## Évolution 8.1.0 — prise en main par tous
+
+- **Page d'arrivée** compréhensible sans connaître le site : ce que fait l'app en 3 points, « Créer mon compte gratuit »,
+  « J'ai déjà un compte », « Essayer sans compte ».
+- **Mode invité** : aucune donnée envoyée au serveur ; tout reste sur l'appareil (séances, historique, profil). Les
+  fonctions qui demandent un serveur (bibliothèque partagée, profil public, signalement, administration) affichent
+  « Compte nécessaire ». « Créer mon compte (je garde mes données) » transfère tout sur le nouveau compte (vérifié en E2E).
+- **Questionnaire de profil** (une question par écran, gros boutons, avance tout seul) ou **fiche complète sur une page** ;
+  « Passer », « Je ne sais pas » et « Finir plus tard » partout ; réponses enregistrées comme *déclarées* ; rappel discret
+  sur l'accueil tant que le profil n'est pas complet ; utilisées par le générateur (durée, motivation, matériel, zones à ménager).
+- **Visite guidée** des onglets après le questionnaire (et dans Paramètres › Aide), **accueil simplifié** (4 grandes tuiles),
+  phrase d'explication sous chaque titre d'onglet, **Aide** avec questions fréquentes.
+- **Installation** : bouton « 📲 Installer » qui déclenche la vraie installation du navigateur (Android, ordinateur : app
+  dans la liste des applications, plein écran). Sur iPhone, Apple ne permet que « Sur l'écran d'accueil » depuis Safari :
+  la marche à suivre est affichée. Limite réelle : l'installation directe dépend du navigateur (Chrome, Edge, Samsung
+  Internet) ; Firefox Android et iOS n'exposent pas de bouton d'installation programmable.
+- **Mode sombre noir pur** (#000) pour toutes les couleurs d'accent (Or, Bleu, Vert, Rouge, Violet, Rose, Contraste).
+- **Paramètres réorganisés** : ⭐ Essentiel (compte, affichage, profil sportif, installation, séance), ❓ Aide,
+  💾 Mes données, 🔄 Synchronisation, 🐞 Signaler un bug, 🛡️ Admin ; options rares repliées.
+- Bug corrigé au passage : une sauvegarde locale asynchrone pouvait échouer si l'utilisateur changeait pendant l'écriture.
+- Tests : E2E porté à 39 étapes (page d'arrivée, fond noir, fiche de profil, visite, invité, « finir plus tard »,
+  transfert invité → compte).
 
 ## 16. Limitations réelles restantes
 

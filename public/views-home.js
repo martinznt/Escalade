@@ -11,12 +11,13 @@ import { adaptDuration, alternatives, replaceExercise, BODY_WORDS } from './gene
 import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { openGenerator, blocksOf } from './views-library.js';
 import { startPlayer } from './player.js';
+import { vSetup, setupCard, installCard, questionCard, maybeAskOnOpen } from './views-setup.js';
 
 export const DASH_BLOCKS = {
   today: 'Que faire aujourd’hui ?', command: 'Commande', next: 'Prochaines séances', progress: 'Progression', goals: 'Objectifs', records: 'Records',
   regularity: 'Régularité', capacities: 'Capacités', reco: 'Recommandations', load: 'Charge récente', summary: 'Résumé de la semaine', achievements: 'Jalons', calendar: 'Calendrier',
 };
-const DEFAULT_DASH = ['today', 'command', 'next', 'goals', 'progress', 'reco', 'regularity'];
+const DEFAULT_DASH = ['today', 'next', 'goals', 'reco', 'command'];
 export const dashBlocks = () => (item('config', 'dashboard')?.blocks?.length ? item('config', 'dashboard').blocks.filter((b) => DASH_BLOCKS[b]) : DEFAULT_DASH);
 
 export function eventsOn(date) {
@@ -26,21 +27,29 @@ export function eventsOn(date) {
 const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt)) === date);
 
 export function vHome() {
+  if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  return h`<div class="row between"><h1>Bonjour ${S.user.username}</h1><button class="btn sm" data-act="dashEdit" aria-label="Personnaliser le tableau de bord">⚙︎ Blocs</button></div>
-    ${seg('homeSub', sub, [['dash', 'Tableau de bord'], ['cal', 'Calendrier']])}${sub === 'cal' ? vCalendar() : vDash()}`;
+  return h`${hero()}
+    <div class="row between">${seg('homeSub', sub, [['dash', '🏠 Ma journée'], ['cal', '📅 Calendrier']])}${sub === 'dash' ? h`<button class="btn sm ghost" data-act="dashEdit" aria-label="Choisir les blocs affichés sur l’accueil">✎</button>` : ''}</div>
+    ${sub === 'cal' ? vCalendar() : vDash()}`;
+}
+function hero() {
+  const c = ctx(), hr = new Date().getHours();
+  const hello = hr < 6 ? 'Bonne nuit' : hr < 12 ? 'Bonjour' : hr < 18 ? 'Salut' : 'Bonsoir';
+  const monday = new Date(); monday.setHours(0, 0, 0, 0); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const week = c.history.filter((x) => x.startedAt >= monday.getTime());
+  const target = Number(item('config', 'main')?.perWeek) || 0, streak = regularity(c).streakWeeks;
+  const mins = Math.round(week.reduce((t, x) => t + (x.durationSeconds || 0), 0) / 60);
+  const pills = [target ? `${week.length}/${target} séance${target > 1 ? 's' : ''} cette semaine` : `${week.length} séance${week.length > 1 ? 's' : ''} cette semaine`];
+  if (mins) pills.push(`⏱ ${mins} min`);
+  if (streak >= 2) pills.push(`🔥 ${streak} semaines d’affilée`);
+  const mood = !c.history.length ? 'Prêt(e) pour ta première séance ?' : target && week.length >= target ? 'Objectif de la semaine atteint 🎉' : week.length ? 'Belle lancée, continue !' : 'Une petite séance aujourd’hui ?';
+  return h`<section class="card hero"><span class="date">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+    <h1>${hello}${S.user.guest ? '' : ' ' + S.user.username} 👋</h1><p>${mood}</p><div class="stats">${pills.map((p) => h`<span>${p}</span>`)}</div></section>`;
 }
 ACT.homeSub = (el) => go('home', el.dataset.id);
 
 /* ═════════ Premier lancement : aucune séance générique imposée ═════════ */
-function vOnboarding() {
-  const acts = ctx().activities;
-  return h`<div class="card acc-b"><h3>Bienvenue 👋</h3><p class="small">Pour des analyses et des séances adaptées, indique d’abord ce que tu pratiques. Tu peux tout modifier ensuite dans ton Profil.</p>
-    <b class="small">Mes activités</b><div class="chips">${Object.entries(ACTIVITIES).map(([id, a]) => chip(!!acts[id], `${a.emoji} ${a.label}`, `data-act="obAct" data-id="${id}"`))}</div>
-    <p class="tiny muted">Basket, vélo, tennis… : ajoute-les comme activité personnalisée dans Profil › Activités.</p>
-    <b class="small">Où t’entraînes-tu le plus souvent ?</b><div class="chips">${Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre').map(([k, l]) => chip(ctx().envs.some((e) => e.type === k), l, `data-act="obEnv" data-id="${k}"`))}</div>
-    <div class="row wrapf"><button class="btn pri" data-act="obDone">C’est parti</button><button class="btn" data-act="goProfile" data-id="perfs">Renseigner mes performances</button></div></div>`;
-}
 ACT.obAct = (el) => {
   const id = el.dataset.id, c = ctx(), a = c.activities[id];
   if (a) putItem('activity', a.itemId, { preset: id, label: ACTIVITIES[id].label, emoji: ACTIVITIES[id].emoji, archived: true });
@@ -60,11 +69,19 @@ ACT.goProfile = (el) => go('profile', el.dataset.id);
 function vDash() {
   const blocks = dashBlocks();
   const loop = S.lastLoop && Date.now() - S.lastLoop.at < 15 * 60000 ? S.lastLoop : null;
-  return h`${!S.settings.onboarded ? vOnboarding() : ''}
+  maybeAskOnOpen();
+  return h`${setupCard()}${questionCard()}${installCard()}
+    <div class="quick">
+      <button class="qa pri" data-act="genOpen"><span class="qi">✨</span><b>Me proposer une séance</b><small>Adaptée à toi, expliquée</small></button>
+      <button class="qa" data-act="goLib"><span class="qi">📚</span><b>Mes séances</b><small>Lancer, créer, modifier</small></button>
+      <button class="qa" data-act="homeSub" data-id="cal"><span class="qi">📅</span><b>Planifier</b><small>Calendrier de la semaine</small></button>
+      <button class="qa" data-act="goProgress" data-id="summary"><span class="qi">📈</span><b>Mes progrès</b><small>Historique et records</small></button>
+    </div>
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée — ce qui change dans ton profil</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<p class="tiny muted">Ces données alimentent tes analyses et tes prochaines séances générées.</p><button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
-    ${blocks.map((b) => BLOCK_VIEWS[b]?.() || '')}
-    <div class="row wrapf"><button class="btn pri" data-act="genOpen">✨ Générer une séance</button><button class="btn" data-act="newSeanceHome">＋ Créer une séance</button><button class="btn" data-act="homeSub" data-id="cal">📅 Calendrier</button></div>`;
+    ${blocks.map((b) => { try { return BLOCK_VIEWS[b]?.() || ''; } catch (e) { console.error(e); return card(DASH_BLOCKS[b] || b, h`<p class="small warn-t">Ce bloc n’a pas pu s’afficher : ${e.message}</p><p class="tiny muted">Le reste de l’accueil fonctionne. Tu peux le signaler dans Paramètres › Signaler un bug.</p>`); } })}
+    <p class="tiny muted center">✎ en haut pour choisir ce qui s’affiche ici.</p>`;
 }
+ACT.goLib = () => go('library', 'seances');
 ACT.loopClose = () => { S.lastLoop = null; render(); };
 ACT.genOpen = () => openGenerator({});
 ACT.newSeanceHome = () => ACT.newSeance();
@@ -73,13 +90,13 @@ const BLOCK_VIEWS = {
   today() {
     const today = ymd(new Date()), evs = eventsOn(today).filter((e) => !doneOnDay(today).some((d) => d.sessionId === e.sessionId && e.sessionId));
     const t = todayOptions(ctx(), { todayEvents: evs });
-    return card('☀️ Que faire aujourd’hui ?', h`<p class="tiny muted">${t.note}</p>${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
+    return card('☀️ Que faire aujourd’hui ?', h`${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
       <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="tiny">${(o.how || []).map((x) => h`<li>${x}</li>`)}</ul></details></div>
       ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}">✨</button>`}</div>`)}`);
   },
   command() {
-    return card('🗣️ Commande', h`<form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Fais-moi une séance de 30 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>
-      <p class="tiny muted">Exemples : « Remplace les tractions », « Ajoute 5 minutes de gainage », « Je n’ai que 12 minutes », « Montre mes records », « Que dois-je faire aujourd’hui ? », « Je n’ai pas de barre aujourd’hui ».</p>`);
+    return card('🗣️ Dis-le simplement', h`<form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Séance de 20 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>
+      <details class="how mini"><summary>Exemples</summary><p class="tiny">« Remplace les tractions » · « Ajoute 5 minutes de gainage » · « Je n’ai que 12 minutes » · « Montre mes records » · « Je n’ai pas de barre aujourd’hui ».</p></details>`);
   },
   next() {
     const days = [...Array(8)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return ymd(d); });
@@ -111,10 +128,10 @@ const BLOCK_VIEWS = {
   reco() {
     const c = ctx(), items = [];
     for (const f of forgottenGoals(c).slice(0, 2)) items.push({ icon: '🎯', text: f.days != null ? `« ${f.label} » n’a pas été travaillé depuis ${f.days} jours (dernière fois : ${fmtDay(f.last)}).` : `« ${f.label} » n’a pas encore été travaillé.`, act: h`<button class="btn sm" data-act="todayGoal" data-id="${f.goal.id}">Séance</button>` });
-    for (const t of testReminders(c).slice(0, 2)) items.push({ icon: '📏', text: t.text, act: h`<button class="btn sm" data-act="perfAdd" data-id="${t.metricId}">Saisir</button>` });
-    for (const u of undertrained(c).items.slice(0, 1)) items.push({ icon: '🧩', text: u.text, act: '' });
+    for (const t of testReminders(c).slice(0, 2)) items.push({ icon: '📏', text: t.unknown ? `Faire le test : ${t.label.toLowerCase()}` : t.age != null ? `Refaire le test : ${t.label.toLowerCase()}` : `Mesurer : ${t.label.toLowerCase()}`, act: h`<button class="btn sm" data-act="perfAdd" data-id="${t.metricId}">Saisir</button>` });
+    for (const u of undertrained(c).items.slice(0, 1)) items.push({ icon: '🧩', text: `Peu travaillé ces temps-ci : ${u.label.toLowerCase()}`, act: '' });
     for (const hb of habits(c).filter((x) => x.proposal).slice(0, 2)) items.push({ icon: '🔁', text: hb.text, act: h`<button class="btn sm pri" data-act="habitYes" data-k="${hb.key}">Oui</button><button class="btn sm" data-act="habitNo" data-k="${hb.key}">Non</button>` });
-    for (const n of neverTried(c).slice(0, 1)) items.push({ icon: '✨', text: `Tu n’as jamais essayé « ${n.lib.name} » : ${n.reason}`, act: h`<button class="btn sm" data-act="libInfo" data-id="${n.lib.id}">Voir</button>` });
+    for (const n of neverTried(c).slice(0, 1)) items.push({ icon: '✨', text: `À essayer : ${n.lib.name}`, act: h`<button class="btn sm" data-act="libInfo" data-id="${n.lib.id}">Voir</button>` });
     return card('💡 Recommandations', items.length ? items.map((x) => h`<div class="item"><div class="ico sm">${x.icon}</div><div class="grow small">${x.text}</div><div class="row tight">${x.act}</div></div>`) : h`<p class="muted small">Rien à signaler pour l’instant.</p>`);
   },
   load() {

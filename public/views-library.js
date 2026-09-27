@@ -1,7 +1,8 @@
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
 import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, putItem, queue, newId, syncSoon } from './state.js';
+import './views-ai.js';
+import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon } from './state.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
@@ -35,7 +36,7 @@ export function vLibrary() {
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
   const cur = ['seances', 'generate', 'exercises', 'common', 'search'].includes(sub) ? sub : 'seances';
-  return h`<h1>Bibliothèque</h1>${seg('libSub', cur, [['seances', 'Mes séances'], ['generate', 'Générer'], ['exercises', 'Exercices'], ['common', 'Commune'], ['search', 'Recherche']])}
+  return h`<h1>Bibliothèque</h1><p class="small muted sub">Tes séances : lance-les avec ▶, crée-en une ou laisse l’app en générer une pour toi.</p>${seg('libSub', cur, [['seances', 'Mes séances'], ['generate', '✨ Générer'], ['exercises', 'Exercices'], ['common', 'Partagées'], ['search', 'Recherche']])}
     ${cur === 'seances' ? vSeances() : cur === 'generate' ? vGenerate() : cur === 'exercises' ? vExercises() : cur === 'common' ? vCommon() : vSearch()}`;
 }
 ACT.libSub = (el) => { go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
@@ -267,6 +268,12 @@ ACT.impSave = () => { const s = saveSeance(S.importResult.session); S.importText
 
 /* ═════════ Générateur : simulation puis génération ═════════ */
 export function openGenerator(opts = {}) {
+  if (!S.gen.init) { // première ouverture : durée et motivation déclarées dans le questionnaire de profil
+    S.gen.init = true;
+    const cfg = item('config', 'main') || {};
+    S.gen.minutes = Number(cfg.durations?.[0]) || S.settings.defaultMinutes || 30;
+    if (!S.gen.intentions?.length && cfg.intent) S.gen.intentions = [{ id: cfg.intent, p: 2 }];
+  }
   Object.assign(S.gen, { plan: null, result: null, saved: false, priorities: {} }, opts);
   if (!S.gen.activityId) S.gen.activityId = Object.keys(ctx().activities)[0] || 'conditioning';
   go('library', 'generate');
@@ -341,7 +348,8 @@ function vExercises() {
   const match = (name) => !n || name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(n);
   const lib = LIBRARY.filter((x) => x.role === 'main' && match(x.name) && (!act || x.acts.includes(act)) && (!cap || (x.caps[cap] || 0) >= 0.5));
   const c = ctx(), tried = neverTried(c, { activityId: act || undefined, level: 1 });
-  return h`<input type="search" data-input="exQ" value="${q}" placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice">
+  return h`<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>✨</span><div><b>Créer un exercice avec l’IA</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
+    <input type="search" data-input="exQ" value="${q}" placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice">
     <div class="grid2"><select data-change="exAct" aria-label="Activité"><option value="">Toutes activités</option>${Object.entries(ACTIVITIES).map(([id, a]) => h`<option value="${id}" ${act === id ? 'selected' : ''}>${a.emoji} ${a.label}</option>`)}</select>
     <select data-change="exCap" aria-label="Capacité"><option value="">Toutes capacités</option>${Object.entries(CAPACITIES).map(([id, x]) => h`<option value="${id}" ${cap === id ? 'selected' : ''}>${x.label}</option>`)}</select></div>
     ${tried.length && !q ? h`<div class="card flat"><b class="small">✨ Tu n’as jamais essayé</b>${tried.map((t) => h`<div class="item"><div class="ico">${t.lib.emoji}</div><div class="grow"><b>${t.lib.name}</b><div class="tiny muted">${t.reason}</div></div><button class="btn sm" data-act="libInfo" data-id="${t.lib.id}">Voir</button></div>`)}</div>` : ''}
@@ -408,6 +416,7 @@ function gradeHintText(gh) {
   return `${gh.label} (${gh.systemName})${conv.length ? ' ≈ ' + conv.join(', ') : mine.length ? ' — pas d’équivalence définie dans ton système' : ''}`;
 }
 function vCommon() {
+  if (S.user.guest) return h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">La bibliothèque commune (séances partagées par les membres) demande un compte gratuit. En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
   const sh = S.shared;
   if (!sh.common && !sh.loading && !sh.error) setTimeout(loadCommon, 0);
   const f = S.filters.common || {};

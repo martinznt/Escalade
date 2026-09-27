@@ -9,7 +9,8 @@
 import { CAPACITIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, BUILTIN_STYLES, metricTierText, skillCaps } from './model.js';
 import { LIBRARY, byId } from './library.js';
 import { allSystems, toReference, levelFromReference, bestReferenceLevel, LEVEL_WORDS } from './grading.js';
-import { exKey, norm } from './shared.js';
+import { exKey, norm, normalizeHistory } from './shared.js';
+import { cleanItem } from './items.js';
 
 export const DAY = 86400000;
 const HOUR = 3600000;
@@ -26,13 +27,14 @@ const dayNum = (t, tz = 0) => Math.floor((t - tz * 60000) / DAY);
 export function buildContext(raw = {}) {
   const now = raw.now || Date.now(), tz = raw.tz || 0;
   const coll = {};
-  for (const it of raw.items || []) {
+  for (const raw0 of Array.isArray(raw.items) ? raw.items : []) {
+    const it = cleanItem(raw0); // revalidé ici aussi : une donnée locale ancienne ou abîmée ne doit jamais casser une analyse
     if (!it || it.del) continue;
     (coll[it.c] ||= {})[it.id] = { id: it.id, ...it.d, _u: it.u };
   }
   const get = (c) => coll[c] || {};
-  const history = [...(raw.history || [])].filter((h) => h && h.startedAt > 0 && h.startedAt <= now + 5 * 60000).sort((a, b) => b.startedAt - a.startedAt);
-  const future = (raw.history || []).filter((h) => h && h.startedAt > now + 5 * 60000);
+  const history = (Array.isArray(raw.history) ? raw.history : []).map(normalizeHistory).filter(Boolean).filter((h) => h && h.startedAt > 0 && h.startedAt <= now + 5 * 60000).sort((a, b) => b.startedAt - a.startedAt);
+  const future = (Array.isArray(raw.history) ? raw.history : []).filter((h) => h && h.startedAt > now + 5 * 60000);
 
   // Activités : natives activées + personnalisées (non archivées). Les activités pratiquées sont aussi reconnues.
   const activities = {};
@@ -60,12 +62,13 @@ export function buildContext(raw = {}) {
   for (const p of Object.values(get('pref'))) if (p.key) prefs[p.key] = p;
   const capdecl = {};
   for (const d of Object.values(get('capdecl'))) if (d.capId) capdecl[d.capId] = d;
-  const seances = (raw.seances || []).filter(Boolean);
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const seances = arr(raw.seances).filter(Boolean);
   const seanceById = new Map(seances.map((s) => [s.id, s]));
-  const personal = (raw.personal || []).map((x) => ({ id: x.id, name: x.name, ...(x.data || {}) }));
+  const personal = arr(raw.personal).filter((x) => x && typeof x === 'object').map((x) => { const d = x.data && typeof x.data === 'object' ? x.data : {}; return { id: x.id, name: String(x.name ?? ''), ...d, caps: d.caps && typeof d.caps === 'object' && !Array.isArray(d.caps) ? d.caps : {}, prim: arr(d.prim), sec: arr(d.sec), acts: arr(d.acts) }; });
   const personalByKey = new Map(personal.map((x) => [exKey(x.name), x]));
   return {
-    now, tz, history, future, events: raw.events || [], seances, seanceById, personal, personalByKey, settings: raw.settings || {},
+    now, tz, history, future, events: arr(raw.events).filter((e) => e && typeof e === 'object'), seances, seanceById, personal, personalByKey, settings: raw.settings || {},
     activities, categories, metrics, perfs, goals, gradesys, systems, styles, envs, defEnv, unavailable, config, prefs, capdecl,
     ascents: Object.values(get('ascent')).sort((a, b) => (b.date || 0) - (a.date || 0)),
     swaps: Object.values(get('swap')), labs: Object.values(get('lab')), jnotes: Object.values(get('jnote')), habitDecisions: Object.fromEntries(Object.values(get('habit')).map((h) => [h.key, h.decision])),
@@ -744,7 +747,7 @@ export function todayOptions(ctx, { todayEvents = [], minutes = null } = {}) {
   const pref = Number(ctx.config.main?.durations?.[0]) || null;
   const dur = minutes || pref || (ctx.history.length ? Math.max(10, Math.min(90, Math.round(median(ctx.history.slice(0, 8).map((h) => (h.durationSeconds || 0) / 60)) / 5) * 5)) : 30);
   const how = [`${ctx.history.length} séance(s) dans ton historique`, last ? `dernière séance il y a ${Math.round(hoursSince)} h (${last.sessionName})` : 'aucune séance enregistrée', reg.text];
-  for (const ev of todayEvents.filter((e) => !e.completed).slice(0, 2)) opts.push({ kind: 'event', id: 'event:' + ev.id, title: ev.title || 'Séance prévue', reason: 'C’est planifié aujourd’hui dans ton calendrier.', eventId: ev.id, sessionId: ev.sessionId || null, how: ['Événement du calendrier du jour'] });
+  for (const ev of (Array.isArray(todayEvents) ? todayEvents : []).filter((e) => e && typeof e === 'object' && !e.completed).slice(0, 2)) opts.push({ kind: 'event', id: 'event:' + ev.id, title: ev.title || 'Séance prévue', reason: 'C’est planifié aujourd’hui dans ton calendrier.', eventId: ev.id, sessionId: ev.sessionId || null, how: ['Événement du calendrier du jour'] });
   if (hoursSince < 20 || load.signals.length >= 2) opts.push({ kind: 'rest', id: 'rest', title: 'Repos ou récupération légère', reason: hoursSince < 20 ? `Dernière séance il y a ${Math.round(hoursSince)} h : se reposer est une option tout aussi valable.` : 'Ta charge récente a augmenté : une journée légère est une option.', light: true, minutes: Math.min(dur, 20), how: [...how, ...load.signals] });
   const fg = forgotten[0];
   if (fg) opts.push({ kind: 'generate', id: 'goal:' + fg.goal.id, title: `Reprendre « ${fg.label} »`, reason: fg.days != null ? `Pas travaillé depuis ${fg.days} jours.` : 'Objectif configuré mais pas encore travaillé.', mode: 'goal', goalId: fg.goal.id, minutes: dur, how: [...how, `objectif actif : ${fg.label}`] });
@@ -778,6 +781,8 @@ export function understandProfile(ctx) {
     ...Object.values(ctx.capdecl).filter((d) => d.level >= 0).map((d) => `${CAPACITIES[d.capId]?.label || d.capId} : ${LEVEL_WORDS[d.level]}`),
     ...Object.values(ctx.activities).map((a) => `Activité suivie : ${a.label}`),
     ...ctx.goals.filter((g) => g.status === 'active').map((g) => `Objectif : ${goalLabel(g)}`),
+    ...(ctx.config.main?.perWeek ? [`Rythme souhaité : ${ctx.config.main.perWeek} séance(s) par semaine`] : []),
+    ...(ctx.config.main?.climbPerWeek != null ? [`Escalade : ${ctx.config.main.climbPerWeek} fois par semaine en moyenne`] : []),
   ];
   const s30 = ctx.history.filter((h) => ctx.now - h.startedAt <= 30 * DAY);
   const calculated = [`${ctx.history.length} séance(s) enregistrée(s), dont ${s30.length} sur 30 jours`, regularity(ctx).text, ...Object.entries(capVolume(ctx, 30)).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, x]) => `Volume 30 j — ${CAPACITIES[id]?.label || id} : ${round(x, 1)} séries pondérées`)];

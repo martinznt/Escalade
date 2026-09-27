@@ -14,7 +14,7 @@
     root.dataset.palette = a.palette; root.dataset.shape = a.shape; root.dataset.radius = a.radius;
     root.dataset.size = a.size; root.dataset.density = a.density; root.dataset.motion = a.motion;
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', dark ? '#16110e' : '#f4efe9');
+    if (meta) meta.setAttribute('content', dark ? '#000000' : '#f5f5f7');
   }
   function save(a) { try { localStorage.setItem(KEY, JSON.stringify(a)); } catch (e) { /* stockage indisponible */ } apply(a); }
   window.__sea = { load: load, apply: apply, save: save, DEFAULTS: DEFAULTS };

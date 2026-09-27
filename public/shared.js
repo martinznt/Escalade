@@ -111,6 +111,30 @@ export function normalizeSession(s = {}) {
     } : null,
   };
 }
+/**
+ * Séance réalisée (historique) : garantit la forme attendue par les analyses, quelle que soit la version qui l'a
+ * écrite. Les très anciennes entrées stockaient parfois un NOMBRE de séries (« sets: 12 ») au lieu de la liste :
+ * il devient 12 séries faites sans détail (rien n'est inventé : ni répétitions, ni charge).
+ */
+export function normalizeHistory(h) {
+  if (!h || typeof h !== 'object') return null;
+  const d = h.data && typeof h.data === 'object' && !Array.isArray(h.data) ? h.data : {};
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+  const sets = (v) => {
+    if (Array.isArray(v)) return v.filter((x) => x && typeof x === 'object');
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) && n > 0 ? Array.from({ length: Math.min(n, 40) }, () => ({ reps: 0, seconds: 0, load: 0, done: true })) : [];
+  };
+  const q = d.questionnaire && typeof d.questionnaire === 'object' ? { ...d.questionnaire, felt: arr(d.questionnaire.felt), likes: arr(d.questionnaire.likes).filter((l) => l && typeof l === 'object'), answers: arr(d.questionnaire.answers).filter((a) => a && typeof a === 'object') } : null;
+  return {
+    ...h, sessionName: String(h.sessionName ?? 'Séance'), startedAt: Number(h.startedAt) || 0, durationSeconds: Math.max(0, Number(h.durationSeconds) || 0),
+    data: {
+      ...d, rpe: Number(d.rpe) || 0, questionnaire: q, swaps: arr(d.swaps).filter((x) => x && typeof x === 'object'), context: d.context && typeof d.context === 'object' ? { ...d.context, equipment: arr(d.context.equipment) } : d.context,
+      exercises: arr(d.exercises).filter((e) => e && typeof e === 'object').map((e) => ({ ...e, name: String(e.name ?? ''), sets: sets(e.sets), caps: obj(e.caps), prim: arr(e.prim), sec: arr(e.sec), muscles: arr(e.muscles) })),
+    },
+  };
+}
 export function normalizeContext(c) {
   c = c && typeof c === 'object' ? c : {};
   return {

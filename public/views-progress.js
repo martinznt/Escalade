@@ -11,7 +11,7 @@ const SUBS = [['summary', 'Résumé'], ['history', 'Historique'], ['records', 'R
 export function vProgress() {
   const sub = SUBS.some(([k]) => k === S.sub.progress) ? S.sub.progress : 'summary';
   const views = { summary: vSummary, history: vHistory, records: vRecords, timeline: vTimeline, journal: vJournal, analyses: vAnalyses, lab: vLab };
-  return h`<h1>Progrès</h1><div class="scrollx">${seg('progSub', sub, SUBS)}</div>${views[sub]()}`;
+  return h`<h1>Progrès</h1><p class="small muted sub">Ce que tu as fait et comment tu évolues, comparé uniquement à toi-même.</p><div class="scrollx">${seg('progSub', sub, SUBS)}</div>${views[sub]()}`;
 }
 ACT.progSub = (el) => go('progress', el.dataset.id);
 const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);

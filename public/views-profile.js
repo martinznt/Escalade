@@ -1,6 +1,7 @@
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
+import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
 import { uid, normalizeEx, normalizeSession } from './shared.js';
 import { CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, metricTierText, metricsForCap } from './model.js';
@@ -14,7 +15,7 @@ const SUBS = [['understand', 'Comprendre'], ['map', 'Ma carte'], ['activities', 
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'understand';
   const views = { understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: vClimbing, goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
-  return h`<h1>Profil</h1><div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
+  return h`<h1>Mon profil</h1><p class="small muted sub">Ce que l’app sait de toi et comment elle le sait. Tout est modifiable.</p><div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
 }
 ACT.profSub = (el) => { go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
 const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;
@@ -80,8 +81,8 @@ function vActivityCard(a) {
   const c = ctx(), native = ACTIVITIES[a.id];
   const cats = [...(native?.categories || []).map(([id, label, caps]) => ({ id: 'native:' + id, label, caps: caps.map((x) => ({ id: x, w: 1 })), native: true })), ...Object.values(c.categories).filter((x) => x.activityId === a.id)];
   const st = profileCapacities(c, a.id), sw = strengthsWeaknesses(st);
-  return h`<div class="card flat"><div class="row between"><b>${a.emoji} ${a.label}</b><button class="btn sm" data-act="catNew" data-id="${a.id}">＋ Catégorie</button></div>
-    <div class="chips">${cats.map((x) => x.native ? h`<span class="chip static" title="${x.caps.map((k) => capL(k.id)).join(', ')}">${x.label}</span>` : chip(false, x.label + ' ✎', `data-act="catEdit" data-id="${x.id}"`))}</div>
+  return h`<div class="card flat"><div class="row between wrapf"><b>${a.emoji} ${a.label}</b><div class="row tight"><button class="btn sm" data-act="aiCap" data-id="${a.id}">✨ Avec l’IA</button><button class="btn sm" data-act="catNew" data-id="${a.id}">＋ Catégorie</button></div></div>
+    <div class="chips">${cats.map((x) => x.native ? h`<span class="chip static" title="${x.caps.map((k) => capL(k.id)).join(', ')}">${x.label}</span>` : chip(false, `${x.emoji ? x.emoji + ' ' : ''}${x.label} ✎`, `data-act="catEdit" data-id="${x.id}"`))}</div>
     ${sw.strengths.length ? h`<p class="small"><b>Forces :</b> ${sw.strengths.map((s) => s.label).join(', ')}</p>` : ''}${sw.weaknesses.length ? h`<p class="small"><b>Axes de travail :</b> ${sw.weaknesses.map((s) => s.label).join(', ')}</p>` : ''}
     <p class="tiny muted">${sw.text}</p></div>`;
 }
@@ -91,14 +92,17 @@ SUBMIT.actSave = (f) => { const d = Object.fromEntries(new FormData(f)); const i
 ACT.actArchive = async (el) => { const a = item('activity', el.dataset.id); if (a && (await ask(`Archiver « ${a.label} » ?`, { detail: 'L’historique et les performances liées sont conservés.' }))) { putItem('activity', a.id, { ...a, archived: true }); closeSheet(); render(); } };
 function catForm(cat, activityId) {
   const caps = new Set((cat?.caps || []).map((x) => x.id));
-  return h`<h2 style="margin:0">${cat ? 'Modifier la catégorie' : 'Nouvelle catégorie'}</h2><form data-submit="catSave" class="stack"><input type="hidden" name="id" value="${cat?.id || ''}"><input type="hidden" name="activityId" value="${activityId}">
+  return h`<h2 style="margin:0">${cat ? `${cat.emoji || ''} ${cat.label}` : 'Nouvelle catégorie'}</h2>
+    ${cat?.guide || cat?.howTo?.length ? h`<div class="card flat">${cat.source === 'ia' ? h`<span class="tag acc">✨ fiche créée avec l’IA</span>` : ''}${cat.guide ? h`<p class="small">${cat.guide}</p>` : ''}${cat.howTo?.length ? h`<b class="small">Comment la travailler</b><ul class="small">${cat.howTo.map((x) => h`<li>${x}</li>`)}</ul>` : ''}</div>` : ''}
+    <form data-submit="catSave" class="stack"><input type="hidden" name="id" value="${cat?.id || ''}"><input type="hidden" name="activityId" value="${activityId}">
     <label>Nom<input name="label" required maxlength="60" value="${cat?.label || ''}" placeholder="Ex. Service, appuis, montée…"></label><label>Description<input name="description" maxlength="180" value="${cat?.description || ''}"></label>
     <label>Capacités liées (facultatif — sinon la catégorie est un nœud propre à l’activité)</label><div class="chips">${Object.entries(CAPACITIES).map(([id, x]) => h`<label class="chip ${caps.has(id) ? 'on' : ''}"><input type="checkbox" class="hidden" name="caps" value="${id}" ${caps.has(id) ? 'checked' : ''} data-change="chipToggle">${x.label}</label>`)}</div>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${cat ? h`<button class="btn danger" type="button" data-act="catDel" data-id="${cat.id}">Supprimer</button>` : ''}</div></form>`;
 }
+ACT.aiCap = (el) => { S.ai = { activityId: el.dataset.id }; openAssistant('capacity'); };
 ACT.catNew = (el) => openSheet(catForm(null, el.dataset.id), { wide: true });
 ACT.catEdit = (el) => { const cat = item('category', el.dataset.id); if (cat) openSheet(catForm(cat, cat.activityId), { wide: true }); };
-SUBMIT.catSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd); putItem('category', d.id || 'cat-' + uid().slice(0, 12), { activityId: d.activityId, label: d.label, description: d.description, caps: fd.getAll('caps').map((id) => ({ id, w: 1 })) }); closeSheet(); toast('Catégorie enregistrée'); render(); };
+SUBMIT.catSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd), prev = d.id ? item('category', d.id) || {} : {}; putItem('category', d.id || 'cat-' + uid().slice(0, 12), { emoji: prev.emoji, guide: prev.guide, howTo: prev.howTo, source: prev.source, activityId: d.activityId, label: d.label, description: d.description, caps: fd.getAll('caps').map((id) => ({ id, w: 1 })) }); closeSheet(); toast('Catégorie enregistrée'); render(); };
 ACT.catDel = async (el) => { const cat = item('category', el.dataset.id); if (!cat) return; const used = itemsOf('metric').some((m) => (m.caps || []).some((x) => x.id === cat.id)); if (!(await ask(`Supprimer la catégorie « ${cat.label} » ?`, { danger: true, ok: used ? 'Archiver' : 'Supprimer', detail: used ? 'Des métriques y sont reliées : elle sera archivée (masquée) pour ne rien casser.' : '' }))) return; if (used) putItem('category', cat.id, { ...cat, archived: true }); else delItem('category', cat.id); closeSheet(); render(); };
 function metricForm(m) {
   const c = ctx(), caps = new Set((m?.caps || []).map((x) => x.id));
@@ -375,6 +379,7 @@ export async function loadSocial() {
   so.loading = false; render();
 }
 function vPublic() {
+  if (S.user.guest) return h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">Le profil public et le partage demande un compte gratuit. En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
   const so = S.social, c = ctx();
   if (!so.me && !so.loading && !so.error) setTimeout(loadSocial, 0);
   if (so.error && !so.me) return h`<div class="card flat"><p class="err">${so.error}</p><button class="btn" data-act="socReload">Réessayer</button></div>`;
