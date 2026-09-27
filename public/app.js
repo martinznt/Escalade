@@ -11,6 +11,7 @@ import { startTour } from './tour.js';
 import './timer.js';
 import './views-coach.js';
 import { checkBadges } from './views-motiv.js';
+import { topIcons } from './layout.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
@@ -42,7 +43,7 @@ function doRender() {
       <details class="how mini"><summary>Détail technique</summary><p class="tiny">${S.tab}/${S.sub[S.tab] || ''} — ${where || 'aucun'}</p></details>
       <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
   }
-  app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"> Séances <em>entraînement</em></span>${syncBadge()}</div></header>
+  app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
     <main class="wrap" id="main">${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
 }
@@ -209,6 +210,7 @@ function renderUpdateBar() {
   if (bar.innerHTML !== html.s) bar.innerHTML = html.s;
   bar.classList.toggle('fresh', !UPD.available);
 }
+ACT.notifOpen = () => ACT.updWhat();
 ACT.updSeen = () => { UPD.fresh = false; writeSeen(UPD.boot); markNewsToured(); renderUpdateBar(); };
 /** Visite des nouveautés : seulement ce qui a changé depuis la dernière visite (ou la dernière version, à la demande). */
 ACT.newsTour = () => {

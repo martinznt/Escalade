@@ -114,6 +114,9 @@ export const SCHEMAS = {
     setupDone: ['b'], asked: ['strs', 30, 30],
     // Apparence choisie (item « appearance ») : suit le compte sur tous les appareils.
     mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], shape: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
+    vibe: ['s', 20],
+    // Mise en page personnalisée (item « layout ») : JSON validé à la lecture (layout.js).
+    lay: ['s', 9000],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);

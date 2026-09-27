@@ -375,3 +375,81 @@ canvas.confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:n
 .msg.assistant{justify-self:start;background:var(--card2);border-bottom-left-radius:6px}
 .msg.typing{display:flex;gap:4px}.msg.typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:blink 1s infinite}.msg.typing i:nth-child(2){animation-delay:.2s}.msg.typing i:nth-child(3){animation-delay:.4s}
 @keyframes blink{50%{opacity:.25}}
+
+/* ═════════ Icônes en haut + mise en page personnalisable ═════════ */
+header.top .brand{display:flex;align-items:center;gap:6px;min-width:0}
+header.top .brand .bt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:430px){header.top .brand .bt{display:none}}
+.topicons{display:flex;gap:4px;align-items:center;margin-right:6px}
+.topicons .ti{position:relative;width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:1.05rem;display:grid;place-items:center;cursor:pointer;padding:0}
+.topicons .ti[style*="--wc"]{border-color:var(--wc);background:color-mix(in srgb,var(--wc) 18%,var(--card))}
+.topicons .ti.edit{opacity:.75;font-size:.95rem}
+.topicons .badge-dot{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#ef4444;color:#fff;font-size:.62rem;font-style:normal;font-weight:800;display:grid;place-items:center}
+.edit-flag{font-size:.8rem;font-weight:700;color:var(--accent);margin-right:8px}
+.pagehead{gap:10px;align-items:center}.pagehead h1{margin:0}
+.slot>.card,.slot>section,.slot>.qa{border-color:color-mix(in srgb,var(--wc,transparent) 70%,var(--line))}
+.slot[style*="--wc"]>.card,.slot[style*="--wc"]>section{background:linear-gradient(135deg,color-mix(in srgb,var(--wc) 16%,var(--card)),var(--card) 60%);border-left:4px solid var(--wc)}
+.slot[style*="--wc"]>.qa{background:color-mix(in srgb,var(--wc) 20%,var(--card));border-color:var(--wc)}
+.slot.editing{border:2px dashed color-mix(in srgb,var(--accent) 60%,var(--line));border-radius:20px;padding:8px;margin-bottom:10px;display:grid;gap:6px}
+.slot.editing.off{opacity:.5}.slot.editing .slotbody{pointer-events:none}
+.slotbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.seg.sm button{padding:5px 10px;font-size:.78rem}
+.swatches{display:flex;gap:4px;flex-wrap:wrap}.swc{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);background:var(--card2);color:var(--muted);font-size:.7rem;cursor:pointer;padding:0}.swc.on{outline:2px solid var(--text);outline-offset:1px}
+.quick .slot.editing{margin:0}
+.editbar{border:2px solid var(--accent)}.editbar .mini{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0 2px}
+.editdock{position:sticky;bottom:calc(84px + env(safe-area-inset-bottom));z-index:12;display:flex;gap:8px;justify-content:space-between;padding:10px;border-radius:18px;background:var(--card);border:1px solid var(--accent);box-shadow:var(--shadow);margin-top:10px}
+.allf{display:grid;gap:14px}.allf h2{margin:0}.allgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:6px}
+.allb{display:flex;align-items:center;gap:8px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-weight:600;text-align:left;cursor:pointer}.allb span{font-size:1.3rem}
+
+/* ═════════ Ambiances ═════════
+   Chaque ambiance change les couleurs de fond, les formes, la typographie des titres et un décor discret.
+   La couleur d'accent peut être remplacée à la main (Paramètres › Couleur). Lisibilité : contrastes ≥ 4,5:1 sur le texte. */
+/* Chaleureux : crème et terre cuite, titres à empattements, très arrondi */
+html[data-vibe=chaleureux][data-mode=light]{--bg:#f6efe6;--card:#fffaf3;--card2:#f2e7d9;--line:#e6d6c2;--text:#3a2a1e;--muted:#6f5a48;--accent:#c0592f;--on-accent:#fff;--shadow:0 10px 28px #7a4a2a1c}
+html[data-vibe=chaleureux][data-mode=dark]{--bg:#17110d;--card:#221a14;--card2:#2d231b;--line:#3e3025;--text:#f6ebdf;--muted:#c7ae98;--accent:#ec8a58;--on-accent:#1a120c;--shadow:0 10px 28px #0009}
+html[data-vibe=chaleureux]{--r:26px;--r-sm:18px}
+html[data-vibe=chaleureux] :is(h1,h2,h3,.brand,.hero h1){font-family:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,serif;letter-spacing:0}
+html[data-vibe=chaleureux] body{background:radial-gradient(900px 520px at 110% -10%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 70%),radial-gradient(700px 500px at -20% 110%,color-mix(in srgb,#e9b44c 12%,transparent),transparent 70%),var(--bg);background-attachment:fixed}
+html[data-vibe=chaleureux] .card{border-color:color-mix(in srgb,var(--accent) 12%,var(--line))}
+/* Salle de muscu : noir, rouge, titres condensés en capitales, angles vifs, texture de sol */
+html[data-vibe=muscu][data-mode=dark]{--bg:#090909;--card:#131313;--card2:#1d1d1d;--line:#303030;--text:#f3f3f3;--muted:#a3a3a3;--accent:#ff3b30;--on-accent:#fff;--shadow:0 8px 24px #000c}
+html[data-vibe=muscu][data-mode=light]{--bg:#e9e9e9;--card:#fff;--card2:#f1f1f1;--line:#cdcdcd;--text:#101010;--muted:#4d4d4d;--accent:#cf2419;--on-accent:#fff}
+html[data-vibe=muscu]{--r:6px;--r-sm:4px}
+html[data-vibe=muscu] :is(h1,h2,h3,.brand .bt,.qa b,.kicker,.streak b.big){font-family:Impact,Haettenschweiler,"Arial Narrow Bold","Franklin Gothic Medium",sans-serif;text-transform:uppercase;letter-spacing:.04em;font-weight:400}
+html[data-vibe=muscu] body{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--text) 3%,transparent) 0 2px,transparent 2px 14px),var(--bg)}
+html[data-vibe=muscu] .card,html[data-vibe=muscu] .qa{border-top:3px solid color-mix(in srgb,var(--accent) 70%,var(--line))}
+html[data-vibe=muscu] .hero{background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 30%,var(--card)) 0 38%,var(--card) 38%)}
+html[data-vibe=muscu] .btn.pri{text-transform:uppercase;letter-spacing:.05em}
+/* Grand air : vert forêt et sable, courbes de niveau en fond */
+html[data-vibe=nature][data-mode=dark]{--bg:#0e1611;--card:#152019;--card2:#1c2a21;--line:#2a3b2f;--text:#eef3ea;--muted:#a9b9aa;--accent:#86c77f;--on-accent:#0e1611}
+html[data-vibe=nature][data-mode=light]{--bg:#eff1e6;--card:#fbfcf6;--card2:#e7ebda;--line:#d3dac1;--text:#1e291e;--muted:#526150;--accent:#3d7a37;--on-accent:#fff}
+html[data-vibe=nature]{--r:18px}
+html[data-vibe=nature] :is(h1,h2,h3,.brand){font-family:"Trebuchet MS","Gill Sans","Segoe UI",sans-serif;letter-spacing:-.005em}
+html[data-vibe=nature] body{background:repeating-radial-gradient(circle at 80% -20%,transparent 0 38px,color-mix(in srgb,var(--accent) 7%,transparent) 38px 39px),var(--bg);background-attachment:fixed}
+/* Minimal : tout plat, fines bordures, pas d'ombres ni de dégradés */
+html[data-vibe=minimal][data-mode=light]{--bg:#fff;--card:#fff;--card2:#f5f5f5;--line:#e4e4e4;--text:#111;--muted:#5f5f5f;--accent:#111;--on-accent:#fff;--shadow:none}
+html[data-vibe=minimal][data-mode=dark]{--bg:#0a0a0a;--card:#0a0a0a;--card2:#151515;--line:#2a2a2a;--text:#ededed;--muted:#9a9a9a;--accent:#fafafa;--on-accent:#000;--shadow:none}
+html[data-vibe=minimal]{--r:10px}
+html[data-vibe=minimal] :is(.card,.qa,.hero,.streak.hot){box-shadow:none!important;background:var(--card)!important}
+html[data-vibe=minimal] :is(h1,h2,h3){font-weight:600;letter-spacing:-.02em}
+/* Néon : fond nuit, cyan et magenta, lueurs douces */
+html[data-vibe=neon][data-mode=dark]{--bg:#07060f;--card:#100e1f;--card2:#18152c;--line:#2b2552;--text:#eef0ff;--muted:#a3a8d3;--accent:#22e4ff;--on-accent:#07060f;--shadow:0 0 0 1px #22e4ff1f,0 10px 34px #7b2cff2e}
+html[data-vibe=neon][data-mode=light]{--bg:#f5f4ff;--card:#fff;--card2:#efedff;--line:#dcd8ff;--text:#140f2e;--muted:#4e4a70;--accent:#6a1bff;--on-accent:#fff}
+html[data-vibe=neon] body{background:radial-gradient(800px 500px at 100% 0,#7b2cff2a,transparent 70%),radial-gradient(700px 500px at 0 100%,#22e4ff1f,transparent 70%),var(--bg);background-attachment:fixed}
+html[data-vibe=neon][data-mode=dark] :is(h1,.hero h1){text-shadow:0 0 18px color-mix(in srgb,var(--accent) 55%,transparent)}
+html[data-vibe=neon][data-mode=dark] .btn.pri{box-shadow:0 0 18px color-mix(in srgb,var(--accent) 45%,transparent)}
+/* Sélecteur d'ambiance : petit aperçu de chaque ambiance */
+.vibes{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.vibe{display:grid;gap:3px;justify-items:start;text-align:left;padding:8px;border-radius:14px;border:2px solid var(--line);background:var(--card2);color:var(--text);cursor:pointer}
+.vibe.on{border-color:var(--accent)}.vibe small{color:var(--muted);font-size:.68rem;line-height:1.2}.vibe b{font-size:.82rem}
+.vprev{display:flex;gap:3px;width:100%;height:30px;border-radius:8px;padding:5px;background:var(--p0)}.vprev i{flex:1;border-radius:4px;background:var(--p1)}.vprev i:first-child{flex:2;background:var(--p2)}
+.vibe[data-vibe-preview=classique]{--p0:#111113;--p1:#2e2e33;--p2:#d4a056}.vibe[data-vibe-preview=chaleureux]{--p0:#f6efe6;--p1:#e6d6c2;--p2:#c0592f}
+.vibe[data-vibe-preview=muscu]{--p0:#090909;--p1:#303030;--p2:#ff3b30}.vibe[data-vibe-preview=nature]{--p0:#152019;--p1:#2a3b2f;--p2:#86c77f}
+.vibe[data-vibe-preview=minimal]{--p0:#fff;--p1:#e4e4e4;--p2:#111}.vibe[data-vibe-preview=neon]{--p0:#07060f;--p1:#2b2552;--p2:#22e4ff}
+.sw.none{display:grid;place-items:center;color:var(--muted);background:var(--card2)!important;font-size:.8rem}
+.edlist{display:grid;gap:8px}
+.edrow{display:grid;gap:8px;padding:10px 12px;border-radius:16px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--wc,var(--line))}
+.edrow.off{opacity:.55}.edrow.icon{border-style:dashed}.edic{width:28px;text-align:center;font-size:1.1rem}
+.swc.cur{width:32px;height:32px;font-size:.95rem}
+.editbar h2{margin:0}
+.editdock .btn{padding:8px 12px;font-size:.88rem;white-space:nowrap}

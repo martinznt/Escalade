@@ -12,6 +12,7 @@ import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { openGenerator, blocksOf } from './views-library.js';
 import { startPlayer } from './player.js';
 import { streakCard } from './views-motiv.js';
+import { composePage } from './layout.js';
 import { programCard, fingerCard, activeProgram } from './views-program.js';
 import { programStatus } from './program.js';
 import { buildIcs } from './ics.js';
@@ -35,9 +36,8 @@ const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  return h`${reinstallCard()}${hero()}
-    <div class="row between">${seg('homeSub', sub, [['dash', '🏠 Ma journée'], ['cal', '📅 Calendrier']])}${sub === 'dash' ? h`<button class="btn sm ghost" data-act="dashEdit" aria-label="Choisir les blocs affichés sur l’accueil">✎</button>` : ''}</div>
-    ${sub === 'cal' ? vCalendar() : vDash()}`;
+  if (sub === 'cal') return h`<div class="row pagehead"><button class="btn sm" data-act="homeSub" data-id="dash">‹ Accueil</button><h1 class="grow">📅 Calendrier</h1></div>${vCalendar()}`;
+  return h`${reinstallCard()}${vDash()}`;
 }
 function hero() {
   const c = ctx(), hr = new Date().getHours();
@@ -73,26 +73,32 @@ ACT.goProfile = (el) => go('profile', el.dataset.id);
 
 /* ═════════ Tableau de bord ═════════ */
 function vDash() {
-  const blocks = dashBlocks();
   const loop = S.lastLoop && Date.now() - S.lastLoop.at < 15 * 60000 ? S.lastLoop : null;
   maybeAskOnOpen();
+  const tile = (act, ic, title, sub, pri = false, id = '') => h`<button class="qa ${pri ? 'pri' : ''}" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><b>${title}</b><small>${sub}</small></button>`;
+  const safe = (b) => () => BLOCK_VIEWS[b]();
   return h`${setupCard()}${questionCard()}${installCard()}
-    <div class="quick">
-      <button class="qa pri" data-act="genOpen"><span class="qi">🎯</span><b>Séance du jour</b><small>Préparée selon ton niveau et ton temps</small></button>
-      <button class="qa" data-act="goLib"><span class="qi">📚</span><b>Mes séances</b><small>Lancer, créer, modifier</small></button>
-      <button class="qa" data-act="homeSub" data-id="cal"><span class="qi">📅</span><b>Planifier</b><small>Calendrier de la semaine</small></button>
-      <button class="qa" data-act="goProgress" data-id="summary"><span class="qi">📈</span><b>Mes progrès</b><small>Historique et records</small></button>
-      <button class="qa" data-act="timerOpen"><span class="qi">⏱</span><b>Minuteur</b><small>Suspensions, Tabata…</small></button>
-      <button class="qa" data-act="goCarnet"><span class="qi">🧗</span><b>Carnet</b><small>Blocs, voies et projets</small></button>
-    </div>
-    ${programCard()}${fingerCard()}
-    ${S.history.length || ctx().ascents.length ? streakCard() : ''}
-    ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée — ce qui change dans ton profil</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<p class="tiny muted">Ces données alimentent tes analyses et tes prochaines séances générées.</p><button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
-    ${blocks.map((b) => { try { return BLOCK_VIEWS[b]?.() || ''; } catch (e) { console.error(e); return card(DASH_BLOCKS[b] || b, h`<p class="small warn-t">Ce bloc n’a pas pu s’afficher : ${e.message}</p><p class="tiny muted">Le reste de l’accueil fonctionne. Tu peux le signaler dans Paramètres › Signaler un bug.</p>`); } })}
-    <p class="tiny muted center">✎ en haut pour choisir ce qui s’affiche ici.</p>`;
+    ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
+    ${composePage('home', {
+      hero,
+      gen: () => tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true),
+      seances: () => tile('goLib', '📚', 'Mes séances', 'Lancer, créer, modifier'),
+      timer: () => tile('timerOpen', '⏱', 'Minuteur', 'Suspensions, Tabata…'),
+      carnet: () => tile('goCarnet', '🧗', 'Carnet', 'Blocs, voies et projets'),
+      progress: () => tile('goProgress', '📈', 'Mes progrès', 'Historique et records', false, 'summary'),
+      cal: safe('calendar'), coach: safe('command'), program: () => programCard() || '', finger: () => fingerCard() || '',
+      streak: () => (S.history.length || ctx().ascents.length ? streakCard() : ''),
+      today: safe('today'), next: safe('next'), goals: safe('goals'), reco: safe('reco'), weekprog: safe('progress'), records: safe('records'),
+      regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'),
+    })}`;
 }
 ACT.goLib = () => go('library', 'seances');
 ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
+ACT.topCal = () => { go('home', 'cal'); window.scrollTo(0, 0); };
+ACT.goProgressTop = () => { go('progress', 'summary'); window.scrollTo(0, 0); };
+ACT.topProgram = () => { const p = activeProgram(); if (p) ACT.progOpen({ dataset: { id: p.id } }); else ACT.progNew(); };
+ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); closeSheet(); go(t, sub); window.scrollTo(0, 0); };
+ACT.layEditHome = () => { closeSheet(); go('home', 'dash'); setTimeout(() => ACT.layEdit(), 150); };
 ACT.loopClose = () => { S.lastLoop = null; render(); };
 ACT.genOpen = () => openGenerator({});
 ACT.newSeanceHome = () => ACT.newSeance();

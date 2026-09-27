@@ -35,6 +35,8 @@ const newCtx = async ({ ask = false } = {}) => {
 let n = 0, cur = null;
 /** Attend qu'une condition (évaluée côté Node) devienne vraie. */
 async function poll(fn, ms = 12000, what = 'condition') { const t0 = Date.now(); for (;;) { if (await fn()) return; if (Date.now() - t0 > ms) throw new Error('Délai dépassé : ' + what); await new Promise((r) => setTimeout(r, 300)); } }
+/** Deux validations de suite (mise en page) : la 2e boîte s'ouvre juste après la 1re. */
+const confirm2 = async (P) => { await P.click('#dialog.open [data-dlg="1"]'); await P.waitForFunction(() => /sûr|Vraiment/.test(document.querySelector('#dialog.open')?.textContent || '')); await P.click('#dialog.open [data-dlg="1"]'); await P.waitForSelector('#dialog:not(.open)', { state: 'attached' }); };
 const step = async (name, fn) => {
   try { await fn(); n++; console.log('  ✓', name); }
   catch (e) { console.log('  ✗', name); if (cur) await cur.screenshot({ path: '/tmp/e2e-fail.png', fullPage: true }).catch(() => {}); throw e; }
@@ -144,7 +146,7 @@ await step('carnet : ajout rapide, pyramide, projet suivi jusqu’à la réussit
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'project' && i.d.status === 'done' && i.d.tries.length), 12000, 'projet synchronisé');
 });
 await step('programme : création en 4 questions, calendrier rempli, séance du jour avec la forme', async () => {
-  await a.tab('home'); await a.click('[data-act=homeSub][data-id=cal]'); await a.click('[data-act=progNew]'); await A.waitForSelector('.pwiz');
+  await a.tab('home'); await a.click('.topicons [data-act=topCal]'); await a.click('[data-act=progNew]'); await A.waitForSelector('.pwiz');
   await a.click('.pwiz [data-act=pwSet][data-k=goal][data-v=force]'); await a.click('.pwiz [data-act=pwSet][data-k=weeks][data-v="4"]');
   const today = (new Date().getDay() + 6) % 7;
   for (const d of [0, 1, 2, 3, 4, 5, 6]) { const on = await A.locator(`.pwiz [data-act=pwDay][data-v="${d}"].on`).count(); if (!on && d === today) await a.click(`.pwiz [data-act=pwDay][data-v="${d}"]`); }
@@ -160,7 +162,7 @@ await step('programme : création en 4 questions, calendrier rempli, séance du 
   await a.tab('home'); await A.waitForSelector('.prog'); assert.match(await a.text('.prog'), /1 séance sur/);
 });
 await step('coach : question en un toucher, réponse affichée', async () => {
-  await a.click('[data-act=coachOpen]'); await A.waitForSelector('.chat [data-act=chatIdea]');
+  await a.click('.topicons [data-act=allOpen]'); await A.waitForSelector('.allf'); await a.click('.allf [data-act=coachOpen]'); await A.waitForSelector('.chat [data-act=chatIdea]');
   await a.click('.chat [data-act=chatIdea]'); await A.waitForSelector('.msg.assistant:not(.typing)', { timeout: 10000 });
   assert.match(await a.text('.msg.assistant'), /Conseil du coach/); await a.click('#sheet .back'); await a.tab('profile');
 });
@@ -221,7 +223,7 @@ await step('questionnaire adaptatif puis enregistrement', async () => {
   await a.click('#player [data-act=qDiff][data-v="4"]'); // un nouveau clic ne doit pas effacer le commentaire
   assert.equal(await A.inputValue('#player [data-input=qComment]'), 'Bonne séance, commentaire conservé');
   await a.click('#player [data-act=pSave]'); await A.waitForSelector('#player:not(.open)', { state: 'attached' });
-  await A.waitForSelector('text=ce qui change dans ton profil');
+  await A.waitForSelector('.card.ok-b:has-text("Séance enregistrée")');
 });
 await step('historique réellement enregistré sur le serveur (durée, pause, questionnaire)', async () => {
   const mine = async () => (await a.api('GET', '/api/history')).data.history.find((x) => x.sessionName === 'Tirage maison');
@@ -254,17 +256,32 @@ await step('commande naturelle : « je n’ai que 12 minutes » reconstruit la s
   await a.tab('library'); await A.locator('[data-act=openSeance]').first().click(); await A.waitForSelector('input[data-change=sName]');
   const sid = await A.evaluate(() => location.hash.split('/')[3]);
   await a.tab('home');
-  await A.fill('form[data-submit=command] input', 'Je n’ai que 12 minutes'); await a.click('form[data-submit=command] button');
+  const coach = async (q) => { await a.click('.topicons [data-act=allOpen]'); await a.click('.allf [data-act=coachOpen]'); await A.waitForSelector('.chat-in input'); await A.fill('.chat-in input', q); await a.click('.chat-in button[type=submit]'); };
+  await coach('Je n’ai que 12 minutes');
   await A.waitForSelector('#toast.show'); assert.match(await a.text('#toast'), /12 min/);
-  await A.fill('form[data-submit=command] input', 'quel temps fait-il ?'); await a.click('form[data-submit=command] button');
-  await A.waitForFunction(() => /Rien n’a été fait/.test(document.querySelector('#toast')?.textContent || ''));
+  await coach('quel temps fait-il ?'); // pas une consigne : c'est le coach qui répond, aucune action
+  await A.waitForSelector('.msg.assistant:not(.typing)'); await A.keyboard.press('Escape');
   assert.ok(sid);
 });
 await step('« Que faire aujourd’hui ? » et tableau de bord personnalisé', async () => {
   assert.match(await a.text('main'), /Que faire aujourd’hui/);
-  await a.click('[data-act=dashEdit]'); await a.click('#sheet [data-act=dashToggle][data-id=records]'); await a.click('#sheet [data-act=closeSheet].btn');
-  await A.waitForSelector('h3:has-text("Records")');
+  // Mode édition : rien ne change sans deux validations
+  await a.click('.topicons [data-act=layEdit]'); await A.waitForSelector('.edlist');
+  await a.click('[data-act=layAs][data-id=records][data-v=big]'); await a.click('[data-act=layAs][data-id=timer][data-v=icon]');
+  await a.click('[data-act=layPick][data-id=gen]'); await a.click('[data-act=layColor][data-id=gen][data-v="#5fa8d3"]');
+  await a.click('[data-act=layCancel]'); await A.waitForSelector('.quick [data-act=timerOpen]'); assert.equal(await a.count('h3:has-text("Records")'), 0, 'annulé : rien n’a changé');
+  await a.click('.topicons [data-act=layEdit]'); await a.click('[data-act=layAs][data-id=records][data-v=big]'); await a.click('[data-act=layAs][data-id=timer][data-v=icon]');
+  await a.click('[data-act=layPick][data-id=gen]'); await a.click('[data-act=layColor][data-id=gen][data-v="#5fa8d3"]');
+  await a.click('[data-act=laySave]'); await A.waitForSelector('#dialog.open'); await A.click('#dialog.open [data-dlg="0"]'); await A.waitForSelector('.edlist'); // 1re validation refusée : on reste en édition
+  await a.click('[data-act=laySave]'); await confirm2(A);
+  await A.waitForSelector('h3:has-text("Records")'); assert.equal(await a.count('.quick [data-act=timerOpen]'), 0);
+  assert.equal(await a.count('.topicons [data-act=timerOpen]'), 1, 'minuteur passé en icône en haut');
+  assert.equal(await a.count('.slot[style*="#5fa8d3"] [data-act=genOpen]'), 1, 'couleur appliquée');
   await A.reload(); await A.waitForSelector('h3:has-text("Records")');
+  await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'layout' && /records/.test(i.d.lay)), 12000, 'mise en page liée au compte');
+  // Retour à la base (deux validations)
+  await a.tab('settings'); await a.click('[data-act=layReset][data-scope=all]'); await confirm2(A);
+  await a.tab('home'); await A.waitForSelector('.quick [data-act=timerOpen]'); assert.equal(await a.count('h3:has-text("Records")'), 0);
 });
 await step('recherche intelligente et classique', async () => {
   await a.tab('library'); await a.sub('libSub', 'search');
@@ -287,7 +304,7 @@ await step('export JSON', async () => {
   assert.ok(!JSON.stringify(data).includes('secret-admin-de-test'));
 });
 await step('calendrier : planifier une séance, prévu visible, enregistré sur le serveur', async () => {
-  await a.tab('home'); await a.sub('homeSub', 'cal'); await A.waitForSelector('[data-act=calDay].today');
+  await a.tab('home'); await a.click('.topicons [data-act=topCal]'); await A.waitForSelector('[data-act=calDay].today');
   await a.click('[data-act=calDay].today'); await A.waitForSelector('#sheet form[data-submit=addEvent]');
   await a.click('#sheet form[data-submit=addEvent] button[type=submit]'); await A.waitForSelector('#sheet >> text=Prévu');
   await a.click('#sheet [data-act=closeSheet].btn');
@@ -436,7 +453,7 @@ console.log('Autre appareil');
 await step('tout suit le compte sur un autre appareil : données, réglages et apparence', async () => {
   const a2 = H(A2);
   await a2.tab('settings'); await a2.sub('setSub', 'main');
-  await A2.click('[data-act=appear][data-k=mode][data-v=light]'); await A2.click('[data-act=appear][data-k=palette][data-v=granit]'); await A2.click('[data-act=appear][data-k=size][data-v=l]');
+  await A2.click('[data-act=appear][data-k=mode][data-v=light]'); await A2.click('[data-act=appearColor][data-id=granit]'); await A2.click('[data-act=appear][data-k=size][data-v=l]');
   await A2.fill('input[name=defaultRest]', '75'); await A2.dispatchEvent('input[name=defaultRest]', 'change');
   await poll(async () => (await a2.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'appearance' && i.d.palette === 'granit'), 15000, 'apparence enregistrée dans le compte');
   await poll(async () => (await a2.api('GET', '/api/settings')).data.settings.defaultRest === 75, 15000, 'réglages enregistrés dans le compte');
@@ -504,7 +521,7 @@ await step('après une mise à jour : visite des nouveautés, seulement ce qui a
   await G.evaluate(() => localStorage.setItem('sea:news-toured', JSON.stringify('8.3.0'))); await G.reload(); await G.waitForSelector('nav.tabs');
   await G.waitForSelector('#updbar [data-act=newsTour]', { timeout: 10000 }); await g.click('#updbar [data-act=newsTour]');
   await G.waitForSelector('#tour .tour-bubble'); assert.match(await g.text('#tour .tour-bubble'), /Consignes à chaque série/);
-  assert.match(await g.text('#tour .tour-step'), /^1 \/ 3$/, 'seulement les nouveautés de la version');
+  assert.match(await g.text('#tour .tour-step'), new RegExp('^1 / ' + (await G.evaluate(async () => { const m = await import('/news.js'); return m.NEWS.filter((n) => n.v > '8.3.0').reduce((t, n) => t + n.steps.length, 0); })) + '$'), 'seulement les nouveautés des versions pas encore vues');
   await g.click('#tour [data-act=tourNext]'); await g.click('#tour [data-act=tourNext]');
   await G.waitForFunction(() => location.hash.startsWith('#/settings/help'), null, { timeout: 5000 });
   await G.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
@@ -564,7 +581,7 @@ await step('ancienne adresse → nouvelle : compte, réglages et séances retrou
   await P.fill('input[name=username]', 'Voyageur'); await P.fill('input[name=password]', 'motdepasse9'); await m.click('button[type=submit]');
   await P.waitForSelector('nav.tabs'); if (await m.count('[data-act=setupLater]')) await m.click('[data-act=setupLater]');
   if (await P.$('#tour')) await m.click('#tour .tour-x');
-  await m.tab('settings'); await m.click('[data-act=appear][data-k=palette][data-v=foret]'); await P.waitForTimeout(300);
+  await m.tab('settings'); await m.click('[data-act=appearColor][data-id=foret]'); await P.waitForTimeout(300);
   await m.tab('library'); await m.sub('libSub', 'seances'); await m.click('[data-act=newSeance]'); await P.waitForSelector('input[data-change=sName]');
   await P.fill('input[data-change=sName]', 'Séance déménagée'); await P.press('input[data-change=sName]', 'Tab'); await P.waitForTimeout(600);
   delete env.MOVE_TO; // déménagement actif (adresse par défaut)

@@ -2,7 +2,7 @@
 // qu'une erreur de démarrage n'affiche jamais un écran blanc (écran d'erreur identifiable + réparation).
 (function () {
   var KEY = 'sea:appearance';
-  var DEFAULTS = { mode: 'dark', palette: 'gres', accent: '', shape: 'squircle', radius: 'soft', size: 'm', density: 'normal', motion: 'on' };
+  var DEFAULTS = { mode: 'dark', palette: 'gres', accent: '', shape: 'squircle', radius: 'soft', size: 'm', density: 'normal', motion: 'on', vibe: 'classique' };
   function load() {
     try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { return Object.assign({}, DEFAULTS); }
   }
@@ -13,6 +13,9 @@
     root.dataset.mode = dark ? 'dark' : 'light';
     root.dataset.palette = a.palette; root.dataset.shape = a.shape; root.dataset.radius = a.radius;
     root.dataset.size = a.size; root.dataset.density = a.density; root.dataset.motion = a.motion;
+    root.dataset.vibe = /^(classique|chaleureux|muscu|nature|minimal|neon)$/.test(a.vibe || '') ? a.vibe : 'classique';
+    // Couleur choisie à la main (par-dessus l'ambiance) : prioritaire sur la couleur de l'ambiance.
+    if (/^#[0-9a-f]{6}$/i.test(a.accent || '')) root.style.setProperty('--accent', a.accent); else root.style.removeProperty('--accent');
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', dark ? '#000000' : '#f5f5f7');
   }

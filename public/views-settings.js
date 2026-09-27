@@ -10,7 +10,8 @@ import { installCard, openSetup, showTour } from './views-setup.js';
 import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
 
-export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion'];
+export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
+export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
 const SUBS = [['main', '⭐ Essentiel'], ['help', '❓ Aide'], ['data', '💾 Mes données'], ['sync', '🔄 Synchronisation'], ['bug', '🐞 Signaler un bug'], ['admin', '🛡️ Admin']];
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
@@ -36,9 +37,13 @@ function vMain() {
   return h`${account}
     <div class="card"><h3>🎨 Affichage</h3>
       <label>Thème</label>${segA('mode', [['dark', '🌙 Sombre'], ['light', '☀️ Clair'], ['auto', '🔁 Comme mon téléphone']])}
-      <label>Couleur</label><div class="palette">${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${a.palette === id ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appear" data-k="palette" data-v="${id}"></button>`)}</div>
+      <label>Ambiance</label><div class="vibes">${VIBES.map(([id, n, d]) => h`<button type="button" class="vibe ${(a.vibe || 'classique') === id ? 'on' : ''}" data-act="appear" data-k="vibe" data-v="${id}" data-vibe-preview="${id}"><span class="vprev"><i></i><i></i><i></i></span><b>${n}</b><small>${d}</small></button>`)}</div>
+      <label>Couleur</label><div class="palette">${(a.vibe || 'classique') !== 'classique' ? h`<button type="button" class="sw none ${a.accent ? '' : 'on'}" title="Couleur de l’ambiance" aria-label="Couleur de l’ambiance" data-act="appearColor" data-v="">∅</button>` : ''}${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${((a.vibe || 'classique') === 'classique' ? a.palette === id && !a.accent : a.accent === c) ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appearColor" data-id="${id}" data-v="${c}"></button>`)}</div>
       <label>Taille du texte</label>${segA('size', [['s', 'Petit'], ['m', 'Normal'], ['l', 'Grand'], ['xl', 'Très grand']])}
       <details class="how mini"><summary>Plus d’options d’affichage</summary><label>Espacement</label>${segA('density', [['compact', 'Serré'], ['normal', 'Normal'], ['airy', 'Aéré']])}<label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</details></div>
+    <div class="card"><h3>✏️ Mise en page</h3><p class="small muted">Choisis ce qui s’affiche, en grand ou en petite icône en haut, dans quel ordre et de quelle couleur. Le ✏️ en haut de chaque page fait pareil.</p>
+      <div class="row wrapf"><button class="btn" data-act="layEditAt" data-to="home/dash">Accueil</button><button class="btn" data-act="layEditAt" data-to="progress/summary">Progrès</button><button class="btn" data-act="layEditAt" data-to="library/seances">Bibliothèque</button><button class="btn" data-act="layEditAt" data-to="profile/home">Profil</button></div>
+      <button class="btn ghost" data-act="layReset" data-scope="all">Revenir à la mise en page de base partout</button></div>
     <div class="card"><h3>🧩 Mon profil sportif</h3><p class="small muted">Pour que l’app s’adapte à toi (sports, niveau, temps, matériel, objectif).</p>
       <div class="row wrapf"><button class="btn pri" data-act="setupAgain" data-id="quiz">Répondre aux questions</button><button class="btn" data-act="setupAgain" data-id="form">Remplir la fiche</button><button class="btn ghost" data-act="goProfile" data-id="understand">Voir mon profil</button></div></div>
     ${installCard({ force: true })}
@@ -78,8 +83,20 @@ function vHelp() {
 ACT.helpTour = () => showTour(0);
 ACT.soundTest = () => { beep(660, 120); setTimeout(() => beep(1040, 300), 350); };
 CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); };
+/** Couleur : en ambiance « Classique », c'est la palette ; dans les autres ambiances, une couleur par-dessus (∅ = celle de l'ambiance). */
+ACT.appearColor = (el) => {
+  const a = window.__sea.load(), classic = (a.vibe || 'classique') === 'classique';
+  const patch = classic ? { palette: el.dataset.id || a.palette, accent: '' } : { accent: el.dataset.v || '' };
+  saveAppear({ ...a, ...patch });
+};
+function saveAppear(a) {
+  a = { ...a, _t: Date.now(), _owner: S.user?.id || '' };
+  window.__sea.save(a);
+  putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(a[k] ?? '') }), {}));
+  render();
+}
 ACT.appear = (el) => {
-  const a = { ...window.__sea.load(), [el.dataset.k]: el.dataset.v, _t: Date.now(), _owner: S.user?.id || '' };
+  const a = { ...window.__sea.load(), [el.dataset.k]: el.dataset.v, ...(el.dataset.k === 'vibe' ? { accent: '' } : {}), _t: Date.now(), _owner: S.user?.id || '' };
   window.__sea.save(a);
   putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(a[k] ?? '') }), {})); // suit le compte sur tous les appareils
   render();
