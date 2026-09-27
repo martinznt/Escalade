@@ -25,11 +25,12 @@ export function cleanBody(b = {}) {
  * Chaque règle renvoie sa raison, affichée dans « Pourquoi cette séance ? ».
  */
 export function bodyAdjust(body = {}, goals = []) {
-  const r = { levelCap: null, restFactor: 1, noPlyo: false, extraIntents: [], reasons: [] };
+  const r = { levelCap: null, restFactor: 1, noPlyo: false, extraIntents: [], reasons: [], sources: [] };
   if (body.breath === 'souvent' || body.fitness === 1) { r.levelCap = 0; r.restFactor = 1.4; r.noPlyo = true; r.reasons.push('Tu es vite essoufflé ou à plat en ce moment : exercices simples, repos plus longs, pas de sauts.'); }
   else if (body.breath === 'escaliers' || body.fitness === 2) { r.levelCap = 1; r.restFactor = 1.2; r.reasons.push('Forme moyenne en ce moment : intensité modérée et repos un peu plus longs.'); }
-  if (body.age >= 60) { r.noPlyo = true; r.extraIntents.push('mobilite'); r.reasons.push('À partir de 60 ans, on ajoute de l’équilibre et de la mobilité, et on évite les sauts intenses.'); }
+  if (body.age >= 60) { r.sources.push('sherrington2019'); r.noPlyo = true; r.extraIntents.push('mobilite'); r.reasons.push('À partir de 60 ans, on ajoute de l’équilibre et de la mobilité, et on évite les sauts intenses.'); }
   if (goals.includes('poids')) {
+    r.sources.push('donnelly2009', 'acsm2009');
     r.extraIntents.push('endurance'); r.circuit = true; r.reasons.push('Objectif perte de poids : plus de mouvement continu, en circuit, avec des pauses courtes.');
     if (body.shape === 'rond') { r.noPlyo = true; r.reasons.push('Pour ménager les articulations, pas de sauts : on privilégie les mouvements sans impact.'); }
   }

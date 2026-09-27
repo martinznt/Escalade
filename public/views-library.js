@@ -9,6 +9,8 @@ import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from '
 import { parseSessionText, exportSessionText, sessionMinutes, exMinutes, parseRest } from './engine.js';
 import { boostSession } from './program.js';
 import { vGenerateForm, genOptions } from './views-gen.js';
+import { vCatalog, vBest } from './views-catalog.js';
+import { sourcesLine } from './srcui.js';
 import { planSession, generateFromPlan, adaptDuration, alternatives, replaceExercise, rebuildForEquipment, newPossibilities, estimateLevel, LEVEL_LABEL, levelFor, BODY_WORDS } from './generator.js';
 import { availableEquipment, graphFromExercise, goalLabel, activeGoals, neverTried, exCaps, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -37,9 +39,9 @@ export function vLibrary() {
   if (sub === 'shared-edit' && S.sharedDraft) return vEditor(S.sharedDraft.session, 'shared');
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
-  const cur = ['seances', 'generate', 'exercises', 'common', 'search'].includes(sub) ? sub : 'seances';
-  return h`<h1>📚 Bibliothèque</h1>${seg('libSub', cur, [['seances', '📋 Mes séances'], ['generate', '✨ Générer'], ['exercises', '💪 Exercices'], ['common', '🌍 Partagées'], ['search', '🔍 Recherche']])}
-    ${cur === 'seances' ? vSeances() : cur === 'generate' ? vGenerate() : cur === 'exercises' ? vExercises() : cur === 'common' ? vCommon() : vSearch()}`;
+  const cur = ['seances', 'generate', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'seances';
+  return h`<h1>📚 Bibliothèque</h1><div class="scrollx">${seg('libSub', cur, [['seances', '📋 Mes séances'], ['generate', '🎯 Sur mesure'], ['catalog', '🗂 Prêtes'], ['best', '🏆 Top exercices'], ['exercises', '💪 Exercices'], ['common', '🌍 Partagées'], ['search', '🔍 Recherche']])}</div>
+    ${cur === 'seances' ? vSeances() : cur === 'generate' ? vGenerate() : cur === 'catalog' ? vCatalog() : cur === 'best' ? vBest() : cur === 'exercises' ? vExercises() : cur === 'common' ? vCommon() : vSearch()}`;
 }
 ACT.libSub = (el) => { go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
@@ -316,7 +318,7 @@ function vPlan(p) {
     <p class="small">🧰 <b>Matériel nécessaire :</b> ${p.neededEquipment?.length ? p.neededEquipment.join(', ') : 'aucun'}</p>
     ${p.missing.length ? h`<p class="small warn-t">⚠ ${p.missing[0]}</p>` : ''}
     <details class="how mini"><summary>Pourquoi ces choix ?</summary><ul class="small">${p.distribution.map((d) => h`<li><b>${d.label}</b> : ${d.reasons.join(' · ')}</li>`)}${p.blocks.map((b) => h`<li><b>${b.label}</b> : ${b.reason}</li>`)}<li>${p.difficulty.text}</li>${p.constraints.map((x) => h`<li>${x}</li>`)}${p.missing.slice(1).map((x) => h`<li>${x}</li>`)}</ul></details>
-    <button class="btn pri big" data-act="genDo">✨ Générer la séance</button></div>`;
+    ${sourcesLine(['who2020', 'acsm2009', 'soligard2008'])}<button class="btn pri big" data-act="genDo">Générer la séance</button></div>`;
 }
 ACT.prio = (el) => {
   const g = S.gen, id = el.dataset.id, d = el.dataset.d;

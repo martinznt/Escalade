@@ -473,3 +473,11 @@ html[data-vibe=neon][data-mode=dark] .btn.pri{box-shadow:0 0 18px color-mix(in s
 .ntypes{display:grid;gap:8px;margin:8px 0}.ntype{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--card2);cursor:pointer}
 .ntype .nti{font-size:1.3rem}.ntype small{display:block;color:var(--muted);font-size:.76rem}.ntype input{width:20px;height:20px;accent-color:var(--accent)}
 .nsub{display:grid;gap:8px;padding:4px 4px 8px 36px}.chk.big{font-weight:700}
+
+/* ═════════ Catalogue, top exercices, sources ═════════ */
+.catf{display:grid;gap:6px}.catcard{display:grid;gap:6px;text-align:left}.catemoji{font-size:1.8rem;width:44px;text-align:center}
+.catd{display:grid;gap:10px}.catd h2{margin:0}.catex li{margin:3px 0}
+.srcs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.75rem;color:var(--muted)}
+.src{border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:99px;padding:2px 9px;font-size:.72rem;cursor:pointer}
+.bestrow{display:flex;gap:12px;align-items:center;text-align:left}.rank{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent,#000);font-weight:800;flex:none}
+.chips.nowrap{flex-wrap:nowrap}

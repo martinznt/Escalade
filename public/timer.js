@@ -5,11 +5,12 @@ import { h, $, openSheet, closeSheet, toast, mmss, buzzOk } from './ui.js';
 import { S, ACT, SUBMIT, addHistory, render } from './state.js';
 import { uid } from './shared.js';
 import { beep } from './sound.js';
+import { sourcesLine } from './srcui.js';
 
 export const PRESETS = [
-  { id: 'hang73', name: 'Suspensions 7 / 3', emoji: '🫳', work: 7, rest: 3, reps: 6, sets: 4, setRest: 180, note: 'Le classique à la poutre : 7 s suspendu, 3 s de pause, 6 fois. Prise que tu tiens sans forcer au début.' },
-  { id: 'maxhang', name: 'Suspensions max', emoji: '💪', work: 10, rest: 0, reps: 1, sets: 5, setRest: 120, note: '10 s sur une réglette exigeante (ou avec du lest), 2 min de repos. Arrête dès que la prise se dégrade.' },
-  { id: 'tabata', name: 'Tabata', emoji: '🔥', work: 20, rest: 10, reps: 8, sets: 1, setRest: 0, note: '20 s à fond, 10 s de pause, 8 fois. 4 minutes qui piquent.' },
+  { id: 'hang73', name: 'Suspensions 7 / 3', emoji: '🫳', work: 7, rest: 3, reps: 6, sets: 4, setRest: 180, note: 'Le classique à la poutre : 7 s suspendu, 3 s de pause, 6 fois. Prise que tu tiens sans forcer au début.', src: ['medernach2015', 'lopez2012'] },
+  { id: 'maxhang', name: 'Suspensions max', emoji: '💪', work: 10, rest: 0, reps: 1, sets: 5, setRest: 120, note: '10 s sur une réglette exigeante (ou avec du lest), 2 min de repos. Arrête dès que la prise se dégrade.', src: ['lopez2012', 'schoffl2006'] },
+  { id: 'tabata', name: 'Tabata', emoji: '🔥', work: 20, rest: 10, reps: 8, sets: 1, setRest: 0, note: '20 s à fond, 10 s de pause, 8 fois. 4 minutes qui piquent.', src: ['tabata1996'] },
   { id: 'emom', name: 'Chaque minute (EMOM)', emoji: '⏱', work: 60, rest: 0, reps: 10, sets: 1, setRest: 0, note: 'Un bip chaque minute : fais tes répétitions, récupère le reste de la minute.' },
   { id: 'plank', name: 'Gainage 40 / 20', emoji: '🧱', work: 40, rest: 20, reps: 6, sets: 1, setRest: 0, note: 'Enchaîne planche, côtés, hollow… 40 s chacun.' },
 ];
@@ -42,13 +43,13 @@ ACT.timerOpen = () => {
       <div class="grid2">${[['work', 'Effort (s)', c.work, 1, 600], ['rest', 'Pause (s)', c.rest, 0, 600], ['reps', 'Répétitions', c.reps, 1, 50], ['sets', 'Séries', c.sets, 1, 20]].map(([n, l, v, mi, ma]) => h`<label>${l}<input type="number" name="${n}" value="${v}" min="${mi}" max="${ma}" inputmode="numeric" required></label>`)}</div>
       <label>Repos entre les séries (s)<input type="number" name="setRest" value="${c.setRest}" min="0" max="900" inputmode="numeric"></label>
       <input type="hidden" name="name" value="${c.name || 'Minuteur'}">
-      <p class="small muted" id="tnote">${c.note || ''}</p>
+      <p class="small muted" id="tnote">${c.note || ''}</p><div id="tsrc">${sourcesLine(c.src || [])}</div>
       <button class="btn pri big" type="submit">▶ Démarrer</button></form></div>`);
 };
 ACT.timerPreset = (el) => {
   const p = PRESETS.find((x) => x.id === el.dataset.id), f = $('#tform'); if (!p || !f) return;
   for (const k of ['work', 'rest', 'reps', 'sets', 'setRest', 'name']) f.elements[k].value = p[k];
-  $('#tnote').textContent = p.note;
+  $('#tnote').textContent = p.note; const ts = $('#tsrc'); if (ts) ts.innerHTML = sourcesLine(p.src || []).s || '';
   document.querySelectorAll('.itimer-setup .chip').forEach((c) => c.classList.toggle('on', c === el));
 };
 SUBMIT.timerStart = (f) => {

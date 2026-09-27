@@ -16,7 +16,8 @@ ok('réponses bornées, champs inconnus ou invalides ignorés', () => {
   assert.equal(cleanBody({ age: '' }).age, undefined);
 });
 ok('règles : souffle court, 60 ans et plus, perte de poids — chacune expliquée', () => {
-  assert.deepEqual(bodyAdjust({}), { levelCap: null, restFactor: 1, noPlyo: false, extraIntents: [], reasons: [] });
+  assert.deepEqual(bodyAdjust({}), { levelCap: null, restFactor: 1, noPlyo: false, extraIntents: [], reasons: [], sources: [] });
+  assert.deepEqual(bodyAdjust({ age: 70 }, ['poids']).sources, ['sherrington2019', 'donnelly2009', 'acsm2009'], 'chaque règle cite sa source');
   const a = bodyAdjust({ breath: 'souvent' }); assert.equal(a.levelCap, 0); assert.ok(a.noPlyo); assert.ok(a.restFactor > 1); assert.equal(a.reasons.length, 1);
   const b = bodyAdjust({ age: 67 }); assert.ok(b.noPlyo && b.extraIntents.includes('mobilite'));
   const c = bodyAdjust({ shape: 'rond' }, ['poids']); assert.ok(c.circuit && c.noPlyo && c.extraIntents.includes('endurance')); assert.equal(c.reasons.length, 2);

@@ -3,6 +3,7 @@
 import { h, openSheet, closeSheet, toast, ask, fmtDay, buzzOk } from './ui.js';
 import { S, ACT, ctx, render, putItem, item, itemsOf, go } from './state.js';
 import { uid } from './shared.js';
+import { sourcesLine } from './srcui.js';
 import { planSession, generateFromPlan } from './generator.js';
 import { startPlayer } from './player.js';
 import { activeGoals, goalLabel } from './brain.js';
@@ -30,7 +31,7 @@ export function fingerCard() {
   return h`<section class="card warn-b"><div class="row"><span style="font-size:1.6rem">✋</span><div class="grow"><b>Tes doigts ont beaucoup travaillé</b>
     <div class="small">${f.cur} séries pour les doigts ces 7 jours${f.avg ? `, contre ${f.avg} d’habitude` : ''}. Une séance plus douce aujourd’hui ?</div></div></div>
     <div class="row wrapf"><button class="btn sm pri" data-act="fingerEasy">Séance douce</button><button class="btn sm ghost" data-act="fingerHide">Ça va, merci</button></div>
-    <p class="tiny muted">Un simple repère de volume, pas un avis médical. Une douleur qui dure mérite l’avis d’un professionnel.</p></section>`;
+    <p class="tiny muted">Un simple repère de volume, pas un avis médical. Une douleur qui dure mérite l’avis d’un professionnel.</p>${sourcesLine(['schoffl2006'])}</section>`;
 }
 ACT.fingerHide = () => { S.fingerHide = true; render(); };
 ACT.fingerEasy = () => { S.fingerHide = true; S.gen.light = true; ACT.genOpen?.(); };
@@ -48,7 +49,7 @@ function wizard() {
     <label>4 · Combien de temps par séance ?</label><div class="chips">${[20, 30, 45, 60, 90].map((n) => h`<button type="button" class="chip ${w.minutes === n ? 'on' : ''}" data-act="pwSet" data-k="minutes" data-v="${n}">${n} min</button>`)}</div>
     <div class="card flat pwsum"><b>${plan.sessions.length} séances</b>${end ? h` · jusqu’au ${fmtDay(new Date(end + 'T12:00').getTime())}` : ''}
       ${deloads.length ? h`<div class="small muted">Semaine${deloads.length > 1 ? 's' : ''} ${deloads.join(' et ')} plus légère${deloads.length > 1 ? 's' : ''} pour récupérer. ${w.weeks >= 4 ? 'Dernière semaine : bilan.' : ''}</div>` : ''}
-      <div class="small muted">Chaque séance est préparée le jour même, d’après tes dernières séances.</div></div>
+      <div class="small muted">Chaque séance est préparée le jour même, d’après tes dernières séances.</div>${sourcesLine(['acsm2009', 'grgic2018', 'who2020'])}</div>
     <button class="btn pri big" data-act="pwSave" ${w.goal === 'goal' && !w.goalId ? 'disabled' : ''}>Créer le programme</button></div>`;
 }
 ACT.progNew = () => {

@@ -7,6 +7,7 @@ import { sortedLevels, gradeSnapshot, REFERENCE } from './grading.js';
 import { pyramid, projectStats, addTries, fingerTest, SENT, RESULT_WORD } from './climb.js';
 import { celebrate } from './fx.js';
 import { startTimer } from './timer.js';
+import { sourcesLine } from './srcui.js';
 
 const C = () => (S.carnet ||= { kind: 'bloc', period: 'year', hold: 'main' });
 const PERIODS = [['3m', '3 mois', 90], ['year', '1 an', 365], ['all', 'Tout', 0]];
@@ -190,7 +191,7 @@ export async function compressPhoto(file) {
 /* ───────── Test de doigts ───────── */
 ACT.fingerTime = () => {
   openSheet(h`<div class="stack"><h2>⏱ Temps max sur 20 mm</h2><ol class="small"><li>Échauffe bien tes doigts (10 min de grimpe facile ou de suspensions légères).</li><li>Prends la réglette de 20 mm, bras tendus, épaules engagées.</li><li>Tiens le plus longtemps possible, puis touche « J’ai lâché ».</li></ol>
-    <p class="tiny muted">Arrête tout de suite si tu sens une douleur dans un doigt.</p><button class="btn pri big" data-act="fingerGo">Je suis prêt</button></div>`);
+    <p class="tiny muted">Arrête tout de suite si tu sens une douleur dans un doigt.</p>${sourcesLine(['medernach2015', 'schoffl2006'])}<button class="btn pri big" data-act="fingerGo">Je suis prêt</button></div>`);
 };
 let sw = null;
 ACT.fingerGo = () => {

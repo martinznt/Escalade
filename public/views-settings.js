@@ -9,6 +9,7 @@ import { describeOp } from './outbox.js';
 import { installCard, openSetup, showTour } from './views-setup.js';
 import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
+import { vSources } from './views-catalog.js';
 import { CAPACITIES, ACTIVITIES } from './model.js';
 
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
@@ -78,7 +79,7 @@ const FAQ = [
 ];
 function vHelp() {
   return h`<div class="card"><h3>🧭 Visite guidée</h3><p class="small">Revois en 30 secondes à quoi sert chaque onglet.</p><div class="row wrapf"><button class="btn pri" data-act="helpTour">Lancer la visite</button><button class="btn" data-act="newsTour">✨ Revoir les nouveautés</button></div></div>
-    <div class="card"><h3>❓ Questions fréquentes</h3>${FAQ.map(([q, r]) => h`<details class="faq"><summary>${q}</summary><p class="small">${r}</p></details>`)}</div>`;
+    <div class="card"><h3>❓ Questions fréquentes</h3>${FAQ.map(([q, r]) => h`<details class="faq"><summary>${q}</summary><p class="small">${r}</p></details>`)}</div>${vSources()}`;
 }
 ACT.helpTour = () => showTour(0);
 ACT.soundTest = () => { beep(660, 120); setTimeout(() => beep(1040, 300), 350); };

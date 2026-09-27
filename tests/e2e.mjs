@@ -169,6 +169,19 @@ await step('notifications : boîte des mises à jour (utilité, visite), répons
   await a.click('.inbox [data-act=notifSettings]'); await A.waitForSelector('text=Son dans l’app');
   assert.equal(await a.count('.topicons [data-act=notifOpen] .badge-dot'), 0, 'lu');
 });
+await step('séances prêtes : filtres, tri pour toi, sources consultables, lancer / garder ; top exercices', async () => {
+  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('.catcard');
+  await a.click('[data-act=catEq]'); // tout afficher, même sans le matériel
+  await a.click('[data-act=catF][data-k=sport][data-v=running]'); assert.match(await a.text('main'), /Fractionné 4 × 4 min/);
+  await A.locator('.catcard', { hasText: 'Fractionné 4 × 4 min' }).click(); await A.waitForSelector('.catd .src');
+  assert.match(await a.text('.catd'), /VO2max/); await A.locator('.catd .src').first().click();
+  await A.waitForSelector('text=Ce qu’elle montre'); assert.match(await a.text('#sheet'), /Helgerud|Milanović/); assert.ok(await a.count('#sheet a[href^="http"]') === 1);
+  await A.keyboard.press('Escape'); await a.click('[data-act=catF][data-k=sport][data-v=running]');
+  await A.locator('.catcard', { hasText: 'Renfo maison sans matériel' }).click(); await a.click('.catd [data-act=catSave]');
+  await poll(async () => (await a.api('GET', '/api/sync')).data.items.some((x) => x.name === 'Renfo maison sans matériel'), 12000, 'séance gardée');
+  await a.sub('libSub', 'best'); await A.waitForSelector('.bestrow'); await a.click('[data-act=bestCat][data-v=doigts]'); await A.waitForSelector('.bestrow'); await a.sub('libSub', 'seances');
+  await a.tab('settings'); await a.sub('setSub', 'help'); await A.waitForSelector('text=Sources citées');
+});
 await step('programme : création en 4 questions, calendrier rempli, séance du jour avec la forme', async () => {
   await a.tab('home'); await a.click('.topicons [data-act=topCal]'); await a.click('[data-act=progNew]'); await A.waitForSelector('.pwiz');
   await a.click('.pwiz [data-act=pwSet][data-k=goal][data-v=force]'); await a.click('.pwiz [data-act=pwSet][data-k=weeks][data-v="4"]');
