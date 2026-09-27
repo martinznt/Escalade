@@ -311,6 +311,12 @@ réglages qu'un client V2 ne connaît pas.
 - **Admin — liste des comptes** (`GET /api/admin/users`, Paramètres › Admin) : pseudo, inscription, e-mail masqué,
   nombre de séances et dernière connexion, recherche ; jamais les séances, performances ni profils ; refusé à tout
   compte non administrateur (test worker + E2E).
+- **Tout suit le compte** : l'apparence (thème, couleur, taille du texte, espacement, animations) est maintenant
+  enregistrée dans le compte (item `config/appearance`, dernière modification gagnante) comme le reste (séances,
+  historique, profil, objectifs, réglages de séance, tableau de bord, questionnaire). Sur un autre appareil ou
+  navigateur, tout est retrouvé à la connexion ; l'apparence d'un autre compte du même appareil n'est jamais reprise.
+  Restent volontairement propres à l'appareil : « Plus tard » de l'installation et des petites questions.
+  Test E2E : nouveau navigateur vierge → connexion → apparence, réglages et séances identiques.
 
 ## Évolution 8.2.0 — plus joli, plus léger, assistant IA
 

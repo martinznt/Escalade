@@ -8,6 +8,7 @@ import { parseCSV, proposeMapping, checkMapping, proposeMetricMap, buildImport, 
 import { describeOp } from './outbox.js';
 import { installCard, openSetup, showTour } from './views-setup.js';
 
+export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion'];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
 const SUBS = [['main', '⭐ Essentiel'], ['help', '❓ Aide'], ['data', '💾 Mes données'], ['sync', '🔄 Synchronisation'], ['bug', '🐞 Signaler un bug'], ['admin', '🛡️ Admin']];
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
@@ -70,7 +71,12 @@ function vHelp() {
 }
 ACT.helpTour = () => showTour(0);
 CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); };
-ACT.appear = (el) => { window.__sea.save({ ...window.__sea.load(), [el.dataset.k]: el.dataset.v }); render(); };
+ACT.appear = (el) => {
+  const a = { ...window.__sea.load(), [el.dataset.k]: el.dataset.v, _t: Date.now(), _owner: S.user?.id || '' };
+  window.__sea.save(a);
+  putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(a[k] ?? '') }), {})); // suit le compte sur tous les appareils
+  render();
+};
 ACT.chpass = () => openSheet(h`<h2 style="margin:0">Changer le mot de passe</h2><form data-submit="chpass" class="stack"><input type="text" name="username" value="${S.user.username}" autocomplete="username" class="hidden" aria-hidden="true"><label>Mot de passe actuel<input type="password" name="current" autocomplete="current-password" required></label><label>Nouveau (8 caractères minimum)<input type="password" name="next" autocomplete="new-password" required minlength="8"></label><p class="tiny muted">Tes autres appareils seront déconnectés.</p><button class="btn pri" type="submit">Changer</button></form>`);
 SUBMIT.chpass = async (f) => { const d = Object.fromEntries(new FormData(f)); try { await api('POST', '/api/auth/password', { current: d.current, next: d.next }); f.reset(); closeSheet(); toast('Mot de passe changé ; les autres appareils sont déconnectés.'); } catch (e) { toast(e.offline ? 'Connexion requise.' : e.message, 4000, 'bad'); } };
 ACT.logout = async () => {

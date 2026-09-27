@@ -96,7 +96,9 @@ export const SCHEMAS = {
     blocks: ['strs', 20, 30], envId: ['id'], durations: ['strs', 10, 10], unavailable: ['ids', 40],
     // Premiers pas (questionnaire de profil, visite guidée) : réponses déclarées par l'utilisateur.
     perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', ''], ''], intent: ['s', 30],
-    setupDone: ['b'], asked: ['strs', 30, 30], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
+    setupDone: ['b'], asked: ['strs', 30, 30],
+    // Apparence choisie (item « appearance ») : suit le compte sur tous les appareils.
+    mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], shape: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);

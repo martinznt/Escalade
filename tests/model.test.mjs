@@ -64,7 +64,7 @@ const SAMPLES = {
   jnote: { date: 1, text: 'note' },
   swap: { from: 'Pompes', to: 'Dips', date: 1, where: 'player' },
   habit: { key: 'swap:pompes', decision: 'accepted' },
-  config: { blocks: ['today', 'records'], envId: 'e1', durations: ['20'], unavailable: ['bar'], perWeek: 3, climbPerWeek: 2, goal: 'force', intent: 'force', setupDone: true, asked: ['bloc'], setupLater: 5, setupHidden: false, tourDone: true },
+  config: { blocks: ['today', 'records'], envId: 'e1', durations: ['20'], unavailable: ['bar'], perWeek: 3, climbPerWeek: 2, goal: 'force', intent: 'force', setupDone: true, asked: ['bloc'], mode: 'dark', palette: 'granit', accent: 'x', shape: 'squircle', radius: 'soft', size: 'm', density: 'normal', motion: 'on', setupLater: 5, setupHidden: false, tourDone: true },
 };
 await ok('chaque collection a un échantillon testé', () => assert.deepEqual(Object.keys(SAMPLES).sort(), [...COLLECTIONS].sort()));
 await ok('aller-retour exact de chaque collection (aucune clé utile supprimée par la liste blanche)', () => {

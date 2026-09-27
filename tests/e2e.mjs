@@ -379,6 +379,24 @@ await step('déconnexion puis reconnexion : données intactes', async () => {
   await A2.fill('input[name=password]', 'motdepasse1'); await a2.click('button[type=submit]'); await A2.waitForSelector('nav.tabs');
   await a2.tab('library'); await a2.sub('libSub', 'seances'); await A2.waitForSelector('text=Créée hors ligne'); await A2.waitForSelector('text=Tirage maison');
 });
+/* ═════════ Autre appareil ═════════ */
+console.log('Autre appareil');
+await step('tout suit le compte sur un autre appareil : données, réglages et apparence', async () => {
+  const a2 = H(A2);
+  await a2.tab('settings'); await a2.sub('setSub', 'main');
+  await A2.click('[data-act=appear][data-k=mode][data-v=light]'); await A2.click('[data-act=appear][data-k=palette][data-v=granit]'); await A2.click('[data-act=appear][data-k=size][data-v=l]');
+  await A2.fill('input[name=defaultRest]', '75'); await A2.dispatchEvent('input[name=defaultRest]', 'change');
+  await poll(async () => (await a2.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'appearance' && i.d.palette === 'granit'), 15000, 'apparence enregistrée dans le compte');
+  await poll(async () => (await a2.api('GET', '/api/settings')).data.settings.defaultRest === 75, 15000, 'réglages enregistrés dans le compte');
+  const ctxD = await newCtx(); const D = await ctxD.newPage(); watch(D, 'D'); cur = D; const d = H(D); // un autre navigateur, vierge
+  await D.goto(BASE); await D.waitForSelector('[data-act=authPick][data-id=login]'); await d.click('[data-act=authPick][data-id=login]');
+  await D.fill('input[name=username]', 'Alice'); await D.fill('input[name=password]', 'motdepasse1'); await d.click('button[type=submit]');
+  await D.waitForSelector('nav.tabs');
+  await poll(async () => (await D.evaluate(() => [document.documentElement.dataset.mode, document.documentElement.dataset.palette, document.documentElement.dataset.size].join())) === 'light,granit,l', 15000, 'apparence appliquée sur le nouvel appareil');
+  await d.tab('settings'); await d.sub('setSub', 'main'); assert.equal(await D.inputValue('input[name=defaultRest]'), '75');
+  await d.tab('library'); await d.sub('libSub', 'seances'); await D.waitForSelector('text=Tirage maison');
+  await ctxD.close(); cur = A2;
+});
 /* ═════════ Invité ═════════ */
 console.log('Invité');
 const ctxG = await newCtx(); const G = await ctxG.newPage(); watch(G, 'G'); cur = G; const g = H(G);
