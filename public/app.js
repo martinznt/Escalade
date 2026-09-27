@@ -1,7 +1,7 @@
 // app.js — point d'entrée de « Séances entraînement » (PWA, sans bibliothèque externe, fonctionne hors ligne).
 // Charge les vues, gère l'authentification, la navigation (onglets + adresse #/onglet/sous-vue/paramètre),
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
-import { h, raw, $, toast, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
+import { h, raw, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession } from './shared.js';
@@ -181,15 +181,45 @@ window.addEventListener('pagehide', () => { writePending(); persistNow(); });
 
 /* ═════════ Démarrage ═════════ */
 /* ═════════ Mises à jour : chaque déploiement (modification sur GitHub) est proposé dans le site et l'app ═════════ */
-const UPD = { reg: null, boot: '', available: false, later: 0 };
+const UPD = { reg: null, boot: '', available: false, fresh: false, later: 0, since: 0 };
+// Dernière version vue sur cet appareil : si le site a changé depuis (même application fermée entre-temps),
+// un bandeau « mis à jour » s'affiche une fois, avec un bouton pour voir ce qui a changé.
+const SEEN_KEY = 'sea:seen-build';
+const readSeen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || 'null'); } catch { return null; } };
+const writeSeen = (build) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify({ build, at: Date.now() })); } catch { /* stockage indisponible */ } };
 function showUpdate() { UPD.available = true; renderUpdateBar(); }
 function renderUpdateBar() {
   let bar = document.getElementById('updbar');
-  const hidden = !UPD.available || S.player || Date.now() < UPD.later;
+  const hidden = !(UPD.available || UPD.fresh) || S.player || Date.now() < UPD.later || document.body.classList.contains('touring');
   if (hidden) { bar?.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'updbar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
-  bar.innerHTML = h`<span>✨ <b>Nouvelle version disponible</b></span><button class="btn pri sm" data-act="updNow">Mettre à jour</button><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button>`.s;
+  const html = UPD.available
+    ? h`<div class="ut"><span>✨ <b>Nouvelle version disponible</b></span><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button></div>
+      <div class="ub"><button class="btn sm" data-act="updWhat">👀 Nouveautés</button><button class="btn pri sm" data-act="updNow">Mettre à jour</button></div>`
+    : h`<div class="ut"><span>🎉 <b>L’app a été mise à jour</b></span><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button></div>
+      <div class="ub"><button class="btn pri sm" data-act="updWhat">👀 Voir les nouveautés</button></div>`;
+  if (bar.innerHTML !== html.s) bar.innerHTML = html.s;
+  bar.classList.toggle('fresh', !UPD.available);
 }
+ACT.updSeen = () => { UPD.fresh = false; writeSeen(UPD.boot); renderUpdateBar(); };
+/** Aperçu de ce qui a changé : les dernières modifications publiées (historique du dépôt GitHub). */
+ACT.updWhat = async () => {
+  const since = UPD.since;
+  if (UPD.fresh) ACT.updSeen();
+  openSheet(h`<div class="news"><h2>✨ Quoi de neuf ?</h2>${skeleton(3)}</div>`);
+  let list = [];
+  try { const r = await fetch('/api/changes'); if (r.ok) list = (await r.json()).changes || []; } catch { /* hors ligne */ }
+  let recent = since ? list.filter((c) => c.date > since - 3600000) : [];
+  const older = !recent.length;
+  if (older) recent = list.slice(0, 4);
+  const day = (t) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const body = h`<div class="news"><h2>✨ Quoi de neuf ?</h2>
+    ${recent.length ? h`<p class="small muted">${older ? 'Les dernières améliorations du site :' : `${recent.length} amélioration${recent.length > 1 ? 's' : ''} depuis ta dernière visite :`}</p>
+      <ol class="newslist">${recent.slice(0, 8).map((c) => h`<li><span class="nd">${day(c.date)}</span><div><b>${c.title}</b>${c.points?.length ? h`<ul>${c.points.map((p) => h`<li>${p}</li>`)}</ul>` : ''}</div></li>`)}</ol>`
+      : h`<p class="small muted">Petites améliorations et corrections. ${navigator.onLine ? '' : 'Connecte-toi à Internet pour voir le détail.'}</p>`}
+    <div class="row">${UPD.available ? h`<button class="btn pri" data-act="updNow">Mettre à jour maintenant</button>` : ''}<span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`;
+  if (document.querySelector('#sheet.open .news')) openSheet(body);
+};
 ACT.updNow = async () => {
   if (S.player) { toast('Termine ta séance, puis mets à jour.'); return; }
   writePending(); await persistNow();
@@ -205,7 +235,13 @@ async function checkUpdate() {
   try {
     const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return;
     const { build } = await r.json();
-    if (!UPD.boot) UPD.boot = build; else if (build && build !== UPD.boot) showUpdate();
+    if (!build) return;
+    if (!UPD.boot) {
+      UPD.boot = build;
+      const seen = readSeen();
+      if (!seen?.build) writeSeen(build); // première visite : rien à annoncer
+      else if (seen.build !== build) { UPD.fresh = true; UPD.since = seen.at || 0; renderUpdateBar(); }
+    } else if (build !== UPD.boot) showUpdate();
   } catch { /* hors ligne : on réessaiera */ }
 }
 window.__seaCheckUpdate = checkUpdate;

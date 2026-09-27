@@ -7,6 +7,7 @@ import { S, ACT, INPUT, render, go, putItem, item, itemsOf, ctx, saveSettings } 
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, SKILLS, CAPACITIES } from './model.js';
 import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
 import { nextQuestion, pendingQuestions, bucketValue } from './questions.js';
+import { startTour } from './tour.js';
 import { canPrompt, isIOS, isInstalled, shouldOffer, dismissInstall, promptInstall, onInstallChange } from './install.js';
 
 /* ═════════ Configuration personnelle (item config « main ») ═════════ */
@@ -202,25 +203,13 @@ ACT.setupSkip = () => { S.setup = null; ACT.setupLater(); };
 ACT.setupHide = () => { saveMain({ setupHidden: true }); toast('Rappel masqué. Tu peux compléter ton profil à tout moment dans Paramètres › Essentiel.', 4500); render(); };
 
 /* ═════════ Visite guidée ═════════ */
-const TOUR = [
-  ['🏠', 'Accueil', 'Ta journée en un coup d’œil : ce que tu peux faire aujourd’hui, tes prochaines séances et tes objectifs.'],
-  ['📚', 'Bibliothèque', 'Tes séances. Crée la tienne, ou touche « ✨ Générer une séance » : l’app en prépare une adaptée à toi et explique pourquoi.'],
-  ['▶️', 'Faire une séance', 'Touche ▶ sur une séance : l’app te guide exercice par exercice (chrono, repos, séries). À la fin, 3 petites questions.'],
-  ['📈', 'Progrès', 'Ton historique, tes records et ton évolution — comparés uniquement à toi-même, jamais aux autres.'],
-  ['🧠', 'Profil', 'Ce que l’app sait de toi, et comment elle le sait : sports, niveau, matériel, objectifs. Tout est modifiable.'],
-  ['⚙️', 'Paramètres', 'Couleurs, sons, installation de l’application et aide. Tu peux revoir cette visite à tout moment.'],
-];
-export function maybeTour(force = false) { if (force || !mainConfig().tourDone) setTimeout(() => showTour(0), 250); }
-export function showTour(i = 0) {
-  const [ic, title, text] = TOUR[i];
-  openSheet(h`<div class="tour center"><div class="tour-ic">${ic}</div><h2>${title}</h2><p>${text}</p>
-    <div class="dots">${TOUR.map((_, k) => h`<i class="${k === i ? 'on' : ''}"></i>`)}</div>
-    <div class="row">${i > 0 ? h`<button class="btn" data-act="tourGo" data-i="${i - 1}">‹</button>` : h`<button class="btn ghost" data-act="tourEnd">Passer</button>`}<span class="grow"></span>
-    ${i < TOUR.length - 1 ? h`<button class="btn pri" data-act="tourGo" data-i="${i + 1}">Suivant ›</button>` : h`<button class="btn pri" data-act="tourEnd">C’est compris !</button>`}</div></div>`);
+// La visite elle-même (tour.js) navigue de page en page et pointe chaque élément avec une flèche.
+export function maybeTour(force = false) {
+  if (!force && mainConfig().tourDone) return;
+  setTimeout(() => { closeSheet(); startTour({ onEnd: () => { if (!mainConfig().tourDone) saveMain({ tourDone: true }); } }); }, 250);
 }
-ACT.tourGo = (el) => showTour(Number(el.dataset.i));
-ACT.tourEnd = () => { closeSheet(); if (!mainConfig().tourDone) saveMain({ tourDone: true }); };
-ACT.tourStart = () => showTour(0);
+export const showTour = () => maybeTour(true);
+ACT.tourStart = () => maybeTour(true);
 
 /* ═════════ Installation de l'application ═════════ */
 onInstallChange(() => render());
@@ -266,10 +255,10 @@ export function questionCard() {
 }
 /** Une fois par ouverture de l'app, la question s'affiche aussi en fenêtre (jamais pendant une séance ou une saisie). */
 export function maybeAskOnOpen() {
-  if (S.askedThisOpen || S.player || !S.user) return;
+  if (S.askedThisOpen || S.player || !S.user || document.body.classList.contains('touring')) return;
   const x = currentQuestion(); if (!x || !(setupDone() || mainConfig().setupLater)) return;
   S.askedThisOpen = true;
-  setTimeout(() => { if (!document.querySelector('#sheet.open, #dialog.open') && !S.player) openSheet(qBody(x)); }, 1500);
+  setTimeout(() => { if (!document.querySelector('#sheet.open, #dialog.open') && !S.player && !document.body.classList.contains('touring')) openSheet(qBody(x)); }, 1500);
 }
 ACT.qLater = (el) => { snooze(el.dataset.q); closeSheet(); render(); };
 ACT.qAnswer = (el) => {
