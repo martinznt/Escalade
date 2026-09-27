@@ -542,3 +542,9 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
 **Mode ordinateur** : la séance du jour occupe deux colonnes.
 
 **Tests** : E2E à 59 étapes, adapté à la nouvelle navigation. Il vérifie aussi qu'aucune fenêtre de question ne s'ouvre toute seule.
+
+### Notifications : « vu » à cocher
+- Ouvrir la boîte ne marque plus tout comme lu. Chaque notification a son bouton « ✓ Vu », et « Tout marquer comme vu » coche toutes les nouvelles d'un coup.
+- Les nouvelles sont en haut, mises en avant avec l'étiquette « Nouveau ». Les notifications vues passent dans « Déjà vues », plus discrètes (repliées, moins de texte), et « ↺ Non vue » les remet en avant.
+- La pastille de l'icône 🔔 compte les notifications non vues.
+- Les notifications vues sont enregistrées dans le compte (item `config/inbox`), donc elles restent vues sur tous les appareils. L'ancienne date « tout lu » de l'appareil est toujours prise en compte.

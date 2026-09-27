@@ -166,8 +166,15 @@ await step('notifications : boîte des mises à jour (utilité, visite), répons
   await a.click('.topicons [data-act=notifOpen]'); await A.waitForSelector('.inbox .nitem.unread');
   assert.match(await a.text('.inbox'), /Ambiances[\s\S]*Minuteur/); await A.locator('.inbox details summary').first().click();
   assert.match(await a.text('.inbox'), /Ce qui a changé/);
+  // Chaque notification se coche « vu » ; les vues passent dans « Déjà vues », plus discrètes
+  const n0 = await a.count('.inbox .nitem.unread');
+  await a.click('.inbox .nitem.unread [data-act=notifSeen][data-v="1"]'); await A.waitForFunction((n) => document.querySelectorAll('.inbox .nitem.unread').length === n - 1, n0);
+  assert.ok(await a.count('.inbox .oldn .nitem.seen') >= 1, 'rangée dans « Déjà vues »');
+  await a.click('.inbox .oldn summary').catch(() => {}); await a.click('.inbox .nitem.seen [data-act=notifSeen][data-v="0"]'); await A.waitForFunction((n) => document.querySelectorAll('.inbox .nitem.unread').length === n, n0);
+  await a.click('.inbox [data-act=notifAllSeen]'); await A.waitForSelector('text=Rien de nouveau');
+  assert.equal(await a.count('.topicons [data-act=notifOpen] .badge-dot'), 0, 'tout vu : plus de pastille');
   await a.click('.inbox [data-act=notifSettings]'); await A.waitForSelector('text=Son dans l’app');
-  assert.equal(await a.count('.topicons [data-act=notifOpen] .badge-dot'), 0, 'lu');
+  await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'inbox' && i.d.seenIds?.length), 12000, 'notifications vues liées au compte');
 });
 await step('séances prêtes : filtres, tri pour toi, sources consultables, lancer / garder ; top exercices', async () => {
   await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('.catcard');

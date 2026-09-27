@@ -541,3 +541,10 @@ html[data-motion=off] .scene *{animation:none!important}
 .quick:has(>:nth-child(4):last-child)>:not(:first-child){grid-column:span 2}
 .segrow{display:flex;align-items:center;gap:6px;min-width:0}.segrow>.scrollx{flex:1 1 0;min-width:0;overflow-x:auto}.segrow>.btn{flex:none}
 @media (min-width:1000px){.home-grid>.quick{grid-template-columns:repeat(5,minmax(0,1fr))}.home-grid>.quick>*{grid-column:auto!important}.home-grid>.quick>.qa.pri,.home-grid>.quick>.slot:has(>.qa.pri){grid-column:span 2!important}}
+/* Notifications : les nouvelles en avant, celles déjà vues plus discrètes */
+.inbox{display:grid;gap:10px}
+.nitem.unread{box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 40%,transparent)}
+.nitem.seen{background:transparent;border-color:var(--line);opacity:.62;padding:8px 12px}
+.nitem.seen .nic{font-size:1.1rem;filter:grayscale(1)}.nitem.seen b{font-weight:600;font-size:.92rem}
+.nitem .nseen{flex:none}.nitem.unread .nseen{background:var(--accent);color:#111;border-color:transparent}
+.oldn{display:grid;gap:8px}.oldn>summary{cursor:pointer;margin:6px 0}.oldn[open]>summary{margin-bottom:8px}.oldn .nitem+.nitem{margin-top:8px}

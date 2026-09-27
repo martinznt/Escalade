@@ -128,6 +128,8 @@ export const SCHEMAS = {
     lay: ['s', 9000],
     // Formats de séance gardés (item « formats ») : JSON validé à la lecture (format.js).
     formats: ['s', 6000],
+    // Notifications cochées « vu » (item « inbox »).
+    seenIds: ['strs', 200, 40],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);

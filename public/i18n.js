@@ -63,6 +63,7 @@ const EN = {
   'Thème, ambiance, couleur, taille, langue, mise en page': 'Theme, style, colour, size, language, layout', 'Coach vocal, bips, vibration, repos par défaut': 'Voice coach, beeps, vibration, default rest', 'Rappels d’entraînement, mises à jour, son': 'Training reminders, updates, sound',
   'Exporter, importer un historique': 'Export, import a history', 'État de l’envoi de tes données': 'Status of your data upload', 'Visite guidée, questions fréquentes, sources': 'Guided tour, FAQ, sources', 'Un problème ? Dis-le nous': 'A problem? Tell us', 'Réservé aux administrateurs': 'Admins only',
   '‹ Paramètres': '‹ Settings', '‹ Exercices': '‹ Exercises', '‹ Profil': '‹ Profile', 'Top exercices pour toi': 'Top exercises for you', 'Les plus utiles par catégorie, selon ton profil': 'The most useful per category, for your profile', 'Rechercher': 'Search', 'Menu : toutes les fonctions': 'Menu: all features',
+  'Nouveau': 'New', '✓ Vu': '✓ Seen', '↺ Non vue': '↺ Unseen', '✓ Tout marquer comme vu': '✓ Mark all as seen', 'Rien de nouveau. Tout est vu 👍': 'Nothing new. All seen 👍', 'Réglages': 'Settings', 'Faire la visite': 'Take the tour',
   // Partage et séance à deux
   'Séance à deux': 'Partner session', 'Rejoindre la séance': 'Join the session', 'Rejoindre': 'Join', 'Copier le lien': 'Copy link', 'Envoyer…': 'Send…', 'Arrêter le mode à deux': 'Stop partner mode',
   'Lien et QR code': 'Link and QR code', 'Mon profil public': 'My public profile', 'Bibliothèque commune': 'Shared library', 'À deux': 'Partner', 'En attente': 'Waiting',
@@ -97,7 +98,7 @@ const WORDS = [
   [/\bSérie (\d+) \/ (\d+)/g, 'Set $1 / $2'], [/\bExercice (\d+) \/ (\d+)/g, 'Exercise $1 / $2'], [/\bcôté (\d) \/ 2/g, 'side $1 / 2'],
   [/^(\d+) séances? cette semaine$/, '$1 session(s) this week'], [/^(\d+)\/(\d+) séances? cette semaine$/, '$1/$2 sessions this week'], [/^Durée choisie : (\d+) min$/, 'Chosen length: $1 min'],
   [/^Ensuite : (.+)$/, 'Next: $1'], [/^Repos prévu : (.+)$/, 'Planned rest: $1'], [/^▶ Démarrer \((.+)\)$/, '▶ Start ($1)'], [/(\d+) semaines d’affilée/, '$1 weeks in a row'],
-  [/^Total : (.+)$/, 'Total: $1'], [/^Voir les (\d+) autres exercices$/, 'See the $1 other exercises'], [/ rép\./g, ' reps'], [/ · repos /g, ' · rest '], [/\bmin (\d+)\b/g, 'min $1'],
+  [/^Total : (.+)$/, 'Total: $1'], [/^Nouvelles \((\d+)\)$/, 'New ($1)'], [/^Nouvelles$/, 'New'], [/^Déjà vues \((\d+)\)$/, 'Already seen ($1)'], [/^Revoir \((\d+)\)$/, 'See again ($1)'], [/^Ce qui a changé \((\d+)\)$/, 'What changed ($1)'], [/^Voir les (\d+) autres exercices$/, 'See the $1 other exercises'], [/ rép\./g, ' reps'], [/ · repos /g, ' · rest '], [/\bmin (\d+)\b/g, 'min $1'],
 ];
 const DAYS = { lundi: 'Monday', mardi: 'Tuesday', mercredi: 'Wednesday', jeudi: 'Thursday', vendredi: 'Friday', samedi: 'Saturday', dimanche: 'Sunday' };
 const MONTHS = { janvier: 'January', février: 'February', mars: 'March', avril: 'April', mai: 'May', juin: 'June', juillet: 'July', août: 'August', septembre: 'September', octobre: 'October', novembre: 'November', décembre: 'December' };
