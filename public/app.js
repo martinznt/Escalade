@@ -21,6 +21,7 @@ import { vSettings, APPEAR_KEYS } from './views-settings.js';
 import { onVisible, bigTap, startPlayer } from './player.js';
 import { catchLink, pendingLink, clearPending } from './share.js';
 import './duo.js';
+import './find-ui.js';
 import { setLang } from './i18n.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];

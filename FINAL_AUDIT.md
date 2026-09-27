@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.10.0
+# FINAL_AUDIT — Séances entraînement v8.11.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -555,3 +555,20 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
 - **Progrès** : le résumé reste en haut (l'essentiel d'un coup d'œil), puis « Aller plus loin » liste Historique, Records, Frise, Journal, Analyses et Lab.
 - **Profil** : les pages n'ont plus de barre, seulement un retour vers les tuiles.
 - Chaque onglet du bas s'ouvre sur sa page d'accueil.
+
+## Évolution 8.11.0 : une loupe pour tout trouver
+
+**Recherche globale**
+- La loupe 🔍 est en haut de chaque page. Elle ouvre un champ, et les résultats arrivent pendant la frappe, rangés par catégorie : fonctions, paramètres, mes séances, séances prêtes, exercices.
+- Un toucher mène au bon endroit. Le réglage ou l'élément trouvé est mis en lumière, et le bloc replié qui le contient s'ouvre.
+
+**Recherche dans Paramètres** : un champ en haut ne cherche que dans les réglages. La liste des rubriques laisse la place aux résultats tant que la recherche n'est pas vide.
+
+**Fonctionnement** (`public/finder.js`, sans DOM, testé)
+- Chaque fonction et chaque réglage a des mots-clés et des synonymes courants : « anglais » trouve Langue, « tabata » trouve Minuteur.
+- Les accents, majuscules et signes sont ignorés, et tous les mots écrits doivent correspondre.
+- Un titre qui commence par le mot cherché passe devant. Les mots très courts ne trouvent que des débuts de mots, pour éviter les résultats sans rapport.
+
+**Tests**
+- `tests/finder.test.mjs` (6 tests) : classement, synonymes, périmètre des paramètres, et existence de chaque rubrique et de chaque action visées.
+- E2E : 60 étapes.

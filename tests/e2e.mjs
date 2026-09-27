@@ -186,6 +186,18 @@ await step('notifications : boîte des mises à jour (utilité, visite), répons
   await a.click('.inbox [data-act=notifSettings]'); await A.waitForSelector('text=Son dans l’app');
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'inbox' && i.d.seenIds?.length), 12000, 'notifications vues liées au compte');
 });
+await step('recherche 🔍 dans toute l’app, et recherche limitée aux paramètres', async () => {
+  await a.tab('home'); await a.click('.topicons [data-act=findOpen]'); await A.waitForSelector('#sheet input[data-input=findQ]');
+  await A.fill('#sheet input[data-input=findQ]', 'minuteur'); await A.waitForSelector('#findres [data-act=findGo]');
+  assert.match(await a.text('#findres'), /Minuteur/);
+  await A.fill('#sheet input[data-input=findQ]', 'anglais'); await A.waitForFunction(() => /Langue/.test(document.querySelector('#findres')?.textContent || ''));
+  await a.click('#findres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/display'));
+  await A.waitForSelector('#main .found'); // l'élément trouvé est mis en lumière
+  await a.tab('settings'); await A.fill('input[data-input=setFind]', 'vibration'); await A.waitForSelector('#setfindres [data-act=findGo]');
+  assert.equal(await a.count('.setmenu.setmain.hidden'), 1, 'la liste des rubriques laisse place aux résultats');
+  assert.doesNotMatch(await a.text('#setfindres'), /Minuteur|Exercice/, 'seulement des paramètres');
+  await a.click('#setfindres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/session')); await A.waitForSelector('#main input[name=vibration]');
+});
 await step('séances prêtes : filtres, tri pour toi, sources consultables, lancer / garder ; top exercices', async () => {
   await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('.catcard');
   await a.click('[data-act=catEq]'); // tout afficher, même sans le matériel

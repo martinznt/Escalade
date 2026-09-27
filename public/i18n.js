@@ -69,6 +69,7 @@ const EN = {
   'Tes notes et tes ressentis': 'Your notes and feelings', 'Tendances, charge, pourquoi je stagne': 'Trends, load, why I plateau', 'Graphiques détaillés pour aller plus loin': 'Detailed charts to go further',
   'Tes séances : lancer, modifier, planifier': 'Your sessions: start, edit, plan', 'L’app prépare une séance pour toi, au format que tu veux': 'The app builds a session for you, in the format you want',
   'Les séances publiées par la communauté': 'Sessions published by the community', 'Une séance, un exercice, une capacité…': 'A session, an exercise, an ability…',
+  'Que cherches-tu ?': 'What are you looking for?', 'Rechercher un paramètre…': 'Search a setting…', 'Rechercher dans l’app': 'Search the app', 'Fonctions': 'Features', 'Exercice': 'Exercise',
   // Partage et séance à deux
   'Séance à deux': 'Partner session', 'Rejoindre la séance': 'Join the session', 'Rejoindre': 'Join', 'Copier le lien': 'Copy link', 'Envoyer…': 'Send…', 'Arrêter le mode à deux': 'Stop partner mode',
   'Lien et QR code': 'Link and QR code', 'Mon profil public': 'My public profile', 'Bibliothèque commune': 'Shared library', 'À deux': 'Partner', 'En attente': 'Waiting',

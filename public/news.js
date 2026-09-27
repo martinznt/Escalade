@@ -50,6 +50,10 @@ export const NEWS = [
     ['progress', 'summary', '.setmenu', '📈 Aller plus loin', 'Le résumé reste en haut ; historique, records et analyses sont dans la liste en dessous.'],
     ['home', 'dash', '[data-act=notifOpen]', '🔔 « ✓ Vu »', 'Coche chaque notification une fois lue : les nouvelles restent en avant, les autres se rangent plus bas.'],
   ] },
+  { v: '8.11.0', date: '2026-09-29', title: 'Une loupe pour tout trouver', why: 'Écris ce que tu cherches : une fonction, un réglage, une séance ou un exercice. Et dans les paramètres, une recherche rien que pour les réglages.', steps: [
+    ['home', 'dash', '.topicons [data-act=findOpen]', '🔍 Rechercher', 'Touche la loupe et écris ce que tu cherches : les résultats arrivent pendant que tu tapes, et un toucher t’y emmène.'],
+    ['settings', 'main', 'input[data-input=setFind]', '⚙️ Chercher un réglage', 'Ici, la recherche ne montre que les paramètres, et le réglage trouvé est mis en lumière.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

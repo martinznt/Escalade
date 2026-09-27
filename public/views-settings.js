@@ -46,7 +46,9 @@ function vMain() {
     : h`<div class="card"><div class="row between"><h3>👤 ${S.user.username} ${S.user.isAdmin ? tag('administrateur', 'acc') : ''}</h3><button class="btn sm" data-act="logout">Se déconnecter</button></div>
         <details class="how mini"><summary>Gérer mon compte</summary><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></details></div>`;
   return h`${account}
-    <div class="setmenu">${MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin'].includes(k))).map(([k, ic, t, d]) => h`<button class="setrow" data-act="setSub" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
+    <label class="findbox"><span aria-hidden="true">🔍</span><input type="search" data-input="setFind" placeholder="Rechercher un paramètre…" aria-label="Rechercher un paramètre" autocomplete="off"></label>
+    <div id="setfindres"></div>
+    <div class="setmenu setmain">${MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin'].includes(k))).map(([k, ic, t, d]) => h`<button class="setrow" data-act="setSub" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
     <div class="card"><h3>🧩 Mon profil sportif</h3><p class="small muted">Pour que l’app s’adapte à toi (sports, niveau, temps, matériel, objectif).</p>
       <div class="row wrapf"><button class="btn pri" data-act="setupAgain" data-id="quiz">Répondre aux questions</button><button class="btn" data-act="setupAgain" data-id="form">Remplir la fiche</button><button class="btn ghost" data-act="goProfile" data-id="understand">Voir mon profil</button></div></div>
     ${installCard({ force: true })}
@@ -105,7 +107,7 @@ const FAQ = [
   ['Où sont mes séances enregistrées ?', 'Dans l’onglet 📚 Bibliothèque. L’historique de ce que tu as fait est dans 📈 Progrès › Historique.'],
   ['Ça marche sans internet ?', 'Oui. Tout ce que tu fais hors connexion est gardé sur l’appareil et envoyé automatiquement quand internet revient.'],
   ['Mes données sont-elles privées ?', 'Oui, par défaut personne ne voit tes données. Tu peux choisir de partager certaines choses dans Profil › Public.'],
-  ['Comment installer l’application ?', 'Dans ⭐ Essentiel, carte « Installer l’application ». Sur Android et ordinateur, l’app s’installe comme une vraie application. Sur iPhone : Safari › Partager › « Sur l’écran d’accueil ».'],
+  ['Comment installer l’application ?', 'Dans ⚙️ Paramètres, carte « Installer l’application ». Sur Android et ordinateur, l’app s’installe comme une vraie application. Sur iPhone : Safari › Partager › « Sur l’écran d’accueil ».'],
   ['Un problème ?', 'Va dans « 🐞 Signaler un bug » et décris ce qui s’est passé : le message arrive directement à l’administrateur.'],
 ];
 function vHelp() {
