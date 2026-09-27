@@ -192,7 +192,9 @@ await step('questionnaire adaptatif puis enregistrement', async () => {
 await step('historique réellement enregistré sur le serveur (durée, pause, questionnaire)', async () => {
   await poll(async () => (await a.api('GET', '/api/history')).data.history.length === 1, 12000, 'historique sur le serveur');
   const h = (await a.api('GET', '/api/history')).data.history[0];
-  assert.equal(h.data.exercises.length, 2); assert.equal(h.data.rpe, 4); assert.equal(h.data.questionnaire.comment, 'Bonne séance, commentaire conservé');
+  const names = h.data.exercises.map((e) => e.name);
+  assert.ok(names.includes('Tractions australiennes') && names.includes('Gainage bateau (hollow body)'), 'les 2 exercices de la séance');
+  assert.ok(h.data.exercises.length > 2, 'échauffement automatique ajouté devant une séance faite à la main'); assert.equal(h.data.rpe, 4); assert.equal(h.data.questionnaire.comment, 'Bonne séance, commentaire conservé');
   assert.ok(h.data.questionnaire.felt.length >= 1); assert.ok(h.data.pausedSeconds >= 1, 'pause comptée à part'); assert.ok(h.durationSeconds < 200);
   assert.ok(h.durationSeconds >= h.data.activeSeconds);
   await a.tab('progress'); await a.sub('progSub', 'history'); await A.waitForSelector('text=Tirage maison');
@@ -475,6 +477,29 @@ await step('après une mise à jour : visite des nouveautés, seulement ce qui a
   assert.equal(await G.evaluate(() => JSON.parse(localStorage.getItem('sea:news-toured'))), await G.evaluate(() => window.__seaVersion));
   await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
   assert.equal(await g.count('#updbar'), 0, 'plus proposée une fois faite');
+});
+await step('minuteur d’intervalles : préréglage, préparation puis effort, pause, arrêt', async () => {
+  await g.tab('home'); await g.click('[data-act=timerOpen]'); await G.waitForSelector('#tform');
+  await g.click('[data-act=timerPreset][data-id=tabata]'); assert.equal(await G.inputValue('#tform input[name=work]'), '20');
+  await g.click('#tform button[type=submit]'); await G.waitForSelector('#itimer.ph-prep');
+  await G.waitForSelector('#itimer.ph-work', { timeout: 8000 }); assert.match(await g.text('#itimer'), /Série 1 \/ 1 · 1 \/ 8/);
+  await g.click('#itimer [data-act=timerPause]'); await G.waitForSelector('#itimer.paused');
+  await g.click('#itimer [data-act=timerStop]'); await G.waitForSelector('#itimer', { state: 'detached' });
+});
+await step('séance : grand affichage (toucher l’écran valide), coach vocal activable', async () => {
+  await g.click('[data-act=genOpen]'); await G.waitForSelector('[data-act=genPlan]'); await g.click('[data-act=genPlan]');
+  await G.waitForSelector('#genresult [data-act=play]', { timeout: 8000 }).catch(() => {});
+  if (await g.count('[data-act=genDo]')) await g.click('[data-act=genDo]');
+  await g.click('#genresult [data-act=play]'); await G.waitForSelector('#player.open');
+  await g.click('#player [data-act=pVoice]'); await G.waitForSelector('#player [data-act=pVoice][aria-pressed=true]');
+  await g.click('#player [data-act=pBig]'); await G.waitForSelector('#player .pl.big');
+  assert.equal(await G.locator('#player .figbox svg').count(), 1, 'figure animée');
+  const before = await g.text('#player');
+  await G.mouse.click(200, 560); await G.waitForTimeout(300);
+  assert.notEqual(await g.text('#player'), before, 'le toucher a lancé l’action principale');
+  await g.click('#player [data-act=pBig]'); await g.click('#player [data-act=pVoice]');
+  await g.click('#player [data-act=pQuit]'); await g.confirm(); await G.waitForSelector('#player.open [data-act=pDiscard], #player:not(.open)', { state: 'attached' });
+  if (await g.count('#player [data-act=pDiscard]')) { await g.click('#player [data-act=pDiscard]'); await g.confirm(); }
 });
 /* ═════════ Déménagement vers la nouvelle adresse ═════════ */
 console.log('Nouvelle adresse');

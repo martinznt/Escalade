@@ -8,12 +8,13 @@ import { normalizeSession } from './shared.js';
 import { maybeMove, maybeClaim } from './move.js';
 import { pendingNews, latestNews, markNewsToured, initNews } from './news.js';
 import { startTour } from './tour.js';
+import './timer.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
 import { vProfile } from './views-profile.js';
 import { vSettings, APPEAR_KEYS } from './views-settings.js';
-import { onVisible } from './player.js';
+import { onVisible, bigTap } from './player.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
 const VIEWS = { home: vHome, progress: vProgress, library: vLibrary, profile: vProfile, settings: vSettings };
@@ -157,6 +158,7 @@ ACT.tourStart2 = () => maybeTour(true);
 ACT.pubView = async (el) => { try { const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`, undefined, { quiet401: true }); S.publicSession = r.item; render(); } catch (e) { toast(e.message); } };
 
 /* ═════════ Événements ═════════ */
+document.getElementById('player')?.addEventListener('click', (e) => bigTap(e));
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
   const fn = ACT[el.dataset.act]; if (!fn) return;

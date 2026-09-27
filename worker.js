@@ -20,7 +20,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -591,7 +591,10 @@ function cleanSettings(o) {
   if (o.equipment && typeof o.equipment === 'object') out.equipment = Object.fromEntries(['wall', 'hangboard', 'bar', 'dips', 'weights', 'band'].map((k) => [k, bool(o.equipment[k])]));
   if (o.avoid && typeof o.avoid === 'object') out.avoid = Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, bool(o.avoid[k])]));
   if (Array.isArray(o.climbingLogs)) out.climbingLogs = o.climbingLogs.slice(0, 500).map((x) => ({ id: str(x?.id, 64) || uid(), date: clamp(x?.date, 0, 9e15, Date.now()), type: str(x?.type, 30), grade: str(x?.grade, 20), result: ['send', 'attempt', 'flash', 'top', 'fail', 'work'].includes(x?.result) ? x.result : 'attempt', attempts: clamp(x?.attempts, 1, 999, 1), style: str(x?.style, 60), note: str(x?.note, 500) }));
-  for (const k of ['sound', 'vibration', 'voice', 'keepAwake', 'handsFree', 'onboarded', 'autoBase']) if (k in o) out[k] = bool(o[k]);
+  for (const k of ['sound', 'vibration', 'voice', 'keepAwake', 'handsFree', 'onboarded', 'autoBase', 'bigMode', 'autoWarm', 'season']) if (k in o) out[k] = bool(o[k]);
+  if ('soundStyle' in o) out.soundStyle = ['bip', 'cloche', 'bois', 'doux'].includes(o.soundStyle) ? o.soundStyle : 'bip';
+  if ('volume' in o) out.volume = clamp(o.volume, 0, 100, 60);
+  if ('lang' in o) out.lang = ['fr', 'en'].includes(o.lang) ? o.lang : 'fr';
   if ('defaultRest' in o) out.defaultRest = clamp(o.defaultRest, 0, 600, 60);
   if ('defaultMinutes' in o) out.defaultMinutes = clamp(o.defaultMinutes, 5, 240, 30);
   if (o.sportProfile && typeof o.sportProfile === 'object') out.sportProfile = o.sportProfile; // ancien format conservé tel quel (lecture seule)

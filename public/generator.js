@@ -258,6 +258,13 @@ function buildBlock(ids, block, budgetMin, targets) {
   return out;
 }
 
+/** Échauffement court à ajouter devant une séance créée à la main (exercices sans matériel si eq n'est pas connu). */
+export function warmupFor(activityId, minutes = 5, eq = null) {
+  const key = WARM[activityId] ? activityId : isClimbing(activityId) ? 'conditioning' : 'custom';
+  const ids = WARM[key].filter((id) => byId(id) && byId(id).needs.every((n) => (eq ? eq.has(n) : false)));
+  return buildBlock(ids, 'warmup', minutes, {});
+}
+
 /* ───────── Génération finale ───────── */
 export function generateFromPlan(plan, ctx) {
   const eq = new Set(plan.equipment);

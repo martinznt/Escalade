@@ -19,7 +19,7 @@ import { toast, tz, $ } from './ui.js';
 
 export const APP_VERSION = '8.4.1';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
-export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {} };
+export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr' };
 export const S = {
   user: null, tab: 'home', sub: { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }, param: '',
   settings: { ...DEFAULT_SETTINGS }, seances: { items: [], tomb: {} }, seancesDirty: false, seancesVer: 0,

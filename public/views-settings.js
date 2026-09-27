@@ -7,6 +7,7 @@ import { cleanItem, itemKey } from './items.js';
 import { parseCSV, proposeMapping, checkMapping, proposeMetricMap, buildImport, TARGETS, MAX_CSV_BYTES } from './csv.js';
 import { describeOp } from './outbox.js';
 import { installCard, openSetup, showTour } from './views-setup.js';
+import { SOUND_STYLES, beep } from './sound.js';
 
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion'];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
@@ -41,7 +42,10 @@ function vMain() {
       <div class="row wrapf"><button class="btn pri" data-act="setupAgain" data-id="quiz">Répondre aux questions</button><button class="btn" data-act="setupAgain" data-id="form">Remplir la fiche</button><button class="btn ghost" data-act="goProfile" data-id="understand">Voir mon profil</button></div></div>
     ${installCard({ force: true })}
     <div class="card"><h3>▶ Pendant la séance</h3>
-      ${[['sound', '🔔 Bips pour les chronos'], ['vibration', '📳 Vibration à la fin du repos'], ['keepAwake', '💡 Garder l’écran allumé'], ['voice', '🗣️ Lire les exercices à voix haute']].map(tog)}
+      ${[['voice', '🗣️ Coach vocal : il annonce les séries, le repos et le décompte'], ['sound', '🔔 Bips pour les chronos'], ['vibration', '📳 Vibration à la fin du repos'], ['keepAwake', '💡 Garder l’écran allumé'], ['autoWarm', '🔥 Ajouter un échauffement de 5 min à mes séances'], ['bigMode', '🔠 Grand affichage (touche l’écran pour valider)']].map(tog)}
+      <div class="grid2"><label>Son des bips<select data-change="pref" name="soundStyle">${SOUND_STYLES.map(([v, l]) => h`<option value="${v}" ${st.soundStyle === v ? 'selected' : ''}>${l}</option>`)}</select></label>
+      <label>Volume<input type="range" data-change="pref" name="volume" min="0" max="100" step="10" value="${st.volume ?? 60}"></label></div>
+      <button class="btn sm" data-act="soundTest">🔔 Écouter</button>
       <div class="grid2"><label>Repos par défaut<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest ?? 60}"><em>secondes</em></span></label>
       <label>Durée de séance habituelle<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultMinutes" min="5" max="240" value="${st.defaultMinutes ?? 30}"><em>min</em></span></label></div>
       <details class="how mini"><summary>Options avancées</summary>${[['handsFree', 'Mode mains libres (commandes vocales)'], ['autoBase', 'Proposer d’utiliser mes valeurs réalisées comme nouvelle base']].map(tog)}</details></div>
@@ -70,7 +74,8 @@ function vHelp() {
     <div class="card"><h3>❓ Questions fréquentes</h3>${FAQ.map(([q, r]) => h`<details class="faq"><summary>${q}</summary><p class="small">${r}</p></details>`)}</div>`;
 }
 ACT.helpTour = () => showTour(0);
-CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); };
+ACT.soundTest = () => { beep(660, 120); setTimeout(() => beep(1040, 300), 350); };
+CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); };
 ACT.appear = (el) => {
   const a = { ...window.__sea.load(), [el.dataset.k]: el.dataset.v, _t: Date.now(), _owner: S.user?.id || '' };
   window.__sea.save(a);

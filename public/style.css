@@ -297,3 +297,27 @@ body.touring{overflow:hidden}
 #updbar .ub .btn{white-space:nowrap}
 .move-steps{text-align:left;margin:0;padding-left:22px;display:grid;gap:8px;font-size:1rem;line-height:1.4}
 .reinstall{border-color:var(--accent)}
+
+/* ═════════ Séance : outils, grand affichage, figures ═════════ */
+.pl .ptools{gap:6px;justify-content:center;flex-wrap:wrap}.pl .ptools .btn.on{border-color:var(--accent);color:var(--accent)}
+.pl .hr{color:#ef6f5e;font-weight:700;margin-left:4px}
+.pl .warmnote{padding:8px 12px}
+.figbox{flex:none;width:84px;height:84px;border-radius:18px;background:var(--card2);display:grid;place-items:center}
+.fig .body{fill:none;stroke:var(--text);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+.fig .head{fill:var(--accent)}.fig .prop{fill:var(--muted);stroke:var(--muted);stroke-width:4;stroke-linecap:round}
+.fig .ground{stroke:var(--line);stroke-width:3;stroke-linecap:round}.fig .water{fill:none;stroke:#5fa8d3;stroke-width:3}
+.pl.big .presc{font-size:2.6rem}.pl.big .timer{font-size:6.5rem}.pl.big h1{font-size:2rem}.pl.big .btn.big{min-height:84px;font-size:1.4rem}
+.pl.big .stepper b{font-size:2.6rem}.pl.big .cues{font-size:1.15rem}
+canvas.confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:200}
+
+/* ═════════ Minuteur d'intervalles ═════════ */
+#itimer{position:fixed;inset:0;z-index:80;display:grid;grid-template-rows:auto 1fr auto;padding:calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));background:var(--bg);color:var(--text);transition:background .3s}
+#itimer.ph-work{background:color-mix(in srgb,#2f9e5b 38%,var(--bg))}#itimer.ph-rest{background:color-mix(in srgb,#3478c6 30%,var(--bg))}
+#itimer.ph-setrest{background:color-mix(in srgb,#6b5fd3 28%,var(--bg))}#itimer.ph-prep{background:color-mix(in srgb,var(--accent) 22%,var(--bg))}
+#itimer .it-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+#itimer .it-mid{display:grid;place-content:center;justify-items:center;gap:10px;text-align:center}
+#itimer .it-label{font-size:1.6rem;font-weight:800;letter-spacing:.02em}
+#itimer .big-t{font-size:clamp(5rem,28vw,10rem);font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+#itimer .ibar{width:min(420px,80vw);height:10px;border-radius:99px;background:color-mix(in srgb,var(--text) 15%,transparent);overflow:hidden}#itimer .ibar i{display:block;height:100%;background:var(--text);width:0}
+#itimer .it-count{font-size:1.2rem;font-weight:700}#itimer .it-bot{display:grid}#itimer .it-bot .btn{min-height:64px}
+.itimer-setup{display:grid;gap:12px}.itimer-setup h2{margin:0}.itimer-setup .chip.on{border-color:var(--accent)}
