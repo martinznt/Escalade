@@ -12,6 +12,7 @@ export const PROGRAM_GOALS = {
   endurance: { label: 'Plus d’endurance', emoji: '🔋', activityId: 'conditioning', mode: 'weaknesses', intent: 'endurance' },
   mobilite: { label: 'Être plus souple', emoji: '🧘', activityId: 'conditioning', mode: 'weaknesses', intent: 'mobilite' },
   forme: { label: 'Rester en forme', emoji: '🙂', activityId: 'conditioning', mode: 'weaknesses' },
+  poids: { label: 'Perdre du poids', emoji: '⚖️', activityId: 'conditioning', mode: 'weaknesses', intent: 'endurance' },
   goal: { label: 'Mon objectif', emoji: '🎯', activityId: '', mode: 'goal' },
 };
 export const DAY_NAMES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];

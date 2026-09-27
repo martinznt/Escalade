@@ -12,6 +12,7 @@
 import { normalizeEx, normalizeSession, uid, exKey, clamp } from './shared.js';
 import { LIBRARY, byId, FOCUS } from './library.js';
 import { CAPACITIES, ACTIVITIES, INTENTIONS, EQUIPMENT } from './model.js';
+import { bodyAdjust } from './body-rules.js';
 import { generateSession as climbGenerate, exMinutes, sessionMinutes, progressHint, analyze, levelFrom } from './engine.js';
 import { profileCapacities, strengthsWeaknesses, availableEquipment, goalCaps, goalLabel, capVolume, relevantCaps, undertrained, exCaps, capacityState, perfsOf, confWord, STATUS_WORD, DAY } from './brain.js';
 import { bestReferenceLevel, levelFromReference } from './grading.js';
@@ -90,7 +91,7 @@ function customPool(activityId, ctx) {
 export function fingerComplaint(ctx) {
   return ctx.history.some((h) => ctx.now - h.startedAt < 3 * DAY && (h.data?.questionnaire?.answers || []).some((a) => a.q === 'doigts' && /douleur|gêne/i.test(a.a)));
 }
-export function candidates(activityId, ctx, { eq, level, light }) {
+export function candidates(activityId, ctx, { eq, level, light, noPlyo = false }) {
   const A = analyze(ctx.history, ctx.now), avoid = { ...(ctx.settings?.avoid || {}) };
   const complaint = fingerComplaint(ctx);
   const base = ACTIVITIES[activityId] ? LIBRARY.filter((x) => x.role === 'main' && x.acts.includes(activityId)) : customPool(activityId, ctx).pool;
@@ -103,6 +104,7 @@ export function candidates(activityId, ctx, { eq, level, light }) {
     if (light && (x.intensity !== 'low' || (x.diff || 1) > 2)) why.push('mode léger : intensité trop élevée');
     if (x.risk === 'finger' && x.intensity === 'high' && A.hoursSinceHighFinger < 48) why.push(`doigts sollicités intensément il y a ${Math.round(A.hoursSinceHighFinger)} h (48 h conseillées)`);
     if (['plyo', 'legs', 'run'].includes(x.kind) && x.intensity === 'high' && A.hoursSinceHighLegs < 36) why.push(`jambes sollicitées intensément il y a ${Math.round(A.hoursSinceHighLegs)} h`);
+    if (noPlyo && (x.kind === 'plyo' || (x.kind === 'run' && x.intensity === 'high'))) why.push('pas de sauts ni d’impacts forts (ton profil)');
     if (avoid.fingers && x.risk === 'finger') why.push('doigts à ménager (ton réglage)');
     else if (complaint && (x.risk === 'finger' || (x.caps?.force_doigts || 0) >= 0.8)) why.push('gêne aux doigts signalée dans ton dernier questionnaire');
     if (avoid.shoulders && (x.risk === 'shoulder' || SHOULDER.has(x.id))) why.push('épaules à ménager (ton réglage)');
@@ -122,7 +124,10 @@ export function planSession(opts = {}, ctx) {
   const minutes = clamp(opts.minutes, 5, 240, 30), light = !!opts.light, mode = opts.mode || 'weaknesses';
   const eq = availableEquipment(ctx, opts.envId);
   const env = ctx.envs.find((e) => e.id === opts.envId) || ctx.defEnv;
-  const { level, how: levelHow } = levelFor(activityId, ctx);
+  let { level, how: levelHow } = levelFor(activityId, ctx);
+  // Profil corporel déclaré (forme, souffle, âge, objectif poids) : règles simples, expliquées dans « Pourquoi ces choix ? ».
+  const bodyAdj = bodyAdjust(ctx.config?.body || {}, ctx.config?.main?.goals || []);
+  if (bodyAdj.levelCap != null && level > bodyAdj.levelCap) { level = bodyAdj.levelCap; levelHow += ' · plafonné selon ta forme du moment'; }
   const goal = opts.goalId ? ctx.goals.find((g) => g.id === opts.goalId) : null;
   const states = profileCapacities(ctx, activityId);
   const byCap = Object.fromEntries(states.map((s) => [s.capId, s]));
@@ -138,6 +143,7 @@ export function planSession(opts = {}, ctx) {
     for (const u of undertrained(ctx).items.filter((u) => relevantCaps(ctx, activityId)[u.id]).slice(0, 2)) add(u.id, 0.8, `peu travaillée ces 30 jours (${u.actual} % du volume)`);
   }
   if (opts.capId) add(opts.capId, 1.5, 'capacité demandée');
+  for (const id of bodyAdj.extraIntents) { const I = INTENTIONS[id]; if (!I) continue; for (const [c, cap] of Object.entries(CAPACITIES)) if (I.families.includes(cap.family) && relevantCaps(ctx, activityId)[c] != null) add(c, 0.2, `ton profil (${I.label.toLowerCase()})`); }
   for (const it of opts.intentions || []) {
     const I = INTENTIONS[it.id]; if (!I) continue;
     for (const [c, cap] of Object.entries(CAPACITIES)) if (I.families.includes(cap.family) && relevantCaps(ctx, activityId)[c] != null) add(c, 0.25 * (it.p || 2), `intention « ${I.label} »`);
@@ -152,7 +158,7 @@ export function planSession(opts = {}, ctx) {
   if (light) { add('mobilite_hanches', 0.6, 'mode léger / récupération'); add('mobilite_epaules', 0.5, 'mode léger / récupération'); }
   for (const [id, p] of Object.entries(opts.priorities || {})) { if (Number(p) <= 0) delete targets[id]; else targets[id] = Number(p); if (!reasons[id]) reasons[id] = ['priorité choisie']; else reasons[id].push('priorité modifiée par toi'); }
 
-  const { ok, excluded } = isClimbing(activityId) ? { ok: [], excluded: [] } : candidates(activityId, ctx, { eq, level, light });
+  const { ok, excluded } = isClimbing(activityId) ? { ok: [], excluded: [] } : candidates(activityId, ctx, { eq, level, light, noPlyo: bodyAdj.noPlyo });
   const trainable = (id) => isClimbing(activityId) || ok.some((x) => (x.caps?.[id] || 0) >= 0.3);
   const missing = [];
   for (const id of Object.keys(targets)) if (!trainable(id)) { missing.push(`${capName(id, ctx)} : aucun exercice compatible avec ton matériel ou ton niveau aujourd’hui.`); delete targets[id]; }
@@ -173,7 +179,7 @@ export function planSession(opts = {}, ctx) {
     activityId, activityLabel: ctx.activities[activityId]?.label || ACTIVITIES[activityId]?.label || activityId, minutes, light, mode, goalId: goal?.id || '', goalLabel: goal ? goalLabel(goal) : '',
     intentions: opts.intentions || [], priorities: opts.priorities || {}, envId: env?.id || '', envName: env?.name || '', equipment: [...eq], level, levelHow,
     distribution, blocks, difficulty: { value: est, text: `${est}/5 — intensité ${intensityWord} (niveau pris en compte : ${['débutant', 'intermédiaire', 'avancé'][level]}, ${levelHow})` },
-    constraints, missing, seed, capId: opts.capId || '',
+    constraints, missing, seed, capId: opts.capId || '', bodyReasons: bodyAdj.reasons, restFactor: bodyAdj.restFactor, circuit: !!bodyAdj.circuit,
     intentionText: goal ? `Avancer vers « ${goalLabel(goal)} »` : light ? 'Séance légère : technique, mobilité, travail doux' : mode === 'strengths' ? 'Faire progresser tes points forts' : 'Travailler tes axes de progrès',
   };
   if (!isClimbing(activityId)) {
@@ -314,8 +320,10 @@ export function generateFromPlan(plan, ctx) {
     const coolIds = plan.light ? ['cd-breath', 'mob-hips'] : (COOL[plan.activityId] || COOL.custom);
     const warm = B.warm <= 2 ? buildBlock([warmIds.find((id) => byId(id).mode === 'time') || warmIds[0]].filter(Boolean), 'warmup', B.warm, targets) : buildBlock(warmIds, 'warmup', B.warm, targets);
     const cool = B.cool ? buildBlock(coolIds, 'cool', B.cool, targets) : [];
+    // Repos adaptés au profil : plus longs si la forme est basse, courts en circuit (objectif perte de poids).
+    for (const it of items) { if (plan.restFactor && plan.restFactor !== 1) it.ex.rest = Math.round((it.ex.rest || 60) * plan.restFactor); if (plan.circuit) it.ex.rest = Math.min(it.ex.rest || 45, 45); }
     exercises = [...warm, ...items.map((i) => i.ex), ...cool];
-    why.push(...items.map((i) => `${i.lib.name} : ${i.ex.why}.`));
+    why.push(...items.map((i) => `${i.lib.name} : ${i.ex.why}.`), ...(plan.bodyReasons || []));
     if (plan.light) why.push('Mode léger : uniquement des exercices à faible intensité (technique, mobilité, travail doux). Ce n’est pas un avis médical.');
   }
   for (const d of plan.distribution) { const st = capacityState(d.capId, ctx); for (const m of st.missing.slice(0, 1)) missing.push(`${d.label} : ${m}`); }
@@ -329,7 +337,7 @@ export function generateFromPlan(plan, ctx) {
       { title: 'Pourquoi cette séance', text: [plan.intentionText + '.', ...why].join('\n') },
       { title: 'Sécurité', text: 'Stoppe au moindre signal de douleur aiguë. Ces séances suivent des principes d’entraînement courants : elles ne remplacent ni un coach ni un avis médical.' },
     ],
-    explain: { facts, inferences, missing: [...new Set(missing)], excluded: excludedTxt },
+    explain: { facts, inferences: [...inferences, ...(plan.bodyReasons || [])], missing: [...new Set(missing)], excluded: excludedTxt },
     exercises, createdAt: now, updatedAt: now,
   });
   return { session, meta: { plan, why, explain: session.explain, level: estimateLevel(session) } };

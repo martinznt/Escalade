@@ -453,3 +453,8 @@ html[data-vibe=neon][data-mode=dark] .btn.pri{box-shadow:0 0 18px color-mix(in s
 .swc.cur{width:32px;height:32px;font-size:.95rem}
 .editbar h2{margin:0}
 .editdock .btn{padding:8px 12px;font-size:.88rem;white-space:nowrap}
+
+/* ═════════ Mon corps ═════════ */
+.bodyf{display:grid;gap:10px}.bodyf .grid3{gap:8px}.bnum{display:grid;gap:4px;font-size:.85rem}.bnum .unitbox input{width:100%}
+.chips.fit .chip{font-size:.85rem}
+@media(max-width:420px){.bodyf .grid3{grid-template-columns:1fr 1fr 1fr}}

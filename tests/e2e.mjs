@@ -166,6 +166,20 @@ await step('coach : question en un toucher, réponse affichée', async () => {
   await a.click('.chat [data-act=chatIdea]'); await A.waitForSelector('.msg.assistant:not(.typing)', { timeout: 10000 });
   assert.match(await a.text('.msg.assistant'), /Conseil du coach/); await a.click('#sheet .back'); await a.tab('profile');
 });
+await step('mon corps et mes objectifs : profil corporel, objectifs multiples, objectif écrit', async () => {
+  await a.tab('profile'); await a.click('[data-act=profSub][data-id=body]'); await A.waitForSelector('.bodyf');
+  await A.fill('.bodyf input[data-k=age]', '34'); await A.press('.bodyf input[data-k=age]', 'Tab'); await A.waitForTimeout(200);
+  await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); await A.waitForSelector('text=vite essoufflé');
+  await a.click('[data-act=weighIn]'); await A.fill('#sheet input[name=kg]', '71.5'); await a.click('#sheet button[type=submit]'); await A.waitForSelector('text=71.5 kg');
+  await a.click('[data-act=profSub][data-id=goals]'); await a.click('[data-act=goalsToggle][data-id=poids]'); await a.click('[data-act=goalsToggle][data-id=climb]');
+  await A.waitForSelector('[data-act=goalsToggle][data-id=poids].on');
+  await a.click('[data-act=goalWrite]'); await A.fill('#sheet textarea[name=text]', 'Courir 10 km sans m’arrêter'); await a.click('#sheet button[type=submit]');
+  await A.waitForSelector('#sheet [data-act=goalAiSave]', { timeout: 15000 }); assert.match(await a.text('#sheet'), /Endurance/i);
+  await a.click('#sheet [data-act=goalAiSave]'); await A.waitForSelector('text=Courir 10 km');
+  await poll(async () => { const it = (await a.api('GET', '/api/items?since=0')).data.items; return it.some((i) => i.c === 'config' && i.id === 'body' && i.d.age === 34 && i.d.breath === 'souvent') && it.some((i) => i.c === 'config' && i.id === 'main' && (i.d.goals || []).includes('poids')); }, 12000, 'profil corporel et objectifs sur le serveur');
+  await a.click('[data-act=profSub][data-id=body]'); await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); // on remet comme avant pour la suite
+  await a.click('[data-act=profSub][data-id=goals]'); await a.click('[data-act=goalsToggle][data-id=poids]');
+});
 await step('objectif complexe : front lever (arbre, blocages, chemins)', async () => {
   await a.sub('profSub', 'goals'); await a.click('[data-act=goalNewSkill][data-id=front_lever]');
   await A.waitForSelector('text=Capacités requises');

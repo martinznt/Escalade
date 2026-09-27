@@ -169,6 +169,7 @@ export const METRICS = {
   nage_100: M('100 m nage libre : temps', 's', 'time', { vitesse: 0.6, technique_nage: 0.5 }, ['swimming'], { dir: -1, tiers: [120, 85] }),
   nage_400: M('400 m nage libre : temps', 's', 'time', { endurance_aerobie: 0.6, technique_nage: 0.6 }, ['swimming'], { dir: -1, tiers: [540, 390] }),
   nage_continue: M('Distance nagée sans arrêt', 'm', 'distance', { endurance_aerobie: 0.9, technique_nage: 0.3 }, ['swimming'], { tiers: [400, 1500] }),
+  body_weight: M('Poids du corps', 'kg', 'load', {}, ['strength', 'conditioning', 'running', 'swimming', 'climbing_boulder', 'climbing_route'], { dir: -1 }),
   max_bloc: M('Niveau max en bloc', '', 'grade', { force_doigts: 0.5, technique_escalade: 0.5, puissance_haut: 0.4 }, ['climbing_boulder'], { gradeActivity: 'bloc' }),
   max_voie: M('Niveau max en voie', '', 'grade', { endurance_doigts: 0.6, technique_escalade: 0.6 }, ['climbing_route'], { gradeActivity: 'voie' }),
 };

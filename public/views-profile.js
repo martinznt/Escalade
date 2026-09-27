@@ -10,15 +10,18 @@ import { understandProfile, profileCapacities, strengthsWeaknesses, capacityStat
 import { anatomySvg } from './anatomy.js';
 import { openGenerator } from './views-library.js';
 import { vCarnet } from './views-climb.js';
+import { bodyFields, bodyToggle, cleanBody, bodyAdjust } from './body.js';
+import { GOALS, INTENT_OF } from './views-setup.js';
+import { profileSummary } from './views-coach.js';
 import { byId } from './library.js';
 
-const SUBS = [['understand', 'Ce que l’app sait'], ['map', 'Ma carte'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
-const TILES = { understand: ['🔎', 'Ce que l’app sait', 'et comment'], map: ['🗺️', 'Ma carte', 'mes capacités'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
+const SUBS = [['body', 'Mon corps'], ['understand', 'Ce que l’app sait'], ['map', 'Ma carte'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Ce que l’app sait', 'et comment'], map: ['🗺️', 'Ma carte', 'mes capacités'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
   climbing: ['🧗', 'Carnet', 'blocs, voies, projets'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['🧰', 'Matériel', 'lieux, équipement'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
   if (sub === 'home') return vHub();
-  const views = { understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(vClimbAdvanced()), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
+  const views = { body: vBody, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(vClimbAdvanced()), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
   const [ic, title] = TILES[sub];
   return h`<div class="row subhead"><button class="btn sm ghost" data-act="profSub" data-id="home" aria-label="Retour au profil">‹ Profil</button><h1 class="grow">${ic} ${title}</h1></div>
     <div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
@@ -255,11 +258,84 @@ function vGoals() {
   const c = ctx();
   if (S.param) { const g = c.goals.find((x) => x.id === S.param); if (g) return vGoalDetail(g); }
   const list = c.goals.filter((g) => (S.filters.goals || 'active') === 'all' || (g.status || 'active') === (S.filters.goals || 'active'));
-  return h`<div class="row wrapf"><button class="btn pri" data-act="goalNew">＋ Objectif</button></div>
+  return h`${goalsPicker()}<div class="row wrapf"><button class="btn pri" data-act="goalNew">＋ Objectif précis</button></div>
     <div class="chips">${[['active', 'Actifs'], ['done', 'Atteints'], ['archived', 'Archivés'], ['all', 'Tous']].map(([k, l]) => chip((S.filters.goals || 'active') === k, l, `data-act="goalFilter" data-id="${k}"`))}</div>
     ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…')}
     <div class="card flat"><h3>Figures proposées</h3><div class="chips">${Object.entries(SKILLS).map(([id, s]) => chip(false, `${s.emoji} ${s.label}`, `data-act="goalNewSkill" data-id="${id}"`))}</div></div>`;
 }
+/* ═════════ Mon corps ═════════ */
+function vBody() {
+  const b = item('config', 'body') || {}, c = ctx(), goals = item('config', 'main')?.goals || [];
+  const weights = c.perfs.filter((p) => p.metricId === 'body_weight' && Number.isFinite(p.value)).sort((x, y) => x.date - y.date);
+  const adj = bodyAdjust(b, goals);
+  return h`<section class="card">${bodyFields(b, { act: 'bodySet', inp: 'bodyIn', onChange: true })}</section>
+    <section class="card"><div class="row between"><h3>⚖️ Mon poids</h3><button class="btn sm pri" data-act="weighIn">＋ Pesée</button></div>
+      ${weights.length >= 2 ? lineChart(weights.slice(-30).map((p) => ({ v: p.value, t: p.date })), 'kg') : ''}
+      ${weights.length ? h`<p class="small">Dernière pesée : <b>${weights.at(-1).value} kg</b> (${fmtDay(weights.at(-1).date)})${weights.length >= 2 ? h` · ${(() => { const d = Math.round((weights.at(-1).value - weights[0].value) * 10) / 10; return d > 0 ? `+${d} kg` : `${d} kg`; })()} depuis le ${fmtDay(weights[0].date)}` : ''}</p>` : h`<p class="small muted">Note ton poids de temps en temps (même heure, même conditions) pour voir la tendance.</p>`}</section>
+    <section class="card"><h3>Ce que ça change dans tes séances</h3>${adj.reasons.length ? h`<ul class="small">${adj.reasons.map((r) => h`<li>${r}</li>`)}</ul>` : h`<p class="small muted">Rien de spécial : les séances suivent ton niveau et tes objectifs.</p>`}</section>`;
+}
+const saveBody = (b) => { const clean = cleanBody(b); putItem('config', 'body', Object.fromEntries(Object.entries({ ...(item('config', 'body') || {}), ...clean }).filter(([k, v]) => v !== undefined || !(k in clean)).map(([k, v]) => [k, v ?? null]).filter(([, v]) => v !== null))); };
+ACT.bodySet = (el) => { saveBody(bodyToggle(item('config', 'body') || {}, el.dataset.k, el.dataset.v)); render(); };
+CHG.bodyIn = (el) => {
+  const b = { ...(item('config', 'body') || {}), [el.dataset.k]: el.value }; saveBody(b);
+  if (el.dataset.k === 'weight' && cleanBody(b).weight) putItem('perf', 'bw-' + new Date().toISOString().slice(0, 10), { metricId: 'body_weight', value: cleanBody(b).weight, unit: 'kg', date: Date.now(), source: 'declared', note: 'Profil › Mon corps' });
+  toast('Enregistré'); render();
+};
+ACT.weighIn = () => openSheet(h`<form data-submit="weighSave" class="stack"><h2 style="margin:0">⚖️ Pesée du jour</h2><label>Poids<span class="unitbox"><input type="number" name="kg" step="0.1" min="25" max="300" inputmode="decimal" required autofocus><em>kg</em></span></label><button class="btn pri" type="submit">Enregistrer</button></form>`);
+SUBMIT.weighSave = (f) => { const kg = cleanBody({ weight: new FormData(f).get('kg') }).weight; if (!kg) return toast('Poids invalide.'); putItem('perf', 'bw-' + new Date().toISOString().slice(0, 10), { metricId: 'body_weight', value: kg, unit: 'kg', date: Date.now(), source: 'declared', note: 'Pesée' }); putItem('config', 'body', { ...(item('config', 'body') || {}), weight: kg }); closeSheet(); toast('Pesée enregistrée'); render(); };
+
+/* ═════════ Objectifs du moment (plusieurs) et objectif écrit, analysé par l'assistant ═════════ */
+function goalsPicker() {
+  const cur = item('config', 'main')?.goals || (item('config', 'main')?.goal ? [item('config', 'main').goal] : []);
+  return h`<section class="card"><h3>Ce que je veux en ce moment</h3><div class="chips">${GOALS.map(([k, l]) => chip(cur.includes(k), l, `data-act="goalsToggle" data-id="${k}"`))}</div>
+    <button class="btn" data-act="goalWrite">✍️ Écrire mon objectif avec mes mots</button></section>`;
+}
+ACT.goalsToggle = (el) => {
+  const m = item('config', 'main') || {}, cur = new Set(m.goals || (m.goal ? [m.goal] : [])), k = el.dataset.id;
+  if (cur.has(k)) cur.delete(k); else cur.add(k);
+  const goals = [...cur].slice(0, 8);
+  putItem('config', 'main', { ...m, goals, goal: goals[0] || '', intent: INTENT_OF[goals[0]] || '' }); render();
+};
+ACT.goalWrite = () => openSheet(h`<form data-submit="goalAi" class="stack"><h2 style="margin:0">✍️ Mon objectif</h2>
+  <p class="small muted">Écris-le comme tu le dirais à un coach. L’assistant le transforme en objectif suivi (capacités à travailler, mesure, étapes), selon ton profil. Tu relis avant d’enregistrer.</p>
+  <textarea name="text" maxlength="300" rows="3" required placeholder="Ex. « Enchaîner le 6c du dévers avant l’été » ou « Courir 10 km sans m’arrêter »"></textarea>
+  <button class="btn pri" type="submit">Analyser</button></form>`);
+SUBMIT.goalAi = async (f) => {
+  const text = String(new FormData(f).get('text') || '').trim(); if (text.length < 3) return;
+  openSheet(h`<div class="stack"><h2 style="margin:0">✍️ Mon objectif</h2><p class="small">« ${text} »</p>${skeleton(2)}</div>`);
+  let d = null, why = '';
+  try { d = (await api('POST', '/api/ai/goal', { text, profile: profileSummary() }, { timeout: 45000 })).goal; }
+  catch (e) { why = e.guest ? 'Crée un compte pour utiliser l’assistant.' : e.status === 503 ? 'Assistant indisponible pour le moment.' : e.message; }
+  if (!d) d = localGoal(text);
+  S.goalDraft = d;
+  openSheet(h`<div class="stack"><h2 style="margin:0">🎯 ${d.label}</h2>${why ? h`<p class="tiny warn-t">${why} Proposition faite sans l’assistant, à partir des mots de ton objectif.</p>` : ''}
+    ${d.summary ? h`<p class="small">${d.summary}</p>` : ''}
+    ${d.caps.length ? h`<b class="small">À travailler</b><div class="chips">${d.caps.map((c) => h`<span class="chip static">${capL(c.id)}</span>`)}</div>` : ''}
+    ${d.steps?.length ? h`<b class="small">Étapes</b><ol class="small">${d.steps.map((s) => h`<li>${s}</li>`)}</ol>` : ''}
+    ${d.metricId ? h`<p class="small">Mesure suivie : <b>${METRICS[d.metricId]?.label}</b>${d.target != null ? ` · cible ${d.target} ${METRICS[d.metricId]?.unit || ''}` : ''}</p>` : ''}
+    ${d.weeks ? h`<p class="small muted">Durée conseillée : environ ${d.weeks} semaines.</p>` : ''}
+    <div class="row wrapf"><button class="btn pri" data-act="goalAiSave">Ajouter cet objectif</button><button class="btn" data-act="goalWrite">Reformuler</button></div></div>`, { wide: true });
+};
+/** Sans assistant : mots-clés → capacités (aucune valeur inventée). */
+function localGoal(text) {
+  const t = text.toLowerCase(), caps = [];
+  const add = (id, w) => { if (CAPACITIES[id] && !caps.some((c) => c.id === id)) caps.push({ id, w }); };
+  if (/doigt|réglette|arqu|bloc|voie|grimp|escalad/.test(t)) { add('force_doigts', 0.8); add('technique_escalade', 0.7); }
+  if (/pied|placement|dalle/.test(t)) add('technique_pieds', 0.9);
+  if (/traction|tirer|dos/.test(t)) add('tirage_vertical', 0.9);
+  if (/pompe|pousser|pec/.test(t)) add('poussee_horizontale', 0.9);
+  if (/cour|km|footing|marathon|souffle|cardio|endurance/.test(t)) { add('endurance_aerobie', 1); add('seuil', 0.5); }
+  if (/souple|grand écart|mobilit|étire/.test(t)) { add('mobilite_hanches', 0.9); add('mobilite_epaules', 0.6); }
+  if (/gainage|abdo|planche|front lever/.test(t)) add('gainage_anterieur', 0.9);
+  if (/poids|maigr|mincir|kilos/.test(t)) { add('endurance_aerobie', 0.9); add('force_jambes', 0.5); }
+  return { label: text.slice(0, 80), summary: '', caps: caps.slice(0, 5), steps: [], metricId: /poids|kilos|maigr/.test(t) ? 'body_weight' : '', target: null, weeks: 0 };
+}
+ACT.goalAiSave = () => {
+  const d = S.goalDraft; if (!d) return;
+  const id = 'g-' + uid().slice(0, 12);
+  putItem('goal', id, { type: d.metricId ? 'metric' : 'custom', label: d.label, metricId: d.metricId || '', target: d.target ?? null, current: null, unit: d.metricId ? METRICS[d.metricId]?.unit || '' : '', caps: d.caps.map((c) => ({ id: c.id, w: c.w })), status: 'active', startedAt: Date.now(), deadline: d.weeks ? new Date(Date.now() + d.weeks * 7 * 86400000).toISOString().slice(0, 10) : '', note: (d.steps || []).join(' · ').slice(0, 300) });
+  S.goalDraft = null; closeSheet(); toast('Objectif ajouté'); go('profile', 'goals', id);
+};
 ACT.goalFilter = (el) => { S.filters.goals = el.dataset.id; render(); };
 ACT.goalNew = () => openSheet(goalForm(null), { wide: true });
 ACT.goalNewSkill = (el) => { closeSheet(); const s = SKILLS[el.dataset.id]; const ex = ctx().goals.find((g) => g.skillId === el.dataset.id && g.status === 'active'); if (ex) { go('profile', 'goals', ex.id); return; } const id = 'g-' + uid().slice(0, 12); putItem('goal', id, { type: 'skill', skillId: el.dataset.id, label: s.label, status: 'active', startedAt: Date.now() }); toast(`Objectif « ${s.label} » créé`); go('profile', 'goals', id); };

@@ -53,7 +53,7 @@ function wizard() {
 }
 ACT.progNew = () => {
   const cfg = item('config', 'main') || {}, per = Math.max(1, Math.min(6, Number(cfg.perWeek) || 3));
-  const goal = { climb: 'climb', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: 'forme' }[cfg.goal] || 'forme';
+  const goal = { climb: 'climb', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: 'forme', poids: 'poids', sante: 'forme' }[cfg.goal] || 'forme';
   S.pw = { goal, goalId: '', weeks: 6, days: defaultDays(per), minutes: Number(cfg.durations?.[0]) || S.settings.defaultMinutes || 45, start: ymd(Date.now()) };
   if (![20, 30, 45, 60, 90].includes(S.pw.minutes)) S.pw.minutes = 45;
   openSheet(wizard(), { wide: true });

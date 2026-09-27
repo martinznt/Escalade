@@ -78,7 +78,7 @@ export const SCHEMAS = {
   },
   // Programme sur plusieurs semaines : calendrier des séances (générées au moment de les faire).
   program: {
-    name: ['s', 80], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'goal'], 'forme'], goalId: ['id'], activityId: ['s', 40],
+    name: ['s', 80], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'poids', 'goal'], 'forme'], goalId: ['id'], activityId: ['s', 40],
     weeks: ['n', 1, 24, 6], perWeek: ['n', 1, 7, 3], days: ['strs', 7, 1], minutes: ['n', 10, 180, 45], start: ['day'], status: ['e', ['active', 'done', 'stopped'], 'active'],
     sessions: ['list', { i: ['n', 0, 999, 0], week: ['n', 1, 24, 1], date: ['day'], phase: ['e', ['build', 'deload', 'test'], 'build'], light: ['b'], boost: ['n', 0, 3, 0], minutes: ['n', 10, 180, 45] }, 170],
   },
@@ -110,11 +110,15 @@ export const SCHEMAS = {
   config: {
     blocks: ['strs', 20, 30], envId: ['id'], durations: ['strs', 10, 10], unavailable: ['ids', 40],
     // Premiers pas (questionnaire de profil, visite guidée) : réponses déclarées par l'utilisateur.
-    perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', ''], ''], intent: ['s', 30],
+    perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', 'poids', 'sante', ''], ''], intent: ['s', 30],
     setupDone: ['b'], asked: ['strs', 30, 30],
     // Apparence choisie (item « appearance ») : suit le compte sur tous les appareils.
     mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], shape: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
     vibe: ['s', 20],
+    // Objectifs (plusieurs) et profil corporel (item « body ») : déclarés, tous facultatifs.
+    goals: ['strs', 8, 20], age: ['n', 8, 100, null], height: ['n', 100, 230, null], weight: ['n', 25, 300, null], sex: ['e', ['f', 'h', 'x', ''], ''],
+    shape: ['e', ['mince', 'athletique', 'moyen', 'costaud', 'rond', ''], ''], muscled: ['strs', 8, 20], fitness: ['n', 1, 5, null],
+    breath: ['e', ['jamais', 'effort', 'escaliers', 'souvent', ''], ''], daily: ['e', ['assis', 'debout', 'physique', ''], ''],
     // Mise en page personnalisée (item « layout ») : JSON validé à la lecture (layout.js).
     lay: ['s', 9000],
   },
