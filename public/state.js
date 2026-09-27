@@ -17,9 +17,9 @@ import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
 import { toast, tz, $ } from './ui.js';
 
-export const APP_VERSION = '8.4.1';
+export const APP_VERSION = '8.7.0';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
-export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {} };
+export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr', notifSound: 'doux' };
 export const S = {
   user: null, tab: 'home', sub: { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }, param: '',
   settings: { ...DEFAULT_SETTINGS }, seances: { items: [], tomb: {} }, seancesDirty: false, seancesVer: 0,
@@ -186,8 +186,11 @@ export function restoreConflict(i) {
 }
 async function syncItems() {
   const dirty = [...S.dirtyItems].map((k) => S.items.get(k)).filter(Boolean);
-  for (let i = 0; i < dirty.length; i += 200) {
-    const chunk = dirty.slice(i, i + 200).map((x) => ({ ...x }));
+  // Envois de 200 éléments au plus et d'environ 600 Ko au plus (les photos de voies sont plus lourdes).
+  const chunks = []; let cur = [], size = 0;
+  for (const x of dirty) { const n = JSON.stringify(x).length; if (cur.length && (cur.length >= 200 || size + n > 600000)) { chunks.push(cur); cur = []; size = 0; } cur.push({ ...x }); size += n; }
+  if (cur.length) chunks.push(cur);
+  for (const chunk of chunks) {
     const r = await api('POST', '/api/items', { changes: chunk });
     for (const a of r.applied || []) { const k = itemKey(a.c, a.id), cur = S.items.get(k); if (cur && cur.u === a.u) S.dirtyItems.delete(k); }
     for (const c of r.conflicts || []) {

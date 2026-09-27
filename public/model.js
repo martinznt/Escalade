@@ -76,6 +76,13 @@ export const EQUIPMENT = {
   band: 'Élastique', rings: 'Anneaux', barbell: 'Barre et disques', kettlebell: 'Kettlebell', bench: 'Banc', pole: 'Espalier / poteau',
   box: 'Box / marche', rope: 'Corde à sauter', mat: 'Tapis de sol', machine: 'Machines de musculation', pool: 'Bassin de natation',
   pullbuoy: 'Pull-buoy / planche', track: 'Piste / terrain', hill: 'Côte', treadmill: 'Tapis de course',
+  campus: 'Campus board', boardwall: 'Mur à prises connectées (Moon, Kilter, Tension)', spraywall: 'Pan d’entraînement', autobelay: 'Enrouleurs (auto-assureurs)', leadwall: 'Mur de voies en tête', topwall: 'Voies en moulinette',
+};
+/** Espaces d'une salle d'escalade, avec le matériel qu'on y trouve souvent (on coche ce qui existe vraiment). */
+export const GYM_AREAS = {
+  bloc: ['🪨', 'Espace bloc', ['wall', 'mat']], voie: ['🧗', 'Mur de voies', ['leadwall', 'topwall', 'autobelay']],
+  entrainement: ['🏋️', 'Espace entraînement', ['hangboard', 'campus', 'boardwall', 'spraywall', 'bar', 'rings', 'band']], muscu: ['💪', 'Musculation', ['weights', 'kettlebell', 'barbell', 'bench', 'dips', 'box']],
+  etirement: ['🧘', 'Étirements', ['mat', 'band', 'rope']],
 };
 export const ENV_TYPES = { maison: 'Maison', salle: 'Salle de sport', exterieur: 'Extérieur', escalade: 'Salle d’escalade', piscine: 'Piscine', piste: 'Piste / terrain', autre: 'Autre' };
 // Modèles proposés à la création d'un environnement (l'utilisateur coche ensuite son matériel réel).
@@ -169,6 +176,7 @@ export const METRICS = {
   nage_100: M('100 m nage libre : temps', 's', 'time', { vitesse: 0.6, technique_nage: 0.5 }, ['swimming'], { dir: -1, tiers: [120, 85] }),
   nage_400: M('400 m nage libre : temps', 's', 'time', { endurance_aerobie: 0.6, technique_nage: 0.6 }, ['swimming'], { dir: -1, tiers: [540, 390] }),
   nage_continue: M('Distance nagée sans arrêt', 'm', 'distance', { endurance_aerobie: 0.9, technique_nage: 0.3 }, ['swimming'], { tiers: [400, 1500] }),
+  body_weight: M('Poids du corps', 'kg', 'load', {}, ['strength', 'conditioning', 'running', 'swimming', 'climbing_boulder', 'climbing_route'], { dir: -1 }),
   max_bloc: M('Niveau max en bloc', '', 'grade', { force_doigts: 0.5, technique_escalade: 0.5, puissance_haut: 0.4 }, ['climbing_boulder'], { gradeActivity: 'bloc' }),
   max_voie: M('Niveau max en voie', '', 'grade', { endurance_doigts: 0.6, technique_escalade: 0.6 }, ['climbing_route'], { gradeActivity: 'voie' }),
 };

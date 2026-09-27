@@ -281,7 +281,7 @@ await ok('profil public : seuls les éléments choisis sont publiés', async () 
   const v = (await new Client(env).get('/api/public/u/alice')).data.person;
   assert.equal(v.bio, 'Grimpeuse'); assert.equal(v.perfs.length, 1); assert.equal(v.perfs[0].text, '12 reps'); assert.equal(v.goals[0].label, 'Front lever');
   assert.equal(v.stats, null); assert.equal(v.records, null);
-  assert.ok(!JSON.stringify(v).includes('40'), 'performance non choisie absente');
+  assert.ok(!/pompes|40 reps|"pp2"/i.test(JSON.stringify(v)), 'performance non choisie absente'); // (pas « 40 » seul : une date peut le contenir)
 });
 await ok('séance publique : lisible et copiable, modifiable par son seul auteur', async () => {
   const r = await A.post('/api/shared', { scope: 'public', session: { ...session, id: 'x' }, title: 'Ma séance publique' });

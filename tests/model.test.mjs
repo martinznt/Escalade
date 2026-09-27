@@ -50,21 +50,24 @@ await ok('styles d’escalade structurés (identifiants, activité)', () => { as
 console.log('Schéma des données (items)');
 const SAMPLES = {
   activity: { label: 'Tennis', emoji: '🎾', preset: '', aliases: ['tennis'], archived: false },
-  category: { activityId: 'custom-1', label: 'Service', description: 'd', caps: [{ id: 'explosivite', w: 0.5 }], archived: false, emoji: '🎾', guide: 'g', howTo: ['a'], source: 'ia' },
+  category: { activityId: 'custom-1', label: 'Service', description: 'd', caps: [{ id: 'explosivite', w: 0.5 }], archived: false, emoji: '🎾', guide: 'g', howTo: ['a'], source: 'ia' , kind: 'intent', side: ''},
   metric: { label: 'Service', unit: 'km/h', kind: 'pace', dir: 1, activityId: 'custom-1', caps: [{ id: 'cat-1', w: 1 }], gradeActivity: '', archived: false },
   perf: { metricId: 'max_bloc', unknown: false, unit: '', date: 1, source: 'measured', grade: { systemId: 'font', systemName: 'Font', levelId: 'l5', label: '6A', order: 5, total: 24, color: '#aabbcc' }, styles: ['st-dalle', 'st-u-x'], context: { env: 'e1', place: 'Salle', kind: 'salle' }, note: 'n', side: 'gauche' },
   goal: { type: 'grade', label: 'G', skillId: '', metricId: 'max_bloc', target: 3, current: 1, unit: '', gradeTarget: { systemId: 'font', systemName: 'F', levelId: 'l9', label: '6C', order: 9, total: 24, color: '' }, activityId: '', caps: [], status: 'done', deadline: '2026-12-31', startedAt: 1, doneAt: 2, note: '' },
-  ascent: { kind: 'voie', name: 'La voie', grade: { systemId: 'french', systemName: 'Fr', levelId: 'l10', label: '6a+', order: 10, total: 32, color: '' }, gradeText: '', result: 'work', attempts: 3, styles: ['st-devers'], styleText: '', date: 5, context: { env: '', place: '', kind: 'falaise' }, note: '' },
+  project: { kind: 'bloc', name: 'Le toit', grade: { systemId: 'font', systemName: 'Font', levelId: 'l9', label: '6c', order: 9, total: 20, color: '' }, gradeText: '', place: 'Salle', status: 'active', tries: [{ date: 5, n: 3 }], holds: [{ x: 0.5, y: 0.25, t: 'depart' }], hasPhoto: true, startedAt: 5, doneAt: 0, note: '' },
+  program: { name: 'Force 6 sem.', goal: 'force', goalId: '', activityId: 'strength', weeks: 6, perWeek: 3, days: ['0', '2', '4'], minutes: 45, start: '2026-09-28', status: 'active', sessions: [{ i: 0, week: 1, date: '2026-09-28', phase: 'build', light: false, boost: 0, minutes: 45 }] },
+  photo: { data: 'data:image/jpeg;base64,AAAA', w: 480, h: 640 },
+  ascent: { kind: 'voie', name: 'La voie', grade: { systemId: 'french', systemName: 'Fr', levelId: 'l10', label: '6a+', order: 10, total: 32, color: '' }, gradeText: '', result: 'work', attempts: 3, styles: ['st-devers'], styleText: '', date: 5, context: { env: '', place: '', kind: 'falaise' }, note: '', nuance: 'dur' },
   gradesys: { name: 'U', activity: 'bloc', kind: 'colors', levels: [{ id: 'lv1', label: 'Jaune', color: '#ffee00', order: 0 }], maps: [{ levelId: 'lv1', ref: 'font', refLevel: '4' }], archived: true },
   style: { label: 'Arête', activity: 'climbing', archived: true },
-  env: { name: 'Maison', type: 'maison', equipment: ['bar'], isDefault: true, archived: false },
+  env: { name: 'Maison', type: 'maison', equipment: ['bar'], isDefault: true, archived: false , city: 'Montreuil', gradeSys: 'gs-1', areas: [{ id: 'entrainement', items: ['hangboard', 'campus'], note: 'au fond' }]},
   pref: { key: 'tractions', label: 'Tractions', value: 'evite', source: 'habit', reason: 'r' },
   capdecl: { capId: 'force_doigts', level: -1, note: '' },
   lab: { title: 'L', hypothesis: 'h', goalId: 'g', capId: 'c', metricId: 'm', startDate: '2026-01-01', weeks: 4, before: { value: 1, note: '', date: 0 }, after: { value: 2, note: '', date: 0 }, status: 'done', conclusion: 'c' },
   jnote: { date: 1, text: 'note' },
   swap: { from: 'Pompes', to: 'Dips', date: 1, where: 'player' },
   habit: { key: 'swap:pompes', decision: 'accepted' },
-  config: { blocks: ['today', 'records'], envId: 'e1', durations: ['20'], unavailable: ['bar'], perWeek: 3, climbPerWeek: 2, goal: 'force', intent: 'force', setupDone: true, asked: ['bloc'], mode: 'dark', palette: 'granit', accent: 'x', shape: 'squircle', radius: 'soft', size: 'm', density: 'normal', motion: 'on', setupLater: 5, setupHidden: false, tourDone: true },
+  config: { blocks: ['today', 'records'], envId: 'e1', durations: ['20'], unavailable: ['bar'], perWeek: 3, climbPerWeek: 2, goal: 'force', intent: 'force', setupDone: true, asked: ['bloc'], mode: 'dark', palette: 'granit', accent: 'x', shape: 'squircle', radius: 'soft', size: 'm', density: 'normal', motion: 'on', setupLater: 5, setupHidden: false, tourDone: true , vibe: 'muscu', lay: '{"home":[]}', goals: ['poids', 'climb'], age: 34, height: 178, weight: 72.5, sex: 'x', shape: 'athletique', muscled: ['dos', 'avantbras'], fitness: 4, breath: 'effort', daily: 'assis'},
 };
 await ok('chaque collection a un échantillon testé', () => assert.deepEqual(Object.keys(SAMPLES).sort(), [...COLLECTIONS].sort()));
 await ok('aller-retour exact de chaque collection (aucune clé utile supprimée par la liste blanche)', () => {

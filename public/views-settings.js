@@ -7,15 +7,20 @@ import { cleanItem, itemKey } from './items.js';
 import { parseCSV, proposeMapping, checkMapping, proposeMetricMap, buildImport, TARGETS, MAX_CSV_BYTES } from './csv.js';
 import { describeOp } from './outbox.js';
 import { installCard, openSetup, showTour } from './views-setup.js';
+import { SOUND_STYLES, beep } from './sound.js';
+import { remindersCard } from './reminders.js';
+import { vSources } from './views-catalog.js';
+import { CAPACITIES, ACTIVITIES } from './model.js';
 
-export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion'];
+export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
+export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
-const SUBS = [['main', '⭐ Essentiel'], ['help', '❓ Aide'], ['data', '💾 Mes données'], ['sync', '🔄 Synchronisation'], ['bug', '🐞 Signaler un bug'], ['admin', '🛡️ Admin']];
+const SUBS = [['main', '⭐ Essentiel'], ['notifs', '🔔 Notifications'], ['help', '❓ Aide'], ['data', '💾 Mes données'], ['sync', '🔄 Synchronisation'], ['bug', '🐞 Signaler un bug'], ['admin', '🛡️ Admin']];
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
 export function vSettings() {
   const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin'].includes(k)) : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, help: vHelp, data: vData, sync: vSync, admin: vAdmin, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   return h`<h1>Paramètres</h1><div class="scrollx">${seg('setSub', sub, subs)}</div>${views[sub]()}`;
 }
 ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug' && !S.user?.guest) loadMyBugs(); };
@@ -34,14 +39,23 @@ function vMain() {
   return h`${account}
     <div class="card"><h3>🎨 Affichage</h3>
       <label>Thème</label>${segA('mode', [['dark', '🌙 Sombre'], ['light', '☀️ Clair'], ['auto', '🔁 Comme mon téléphone']])}
-      <label>Couleur</label><div class="palette">${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${a.palette === id ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appear" data-k="palette" data-v="${id}"></button>`)}</div>
+      <label>Ambiance</label><div class="vibes">${VIBES.map(([id, n, d]) => h`<button type="button" class="vibe ${(a.vibe || 'classique') === id ? 'on' : ''}" data-act="appear" data-k="vibe" data-v="${id}" data-vibe-preview="${id}"><span class="vprev"><i></i><i></i><i></i></span><b>${n}</b><small>${d}</small></button>`)}</div>
+      <label>Couleur</label><div class="palette">${(a.vibe || 'classique') !== 'classique' ? h`<button type="button" class="sw none ${a.accent ? '' : 'on'}" title="Couleur de l’ambiance" aria-label="Couleur de l’ambiance" data-act="appearColor" data-v="">∅</button>` : ''}${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${((a.vibe || 'classique') === 'classique' ? a.palette === id && !a.accent : a.accent === c) ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appearColor" data-id="${id}" data-v="${c}"></button>`)}</div>
       <label>Taille du texte</label>${segA('size', [['s', 'Petit'], ['m', 'Normal'], ['l', 'Grand'], ['xl', 'Très grand']])}
+      ${tog(['season', '🍂 Décor de saison sur l’accueil (neige, fleurs, feuilles…)'])}
+      <label>Langue<select data-change="pref" name="lang"><option value="fr" ${st.lang !== 'en' ? 'selected' : ''}>Français</option><option value="en" ${st.lang === 'en' ? 'selected' : ''}>English (beta)</option></select></label>
       <details class="how mini"><summary>Plus d’options d’affichage</summary><label>Espacement</label>${segA('density', [['compact', 'Serré'], ['normal', 'Normal'], ['airy', 'Aéré']])}<label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</details></div>
+    <div class="card"><h3>✏️ Mise en page</h3><p class="small muted">Choisis ce qui s’affiche, en grand ou en petite icône en haut, dans quel ordre et de quelle couleur. Le ✏️ en haut de chaque page fait pareil.</p>
+      <div class="row wrapf"><button class="btn" data-act="layEditAt" data-to="home/dash">Accueil</button><button class="btn" data-act="layEditAt" data-to="progress/summary">Progrès</button><button class="btn" data-act="layEditAt" data-to="library/seances">Bibliothèque</button><button class="btn" data-act="layEditAt" data-to="profile/home">Profil</button></div>
+      <button class="btn ghost" data-act="layReset" data-scope="all">Revenir à la mise en page de base partout</button></div>
     <div class="card"><h3>🧩 Mon profil sportif</h3><p class="small muted">Pour que l’app s’adapte à toi (sports, niveau, temps, matériel, objectif).</p>
       <div class="row wrapf"><button class="btn pri" data-act="setupAgain" data-id="quiz">Répondre aux questions</button><button class="btn" data-act="setupAgain" data-id="form">Remplir la fiche</button><button class="btn ghost" data-act="goProfile" data-id="understand">Voir mon profil</button></div></div>
     ${installCard({ force: true })}
     <div class="card"><h3>▶ Pendant la séance</h3>
-      ${[['sound', '🔔 Bips pour les chronos'], ['vibration', '📳 Vibration à la fin du repos'], ['keepAwake', '💡 Garder l’écran allumé'], ['voice', '🗣️ Lire les exercices à voix haute']].map(tog)}
+      ${[['voice', '🗣️ Coach vocal : il annonce les séries, le repos et le décompte'], ['sound', '🔔 Bips pour les chronos'], ['vibration', '📳 Vibration à la fin du repos'], ['keepAwake', '💡 Garder l’écran allumé'], ['autoWarm', '🔥 Ajouter un échauffement de 5 min à mes séances'], ['bigMode', '🔠 Grand affichage (touche l’écran pour valider)']].map(tog)}
+      <div class="grid2"><label>Son des bips<select data-change="pref" name="soundStyle">${SOUND_STYLES.map(([v, l]) => h`<option value="${v}" ${st.soundStyle === v ? 'selected' : ''}>${l}</option>`)}</select></label>
+      <label>Volume<input type="range" data-change="pref" name="volume" min="0" max="100" step="10" value="${st.volume ?? 60}"></label></div>
+      <button class="btn sm" data-act="soundTest">🔔 Écouter</button>
       <div class="grid2"><label>Repos par défaut<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest ?? 60}"><em>secondes</em></span></label>
       <label>Durée de séance habituelle<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultMinutes" min="5" max="240" value="${st.defaultMinutes ?? 30}"><em>min</em></span></label></div>
       <details class="how mini"><summary>Options avancées</summary>${[['handsFree', 'Mode mains libres (commandes vocales)'], ['autoBase', 'Proposer d’utiliser mes valeurs réalisées comme nouvelle base']].map(tog)}</details></div>
@@ -56,7 +70,7 @@ ACT.guestQuit = async () => {
 
 /* ═════════ Aide ═════════ */
 const FAQ = [
-  ['Comment faire ma première séance ?', 'Sur l’Accueil, touche « ✨ Me proposer une séance », choisis la durée, puis « Voir la simulation » et « Générer ». Touche ensuite ▶ pour commencer : l’écran te guide exercice par exercice.'],
+  ['Comment faire ma première séance ?', 'Sur l’Accueil, touche « 🎯 Séance du jour », choisis la durée, puis « Voir la simulation » et « Générer ». Touche ensuite ▶ pour commencer : l’écran te guide exercice par exercice.'],
   ['Comment l’app choisit mes exercices ?', 'Elle utilise ce que tu lui as dit (sports, niveau, matériel, zones à ménager), tes séances passées et tes mesures. Chaque séance générée a un encadré « Pourquoi cette séance ? » qui explique ses choix.'],
   ['Je ne connais pas mon niveau, c’est grave ?', 'Non. Réponds « Je ne sais pas » : l’app reste prudente et apprend avec tes séances. Tu peux faire des petits tests plus tard (Profil › Performances).'],
   ['Où sont mes séances enregistrées ?', 'Dans l’onglet 📚 Bibliothèque. L’historique de ce que tu as fait est dans 📈 Progrès › Historique.'],
@@ -66,13 +80,34 @@ const FAQ = [
   ['Un problème ?', 'Va dans « 🐞 Signaler un bug » et décris ce qui s’est passé : le message arrive directement à l’administrateur.'],
 ];
 function vHelp() {
-  return h`<div class="card"><h3>🧭 Visite guidée</h3><p class="small">Revois en 30 secondes à quoi sert chaque onglet.</p><div class="row wrapf"><button class="btn pri" data-act="helpTour">Lancer la visite</button><button class="btn" data-act="newsTour">✨ Revoir les nouveautés</button></div></div>
-    <div class="card"><h3>❓ Questions fréquentes</h3>${FAQ.map(([q, r]) => h`<details class="faq"><summary>${q}</summary><p class="small">${r}</p></details>`)}</div>`;
+  return h`<div class="card"><h3>🧭 Visite guidée</h3><p class="small">Revois en 30 secondes à quoi sert chaque onglet.</p><div class="row wrapf"><button class="btn pri" data-act="helpTour">Lancer la visite</button><button class="btn" data-act="newsTour">🆕 Revoir les nouveautés</button></div></div>
+    <div class="card"><h3>❓ Questions fréquentes</h3>${FAQ.map(([q, r]) => h`<details class="faq"><summary>${q}</summary><p class="small">${r}</p></details>`)}</div>${vSources()}`;
 }
 ACT.helpTour = () => showTour(0);
-CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); };
+ACT.soundTest = () => { beep(660, 120); setTimeout(() => beep(1040, 300), 350); };
+CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : Math.max(Number(el.min) || 0, Math.min(Number(el.max) || 600, Number(el.value) || 0)); saveSettings(); document.documentElement.classList.toggle('hands', !!S.settings.handsFree); if (el.name === 'lang') { render(); ACT.pRedraw?.(); } };
+function vNotifs() {
+  const st = S.settings;
+  return h`${remindersCard()}
+    <div class="card"><h3>🎵 Son dans l’app</h3><p class="small muted">Joué quand de nouvelles notifications arrivent pendant que l’app est ouverte. Le son des notifications du téléphone, lui, se règle dans les réglages du téléphone.</p>
+      <div class="row"><select data-change="pref" name="notifSound" class="grow">${[['aucun', 'Aucun'], ...SOUND_STYLES].map(([v, l]) => h`<option value="${v}" ${(st.notifSound || 'doux') === v ? 'selected' : ''}>${l}</option>`)}</select><button class="btn sm" data-act="notifSoundTest">Écouter</button></div></div>
+    <button class="btn" data-act="notifOpen">🔔 Ouvrir mes notifications</button>`;
+}
+ACT.notifSoundTest = () => { const v = S.settings.notifSound || 'doux'; if (v !== 'aucun') { beep(880, 160, v); setTimeout(() => beep(1175, 220, v), 220); } };
+/** Couleur : en ambiance « Classique », c'est la palette ; dans les autres ambiances, une couleur par-dessus (∅ = celle de l'ambiance). */
+ACT.appearColor = (el) => {
+  const a = window.__sea.load(), classic = (a.vibe || 'classique') === 'classique';
+  const patch = classic ? { palette: el.dataset.id || a.palette, accent: '' } : { accent: el.dataset.v || '' };
+  saveAppear({ ...a, ...patch });
+};
+function saveAppear(a) {
+  a = { ...a, _t: Date.now(), _owner: S.user?.id || '' };
+  window.__sea.save(a);
+  putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(a[k] ?? '') }), {}));
+  render();
+}
 ACT.appear = (el) => {
-  const a = { ...window.__sea.load(), [el.dataset.k]: el.dataset.v, _t: Date.now(), _owner: S.user?.id || '' };
+  const a = { ...window.__sea.load(), [el.dataset.k]: el.dataset.v, ...(el.dataset.k === 'vibe' ? { accent: '' } : {}), _t: Date.now(), _owner: S.user?.id || '' };
   window.__sea.save(a);
   putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(a[k] ?? '') }), {})); // suit le compte sur tous les appareils
   render();
@@ -211,10 +246,37 @@ function vAdmin() {
   if (!bugs && !S.admin.error) setTimeout(loadBugs, 0);
   return h`<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier ou supprimer toute contribution de la bibliothèque commune (Bibliothèque › Commune) et les exercices communs, et consulter les signalements. Tu n’as pas accès aux données privées des autres comptes.</p>
       <div class="row wrapf"><button class="btn" data-act="libSub" data-id="common">📚 Bibliothèque commune</button><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
-    ${vAdminUsers()}
+    ${vAdminProposals()}${vAdminUsers()}
     <div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['done', 'Traités'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>
       ${S.admin.error ? h`<p class="err small">${S.admin.error}</p>` : !bugs ? skeleton(2) : bugs.filter((b) => f === 'all' || b.status === f).length ? bugs.filter((b) => f === 'all' || b.status === f).map((b) => h`<div class="card flat"><div class="row between"><b>${b.title}</b>${tag(b.status === 'done' ? 'traité' : 'ouvert', b.status === 'done' ? 'ok' : 'warn')}</div><p class="small pre">${b.description}</p><p class="tiny muted">par ${b.author} · ${fmtDateTime(b.createdAt)}${b.page ? ' · page : ' + b.page : ''}${b.appVersion ? ' · v' + b.appVersion : ''}${b.userAgent ? ' · ' + b.userAgent.slice(0, 80) : ''}</p><button class="btn sm" data-act="bugStatus" data-id="${b.id}" data-v="${b.status === 'done' ? 'open' : 'done'}">${b.status === 'done' ? 'Rouvrir' : 'Marquer traité'}</button></div>`) : h`<p class="muted small">Aucun signalement.</p>`}</div>`;
 }
+/* Propositions des utilisateurs (intentions, idées) et intentions communes. */
+async function loadProps() {
+  try { const [p, ci] = await Promise.all([api('GET', '/api/admin/proposals?status=' + (S.admin.propF || 'open')), api('GET', '/api/community/intents')]); S.admin.props = p.proposals; S.admin.cintents = ci.intents; S.admin.propErr = ''; }
+  catch (e) { S.admin.propErr = e.offline ? 'Connexion requise.' : e.message; }
+  render();
+}
+function vAdminProposals() {
+  const p = S.admin.props; if (!p && !S.admin.propErr) setTimeout(loadProps, 0);
+  const capL = (id) => CAPACITIES[id]?.label || id;
+  return h`<div class="card"><div class="row between"><h3>📬 Propositions ${p?.length && (S.admin.propF || 'open') === 'open' ? tag(String(p.length), 'acc') : ''}</h3><button class="btn sm" data-act="propsReload" aria-label="Actualiser">↻</button></div>
+    <div class="chips">${[['open', 'À traiter'], ['done', 'Traitées']].map(([k, l]) => chip((S.admin.propF || 'open') === k, l, `data-act="propF" data-id="${k}"`))}</div>
+    ${S.admin.propErr ? h`<p class="err small">${S.admin.propErr}</p>` : !p ? skeleton(1) : p.length ? p.map((x) => h`<div class="item prop"><div class="grow"><b>${x.payload?.emoji || ''} ${x.label}</b> ${tag(x.kind === 'intent' ? 'intention' : x.kind === 'category' ? 'catégorie' : 'idée')}
+        <div class="tiny muted">${x.username || 'compte supprimé'} · ${relDate(x.created_at)}${x.activity ? ' · ' + (ACTIVITIES[x.activity]?.label || x.activity) : ''}</div>
+        ${x.detail ? h`<p class="small">${x.detail}</p>` : ''}${Object.keys(x.payload?.caps || {}).length ? h`<div class="chips">${Object.keys(x.payload.caps).map((c) => h`<span class="chip static">${capL(c)}</span>`)}</div>` : ''}${x.reply ? h`<p class="tiny">${x.reply}</p>` : ''}</div>
+      ${x.status === 'open' ? h`<div class="row tight"><button class="btn sm pri" data-act="propDo" data-id="${x.id}" data-d="accept">${x.kind === 'intent' ? 'Ajouter pour tous' : 'Accepter'}</button><button class="btn sm ghost" data-act="propDo" data-id="${x.id}" data-d="refuse">Refuser</button></div>` : ''}</div>`) : h`<p class="small muted">Rien à traiter.</p>`}
+    ${S.admin.cintents?.length ? h`<details class="how mini"><summary>Intentions communes (${S.admin.cintents.length})</summary>${S.admin.cintents.map((x) => h`<div class="item"><div class="grow small">${x.emoji} ${x.label} <span class="tiny muted">${x.activityId ? ACTIVITIES[x.activityId]?.label || x.activityId : 'tous sports'}</span></div><button class="btn sm ghost danger" data-act="cintentDel" data-id="${x.id}" aria-label="Retirer">✕</button></div>`)}</details>` : ''}</div>`;
+}
+ACT.propsReload = () => { S.admin.props = null; loadProps(); };
+ACT.propF = (el) => { S.admin.propF = el.dataset.id; ACT.propsReload(); };
+ACT.propDo = async (el) => {
+  const accept = el.dataset.d === 'accept';
+  if (!(await ask(accept ? 'Accepter cette proposition ?' : 'Refuser cette proposition ?', { ok: accept ? 'Accepter' : 'Refuser', danger: !accept, detail: accept ? 'Une intention acceptée apparaît pour tous les utilisateurs.' : '' }))) return;
+  try { await api('POST', '/api/admin/proposals/' + el.dataset.id, { decision: el.dataset.d }); toast(accept ? 'Ajoutée pour tout le monde' : 'Refusée'); } catch (e) { toast(e.message, 4000, 'bad'); }
+  ACT.propsReload();
+};
+ACT.cintentDel = async (el) => { if (!(await ask('Retirer cette intention pour tout le monde ?', { danger: true, ok: 'Retirer' }))) return; try { await api('DELETE', '/api/admin/intents/' + el.dataset.id); } catch (e) { toast(e.message, 4000, 'bad'); } ACT.propsReload(); };
+
 /* Comptes existants (admin) : identité et activité uniquement, jamais les données d'entraînement. */
 async function loadUsers() { try { S.admin.users = await api('GET', '/api/admin/users'); S.admin.usersErr = ''; } catch (e) { S.admin.usersErr = e.offline ? 'Connexion requise.' : e.message; } render(); }
 function vAdminUsers() {

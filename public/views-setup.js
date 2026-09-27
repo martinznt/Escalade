@@ -8,6 +8,7 @@ import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, SKILLS, CAPACITIES } from './mode
 import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
 import { nextQuestion, pendingQuestions, bucketValue } from './questions.js';
 import { startTour } from './tour.js';
+import { bodyFields, bodyToggle, cleanBody } from './body.js';
 import { canPrompt, isIOS, isInstalled, shouldOffer, dismissInstall, promptInstall, onInstallChange } from './install.js';
 
 /* ═════════ Configuration personnelle (item config « main ») ═════════ */
@@ -17,9 +18,9 @@ export const setupDone = () => !!mainConfig().setupDone;
 
 /* ═════════ Questions ═════════ */
 const LEVELS = [['0', '🌱 Je débute'], ['1', '🙂 Je pratique régulièrement'], ['2', '💪 Je suis confirmé(e)'], ['nsp', '🤷 Je ne sais pas']];
-const GOALS = [['climb', '🧗 Progresser en escalade'], ['force', '💪 Devenir plus fort(e)'], ['endurance', '🔋 Avoir plus d’endurance / de cardio'], ['mobilite', '🧘 Être plus souple, bouger mieux'], ['forme', '🙂 Rester en forme'], ['figure', '🤸 Réussir une figure (front lever, drapeau…)']];
+export const GOALS = [['climb', '🧗 Progresser en escalade'], ['force', '💪 Devenir plus fort(e)'], ['endurance', '🔋 Avoir plus d’endurance / de cardio'], ['mobilite', '🧘 Être plus souple, bouger mieux'], ['forme', '🙂 Rester en forme'], ['figure', '🤸 Réussir une figure (front lever, drapeau…)'], ['poids', '⚖️ Perdre du poids'], ['sante', '❤️ Être en meilleure santé']];
 const AVOID = [['fingers', '✋ Doigts'], ['shoulders', '🦾 Épaules'], ['elbows', '💪 Coudes'], ['knees', '🦵 Genoux'], ['none', '👍 Rien de particulier']];
-const INTENT_OF = { climb: 'specifique', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: '', figure: 'force' };
+export const INTENT_OF = { climb: 'specifique', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: '', figure: 'force', poids: 'endurance', sante: 'endurance' };
 const BLOC_CHOICES = ['4', '5', '5+', '6A', '6A+', '6B', '6B+', '6C', '7A', '7A+', '7B', '7C', '8A'];
 
 const STEPS = [
@@ -29,9 +30,10 @@ const STEPS = [
   { id: 'climbPerWeek', q: 'Et combien de fois grimpes-tu par semaine ?', help: 'En salle ou en falaise, en moyenne. Ça aide l’app à doser le travail des doigts et la récupération.', when: (a) => (a.acts || []).some((x) => x.startsWith('climbing')), opts: () => [['0', 'Pas en ce moment'], ['1', '1 fois'], ['2', '2 fois'], ['3', '3 fois'], ['4', '4 fois ou plus']] },
   { id: 'minutes', q: 'Combien de temps as-tu en général pour une séance ?', opts: () => [['10', '10 min'], ['20', '20 min'], ['30', '30 min'], ['45', '45 min'], ['60', '1 h'], ['90', '1 h 30']] },
   { id: 'places', multi: true, q: 'Où t’entraînes-tu ?', help: 'L’app proposera seulement des exercices faisables avec le matériel de ces lieux (modifiable dans Profil › Matériel).', opts: () => Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre') },
-  { id: 'goal', q: 'Qu’est-ce qui te motive le plus ?', opts: () => GOALS },
-  { id: 'skill', q: 'Quelle figure veux-tu réussir ?', when: (a) => a.goal === 'figure', opts: () => Object.entries(SKILLS).map(([id, s]) => [id, `${s.emoji} ${s.label}`]) },
+  { id: 'goals', multi: true, q: 'Quels sont tes objectifs ?', help: 'Choisis-en autant que tu veux. Tu pourras aussi écrire un objectif à toi dans Profil › Objectifs.', opts: () => GOALS },
+  { id: 'skill', q: 'Quelle figure veux-tu réussir ?', when: (a) => (a.goals || []).includes('figure'), opts: () => Object.entries(SKILLS).map(([id, s]) => [id, `${s.emoji} ${s.label}`]) },
   { id: 'avoid', multi: true, q: 'Y a-t-il une zone à ménager ?', help: 'L’app évitera les exercices qui la sollicitent fortement. Ce n’est pas un avis médical : en cas de douleur, consulte un professionnel.', opts: () => AVOID },
+  { id: 'body', q: 'Parle-nous un peu de toi', help: 'Facultatif : ça aide à doser l’intensité, les repos et le type d’exercices.' },
   { id: 'marks', q: 'Quelques repères (facultatif)', help: 'Si tu ne sais pas, touche « Je ne sais pas » ou passe : rien ne sera inventé.' },
 ];
 const visibleSteps = (a) => STEPS.filter((s) => !s.when || s.when(a));
@@ -48,6 +50,7 @@ function markFields(a) {
 }
 function stepBody(st, a) {
   if (st.id === 'marks') return markFields(a);
+  if (st.id === 'body') return bodyFields(a.body || {}, { act: 'setBody', inp: 'setBodyIn' });
   const cur = a[st.id];
   const on = (v) => (st.multi ? (cur || []).includes(v) : cur === v);
   return h`<div class="choices">${st.opts().map(([v, l]) => h`<button type="button" class="choice ${on(v) ? 'on' : ''}" aria-pressed="${on(v)}" data-act="setPick" data-q="${st.id}" data-v="${v}">${l}</button>`)}</div>`;
@@ -65,7 +68,7 @@ export function vSetup() {
       <button class="btn ghost" data-act="setupMode" data-id="quiz">Préférer les questions une par une</button>`;
   }
   const i = Math.min(st.i || 0, steps.length - 1), s = steps[i];
-  const answered = s.id === 'marks' || (s.multi ? (st.a[s.id] || []).length : st.a[s.id] != null);
+  const answered = s.id === 'marks' || s.id === 'body' || (s.multi ? (st.a[s.id] || []).length : st.a[s.id] != null);
   return h`<div class="setup">
     <div class="row between"><span class="small muted">Question ${i + 1} sur ${steps.length}</span><button class="btn sm ghost" data-act="setupLater">Finir plus tard</button></div>
     ${meter(((i + 1) / steps.length) * 100)}
@@ -80,7 +83,7 @@ function initialAnswers() {
   const acts = Object.keys(c.activities).filter((id) => ACTIVITIES[id]);
   const places = [...new Set(c.envs.map((e) => e.type).filter((t) => ENV_TYPES[t] && t !== 'autre'))];
   const avoid = Object.entries(av).filter(([, v]) => v).map(([k]) => k);
-  return { i: 0, mode: 'quiz', a: { acts: acts.length ? acts : [], places, avoid, perWeek: cfg.perWeek ? String(Math.min(5, cfg.perWeek)) : undefined, climbPerWeek: cfg.climbPerWeek != null ? String(Math.min(4, cfg.climbPerWeek)) : undefined, minutes: cfg.durations?.[0] || undefined, goal: cfg.goal || undefined, marks: {} } };
+  return { i: 0, mode: 'quiz', a: { acts: acts.length ? acts : [], places, avoid, perWeek: cfg.perWeek ? String(Math.min(5, cfg.perWeek)) : undefined, climbPerWeek: cfg.climbPerWeek != null ? String(Math.min(4, cfg.climbPerWeek)) : undefined, minutes: cfg.durations?.[0] || undefined, goals: cfg.goals?.length ? [...cfg.goals] : cfg.goal ? [cfg.goal] : undefined, body: { ...(item('config', 'body') || {}) }, marks: {} } };
 }
 export function openSetup(mode = 'quiz') { S.setup = initialAnswers(); S.setup.mode = mode; go('home', 'setup'); }
 ACT.setupStart = (el) => openSetup(el.dataset.id || 'quiz');
@@ -99,6 +102,8 @@ ACT.setPick = (el) => {
 INPUT.setMark = (el) => { const m = (S.setup.a.marks ||= {}); m[el.dataset.k] = el.value === '' ? undefined : Math.max(0, Math.min(500, Math.round(Number(el.value)))); };
 ACT.setNsp = (el) => { const m = (S.setup.a.marks ||= {}), k = el.dataset.k; m[k + '_nsp'] = !m[k + '_nsp']; if (m[k + '_nsp']) m[k] = undefined; render(); };
 ACT.setBloc = (el) => { const m = (S.setup.a.marks ||= {}); m.bloc = m.bloc === el.dataset.v ? undefined : el.dataset.v; render(); };
+ACT.setBody = (el) => { S.setup.a.body = bodyToggle(S.setup.a.body || {}, el.dataset.k, el.dataset.v); render(); };
+INPUT.setBodyIn = (el) => { (S.setup.a.body ||= {})[el.dataset.k] = el.value; };
 ACT.setupNext = () => { const steps = visibleSteps(S.setup.a); S.setup.i = Math.min(steps.length - 1, (S.setup.i || 0) + 1); render(); window.scrollTo(0, 0); };
 ACT.setupPrev = () => { S.setup.i = Math.max(0, (S.setup.i || 0) - 1); render(); window.scrollTo(0, 0); };
 ACT.setupLater = () => {
@@ -130,7 +135,7 @@ function summaryLines(a) {
   if (a.climbPerWeek != null) out.push(a.climbPerWeek === '0' ? 'Escalade : pas en ce moment' : `Escalade : ${a.climbPerWeek === '4' ? '4 fois ou plus' : a.climbPerWeek + ' fois'} par semaine`);
   if (a.minutes) out.push(`Durée habituelle : ${a.minutes} min`);
   if (a.places?.length) out.push('Lieux : ' + a.places.map((p) => ENV_TYPES[p]).join(', '));
-  if (a.goal) out.push('Motivation : ' + (a.goal === 'figure' && a.skill ? `réussir la figure « ${SKILLS[a.skill]?.label} »` : GOALS.find(([k]) => k === a.goal)[1].replace(/^\S+\s/, '')));
+  if (a.goals?.length) out.push('Objectifs : ' + a.goals.map((k) => (k === 'figure' && a.skill ? `réussir la figure « ${SKILLS[a.skill]?.label} »` : (GOALS.find(([x]) => x === k)?.[1] || k).replace(/^\S+\s/, ''))).join(', '));
   const av = (a.avoid || []).filter((x) => x !== 'none');
   if (av.length) out.push('À ménager : ' + av.map((x) => AVOID.find(([k]) => k === x)[1].replace(/^\S+\s/, '')).join(', '));
   const m = a.marks || {};
@@ -163,7 +168,12 @@ export function applyAnswers(a) {
   if (a.perWeek) { patch.perWeek = Number(a.perWeek); n++; }
   if (a.climbPerWeek != null && a.climbPerWeek !== '') { patch.climbPerWeek = Number(a.climbPerWeek); n++; }
   if (a.minutes) { patch.durations = [String(a.minutes)]; S.settings.defaultMinutes = Number(a.minutes); S.gen.minutes = Number(a.minutes); n++; }
-  if (a.goal) { patch.goal = a.goal; patch.intent = INTENT_OF[a.goal] || ''; S.gen.intentions = patch.intent ? [{ id: patch.intent, p: 2 }] : []; n++; }
+  if (a.goals?.length) { patch.goals = a.goals.slice(0, 8); patch.goal = a.goals[0]; patch.intent = INTENT_OF[a.goals[0]] || ''; S.gen.intentions = [...new Set(a.goals.map((g) => INTENT_OF[g]).filter(Boolean))].map((id) => ({ id, p: 2 })); n++; }
+  const body = cleanBody(a.body || {});
+  if (Object.values(body).some((v) => v !== undefined && !(Array.isArray(v) && !v.length))) {
+    putItem('config', 'body', { ...(item('config', 'body') || {}), ...Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined)) }); n++;
+    if (body.weight) putItem('perf', 'bw-' + new Date(now).toISOString().slice(0, 10), { metricId: 'body_weight', value: body.weight, unit: 'kg', date: now, source: 'declared', note: 'Indiqué dans le profil' });
+  }
   if (Object.keys(patch).length) saveMain(patch);
   const envs = itemsOf('env');
   (a.places || []).forEach((t, i) => {
@@ -171,7 +181,7 @@ export function applyAnswers(a) {
     putItem('env', 'env-' + t, { name: ENV_TYPES[t], type: t, equipment: ENV_TEMPLATES[t] || [], isDefault: !envs.length && i === 0 });
   });
   if (a.places?.length) n++;
-  if (a.goal === 'figure' && a.skill && SKILLS[a.skill] && !c.goals.some((g) => g.skillId === a.skill && (g.status || 'active') === 'active')) {
+  if ((a.goals || []).includes('figure') && a.skill && SKILLS[a.skill] && !c.goals.some((g) => g.skillId === a.skill && (g.status || 'active') === 'active')) {
     putItem('goal', 'goal-' + a.skill, { type: 'skill', skillId: a.skill, label: SKILLS[a.skill].label, status: 'active', startedAt: now }); n++;
   }
   if (a.avoid?.length) { const av = new Set(a.avoid); S.settings.avoid = Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, av.has(k)])); n++; }

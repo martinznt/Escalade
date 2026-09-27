@@ -5,7 +5,7 @@
 //    identifiants connus de capacités, muscles, matériel et activités sont gardés) ;
 //  - le résultat est une PROPOSITION : l'utilisateur la relit et la modifie avant de l'enregistrer ;
 //  - aucune donnée personnelle (performances, historique) n'est envoyée au modèle : seulement le texte tapé.
-import { CAPACITIES, MUSCLES, EQUIPMENT, ACTIVITIES } from '../public/model.js';
+import { CAPACITIES, MUSCLES, EQUIPMENT, ACTIVITIES, METRICS } from '../public/model.js';
 
 export const DEFAULT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const str = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -83,3 +83,81 @@ export async function aiDraft(env, { kind, text, activityId }) {
   if (!draft) { const e = new Error('L’assistant n’a pas donné de réponse exploitable. Reformule ou réessaie.'); e.status = 502; throw e; }
   return { draft, model };
 }
+
+/* ───────── Discussion avec le coach ───────── */
+// Le coach reçoit la conversation (8 derniers messages) et un court résumé que l'utilisateur voit avant d'écrire :
+// sports, niveau déclaré, objectif et dernières séances. Réponse en texte, courte, filtrée.
+export function buildChat(messages, profile) {
+  const sys = `Tu es un coach sportif francophone, chaleureux et concret. Tu tutoies. Réponds en 2 à 6 phrases courtes, ou une petite liste.
+Donne des conseils pratiques d'entraînement (séance, exercice, récupération, technique d'escalade, organisation).
+Règles : pas de diagnostic médical ni de traitement ; en cas de douleur qui dure, conseille un professionnel de santé.
+Aucune comparaison avec d'autres personnes. N'invente pas de chiffres sur l'utilisateur : utilise seulement ce qui est dans son profil.
+Si la question n'a rien à voir avec le sport, réponds en une phrase et ramène la discussion à l'entraînement.
+Profil de l'utilisateur : ${str(profile, 900) || 'non renseigné'}.`;
+  const msgs = (Array.isArray(messages) ? messages : []).slice(-8).map((m) => ({ role: m?.role === 'assistant' ? 'assistant' : 'user', content: str(m?.content, 600) })).filter((m) => m.content);
+  return [{ role: 'system', content: sys }, ...msgs];
+}
+export function cleanReply(resp) {
+  const t = typeof resp === 'string' ? resp : resp?.response ?? resp?.result?.response ?? '';
+  return String(t || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/<[^>]*>/g, '').trim().slice(0, 2000);
+}
+export async function aiChat(env, { messages, profile }) {
+  if (!env.AI?.run) { const e = new Error('Coach non activé sur ce serveur.'); e.status = 503; throw e; }
+  const msgs = buildChat(messages, profile);
+  if (msgs.length < 2 || msgs.at(-1).role !== 'user') { const e = new Error('Écris ta question.'); e.status = 400; throw e; }
+  const reply = cleanReply(await env.AI.run(env.AI_MODEL || DEFAULT_MODEL, { messages: msgs, max_tokens: 500, temperature: 0.5 }));
+  if (!reply) { const e = new Error('Le coach n’a pas su répondre. Reformule ta question.'); e.status = 502; throw e; }
+  return reply;
+}
+
+/* ───────── Objectif écrit avec ses mots → objectif suivi ───────── */
+export function buildGoal(text, profile) {
+  const capList = Object.entries(CAPACITIES).map(([id, c]) => `${id} (${c.label})`).join(', ');
+  const metList = Object.entries(METRICS).map(([id, m]) => `${id} (${m.label}${m.unit ? ', ' + m.unit : ''})`).join(', ');
+  return [{ role: 'system', content: `Tu es un entraîneur sportif francophone, précis et prudent. Réponds UNIQUEMENT par un objet JSON valide.
+Transforme l'objectif écrit par l'utilisateur en objectif d'entraînement suivi, adapté à son profil.
+Format : {"label":"objectif reformulé, court (max 70 caractères)","summary":"1 à 2 phrases : ce qu'il faut travailler et pourquoi","caps":[{"id":"...","w":0.8}],"steps":["étape 1","étape 2","étape 3"],"metricId":"identifiant de mesure ou vide","target":nombre ou null,"weeks":nombre de semaines réaliste,"confidence":"haute|moyenne|faible"}
+Capacités autorisées (3 à 5, identifiants exacts) : ${capList}.
+Mesures autorisées : ${metList}.
+Ne donne une cible chiffrée que si l'utilisateur en donne une ou si elle découle clairement de son texte. Pas de conseil médical. Perte de poids : objectif progressif et raisonnable, sans régime.
+Profil : ${str(profile, 900) || 'non renseigné'}.` }, { role: 'user', content: str(text, 300) }];
+}
+export function cleanGoal(x, text = '') {
+  if (!x || typeof x !== 'object') return null;
+  const c = caps(x.caps);
+  const metricId = METRICS[String(x.metricId || '')] ? String(x.metricId) : '';
+  const target = metricId && Number.isFinite(Number(x.target)) && x.target !== null && x.target !== '' ? Math.round(Number(x.target) * 10) / 10 : null;
+  const label = str(x.label, 80) || str(text, 80);
+  if (!label || (!Object.keys(c).length && !metricId)) return null;
+  return { label, summary: str(x.summary, 300), caps: Object.entries(c).map(([id, w]) => ({ id, w })), steps: list(x.steps, 5, 160), metricId, target, weeks: num(x.weeks, 0, 52, 0), confidence: ['haute', 'moyenne', 'faible'].includes(x.confidence) ? x.confidence : 'moyenne' };
+}
+export async function aiGoal(env, { text, profile }) {
+  if (!env.AI?.run) { const e = new Error('Assistant non activé sur ce serveur.'); e.status = 503; throw e; }
+  const goal = cleanGoal(extractJson(await env.AI.run(env.AI_MODEL || DEFAULT_MODEL, { messages: buildGoal(text, profile), max_tokens: 700, temperature: 0.3 })), text);
+  if (!goal) { const e = new Error('L’assistant n’a pas compris cet objectif. Reformule-le.'); e.status = 502; throw e; }
+  return goal;
+}
+
+/* ───────── Intention, force ou faiblesse écrite avec ses mots → capacités ───────── */
+export function buildIntent(text, activityId, kind) {
+  const capList = Object.entries(CAPACITIES).map(([id, c]) => `${id} (${c.label})`).join(', ');
+  const what = kind === 'strength' ? 'un point fort à faire progresser' : kind === 'weakness' ? 'un point faible à travailler' : 'une intention de séance (ce que la personne veut travailler)';
+  return [{ role: 'system', content: `Tu es un entraîneur sportif francophone. Réponds UNIQUEMENT par un objet JSON valide.
+L'utilisateur décrit ${what}. Donne-lui un nom court et relie-le aux capacités qu'il faut entraîner.
+Format : {"label":"nom court (max 40 caractères)","emoji":"1 emoji","summary":"1 phrase simple","caps":[{"id":"...","w":0.8}]}
+Capacités autorisées (1 à 4, identifiants exacts) : ${capList}.
+Sport : ${ACTIVITIES[activityId]?.label || 'non précisé'}.` }, { role: 'user', content: str(text, 200) }];
+}
+export function cleanIntent(x, text = '') {
+  if (!x || typeof x !== 'object') return null;
+  const c = caps(x.caps);
+  if (!Object.keys(c).length) return null;
+  return { label: str(x.label, 40) || str(text, 40), emoji: str(x.emoji, 8) || '✨', summary: str(x.summary, 200), caps: c };
+}
+export async function aiIntent(env, { text, activityId, kind }) {
+  if (!env.AI?.run) { const e = new Error('Assistant non activé sur ce serveur.'); e.status = 503; throw e; }
+  const r = cleanIntent(extractJson(await env.AI.run(env.AI_MODEL || DEFAULT_MODEL, { messages: buildIntent(text, activityId, kind), max_tokens: 300, temperature: 0.2 })), text);
+  if (!r) { const e = new Error('L’assistant n’a pas su relier ça à un entraînement. Reformule.'); e.status = 502; throw e; }
+  return r;
+}
+export const cleanCaps = caps;

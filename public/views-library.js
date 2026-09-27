@@ -1,12 +1,18 @@
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
 import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
+import { linkSheet } from './share.js';
+import './duo.js';
 import './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon } from './state.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
 import { parseSessionText, exportSessionText, sessionMinutes, exMinutes, parseRest } from './engine.js';
+import { boostSession } from './program.js';
+import { vGenerateForm, genOptions } from './views-gen.js';
+import { vCatalog, vBest } from './views-catalog.js';
+import { sourcesLine } from './srcui.js';
 import { planSession, generateFromPlan, adaptDuration, alternatives, replaceExercise, rebuildForEquipment, newPossibilities, estimateLevel, LEVEL_LABEL, levelFor, BODY_WORDS } from './generator.js';
 import { availableEquipment, graphFromExercise, goalLabel, activeGoals, neverTried, exCaps, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -35,9 +41,9 @@ export function vLibrary() {
   if (sub === 'shared-edit' && S.sharedDraft) return vEditor(S.sharedDraft.session, 'shared');
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
-  const cur = ['seances', 'generate', 'exercises', 'common', 'search'].includes(sub) ? sub : 'seances';
-  return h`<h1>📚 Bibliothèque</h1>${seg('libSub', cur, [['seances', '📋 Mes séances'], ['generate', '✨ Générer'], ['exercises', '💪 Exercices'], ['common', '🌍 Partagées'], ['search', '🔍 Recherche']])}
-    ${cur === 'seances' ? vSeances() : cur === 'generate' ? vGenerate() : cur === 'exercises' ? vExercises() : cur === 'common' ? vCommon() : vSearch()}`;
+  const cur = ['seances', 'generate', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'seances';
+  return h`<h1>📚 Bibliothèque</h1><div class="scrollx">${seg('libSub', cur, [['seances', '📋 Mes séances'], ['generate', '🎯 Sur mesure'], ['catalog', '🗂 Prêtes'], ['best', '🏆 Top exercices'], ['exercises', '💪 Exercices'], ['common', '🌍 Partagées'], ['search', '🔍 Recherche']])}</div>
+    ${cur === 'seances' ? vSeances() : cur === 'generate' ? vGenerate() : cur === 'catalog' ? vCatalog() : cur === 'best' ? vBest() : cur === 'exercises' ? vExercises() : cur === 'common' ? vCommon() : vSearch()}`;
 }
 ACT.libSub = (el) => { go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
@@ -45,7 +51,7 @@ ACT.libSub = (el) => { go('library', el.dataset.id); if (el.dataset.id === 'comm
 function vSeances() {
   const f = S.filters.seances || 'active';
   const list = S.seances.items.filter((s) => (f === 'archived' ? s.archived : f === 'templates' ? s.template && !s.archived : !s.archived));
-  return h`<div class="row wrapf"><button class="btn pri" data-act="newSeance">＋ Nouvelle séance</button><button class="btn" data-act="openImport">📋 Coller un texte</button><button class="btn" data-act="libSub" data-id="generate">✨ Générer</button></div>
+  return h`<div class="row wrapf"><button class="btn pri" data-act="newSeance">＋ Nouvelle séance</button><button class="btn" data-act="openImport">📋 Coller un texte</button><button class="btn" data-act="libSub" data-id="generate">🎯 Générer</button>${S.user?.guest ? '' : h`<button class="btn" data-act="duoJoinAsk">👥 Rejoindre à deux</button>`}</div>
     <div class="chips">${[['active', 'Actives'], ['templates', 'Modèles'], ['archived', 'Archivées']].map(([k, l]) => chip(f === k, l, `data-act="seanceFilter" data-id="${k}"`))}</div>
     ${list.length ? list.map((s) => h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : ''}</div></div></div>
       <div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div></div>`)
@@ -85,7 +91,7 @@ function vEditor(s, mode) {
   const intents = new Map((s.intentions || []).map((x) => [x.id, x.p]));
   return h`<div class="row"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
-    ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
+    ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
     <div class="card"><div class="row"><input type="text" data-change="sEmoji" value="${s.emoji}" maxlength="4" class="emoji-in" aria-label="Emoji"><input type="text" data-change="sName" value="${s.name}" maxlength="100" aria-label="Nom de la séance"></div>
       <div class="grid2"><label>Activité<select data-change="sActivity"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
       <label>Environnement<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}</select></label></div>
@@ -241,12 +247,13 @@ ACT.sPublish = (el) => {
     <p class="small">Ce qui sera publié : le titre, l’activité, les exercices et leurs prescriptions, les intentions, le matériel et la durée.</p>
     <p class="small muted">Retiré automatiquement : tes notes de progression personnelles (${notes}), les charges chiffrées issues de tes performances (${loads}), les explications liées à ton profil, ton lieu et ton objectif. Aucun historique ni performance n’est partagé.</p>
     <p class="small">Niveau estimé : ${levelTag(lv)}</p>${levelDetails(lv)}
-    <div class="row wrapf"><button class="btn pri" data-act="sPublishDo" data-id="${s.id}" data-scope="common">📚 Bibliothèque commune</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="public">🌍 Mon profil public</button><button class="btn" data-act="closeSheet">Annuler</button></div>`, { wide: true });
+    <div class="row wrapf"><button class="btn pri" data-act="sPublishDo" data-id="${s.id}" data-scope="common">📚 Bibliothèque commune</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="link">🔗 Lien et QR code</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="public">🌍 Mon profil public</button><button class="btn" data-act="closeSheet">Annuler</button></div>`, { wide: true });
 };
 ACT.sPublishDo = async (el) => {
   const s = getSeance(el.dataset.id); if (!s) return;
   try {
     const r = await api('POST', '/api/shared', { id: uid(), scope: el.dataset.scope, session: s, title: s.name }, { opId: 'op-' + uid() });
+    if (el.dataset.scope === 'link') { buzzOk(); linkSheet(r.id, s.name); return; }
     closeSheet(); buzzOk(); toast(el.dataset.scope === 'common' ? `Publiée dans la bibliothèque commune (niveau estimé : ${LEVEL_LABEL[r.level.level].toLowerCase()})` : 'Publiée sur ton profil public');
     S.shared.common = null;
   } catch (e) { toast(e.offline ? 'Connexion requise pour publier.' : e.message, 4500, 'bad'); }
@@ -282,22 +289,7 @@ export function openGenerator(opts = {}) {
 function vGenerate() {
   const g = S.gen, c = ctx();
   if (!g.activityId) g.activityId = Object.keys(c.activities)[0] || 'conditioning';
-  const goals = activeGoals(c), intents = new Map((g.intentions || []).map((x) => [x.id, x.p]));
-  const eq = availableEquipment(c, g.envId);
-  const more = g.mode !== 'weaknesses' || (g.intentions || []).length || g.envId || g.light || ![10, 20, 30, 45, 60, 90].includes(Number(g.minutes));
-  return h`<div class="card gen">
-      <span class="kicker">1 · Quel sport ?</span><div class="chips big">${activityOptions().map(([id, e, l]) => chip(g.activityId === id, `${e} ${l}`, `data-act="gSet" data-k="activityId" data-v="${id}"`))}</div>
-      <span class="kicker">2 · Combien de temps ?</span><div class="chips big">${[10, 20, 30, 45, 60, 90].map((m) => chip(Number(g.minutes) === m, m < 60 ? `${m} min` : m === 60 ? '1 h' : '1 h 30', `data-act="gSet" data-k="minutes" data-v="${m}"`))}</div>
-      <details class="fold genmore" ${more ? 'open' : ''}><summary><span>⚙️ Plus d’options</span><em>${[g.mode !== 'weaknesses', (g.intentions || []).length, g.envId, g.light].filter(Boolean).length || ''}</em></summary>
-        <b class="small">Orientation</b><div class="chips">${chip(g.mode === 'weaknesses', '🎯 Mes axes de progrès', 'data-act="gSet" data-k="mode" data-v="weaknesses"')}${chip(g.mode === 'strengths', '🚀 Mes forces', 'data-act="gSet" data-k="mode" data-v="strengths"')}${chip(g.mode === 'goal', '🏁 Un objectif', 'data-act="gSet" data-k="mode" data-v="goal"')}</div>
-        ${g.mode === 'goal' ? (goals.length ? h`<label>Objectif<select data-change="gGoal"><option value="">— choisir —</option>${goals.map((x) => h`<option value="${x.id}" ${g.goalId === x.id ? 'selected' : ''}>${goalLabel(x)}</option>`)}</select></label>` : h`<p class="small muted">Aucun objectif actif : crée-en un dans Profil › Objectifs.</p>`) : ''}
-        <b class="small">Autres durées</b><div class="chips">${[5, 12, 15].map((m) => chip(Number(g.minutes) === m, `${m} min`, `data-act="gSet" data-k="minutes" data-v="${m}"`))}<span class="unitbox small"><input type="number" inputmode="numeric" min="5" max="240" value="${g.minutes}" data-change="gMinutes" aria-label="Durée en minutes"><em>min</em></span></div>
-        <b class="small">Intentions <span class="tiny muted">(re-touche pour la priorité)</span></b><div class="chips">${Object.entries(INTENTIONS).map(([id, I]) => chip(intents.has(id), `${I.emoji} ${I.label}${intents.has(id) ? ' ×' + intents.get(id) : ''}`, `data-act="gIntent" data-id="${id}"`))}</div>
-        <label>Lieu<select data-change="gEnv"><option value="">${c.defEnv ? 'Par défaut : ' + c.defEnv.name : 'Aucun décrit'}</option>${c.envs.map((e) => h`<option value="${e.id}" ${g.envId === e.id ? 'selected' : ''}>${e.name}</option>`)}</select></label>
-        <label class="chk"><input type="checkbox" data-change="gLight" ${g.light ? 'checked' : ''}> 🧘 Séance légère / récupération</label>
-        <div class="chips">${eq.size ? [...eq].map((k) => h`<span class="chip static">🧰 ${EQUIPMENT[k] || k}</span>`) : h`<span class="small muted">Aucun matériel déclaré</span>`}</div></details>
-      <button class="btn pri big" data-act="genPlan">✨ Préparer ma séance</button></div>
-    ${g.plan ? vPlan(g.plan) : ''}${g.result ? vGenResult(g.result) : ''}`;
+  return h`${vGenerateForm(activityOptions)}${g.plan ? vPlan(g.plan) : ''}${g.result ? vGenResult(g.result) : ''}`;
 }
 ACT.gSet = (el) => { S.gen[el.dataset.k] = el.dataset.k === 'minutes' ? Number(el.dataset.v) : el.dataset.v; S.gen.plan = null; S.gen.result = null; S.gen.priorities = {}; render(); };
 CHG.gGoal = (el) => { S.gen.goalId = el.value; S.gen.plan = null; S.gen.result = null; render(); };
@@ -308,7 +300,9 @@ ACT.gIntent = (el) => { const list = [...(S.gen.intentions || [])], i = list.fin
 ACT.genPlan = () => {
   const g = S.gen;
   if (g.mode === 'goal' && !g.goalId) { toast('Choisis un objectif (ou une autre orientation).'); return; }
-  g.plan = planSession({ activityId: g.activityId, mode: g.mode, goalId: g.mode === 'goal' ? g.goalId : '', capId: g.capId || '', minutes: g.minutes, intentions: g.intentions, envId: g.envId, light: g.light, priorities: g.priorities, seed: g.seed ?? Math.floor(Math.random() * 1e9) }, ctx());
+  const o = genOptions();
+  g.plan = planSession({ activityId: g.activityId, mode: g.mode, goalId: g.mode === 'goal' ? g.goalId : '', capId: g.capId || '', minutes: g.minutes, intentions: g.intentions, envId: g.envId, priorities: g.priorities, seed: g.seed ?? Math.floor(Math.random() * 1e9), ...o }, ctx());
+  g.boost = o.boost;
   g.seed = g.plan.seed; g.result = null; render(); setTimeout(() => $('#genplan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
 };
 function vPlan(p) {
@@ -327,7 +321,7 @@ function vPlan(p) {
     <p class="small">🧰 <b>Matériel nécessaire :</b> ${p.neededEquipment?.length ? p.neededEquipment.join(', ') : 'aucun'}</p>
     ${p.missing.length ? h`<p class="small warn-t">⚠ ${p.missing[0]}</p>` : ''}
     <details class="how mini"><summary>Pourquoi ces choix ?</summary><ul class="small">${p.distribution.map((d) => h`<li><b>${d.label}</b> : ${d.reasons.join(' · ')}</li>`)}${p.blocks.map((b) => h`<li><b>${b.label}</b> : ${b.reason}</li>`)}<li>${p.difficulty.text}</li>${p.constraints.map((x) => h`<li>${x}</li>`)}${p.missing.slice(1).map((x) => h`<li>${x}</li>`)}</ul></details>
-    <button class="btn pri big" data-act="genDo">✨ Générer la séance</button></div>`;
+    ${sourcesLine(['who2020', 'acsm2009', 'soligard2008'])}<button class="btn pri big" data-act="genDo">Générer la séance</button></div>`;
 }
 ACT.prio = (el) => {
   const g = S.gen, id = el.dataset.id, d = el.dataset.d;
@@ -336,7 +330,7 @@ ACT.prio = (el) => {
   if (d === '0') pr[id] = 0; else if (d === 'add') pr[id] = 1.5; else pr[id] = Math.max(0.2, Math.min(3, (pr[id] || 1) + Number(d) * 0.5));
   g.priorities = pr; ACT.genPlan();
 };
-ACT.genDo = () => { const g = S.gen; if (!g.plan) return; g.result = generateFromPlan(g.plan, ctx()); g.saved = false; g.swaps = []; buzzOk(); render(); setTimeout(() => $('#genresult')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30); };
+ACT.genDo = () => { const g = S.gen; if (!g.plan) return; g.result = generateFromPlan(g.plan, ctx()); if (g.boost) g.result = { ...g.result, session: boostSession(g.result.session, g.boost) }; g.saved = false; g.swaps = []; buzzOk(); render(); setTimeout(() => $('#genresult')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30); };
 function vGenResult(r) {
   const s = r.session;
   return h`<div id="genresult" class="card"><div class="row"><div class="ico acc">${s.emoji}</div><div class="grow"><h3>${s.name}</h3><div class="muted small">~${sessionMinutes(s)} min ${levelTag(r.meta.level)}</div></div></div>
@@ -354,11 +348,11 @@ function vExercises() {
   const match = (name) => !n || name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(n);
   const lib = LIBRARY.filter((x) => x.role === 'main' && match(x.name) && (!act || x.acts.includes(act)) && (!cap || (x.caps[cap] || 0) >= 0.5));
   const c = ctx(), tried = neverTried(c, { activityId: act || undefined, level: 1 });
-  return h`<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>✨</span><div><b>Créer un exercice avec l’IA</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
+  return h`<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>🤖</span><div><b>Créer un exercice avec l’assistant</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
     <input type="search" data-input="exQ" value="${q}" placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice">
     <div class="grid2"><select data-change="exAct" aria-label="Activité"><option value="">Toutes activités</option>${Object.entries(ACTIVITIES).map(([id, a]) => h`<option value="${id}" ${act === id ? 'selected' : ''}>${a.emoji} ${a.label}</option>`)}</select>
     <select data-change="exCap" aria-label="Capacité"><option value="">Toutes capacités</option>${Object.entries(CAPACITIES).map(([id, x]) => h`<option value="${id}" ${cap === id ? 'selected' : ''}>${x.label}</option>`)}</select></div>
-    ${tried.length && !q ? h`<div class="card flat"><b class="small">✨ Tu n’as jamais essayé</b>${tried.map((t) => h`<div class="item"><div class="ico">${t.lib.emoji}</div><div class="grow"><b>${t.lib.name}</b><div class="tiny muted">${t.reason}</div></div><button class="btn sm" data-act="libInfo" data-id="${t.lib.id}">Voir</button></div>`)}</div>` : ''}
+    ${tried.length && !q ? h`<div class="card flat"><b class="small">🆕 Jamais essayé</b>${tried.map((t) => h`<div class="item"><div class="ico">${t.lib.emoji}</div><div class="grow"><b>${t.lib.name}</b><div class="tiny muted">${t.reason}</div></div><button class="btn sm" data-act="libInfo" data-id="${t.lib.id}">Voir</button></div>`)}</div>` : ''}
     <div class="card"><div class="row between"><h3>Mes exercices</h3><button class="btn sm" data-act="persNew">＋ Nouveau</button></div>${S.personal.filter((p) => match(p.name)).map((p) => h`<div class="item"><div class="ico">${p.data?.emoji || '💪'}</div><div class="grow"><b>${p.name}</b><div class="tiny muted">${exLine(normalizeEx(p.data))}</div></div><button class="btn sm" data-act="persInfo" data-id="${p.id}">Voir</button></div>`)}${S.personal.length ? '' : h`<p class="muted small">Aucun exercice personnel.</p>`}</div>
     <div class="card"><h3>Catalogue intégré (${lib.length})</h3>${lib.slice(0, 60).map((x) => h`<div class="item"><div class="ico">${x.emoji}</div><div class="grow"><b>${x.name}</b><div class="tiny muted">${Object.entries(x.caps).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => capL(k)).join(', ')} · difficulté ${x.diff}/5</div></div><button class="btn sm" data-act="libInfo" data-id="${x.id}">Voir</button></div>`)}${lib.length > 60 ? h`<p class="tiny muted">Affine la recherche pour voir les ${lib.length - 60} autres.</p>` : ''}</div>
     <div class="card"><div class="row between"><h3>Exercices communs</h3><button class="btn sm" data-act="cexNew">＋ Proposer</button></div>${S.commonEx.filter((x) => match(x.name)).map((x) => h`<div class="item"><div class="ico">${x.data?.emoji || '💪'}</div><div class="grow"><b>${x.name}</b><div class="tiny muted">par ${x.author || 'compte supprimé'}</div></div><button class="btn sm" data-act="cexInfo" data-id="${x.id}">Voir</button></div>`)}${S.commonEx.length ? '' : h`<p class="muted small">Aucun exercice commun pour l’instant.</p>`}</div>

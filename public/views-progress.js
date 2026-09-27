@@ -6,8 +6,10 @@ import { uid, exKey } from './shared.js';
 import { CAPACITIES, MUSCLES, METRICS } from './model.js';
 import { benchmarks, periodSummary, regularity, loadAnalysis, records, timeline, journal, diagnostics, atypicalSessions, undertrained, forgottenGoals, whyNoProgress, activeGoals, goalLabel, labReport, entryActivity, activityLabel, perfText, muscleVolume, achievements, capacityState, confWord } from './brain.js';
 import { anatomySvg } from './anatomy.js';
+import { streakCard, badgesCard } from './views-motiv.js';
+import { composePage } from './layout.js';
 
-const SUBS = [['summary', '✨ Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
+const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
 export function vProgress() {
   const sub = SUBS.some(([k]) => k === S.sub.progress) ? S.sub.progress : 'summary';
   const views = { summary: vSummary, history: vHistory, records: vRecords, timeline: vTimeline, journal: vJournal, analyses: vAnalyses, lab: vLab };
@@ -18,29 +20,37 @@ const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);
 
 function vSummary() {
   const c = ctx(), days = S.benchDays || 30, b = benchmarks(c, days), per = S.sumKind || 'week', s = periodSummary(c, per), reg = regularity(c), load = loadAnalysis(c);
-  if (!c.history.length) return h`<section class="card hero center"><div style="font-size:3rem">🌱</div><h2>Ta progression commence ici</h2><p>Fais ta première séance : tes chiffres, tes records et ta régularité apparaîtront ici.</p><button class="btn pri big" data-act="genOpen">✨ Me proposer une séance</button></section>`;
+  if (!c.history.length) return h`<section class="card hero center"><div style="font-size:3rem">🌱</div><h2>Ta progression commence ici</h2><p>Fais ta première séance : tes chiffres, tes records et ta régularité apparaîtront ici.</p><button class="btn pri big" data-act="genOpen">🎯 Me proposer une séance</button></section>`;
   const delta = (x) => (x == null ? '' : x > 0 ? h`<i class="up">▲ ${x} %</i>` : x < 0 ? h`<i class="down">▼ ${Math.abs(x)} %</i>` : h`<i>=</i>`);
   const kpi = (ic, label, v, d) => h`<div class="kpi"><span>${ic} ${label}</span><b>${v}</b>${delta(d)}</div>`;
   const maxCap = Math.max(1, ...b.capDiff.slice(0, 5).map((x) => Math.max(x.cur, x.prev)));
   const wins = [...s.progression.filter((p) => /record|maximum/i.test(p)).slice(0, 2).map((p) => ['🏆', p.replace(/^Nouveau (record|maximum) — /, 'Record : ')]), ...s.goalsWorked.slice(0, 1).map((g) => ['🎯', `Objectif travaillé : ${g}`])];
-  return h`<div class="row between">${seg('benchDays', String(days), [['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']])}</div>
-    <div class="kpis">${kpi('🏋️', 'Séances', b.cur.sessions, b.deltas.sessions)}${kpi('⏱', 'Minutes', b.cur.minutes, b.deltas.minutes)}${kpi('🔁', 'Séries', b.cur.sets, b.deltas.sets)}${kpi('😮‍💨', 'Ressenti', b.cur.rpe ?? '—', null)}</div>
-    <p class="tiny muted center">Comparé aux ${days} jours d’avant · uniquement toi</p>
-    ${wins.length ? h`<section class="card ok-b"><span class="kicker ok-t">✨ Tes bonnes nouvelles</span>${wins.map(([ic, t]) => h`<div class="win"><span>${ic}</span>${t}</div>`)}</section>` : ''}
-    ${b.capDiff.length ? h`<section class="card"><h3>💪 Ce que tu as travaillé</h3>${b.capDiff.slice(0, 5).map((x) => h`<div class="cbar"><span>${x.label}</span><div class="track"><i class="prev" style="width:${Math.round((x.prev / maxCap) * 100)}%"></i><i class="cur" style="width:${Math.round((x.cur / maxCap) * 100)}%"></i></div><b>${x.cur}</b></div>`)}
-      <p class="tiny muted">Barre claire : ${days} derniers jours · ombre : période d’avant</p></section>` : ''}
-    <section class="card"><h3>📆 Régularité</h3>${bars(reg.weeks, ['il y a 12 sem.', 'cette semaine'])}
+  const WORK = () => h`<section class="card"><h3>💪 Ce que tu as travaillé</h3>${b.capDiff.slice(0, 5).map((x) => h`<div class="cbar"><span>${x.label}</span><div class="track"><i class="prev" style="width:${Math.round((x.prev / maxCap) * 100)}%"></i><i class="cur" style="width:${Math.round((x.cur / maxCap) * 100)}%"></i></div><b>${x.cur}</b></div>`)}
+      <p class="tiny muted">Barre claire : ${days} derniers jours · ombre : période d’avant</p></section>`;
+  const REG = () => h`<section class="card"><h3>📆 Régularité</h3>${bars(reg.weeks, ['il y a 12 sem.', 'cette semaine'])}
       <div class="chips"><span class="chip static">≈ ${reg.mean} séance(s) / semaine</span>${reg.streakWeeks ? h`<span class="chip static">🔥 ${reg.streakWeeks} semaine(s) d’affilée</span>` : ''}${reg.change && reg.change !== 'stable' ? h`<span class="chip static">${reg.change === 'hausse' ? '📈 en hausse' : reg.change === 'baisse' ? '📉 en baisse' : '↩️ reprise'}</span>` : ''}</div>
-      ${reg.gaps.length ? h`<details class="how mini"><summary>Pauses de 7 jours ou plus (${reg.gaps.length})</summary><ul class="small">${reg.gaps.map((g) => h`<li>${g.days} jours ${g.to ? `(du ${fmtDay(g.from)} au ${fmtDay(g.to)})` : `(depuis le ${fmtDay(g.from)})`}</li>`)}</ul></details>` : ''}</section>
-    <section class="card"><h3>📊 Charge</h3><div class="grid3">${load.weeks.slice(0, 3).map((w, i) => h`<div class="stat"><b>${w.load}</b><span>${i === 0 ? 'cette semaine' : i === 1 ? 'sem. −1' : 'sem. −2'}</span></div>`)}</div>
+      ${reg.gaps.length ? h`<details class="how mini"><summary>Pauses de 7 jours ou plus (${reg.gaps.length})</summary><ul class="small">${reg.gaps.map((g) => h`<li>${g.days} jours ${g.to ? `(du ${fmtDay(g.from)} au ${fmtDay(g.to)})` : `(depuis le ${fmtDay(g.from)})`}</li>`)}</ul></details>` : ''}</section>`;
+  const LOAD = () => h`<section class="card"><h3>📊 Charge</h3><div class="grid3">${load.weeks.slice(0, 3).map((w, i) => h`<div class="stat"><b>${w.load}</b><span>${i === 0 ? 'cette semaine' : i === 1 ? 'sem. −1' : 'sem. −2'}</span></div>`)}</div>
       ${load.signals.length ? load.signals.map((x) => h`<div class="win warnw"><span>⚠️</span>${x}</div>`) : h`<p class="small">👍 Charge stable</p>`}
-      <details class="how mini"><summary>Comment c’est calculé ?</summary><p class="tiny">Charge = durée × ressenti (1 à 5). ${load.disclaimer}</p></details></section>
-    <section class="card"><div class="row between"><h3>🫀 Muscles travaillés</h3>${seg('muscleDays', String(S.muscleDays || 7), [['7', '7 j'], ['30', '30 j']])}</div>${raw(anatomySvg({ heat: muscleVolume(c, S.muscleDays || 7) }))}</section>
-    ${achievements(c).length ? h`<section class="card"><h3>🌟 Jalons</h3><div class="chips">${achievements(c).slice(-4).map((a) => h`<span class="chip static">${a.icon} ${a.label}</span>`)}</div></section>` : ''}
-    <details class="card fold"><summary><span>🗓️ Résumé ${per === 'week' ? 'de la semaine' : 'du mois'}</span><em>${s.sessions}</em></summary>
+      <details class="how mini"><summary>Comment c’est calculé ?</summary><p class="tiny">Charge = durée × ressenti (1 à 5). ${load.disclaimer}</p></details></section>`;
+  const SUM = () => h`<details class="card fold"><summary><span>🗓️ Résumé ${per === 'week' ? 'de la semaine' : 'du mois'}</span><em>${s.sessions}</em></summary>
       <div class="chips">${chip(per === 'week', 'Semaine', 'data-act="sumKind" data-id="week"')}${chip(per === 'month', 'Mois', 'data-act="sumKind" data-id="month"')}</div>
       <p class="small">${s.sessions} séance(s) · ${s.minutes} min${s.activities.length ? ' · ' + s.activities.map((a) => `${a.label} ×${a.n}`).join(', ') : ''}</p>
       ${s.undertrained.length ? h`<p class="small">🧩 Peu travaillé : ${s.undertrained.join(', ')}</p>` : ''}</details>`;
+  const kpisView = () => h`<div class="kpiwrap"><div class="row between">${seg('benchDays', String(days), [['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']])}</div>
+    <div class="kpis">${kpi('🏋️', 'Séances', b.cur.sessions, b.deltas.sessions)}${kpi('⏱', 'Minutes', b.cur.minutes, b.deltas.minutes)}${kpi('🔁', 'Séries', b.cur.sets, b.deltas.sets)}${kpi('😮‍💨', 'Ressenti', b.cur.rpe ?? '—', null)}</div>
+    <p class="tiny muted center">Comparé aux ${days} jours d’avant · uniquement toi</p></div>`;
+  return composePage('progress', {
+    streak: () => streakCard(),
+    kpis: kpisView,
+    wins: () => (wins.length ? h`<section class="card ok-b"><span class="kicker ok-t">Tes bonnes nouvelles</span>${wins.map(([ic, t]) => h`<div class="win"><span>${ic}</span>${t}</div>`)}</section>` : ''),
+    work: () => (b.capDiff.length ? WORK() : ''),
+    regularity: () => REG(),
+    load: () => LOAD(),
+    muscles: () => h`<section class="card"><div class="row between"><h3>🫀 Muscles travaillés</h3>${seg('muscleDays', String(S.muscleDays || 7), [['7', '7 j'], ['30', '30 j']])}</div>${raw(anatomySvg({ heat: muscleVolume(c, S.muscleDays || 7) }))}</section>`,
+    badges: () => badgesCard(),
+    weeksum: () => SUM(),
+  });
 }
 ACT.benchDays = (el) => { S.benchDays = Number(el.dataset.id); render(); };
 ACT.sumKind = (el) => { S.sumKind = el.dataset.id; render(); };
@@ -102,7 +112,7 @@ function vAnalyses() {
       ${u.items.length ? h`<details class="how mini"><summary>Comment lire ?</summary><p class="tiny">Barre pleine : ta part de volume. Ombre : ce que demandent tes activités et objectifs. ${u.text}</p></details>` : ''}</div>
     <div class="card"><h3>🎯 Objectifs délaissés</h3>${f.length ? f.map((x) => h`<div class="item"><div class="grow small">${x.days != null ? `« ${x.label} » : dernière séance liée il y a ${x.days} jours (${fmtDay(x.last)}).` : `« ${x.label} » : pas encore travaillé.`}</div><button class="btn sm" data-act="todayGoal" data-id="${x.goal.id}">Séance</button></div>`) : h`<p class="muted small">Tous tes objectifs actifs ont été travaillés récemment.</p>`}</div>
     <div class="card"><h3>📌 Séances atypiques</h3>${a.length ? a.map((x) => h`<div class="win"><span>📌</span>${x.text}</div>`) : h`<p class="muted small">Rien d’inhabituel 👍</p>`}</div>
-    ${w ? h`<div class="card"><h3>🤔 Pourquoi je stagne ? — ${w.goal}</h3>${w.hypotheses.map((x) => h`<details class="win fold2"><summary><b>💡 ${x.title}</b></summary><p class="small">${x.text}</p></details>`)}${howBox({ facts: w.facts, missing: w.missing })}</div>` : ''}`;
+    ${w ? h`<div class="card"><h3>🤔 Pourquoi je stagne sur « ${w.goal} » ?</h3>${w.hypotheses.map((x) => h`<details class="win fold2"><summary><b>💡 ${x.title}</b></summary><p class="small">${x.text}</p></details>`)}${howBox({ facts: w.facts, missing: w.missing })}</div>` : ''}`;
 }
 
 /* ═════════ Mode Lab : expériences personnelles ═════════ */

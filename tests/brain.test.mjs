@@ -88,7 +88,7 @@ ok('régularité : moyenne hebdomadaire et interruption détectée', () => {
 });
 ok('comparaisons 7/30/90 jours avec la période précédente uniquement', () => {
   const c = ctxOf({ history: weekly });
-  for (const d of [7, 30, 90]) { const b = B.benchmarks(c, d); assert.equal(b.days, d); assert.match(b.text, /ton propre historique/); }
+  for (const d of [7, 30, 90]) { const b = B.benchmarks(c, d); assert.equal(b.days, d); assert.match(b.text, /d’après ton historique seulement/); }
   assert.equal(B.benchmarks(c, 30).cur.sessions, 5);
 });
 ok('charge : descriptive, avec avertissement non médical', () => {

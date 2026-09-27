@@ -15,6 +15,15 @@ export const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS common_exercises (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, data_json TEXT NOT NULL, created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL)",
   "CREATE TABLE IF NOT EXISTS user_exercises (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, data_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(user_id,name), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE TABLE IF NOT EXISTS system_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+  // Rappels d'entraînement (notifications) : un abonnement par appareil.
+  "CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, days TEXT NOT NULL DEFAULT '[]', hour TEXT NOT NULL DEFAULT '18:00', tz TEXT NOT NULL DEFAULT 'Europe/Paris', last_day TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_push_user ON push_subs(user_id)",
+  "CREATE TABLE IF NOT EXISTS duo_rooms (code TEXT PRIMARY KEY, owner_id TEXT NOT NULL, members_json TEXT NOT NULL, session_json TEXT NOT NULL, state_json TEXT NOT NULL, v INTEGER NOT NULL DEFAULT 1, by_id TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS idx_duo_exp ON duo_rooms(expires_at)",
+  // Intentions communes (ajoutées par un administrateur, visibles par tous) et propositions des utilisateurs.
+  "CREATE TABLE IF NOT EXISTS community_intents (id TEXT PRIMARY KEY, activity TEXT NOT NULL DEFAULT '', label TEXT NOT NULL, emoji TEXT NOT NULL DEFAULT '', caps_json TEXT NOT NULL DEFAULT '{}', created_by TEXT, created_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS proposals (id TEXT PRIMARY KEY, user_id TEXT, kind TEXT NOT NULL, activity TEXT NOT NULL DEFAULT '', label TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', payload_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'open', reply TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, reviewed_by TEXT, reviewed_at INTEGER, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status,created_at)",
   // Communauté : le profil est privé tant que la personne ne choisit pas de partager.
   "CREATE TABLE IF NOT EXISTS profiles (user_id TEXT PRIMARY KEY, visibility TEXT NOT NULL DEFAULT 'private', share_stats INTEGER NOT NULL DEFAULT 1, share_records INTEGER NOT NULL DEFAULT 1, share_sessions INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE TABLE IF NOT EXISTS follows (id TEXT PRIMARY KEY, follower_id TEXT NOT NULL, followee_id TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(follower_id,followee_id), FOREIGN KEY(follower_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(followee_id) REFERENCES users(id) ON DELETE CASCADE)",
@@ -39,4 +48,8 @@ export const ADD_COLUMNS = [
   ['user_data', 'v2_migrated', 'INTEGER NOT NULL DEFAULT 0'],
   ['profiles', 'bio', "TEXT NOT NULL DEFAULT ''"],
   ['profiles', 'share_json', "TEXT NOT NULL DEFAULT '{}'"],
+  // Notifications : types choisis par appareil, message en attente, mode silencieux.
+  ['push_subs', 'types', "TEXT NOT NULL DEFAULT '[\"reminder\",\"update\",\"reply\",\"admin\"]'"],
+  ['push_subs', 'pending', "TEXT NOT NULL DEFAULT ''"],
+  ['push_subs', 'silent', 'INTEGER NOT NULL DEFAULT 0'],
 ];

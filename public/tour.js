@@ -7,7 +7,7 @@ import { S, ACT, go } from './state.js';
 // [onglet, sous-page, sélecteur de l'élément à montrer, titre, texte]
 const STEPS = [
   ['home', 'dash', '.hero', '👋 Bienvenue !', 'Voici ton accueil : ta semaine en un coup d’œil. On fait le tour ensemble en 30 secondes.'],
-  ['home', 'dash', '.quick .qa.pri', '✨ Une séance pour toi', 'Touche ici : l’app prépare une séance adaptée à ton niveau, ton temps et ton matériel.'],
+  ['home', 'dash', '.quick .qa.pri', '🎯 Une séance pour toi', 'Touche ici : l’app prépare une séance adaptée à ton niveau, ton temps et ton matériel.'],
   ['home', 'dash', '.quick .qa:nth-child(2)', '📚 Tes séances', 'Retrouve, lance ou modifie les séances que tu as enregistrées.'],
   ['library', 'generate', '.gen .chips.big', '🎯 Deux choix, c’est tout', 'Choisis ton sport et combien de temps tu as…'],
   ['library', 'generate', '[data-act=genPlan]', '👀 Aperçu avant de commencer', '…puis l’app te montre ce qu’elle prévoit. Tu peux ajuster, puis lancer la séance ▶.'],

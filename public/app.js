@@ -2,18 +2,26 @@
 // Charge les vues, gère l'authentification, la navigation (onglets + adresse #/onglet/sous-vue/paramètre),
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
 import { h, raw, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
-import { normalizeSession } from './shared.js';
+import { normalizeSession, uid } from './shared.js';
 import { maybeMove, maybeClaim } from './move.js';
 import { pendingNews, latestNews, markNewsToured, initNews } from './news.js';
 import { startTour } from './tour.js';
+import './timer.js';
+import './views-coach.js';
+import { checkBadges } from './views-motiv.js';
+import { topIcons } from './layout.js';
+import { refreshInbox } from './inbox.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
 import { vProfile } from './views-profile.js';
 import { vSettings, APPEAR_KEYS } from './views-settings.js';
-import { onVisible } from './player.js';
+import { onVisible, bigTap, startPlayer } from './player.js';
+import { catchLink, pendingLink, clearPending } from './share.js';
+import './duo.js';
+import { setLang } from './i18n.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
 const VIEWS = { home: vHome, progress: vProgress, library: vLibrary, profile: vProfile, settings: vSettings };
@@ -28,10 +36,11 @@ function syncBadge() {
 function doRender() {
   const app = $('#app');
   const pub = (location.hash || '').match(/^#\/profile\/public\/([^/]+)$/);
-  if (!S.user) { app.innerHTML = (pub ? vPublicVisitor(decodeURIComponent(pub[1])) : vAuth()).s; return; }
+  const pl = pendingLink();
+  if (!S.user) { app.innerHTML = (pub ? vPublicVisitor(decodeURIComponent(pub[1])) : pl && !S.authMode ? h`<main class="wrap">${vLanding(pl)}</main>` : vAuth()).s; return; }
   if (!S.loaded) { app.innerHTML = h`<main class="wrap">${skeleton(4)}</main>`.s; return; }
   let body;
-  try { body = pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
+  try { body = pl ? vLanding(pl) : pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
   catch (e) {
     console.error(e);
     const where = String(e?.stack || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/https?:\/\/[^/]+\//, '')).join(' · ');
@@ -39,7 +48,7 @@ function doRender() {
       <details class="how mini"><summary>Détail technique</summary><p class="tiny">${S.tab}/${S.sub[S.tab] || ''} — ${where || 'aucun'}</p></details>
       <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
   }
-  app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"> Séances <em>entraînement</em></span>${syncBadge()}</div></header>
+  app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
     <main class="wrap" id="main">${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
 }
@@ -51,7 +60,7 @@ function syncAppearance() {
   if (it && !it.del && it.u > localT) { window.__sea.save({ ...local, ...Object.fromEntries(Object.entries(it.d).filter(([, v]) => v)), _t: it.u, _owner: S.user.id }); return; }
   if (!it && mine && local._t && (S.lastSync || S.user.guest)) putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(local[k] ?? '') }), {}));
 }
-setRenderer(() => { syncAppearance(); doRender(); renderUpdateBar(); });
+setRenderer(() => { syncAppearance(); setLang(S.settings?.lang); doRender(); renderUpdateBar(); checkBadges(); });
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
 ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }[id]; const keep = S.tab === id ? base : S.sub[id]; go(id, ['seance', 'shared-edit', 'common-detail', 'import'].includes(keep) ? base : keep || base); };
 ACT.goSync = () => go('settings', 'sync');
@@ -63,7 +72,7 @@ function vAuth() {
   const reg = S.authMode === 'register', up = !!S.upgradeGuest;
   return h`<main class="auth wrap"><div class="center"><img class="app-logo" src="/icon-192.png" alt="" width="84" height="84"><h1>Séances entraînement</h1>
       ${up ? h`<p class="muted">Crée ton compte : tout ce que tu as fait en mode invité (séances, historique, profil) y sera transféré.</p>` : h`<p class="lead">Ton coach d’entraînement personnel, gratuit.</p>`}</div>
-    ${up ? '' : h`<ul class="pitch"><li><span>✨</span><div><b>Des séances faites pour toi</b><small>Escalade, muscu, renforcement, course, natation… selon ton niveau, ton temps et ton matériel.</small></div></li>
+    ${up ? '' : h`<ul class="pitch"><li><span>🎯</span><div><b>Des séances faites pour toi</b><small>Escalade, muscu, renforcement, course, natation… selon ton niveau, ton temps et ton matériel.</small></div></li>
       <li><span>▶️</span><div><b>Guidé pendant l’effort</b><small>Chrono, repos, séries : il suffit de suivre l’écran.</small></div></li>
       <li><span>📈</span><div><b>Tu vois tes progrès</b><small>Historique, records et conseils expliqués simplement.</small></div></li></ul>`}
     ${up || S.authMode ? '' : h`<div class="stack"><button class="btn pri big" data-act="authPick" data-id="register">Créer mon compte gratuit</button><button class="btn big" data-act="authPick" data-id="login">J’ai déjà un compte</button>
@@ -152,11 +161,45 @@ function vPublicVisitor(name) {
     ${S.publicSession ? h`<div class="card"><h3>${S.publicSession.title}</h3>${blocksOf(normalizeSession(S.publicSession.session), 'view')}</div>` : ''}
     ${S.user ? h`<button class="btn" data-act="tab" data-id="home">‹ Retour à mon espace</button>` : ''}</main>`;
 }
+/* ═════════ Arrivée par un lien partagé (séance ou séance à deux) ═════════ */
+function vLanding(pl) {
+  const out = h`<button class="btn ghost" data-act="linkClose">${S.user ? '‹ Retour à mon espace' : 'Ignorer'}</button>`;
+  if (pl.kind === 'duo') {
+    return h`<div class="card acc-b center"><h1>👥 Séance à deux</h1><p>On t’invite à faire une séance ensemble. Code : <b class="duocode sm">${pl.id}</b></p>
+      ${S.user && !S.user.guest ? h`<button class="btn pri big" data-act="duoJoinLink" data-code="${pl.id}">Rejoindre la séance</button>`
+        : h`<p class="small muted">Il faut un compte (gratuit) pour partager les chronos.</p><button class="btn pri big" data-act="linkLogin" data-mode="${S.user ? 'up' : 'login'}">${S.user ? 'Créer mon compte' : 'Me connecter'}</button>${S.user ? '' : h`<button class="btn" data-act="linkLogin" data-mode="register">Créer un compte</button>`}`}</div>${out}`;
+  }
+  const L = S.linkView;
+  if (!L || L.id !== pl.id) {
+    S.linkView = { id: pl.id };
+    api('GET', `/api/public/s/${encodeURIComponent(pl.id)}`, undefined, { quiet401: true, guestOk: true }).then((r) => { S.linkView = { id: pl.id, item: r.item }; render(); })
+      .catch((e) => { S.linkView = { id: pl.id, error: e.offline ? 'Pas de connexion : réessaie quand tu as du réseau.' : e.message }; render(); });
+    return skeleton(2);
+  }
+  if (L.error) return h`<div class="card"><h2>Séance introuvable</h2><p class="muted">${L.error}</p><p class="small">La personne a peut-être retiré le lien.</p></div>${out}`;
+  if (!L.item) return skeleton(2);
+  const it = L.item, s = normalizeSession(it.session);
+  return h`<div class="card acc-b"><p class="tiny muted">Séance partagée${it.author ? ` par ${it.author}` : ''}</p><h1 style="margin:.1em 0">${s.emoji || '🏋️'} ${it.title}</h1>
+      <p class="small muted">${it.exerciseCount} exercices · environ ${it.durationMin} min</p>
+      ${S.user ? h`<div class="grid2"><button class="btn pri big" data-act="linkSave">💾 Garder</button><button class="btn big" data-act="linkPlay">▶ Faire maintenant</button></div>`
+        : h`<div class="stack"><button class="btn pri big" data-act="linkLogin" data-mode="login">Me connecter pour la garder</button><button class="btn" data-act="linkLogin" data-mode="register">Créer un compte</button><button class="btn ghost" data-act="guestStart">Essayer sans compte</button></div>`}</div>
+    <div class="card">${blocksOf(s, 'view')}</div>${out}`;
+}
+ACT.linkLogin = (el) => { if (el.dataset.mode === 'up') { ACT.guestUpgrade?.(); return; } S.authMode = el.dataset.mode === 'register' ? 'register' : 'login'; render(); };
+ACT.linkClose = () => { clearPending(); S.linkView = null; if (S.user) go('home', 'dash'); else render(); };
+ACT.linkSave = () => {
+  const it = S.linkView?.item; if (!it) return;
+  const now = Date.now(), src = normalizeSession(it.session);
+  const s = saveSeance({ ...src, id: uid(), name: it.title, source: 'copy', exercises: src.exercises.map((e) => ({ ...e, id: uid(), note: '' })), origin: { kind: 'link', id: it.id, author: it.author || '', copiedAt: now }, createdAt: now, updatedAt: now });
+  clearPending(); S.linkView = null; toast('Gardée dans Mes séances'); go('library', 'seance', s.id);
+};
+ACT.linkPlay = () => { const it = S.linkView?.item; if (!it) return; clearPending(); S.linkView = null; render(); startPlayer(it.session); };
 ACT.pubLogin = () => { location.hash = ''; S.authMode = 'login'; render(); };
 ACT.tourStart2 = () => maybeTour(true);
 ACT.pubView = async (el) => { try { const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`, undefined, { quiet401: true }); S.publicSession = r.item; render(); } catch (e) { toast(e.message); } };
 
 /* ═════════ Événements ═════════ */
+document.getElementById('player')?.addEventListener('click', (e) => bigTap(e));
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
   const fn = ACT[el.dataset.act]; if (!fn) return;
@@ -173,7 +216,7 @@ document.addEventListener('submit', (e) => {
 document.addEventListener('change', (e) => { const el = e.target.closest('[data-change]'); if (!el) return; const fn = CHG[el.dataset.change]; if (fn) try { fn(el); } catch (err) { console.error(err); toast(err.message, 4000, 'bad'); } });
 document.addEventListener('input', (e) => { const el = e.target.closest('[data-input]'); if (!el) return; const fn = INPUT[el.dataset.input]; if (fn) fn(el); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) closeSheet(); });
-window.addEventListener('hashchange', () => { parseHash(); closeSheet(); render(); });
+window.addEventListener('hashchange', () => { catchLink(); parseHash(); closeSheet(); render(); });
 window.addEventListener('online', () => syncAll());
 window.addEventListener('offline', () => { S.sync = 'offline'; render(); });
 document.addEventListener('visibilitychange', () => {
@@ -198,7 +241,7 @@ function renderUpdateBar() {
   if (!bar) { bar = document.createElement('div'); bar.id = 'updbar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
   const tour = pendingNews().length > 0;
   const html = UPD.available
-    ? h`<div class="ut"><span>✨ <b>Nouvelle version disponible</b></span><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button></div>
+    ? h`<div class="ut"><span>🆕 <b>Nouvelle version prête</b></span><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button></div>
       <div class="ub"><button class="btn sm" data-act="updWhat">👀 Nouveautés</button><button class="btn pri sm" data-act="updNow">Mettre à jour</button></div>`
     : h`<div class="ut"><span>🎉 <b>L’app a été mise à jour</b></span><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button></div>
       <div class="ub">${tour ? h`<button class="btn sm" data-act="updWhat">👀 Détails</button><button class="btn pri sm" data-act="newsTour">🧭 Faire la visite</button>` : h`<button class="btn pri sm" data-act="updWhat">👀 Voir les nouveautés</button>`}</div>`;
@@ -219,14 +262,14 @@ ACT.updWhat = async () => {
   const since = UPD.since;
   const tour = pendingNews().length > 0;
   if (UPD.fresh) { UPD.fresh = false; writeSeen(UPD.boot); renderUpdateBar(); }
-  openSheet(h`<div class="news"><h2>✨ Quoi de neuf ?</h2>${skeleton(3)}</div>`);
+  openSheet(h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>${skeleton(3)}</div>`);
   let list = [];
   try { const r = await fetch('/api/changes'); if (r.ok) list = (await r.json()).changes || []; } catch { /* hors ligne */ }
   let recent = since ? list.filter((c) => c.date > since - 3600000) : [];
   const older = !recent.length;
   if (older) recent = list.slice(0, 4);
   const day = (t) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-  const body = h`<div class="news"><h2>✨ Quoi de neuf ?</h2>
+  const body = h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>
     ${recent.length ? h`<p class="small muted">${older ? 'Les dernières améliorations du site :' : `${recent.length} amélioration${recent.length > 1 ? 's' : ''} depuis ta dernière visite :`}</p>
       <ol class="newslist">${recent.slice(0, 8).map((c) => h`<li><span class="nd">${day(c.date)}</span><div><b>${c.title}</b>${c.points?.length ? h`<ul>${c.points.map((p) => h`<li>${p}</li>`)}</ul>` : ''}</div></li>`)}</ol>`
       : h`<p class="small muted">Petites améliorations et corrections. ${navigator.onLine ? '' : 'Connecte-toi à Internet pour voir le détail.'}</p>`}
@@ -265,7 +308,10 @@ function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('/sw.js').then((reg) => {
     UPD.reg = reg;
-    if (reg.waiting && navigator.serviceWorker.controller) showUpdate();
+    // Mise à jour demandée juste avant ce rechargement : si la nouvelle version attend encore, on l'active (sans reproposer le bandeau).
+    const asked = sessionStorage.getItem('sea:user-update');
+    if (reg.waiting && navigator.serviceWorker.controller) { if (asked) reg.waiting.postMessage('SKIP_WAITING'); else showUpdate(); }
+    else if (asked) sessionStorage.removeItem('sea:user-update');
     reg.addEventListener('updatefound', () => {
       const w = reg.installing; if (!w) return;
       w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(); });
@@ -281,7 +327,14 @@ function registerSW() {
 async function start() {
   if (await maybeMove()) return; // ancienne adresse : redirection vers la nouvelle, avec les données de l'appareil
   if (await maybeClaim()) return;
+  // Raccourcis de l'icône (appui long) : ?do=timer / ?do=gen
+  const newsParam = new URLSearchParams(location.search).get('news');
+  if (newsParam) { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => ACT.notifOpen?.(), 900); }
+  setTimeout(() => refreshInbox({ sound: true }), 1500);
+  const doIt = new URLSearchParams(location.search).get('do');
+  if (doIt === 'timer' || doIt === 'gen') { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => { if (S.user) (doIt === 'timer' ? ACT.timerOpen : ACT.genOpen)?.(); }, 900); }
   registerSW();
+  catchLink();
   parseHash();
   const cached = ls.get('sea:user');
   if (cached?.guest) { S.user = { ...GUEST }; render(); await loadLocal(); render(); window.__seaStarted = true; return; }

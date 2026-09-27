@@ -101,7 +101,7 @@ export function normalizeSession(s = {}) {
     context: normalizeContext(s.context),
     template: !!s.template,
     archived: !!s.archived,
-    origin: s.origin && typeof s.origin === 'object' && ['common', 'public'].includes(s.origin.kind)
+    origin: s.origin && typeof s.origin === 'object' && ['common', 'public', 'link'].includes(s.origin.kind)
       ? { kind: s.origin.kind, id: str(s.origin.id, 64), author: str(s.origin.author, 40), copiedAt: clamp(s.origin.copiedAt, 0, 9e15, 0) } : null,
     explain: normalizeExplain(s.explain),
     // Repère d'escalade optionnel indiqué par l'auteur (instantané de cotation, voir grading.js).

@@ -1,6 +1,7 @@
 // views-home.js — Accueil : tableau de bord personnalisable, « Que faire aujourd'hui ? », commandes en langage
 // naturel, calendrier visuel (planifié / réalisé), premier lancement.
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk } from './ui.js';
+import { sceneSvg, moodLine } from './scene.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings } from './state.js';
 import { uid, summarizeHistory } from './shared.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, EQUIPMENT, CAPACITIES } from './model.js';
@@ -11,6 +12,11 @@ import { adaptDuration, alternatives, replaceExercise, BODY_WORDS } from './gene
 import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { openGenerator, blocksOf } from './views-library.js';
 import { startPlayer } from './player.js';
+import { streakCard } from './views-motiv.js';
+import { composePage } from './layout.js';
+import { programCard, fingerCard, activeProgram } from './views-program.js';
+import { programStatus } from './program.js';
+import { buildIcs } from './ics.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard, maybeAskOnOpen } from './views-setup.js';
 
 export const DASH_BLOCKS = {
@@ -24,14 +30,15 @@ export function eventsOn(date) {
   const wd = (d) => new Date(d + 'T12:00:00').getDay();
   return S.events.filter((e) => e.date === date || (e.recurrence?.freq === 'weekly' && e.date <= date && wd(e.date) === wd(date) && (!e.recurrence.until || date <= e.recurrence.until)));
 }
+/** Séances du programme en cours prévues ce jour-là (pas encore faites). */
+const programOn = (date) => { const p = activeProgram(); if (!p) return []; const st = programStatus(p, S.history); return st.list.filter((x) => x.date === date && x.status !== 'done').map((x) => ({ ...x, pid: p.id, name: p.name })); };
 const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt)) === date);
 
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  return h`${reinstallCard()}${hero()}
-    <div class="row between">${seg('homeSub', sub, [['dash', '🏠 Ma journée'], ['cal', '📅 Calendrier']])}${sub === 'dash' ? h`<button class="btn sm ghost" data-act="dashEdit" aria-label="Choisir les blocs affichés sur l’accueil">✎</button>` : ''}</div>
-    ${sub === 'cal' ? vCalendar() : vDash()}`;
+  if (sub === 'cal') return h`<div class="row pagehead"><button class="btn sm" data-act="homeSub" data-id="dash">‹ Accueil</button><h1 class="grow">📅 Calendrier</h1></div>${vCalendar()}`;
+  return h`${reinstallCard()}${vDash()}`;
 }
 function hero() {
   const c = ctx(), hr = new Date().getHours();
@@ -43,9 +50,10 @@ function hero() {
   const pills = [target ? `${week.length}/${target} séance${target > 1 ? 's' : ''} cette semaine` : `${week.length} séance${week.length > 1 ? 's' : ''} cette semaine`];
   if (mins) pills.push(`⏱ ${mins} min`);
   if (streak >= 2) pills.push(`🔥 ${streak} semaines d’affilée`);
-  const mood = !c.history.length ? 'Prêt(e) pour ta première séance ?' : target && week.length >= target ? 'Objectif de la semaine atteint 🎉' : week.length ? 'Belle lancée, continue !' : 'Une petite séance aujourd’hui ?';
-  return h`<section class="card hero"><span class="date">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-    <h1>${hello}${S.user.guest ? '' : ' ' + S.user.username} 👋</h1><p>${mood}</p><div class="stats">${pills.map((p) => h`<span>${p}</span>`)}</div></section>`;
+  const now = new Date(), today = new Date(now); today.setHours(0, 0, 0, 0);
+  const mood = moodLine({ first: !c.history.length, done: c.history.some((x) => x.startedAt >= today.getTime()), target, weekCount: week.length, hour: hr, day: Math.floor(today.getTime() / 86400000) });
+  return h`<section class="card hero">${raw(sceneSvg(now, { season: !!S.settings.season }))}<span class="date">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+    <h1>${hello}${S.user.guest ? '' : ' ' + S.user.username}</h1><p>${mood}</p><div class="stats">${pills.map((p) => h`<span>${p}</span>`)}</div></section>`;
 }
 ACT.homeSub = (el) => go('home', el.dataset.id);
 
@@ -67,21 +75,32 @@ ACT.goProfile = (el) => go('profile', el.dataset.id);
 
 /* ═════════ Tableau de bord ═════════ */
 function vDash() {
-  const blocks = dashBlocks();
   const loop = S.lastLoop && Date.now() - S.lastLoop.at < 15 * 60000 ? S.lastLoop : null;
   maybeAskOnOpen();
+  const tile = (act, ic, title, sub, pri = false, id = '') => h`<button class="qa ${pri ? 'pri' : ''}" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><b>${title}</b><small>${sub}</small></button>`;
+  const safe = (b) => () => BLOCK_VIEWS[b]();
   return h`${setupCard()}${questionCard()}${installCard()}
-    <div class="quick">
-      <button class="qa pri" data-act="genOpen"><span class="qi">✨</span><b>Me proposer une séance</b><small>Adaptée à toi, expliquée</small></button>
-      <button class="qa" data-act="goLib"><span class="qi">📚</span><b>Mes séances</b><small>Lancer, créer, modifier</small></button>
-      <button class="qa" data-act="homeSub" data-id="cal"><span class="qi">📅</span><b>Planifier</b><small>Calendrier de la semaine</small></button>
-      <button class="qa" data-act="goProgress" data-id="summary"><span class="qi">📈</span><b>Mes progrès</b><small>Historique et records</small></button>
-    </div>
-    ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée — ce qui change dans ton profil</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<p class="tiny muted">Ces données alimentent tes analyses et tes prochaines séances générées.</p><button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
-    ${blocks.map((b) => { try { return BLOCK_VIEWS[b]?.() || ''; } catch (e) { console.error(e); return card(DASH_BLOCKS[b] || b, h`<p class="small warn-t">Ce bloc n’a pas pu s’afficher : ${e.message}</p><p class="tiny muted">Le reste de l’accueil fonctionne. Tu peux le signaler dans Paramètres › Signaler un bug.</p>`); } })}
-    <p class="tiny muted center">✎ en haut pour choisir ce qui s’affiche ici.</p>`;
+    ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
+    <div class="${S.lay?.page === 'home' ? '' : 'home-grid'}">${composePage('home', {
+      hero,
+      gen: () => tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true),
+      seances: () => tile('goLib', '📚', 'Mes séances', 'Lancer, créer, modifier'),
+      timer: () => tile('timerOpen', '⏱', 'Minuteur', 'Suspensions, Tabata…'),
+      carnet: () => tile('goCarnet', '🧗', 'Carnet', 'Blocs, voies et projets'),
+      progress: () => tile('goProgress', '📈', 'Mes progrès', 'Historique et records', false, 'summary'),
+      cal: safe('calendar'), coach: safe('command'), program: () => programCard() || '', finger: () => fingerCard() || '',
+      streak: () => (S.history.length || ctx().ascents.length ? streakCard() : ''),
+      today: safe('today'), next: safe('next'), goals: safe('goals'), reco: safe('reco'), weekprog: safe('progress'), records: safe('records'),
+      regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'),
+    })}</div>`;
 }
 ACT.goLib = () => go('library', 'seances');
+ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
+ACT.topCal = () => { go('home', 'cal'); window.scrollTo(0, 0); };
+ACT.goProgressTop = () => { go('progress', 'summary'); window.scrollTo(0, 0); };
+ACT.topProgram = () => { const p = activeProgram(); if (p) ACT.progOpen({ dataset: { id: p.id } }); else ACT.progNew(); };
+ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); closeSheet(); go(t, sub); window.scrollTo(0, 0); };
+ACT.layEditHome = () => { closeSheet(); go('home', 'dash'); setTimeout(() => ACT.layEdit(), 150); };
 ACT.loopClose = () => { S.lastLoop = null; render(); };
 ACT.genOpen = () => openGenerator({});
 ACT.newSeanceHome = () => ACT.newSeance();
@@ -92,10 +111,10 @@ const BLOCK_VIEWS = {
     const t = todayOptions(ctx(), { todayEvents: evs });
     return card('☀️ Que faire aujourd’hui ?', h`${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
       <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="tiny">${(o.how || []).map((x) => h`<li>${x}</li>`)}</ul></details></div>
-      ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}">✨</button>`}</div>`)}`);
+      ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}" aria-label="Préparer cette séance">▶</button>`}</div>`)}`);
   },
   command() {
-    return card('🗣️ Dis-le simplement', h`<form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Séance de 20 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>
+    return card('🗣️ Dis-le simplement', h`<button class="btn coachbtn" data-act="coachOpen">💬 Poser une question au coach</button><form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Séance de 20 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>
       <details class="how mini"><summary>Exemples</summary><p class="tiny">« Remplace les tractions » · « Ajoute 5 minutes de gainage » · « Je n’ai que 12 minutes » · « Montre mes records » · « Je n’ai pas de barre aujourd’hui ».</p></details>`);
   },
   next() {
@@ -131,7 +150,7 @@ const BLOCK_VIEWS = {
     for (const t of testReminders(c).slice(0, 2)) items.push({ icon: '📏', text: t.unknown ? `Faire le test : ${t.label.toLowerCase()}` : t.age != null ? `Refaire le test : ${t.label.toLowerCase()}` : `Mesurer : ${t.label.toLowerCase()}`, act: h`<button class="btn sm" data-act="perfAdd" data-id="${t.metricId}">Saisir</button>` });
     for (const u of undertrained(c).items.slice(0, 1)) items.push({ icon: '🧩', text: `Peu travaillé ces temps-ci : ${u.label.toLowerCase()}`, act: '' });
     for (const hb of habits(c).filter((x) => x.proposal).slice(0, 2)) items.push({ icon: '🔁', text: hb.text, act: h`<button class="btn sm pri" data-act="habitYes" data-k="${hb.key}">Oui</button><button class="btn sm" data-act="habitNo" data-k="${hb.key}">Non</button>` });
-    for (const n of neverTried(c).slice(0, 1)) items.push({ icon: '✨', text: `À essayer : ${n.lib.name}`, act: h`<button class="btn sm" data-act="libInfo" data-id="${n.lib.id}">Voir</button>` });
+    for (const n of neverTried(c).slice(0, 1)) items.push({ icon: '🆕', text: `À essayer : ${n.lib.name}`, act: h`<button class="btn sm" data-act="libInfo" data-id="${n.lib.id}">Voir</button>` });
     return card('💡 Recommandations', items.length ? items.map((x) => h`<div class="item"><div class="ico sm">${x.icon}</div><div class="grow small">${x.text}</div><div class="row tight">${x.act}</div></div>`) : h`<p class="muted small">Rien à signaler pour l’instant.</p>`);
   },
   load() {
@@ -261,7 +280,7 @@ function monthGrid(mini = false) {
     <div class="cal">${JOURS.map((j) => h`<div class="h">${j}</div>`)}${cells.map((d) => {
       if (!d) return h`<div></div>`;
       const done = c.history.filter((x) => ymd(new Date(x.startedAt)) === d), planned = eventsOn(d);
-      return h`<button class="d ${d === today ? 'today' : ''} ${done.length ? 'has-done' : ''}" data-act="calDay" data-id="${d}" aria-label="${d}${done.length ? ', ' + done.length + ' séance(s) réalisée(s)' : ''}${planned.length ? ', ' + planned.length + ' prévue(s)' : ''}">${Number(d.slice(8))}<span class="dots">${done.slice(0, 3).map((x) => raw(`<i class="done" style="background:${ACT_COLORS[entryActivity(x, c)] || 'var(--ok)'}"></i>`))}${planned.slice(0, 2).map(() => raw('<i class="plan"></i>'))}</span></button>`;
+      return h`<button class="d ${d === today ? 'today' : ''} ${done.length ? 'has-done' : ''}" data-act="calDay" data-id="${d}" aria-label="${d}${done.length ? ', ' + done.length + ' séance(s) réalisée(s)' : ''}${planned.length ? ', ' + planned.length + ' prévue(s)' : ''}">${Number(d.slice(8))}<span class="dots">${done.slice(0, 3).map((x) => raw(`<i class="done" style="background:${ACT_COLORS[entryActivity(x, c)] || 'var(--ok)'}"></i>`))}${planned.slice(0, 2).map(() => raw('<i class="plan"></i>'))}${programOn(d).slice(0, 1).map(() => raw('<i class="prog"></i>'))}</span></button>`;
     })}</div>`;
 }
 function vCalendar() {
@@ -269,10 +288,25 @@ function vCalendar() {
   const inMonth = c.history.filter((x) => { const d = new Date(x.startedAt); return d.getFullYear() === y && d.getMonth() === m; });
   const acts = {}; for (const x of inMonth) { const a = entryActivity(x, c); acts[a] = (acts[a] || 0) + 1; }
   const reg = regularity(c);
-  return h`<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée (couleur = activité)</span><span><i class="lg plan"></i> prévue</span></div></div>
+  return h`<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
+    <button class="btn" data-act="icsExport">📅 Ajouter mes séances à l’agenda du téléphone</button>
+    ${activeProgram() ? programCard() : h`<section class="card prog"><b>📆 Un objectif sur plusieurs semaines ?</b><p class="small muted">4 questions, et ton calendrier se remplit tout seul.</p><button class="btn pri" data-act="progNew">Créer un programme</button></section>`}
     <div class="card"><h3>Ce mois-ci</h3><p class="small">${inMonth.length} séance(s) réalisée(s)${Object.keys(acts).length ? ' · ' + Object.entries(acts).map(([a, n]) => `${activityLabel(a, c)} ×${n}`).join(', ') : ''}.</p><p class="small muted">${reg.text}</p>
       ${activeGoals(c).length ? h`<p class="tiny muted">Objectifs suivis : ${activeGoals(c).map(goalLabel).join(', ')}.</p>` : ''}</div>`;
 }
+/** Séances prévues (programme + calendrier, 90 jours) → fichier .ics que le téléphone ouvre dans son agenda. */
+ACT.icsExport = () => {
+  const today = ymd(new Date()), hour = ls.get('sea:reminders', null)?.hour || '18:00', ev = [];
+  for (let k = 0; k < 90; k++) {
+    const d = new Date(); d.setDate(d.getDate() + k); const day = ymd(d);
+    for (const e of eventsOn(day)) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: hour, minutes: s ? Math.max(10, Math.round(sessionMinutes(s))) : 45 }); }
+    for (const x of programOn(day)) if (x.status !== 'missed' || day >= today) ev.push({ uid: `${x.pid}-${x.i}`, title: `${x.name.split(' · ')[0]} · semaine ${x.week}`, date: day, time: hour, minutes: x.minutes, desc: 'Programme Séances entraînement' });
+  }
+  if (!ev.length) { toast('Rien de prévu pour l’instant : planifie une séance ou crée un programme.'); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buildIcs(ev)], { type: 'text/calendar;charset=utf-8' })); a.download = 'seances.ics';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(`${ev.length} séance${ev.length > 1 ? 's' : ''} exportée${ev.length > 1 ? 's' : ''}. Ouvre le fichier pour les ajouter à ton agenda.`, 5000);
+};
 ACT.calMove = (el) => { const n = S.cal.m + Number(el.dataset.id); S.cal = { y: S.cal.y + Math.floor(n / 12), m: ((n % 12) + 12) % 12 }; render(); };
 ACT.calDay = (el) => openPlanSheet(el.dataset.id);
 export function openPlanSheet(date, seanceId) {
@@ -282,7 +316,8 @@ export function openPlanSheet(date, seanceId) {
   openSheet(h`<h2 style="margin:0">${new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
     ${done.length ? h`<b class="small ok-t">Réalisé</b>${done.map((x) => h`<div class="item"><div class="ico sm">✅</div><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.aborted ? ' · interrompue' : ''}</div></div></div>`)}` : ''}
     ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${e.recurrence ? 'se répète chaque semaine' : e.completed ? 'marquée faite' : future ? 'à venir' : ''}</div></div>${s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
-    ${!done.length && !evs.length ? h`<p class="muted small">Rien ce jour-là.</p>` : ''}
+    ${programOn(date).map((x) => h`<div class="item"><div class="ico sm">📆</div><div class="grow"><b>${x.name.split(' · ')[0]} · S${x.week}</b><div class="tiny muted">${x.minutes} min · programme${x.status === 'missed' ? ' · manquée' : ''}</div></div>${date <= ymd(new Date()) ? h`<button class="btn pri sm" data-act="progPlay" data-id="${x.pid}" data-i="${x.i}">▶</button>` : ''}</div>`)}
+    ${!done.length && !evs.length && !programOn(date).length ? h`<p class="muted small">Rien ce jour-là.</p>` : ''}
     ${list.length ? h`<form data-submit="addEvent" class="card flat"><h3>Planifier une séance</h3>
       <label>Séance<select name="sid">${list.map((s) => h`<option value="${s.id}" ${s.id === seanceId ? 'selected' : ''}>${s.emoji} ${s.name}</option>`)}</select></label>
       <label class="chk"><input type="checkbox" name="weekly"> Répéter chaque semaine</label>

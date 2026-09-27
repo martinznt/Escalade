@@ -49,7 +49,9 @@ export const SCHEMAS = {
   // Activité personnalisée ou activation d'une activité native (preset = identifiant natif).
   activity: { label: ['s', 60], emoji: ['s', 8], preset: ['s', 40], aliases: ['strs', 20, 60], archived: ['b'] },
   // Catégorie d'une activité (native ou personnalisée). Sans capacité liée, la catégorie est elle-même un nœud du graphe.
-  category: { activityId: ['id'], label: ['s', 60], description: ['s', 180], caps: ['caps', 8], archived: ['b'], emoji: ['s', 8], guide: ['s', 600], howTo: ['strs', 6, 220], source: ['e', ['', 'ia'], ''] },
+  category: { activityId: ['id'], label: ['s', 60], description: ['s', 180], caps: ['caps', 8], archived: ['b'], emoji: ['s', 8], guide: ['s', 600], howTo: ['strs', 6, 220], source: ['e', ['', 'ia'], ''],
+    // Ajout personnel depuis « Séance du jour » : intention, ou force / faiblesse écrite avec ses mots.
+    kind: ['e', ['', 'intent', 'focus'], ''], side: ['e', ['', 'strength', 'weakness'], ''] },
   // Définition d'une métrique personnalisée (ce qui est mesuré).
   metric: { label: ['s', 80], unit: ['s', 20], kind: ['e', ['reps', 'load', 'time', 'distance', 'grade', 'pace', 'score', 'other'], 'other'], dir: ['e', [1, -1], 1], activityId: ['id'], caps: ['caps', 8], gradeActivity: ['e', ['bloc', 'voie', ''], ''], archived: ['b'] },
   // Performance : une valeur observée à un moment donné pour une métrique.
@@ -67,15 +69,33 @@ export const SCHEMAS = {
   ascent: {
     kind: ['e', ['bloc', 'voie'], 'bloc'], name: ['s', 80], grade: ['obj', GRADE_SNAPSHOT], gradeText: ['s', 20],
     result: ['e', ['flash', 'send', 'work', 'top', 'attempt', 'fail'], 'attempt'], attempts: ['n', 1, 999, 1], styles: ['ids', 12], styleText: ['s', 60],
+    nuance: ['e', ['', 'facile', 'moyen', 'dur'], ''],
     date: ['n', 0, 9e15, 0], context: ['obj', CONTEXT], note: ['s', 300],
   },
+  // Projet d'escalade : un bloc / une voie qu'on travaille sur plusieurs séances, jusqu'à la réussite.
+  project: {
+    kind: ['e', ['bloc', 'voie'], 'bloc'], name: ['s', 80], grade: ['obj', GRADE_SNAPSHOT], gradeText: ['s', 20], place: ['s', 80],
+    status: ['e', ['active', 'done', 'archived'], 'active'], tries: ['list', { date: ['n', 0, 9e15, 0], n: ['n', 1, 99, 1] }, 200],
+    holds: ['list', { x: ['n', 0, 1, 0], y: ['n', 0, 1, 0], t: ['e', ['main', 'pied', 'depart', 'top'], 'main'] }, 80],
+    hasPhoto: ['b'], startedAt: ['n', 0, 9e15, 0], doneAt: ['n', 0, 9e15, 0], note: ['s', 300],
+  },
+  // Programme sur plusieurs semaines : calendrier des séances (générées au moment de les faire).
+  program: {
+    name: ['s', 80], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'poids', 'goal'], 'forme'], goalId: ['id'], activityId: ['s', 40],
+    weeks: ['n', 1, 24, 6], perWeek: ['n', 1, 7, 3], days: ['strs', 7, 1], minutes: ['n', 10, 180, 45], start: ['day'], status: ['e', ['active', 'done', 'stopped'], 'active'],
+    sessions: ['list', { i: ['n', 0, 999, 0], week: ['n', 1, 24, 1], date: ['day'], phase: ['e', ['build', 'deload', 'test'], 'build'], light: ['b'], boost: ['n', 0, 3, 0], minutes: ['n', 10, 180, 45] }, 170],
+  },
+  // Photo (JPEG réduit, en data URL) liée à un projet : même identifiant que le projet.
+  photo: { data: ['s', 90000], w: ['n', 1, 4000, 1], h: ['n', 1, 4000, 1] },
   gradesys: {
     name: ['s', 60], activity: ['e', ['bloc', 'voie', 'autre'], 'bloc'], kind: ['e', ['ordered', 'colors', 'numeric'], 'ordered'],
     levels: ['list', { id: ['id'], label: ['s', 30], color: ['color'], order: ['n', 0, 999, 0] }, 60],
     maps: ['list', { levelId: ['id'], ref: ['id'], refLevel: ['s', 40] }, 150], archived: ['b'],
   },
   style: { label: ['s', 40], activity: ['s', 40], archived: ['b'] },
-  env: { name: ['s', 60], type: ['e', ['maison', 'salle', 'exterieur', 'escalade', 'piscine', 'piste', 'autre'], 'autre'], equipment: ['ids', 40], isDefault: ['b'], archived: ['b'] },
+  env: { name: ['s', 60], type: ['e', ['maison', 'salle', 'exterieur', 'escalade', 'piscine', 'piste', 'autre'], 'autre'], equipment: ['ids', 40], isDefault: ['b'], archived: ['b'],
+    // Salle précise : ville, cotation de la salle, espaces et leur matériel.
+    city: ['s', 60], gradeSys: ['id'], areas: ['list', { id: ['e', ['bloc', 'voie', 'entrainement', 'muscu', 'etirement'], 'bloc'], items: ['ids', 30], note: ['s', 120] }, 8] },
   // Préférence explicite ou confirmée : aime / neutre / évite (jamais une suppression automatique).
   pref: { key: ['s', 80], label: ['s', 80], value: ['e', ['aime', 'neutre', 'evite'], 'neutre'], source: ['e', ['explicit', 'habit', 'questionnaire'], 'explicit'], reason: ['s', 200] },
   // Niveau déclaré par l'utilisateur pour une capacité (-1 = « je ne sais pas »).
@@ -95,10 +115,17 @@ export const SCHEMAS = {
   config: {
     blocks: ['strs', 20, 30], envId: ['id'], durations: ['strs', 10, 10], unavailable: ['ids', 40],
     // Premiers pas (questionnaire de profil, visite guidée) : réponses déclarées par l'utilisateur.
-    perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', ''], ''], intent: ['s', 30],
+    perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', 'poids', 'sante', ''], ''], intent: ['s', 30],
     setupDone: ['b'], asked: ['strs', 30, 30],
     // Apparence choisie (item « appearance ») : suit le compte sur tous les appareils.
     mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], shape: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
+    vibe: ['s', 20],
+    // Objectifs (plusieurs) et profil corporel (item « body ») : déclarés, tous facultatifs.
+    goals: ['strs', 8, 20], age: ['n', 8, 100, null], height: ['n', 100, 230, null], weight: ['n', 25, 300, null], sex: ['e', ['f', 'h', 'x', ''], ''],
+    shape: ['e', ['mince', 'athletique', 'moyen', 'costaud', 'rond', ''], ''], muscled: ['strs', 8, 20], fitness: ['n', 1, 5, null],
+    breath: ['e', ['jamais', 'effort', 'escaliers', 'souvent', ''], ''], daily: ['e', ['assis', 'debout', 'physique', ''], ''],
+    // Mise en page personnalisée (item « layout ») : JSON validé à la lecture (layout.js).
+    lay: ['s', 9000],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);
