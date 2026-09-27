@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { startServer, makeEnv } from './server.mjs';
+import worker from '../worker.js';
 const require = createRequire(import.meta.url);
 let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
@@ -161,9 +162,10 @@ await step('création manuelle d’une séance : exercices du catalogue, modific
 });
 await step('mode séance : séries, chrono, pause (non comptée), repos, fin', async () => {
   await a.click('[data-act=play]'); await A.waitForSelector('#player.open');
-  let guard = 0, sawRest = false, sawTimer = false, paused = false;
+  let guard = 0, sawRest = false, sawTimer = false, paused = false, cuesLater = 0;
   while (guard++ < 60) {
     if (await a.count('#player [data-act=pSave]')) break;
+    if (/Série [2-9] \//.test(await a.text('#player')) && await a.count('#player .cues li')) cuesLater++; // consignes aussi aux séries suivantes
     if (await a.count('#player [data-act=pRestSkip]')) { sawRest = true; await a.click('#player [data-act=pRestSkip]'); }
     else if (await a.count('#player [data-act=pWorkDone]')) {
       sawTimer = true;
@@ -174,6 +176,7 @@ await step('mode séance : séries, chrono, pause (non comptée), repos, fin', a
     await A.waitForTimeout(40);
   }
   assert.ok(sawRest && sawTimer && paused, 'repos, chrono et pause vus');
+  assert.ok(cuesLater > 0, 'consignes affichées à la 2e série');
   assert.match(await a.text('#player'), /de pause \(non comptée\)/);
 });
 await step('questionnaire adaptatif puis enregistrement', async () => {
@@ -459,6 +462,79 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   assert.equal(await g.count('#updbar'), 0, 'bandeau disparu une fois les nouveautés vues');
   await g.click('.news [data-act=closeSheet]'); await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
   assert.equal(await g.count('#updbar'), 0, 'pas de bandeau tant qu’il n’y a rien de nouveau');
+});
+await step('après une mise à jour : visite des nouveautés, seulement ce qui a changé', async () => {
+  await G.evaluate(() => localStorage.setItem('sea:news-toured', JSON.stringify('8.3.0'))); await G.reload(); await G.waitForSelector('nav.tabs');
+  await G.waitForSelector('#updbar [data-act=newsTour]', { timeout: 10000 }); await g.click('#updbar [data-act=newsTour]');
+  await G.waitForSelector('#tour .tour-bubble'); assert.match(await g.text('#tour .tour-bubble'), /Consignes à chaque série/);
+  assert.match(await g.text('#tour .tour-step'), /^1 \/ 3$/, 'seulement les nouveautés de la version');
+  await g.click('#tour [data-act=tourNext]'); await g.click('#tour [data-act=tourNext]');
+  await G.waitForFunction(() => location.hash.startsWith('#/settings/help'), null, { timeout: 5000 });
+  await G.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
+  await g.click('#tour [data-act=tourEnd]'); await G.waitForSelector('#tour', { state: 'detached' });
+  assert.equal(await G.evaluate(() => JSON.parse(localStorage.getItem('sea:news-toured'))), await G.evaluate(() => window.__seaVersion));
+  await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
+  assert.equal(await g.count('#updbar'), 0, 'plus proposée une fois faite');
+});
+/* ═════════ Déménagement vers la nouvelle adresse ═════════ */
+console.log('Nouvelle adresse');
+const OLDO = 'https://seances-entrainement.martin-zannet22.workers.dev', NEWO = 'https://seances-sport.pages.dev';
+/** Navigateur où les deux adresses publiques sont servies par le vrai worker.js (sans réseau). */
+async function twoSites() {
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+  await c.addInitScript(() => { try { if (!localStorage.getItem('sea:q-snooze')) localStorage.setItem('sea:q-snooze', JSON.stringify(Object.fromEntries(['acts', 'climbPerWeek', 'place', 'minutes', 'perWeek', 'bloc', 'goal', 'level', 'avoid', 'equipment'].map((k) => [k, Date.now() + 864e5]))));} catch { /* about:blank */ } });
+  await c.route(/^https:\/\/(seances-entrainement\.martin-zannet22\.workers\.dev|seances-sport\.pages\.dev)\//, async (route) => {
+    const q = route.request(), headers = await q.allHeaders();
+    const body = ['GET', 'HEAD'].includes(q.method()) ? undefined : q.postDataBuffer();
+    const r = await worker.fetch(new Request(q.url(), { method: q.method(), headers, body }), env);
+    const out = {}; for (const [k, v] of r.headers) if (k !== 'set-cookie') out[k] = v;
+    const sc = r.headers.getSetCookie?.() || []; if (sc.length) out['set-cookie'] = sc.join('\n');
+    await route.fulfill({ status: r.status, headers: out, body: Buffer.from(await r.arrayBuffer()) });
+  });
+  const P = await c.newPage(); watch(P, 'M'); cur = P; return { c, P };
+}
+await step('ancienne adresse → nouvelle : compte, réglages et séances retrouvés après confirmation', async () => {
+  const { c, P } = await twoSites(); const m = H(P);
+  await P.goto(NEWO + '/'); await P.waitForSelector('[data-act=authPick]'); // la nouvelle adresse ne redirige pas
+  const reg = await P.evaluate(async () => (await fetch('/api/move')).json()); assert.equal(reg.to, null);
+  await P.evaluate(async () => { localStorage.clear(); });
+  // Compte créé sur l'ancienne adresse, avec une apparence et une séance
+  env.MOVE_TO = ''; // déménagement pas encore actif
+  await P.goto(OLDO + '/'); await P.waitForSelector('[data-act=authPick][data-id=register]'); await m.click('[data-act=authPick][data-id=register]');
+  await P.fill('input[name=username]', 'Voyageur'); await P.fill('input[name=password]', 'motdepasse9'); await m.click('button[type=submit]');
+  await P.waitForSelector('nav.tabs'); if (await m.count('[data-act=setupLater]')) await m.click('[data-act=setupLater]');
+  if (await P.$('#tour')) await m.click('#tour .tour-x');
+  await m.tab('settings'); await m.click('[data-act=appear][data-k=palette][data-v=foret]'); await P.waitForTimeout(300);
+  await m.tab('library'); await m.sub('libSub', 'seances'); await m.click('[data-act=newSeance]'); await P.waitForSelector('input[data-change=sName]');
+  await P.fill('input[data-change=sName]', 'Séance déménagée'); await P.press('input[data-change=sName]', 'Tab'); await P.waitForTimeout(600);
+  delete env.MOVE_TO; // déménagement actif (adresse par défaut)
+  await P.goto('about:blank'); await P.goto(OLDO + '/#/library/seances');
+  await P.waitForURL((u) => u.origin === NEWO, { timeout: 15000 });
+  assert.equal(new URL(P.url()).hash, '#/library/seances', 'même page qu’avant');
+  await P.waitForSelector('#mv-ok'); assert.match(await m.text('#mv-ok'), /Voyageur/);
+  assert.equal(new URL(P.url()).search, '', 'le code disparaît de l’adresse');
+  await m.click('#mv-ok'); await P.waitForSelector('nav.tabs');
+  await P.waitForSelector('text=Séance déménagée', { timeout: 15000 });
+  assert.equal(await P.evaluate(() => document.documentElement.dataset.palette), 'foret', 'réglages de l’appareil repris');
+  assert.equal((await P.evaluate(async () => (await fetch('/api/auth/me')).json())).user.username, 'Voyageur', 'connecté sur la nouvelle adresse');
+  // Revenir sur l'ancienne adresse renvoie encore vers la nouvelle, sans redemander (déjà connecté ici)
+  await P.goto('about:blank'); await P.goto(OLDO + '/'); await P.waitForURL((u) => u.origin === NEWO, { timeout: 15000 }); await P.waitForSelector('nav.tabs');
+  assert.equal(await m.count('#mv-ok'), 0);
+  await c.close();
+});
+await step('ancienne adresse → nouvelle en mode invité : séances de l’appareil retrouvées', async () => {
+  const { c, P } = await twoSites(); const m = H(P);
+  env.MOVE_TO = '';
+  await P.goto(OLDO + '/'); await P.waitForSelector('[data-act=guestStart]'); await m.click('[data-act=guestStart]');
+  await P.waitForSelector('.setup'); await m.click('[data-act=setupLater]'); await P.waitForSelector('#tour .tour-x'); await m.click('#tour .tour-x');
+  await m.tab('library'); await m.sub('libSub', 'seances'); await m.click('[data-act=newSeance]'); await P.waitForSelector('input[data-change=sName]');
+  await P.fill('input[data-change=sName]', 'Séance invitée voyage'); await P.press('input[data-change=sName]', 'Tab'); await P.waitForTimeout(600);
+  delete env.MOVE_TO;
+  await P.goto('about:blank'); await P.goto(OLDO + '/'); await P.waitForURL((u) => u.origin === NEWO, { timeout: 15000 });
+  await P.waitForSelector('#mv-ok'); assert.match(await m.text('#mv-ok'), /Récupérer mes données/);
+  await m.click('#mv-ok'); await P.waitForSelector('.syncbadge.guest');
+  await m.tab('library'); await m.sub('libSub', 'seances'); await P.waitForSelector('text=Séance invitée voyage');
+  await c.close();
 });
 await step('aucune erreur JavaScript dans les navigateurs', async () => assert.deepEqual(errors, []));
 console.log(`\n${n} étapes E2E OK`);

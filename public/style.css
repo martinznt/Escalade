@@ -285,3 +285,13 @@ body.touring{overflow:hidden}
 #updbar{display:grid;gap:6px;border-radius:20px;padding:10px 10px 10px 16px}
 #updbar .ut{display:flex;align-items:center;gap:8px}#updbar .ut span{flex:1}
 #updbar .ub{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
+/* ═════════ Déménagement ═════════ */
+.move{min-height:100vh;display:grid;place-items:center;padding:16px}
+.move .card{max-width:420px;display:grid;gap:12px;justify-items:center;text-align:center;padding:28px 20px}
+.move h1{margin:0}.move p{margin:0}.move-ic{font-size:3.4rem}.move .btn{width:100%}
+
+/* ═════════ Consignes pendant la séance ═════════ */
+.pl .cues{display:grid;gap:4px;padding:12px 14px;text-align:left}
+.pl .cues ul{margin:0;padding-left:20px;display:grid;gap:3px}.pl .cues ul.bad{color:var(--muted)}
+#updbar .ub .btn{white-space:nowrap}

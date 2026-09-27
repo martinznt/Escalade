@@ -1,4 +1,4 @@
-# Séances entraînement — v8.3.0
+# Séances entraînement — v8.4.0
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
@@ -47,6 +47,15 @@ affichent « Nouvelle version — Mettre à jour ». Si l'app était fermée pen
 s'affiche à la réouverture. « Voir les nouveautés » liste les dernières modifications : le titre de chaque commit et ses
 lignes « - … » (historique public du dépôt GitHub). Écris donc des titres de commit simples et parlants.
 Inutile de modifier un numéro de version.
+
+Pour qu'une mise à jour propose aussi une **visite des nouveautés**, ajoute ses étapes dans `public/news.js`
+(une entrée par version, avec la même version que `APP_VERSION`).
+
+## Ancienne adresse
+
+`seances-entrainement.martin-zannet22.workers.dev` redirige automatiquement vers `https://seances-sport.pages.dev`
+avec le compte, les réglages et les données de l'appareil (confirmation demandée). Autre adresse : variable `MOVE_TO`
+dans Cloudflare (vide pour désactiver).
 
 ## Tests
 

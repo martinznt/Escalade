@@ -131,6 +131,11 @@ function draw(anim = false) {
   tick();
 }
 function stepper(k, value, unit, label) { return h`<div class="center"><div class="muted small">${label}</div><div class="stepper"><button data-act="pAdj" data-k="${k}" data-d="-1" aria-label="Moins">−</button><b>${value}<span class="small muted"> ${unit}</span></b><button data-act="pAdj" data-k="${k}" data-d="1" aria-label="Plus">+</button></div></div>`; }
+/** Consignes de l'exercice, affichées à chaque série (et pendant le repos, pour la série qui suit). */
+function cues(ex) {
+  if (!ex.ok.length && !ex.bad.length) return '';
+  return h`<div class="card cues">${ex.ok.length ? h`<b>📋 Consignes</b><ul>${ex.ok.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${ex.bad.length ? h`<b class="small">⚠️ À éviter</b><ul class="bad">${ex.bad.map((c) => h`<li>${c}</li>`)}</ul>` : ''}</div>`;
+}
 function vSet(p) {
   const ex = cur(), t = ex.mode === 'time', working = p.phase === 'work';
   const usesLoad = p.load > 0 || /kg|lest/i.test(ex.load) || p.hint?.load > 0;
@@ -140,14 +145,15 @@ function vSet(p) {
     ${working ? h`<div class="timer" id="ptimer">${mmss(Math.max(0, Math.ceil(((p.paused ? p.remaining : p.end - Date.now())) / 1000)))}</div><div class="bar"><i id="pbar2" style="width:0%"></i></div><button class="btn big pri" data-act="pWorkDone">✓ Terminer la série</button>`
       : h`${t ? stepper('secs', p.secs, 's', 'Durée') : stepper('reps', p.reps, ex.unit || 'rép.', 'Répétitions faites')}${!t && usesLoad ? stepper('load', p.load, 'kg', 'Charge') : ''}
         <button class="btn pri big" data-act="pGo" ${p.paused ? 'disabled' : ''}>${t ? `▶ Démarrer (${mmss(p.secs)})` : '✓ Série faite'}</button>`}
-    ${ex.ok.length ? h`<details ${p.set === 0 ? 'open' : ''} class="card"><summary><b>Consignes</b></summary><ul>${ex.ok.map((c) => h`<li>${c}</li>`)}</ul>${ex.bad.length ? h`<b class="small">À éviter</b><ul>${ex.bad.map((c) => h`<li>${c}</li>`)}</ul>` : ''}</details>` : ''}
+    ${cues(ex)}
     ${next ? h`<p class="tiny muted center">Ensuite : ${next.name}</p>` : ''}`;
 }
 function vRest(p) {
   const ex = cur();
   return h`<div class="center"><div class="muted">Repos</div></div><div class="timer rest" id="ptimer">${mmss(Math.max(0, Math.ceil((p.paused ? p.remaining : p.end - Date.now()) / 1000)))}</div><div class="bar"><i id="pbar2" style="width:0%"></i></div>
     <div class="center muted">Ensuite : <b>${ex.name} — série ${p.set + 1}/${ex.sets}</b></div>
-    <div class="grid2"><button class="btn big" data-act="pRestAdd">+ 30 s</button><button class="btn pri big" data-act="pRestSkip">Passer le repos</button></div>`;
+    <div class="grid2"><button class="btn big" data-act="pRestAdd">+ 30 s</button><button class="btn pri big" data-act="pRestSkip">Passer le repos</button></div>
+    ${cues(ex)}`;
 }
 /* ───────── Questionnaire adaptatif post-séance ───────── */
 function doneExercises(p) { return p.log.map((l, i) => ({ ...l, ex: p.s.exercises[i] })).filter((l) => l.sets.length); }

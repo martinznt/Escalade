@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.3.0
+# FINAL_AUDIT — Séances entraînement v8.4.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -403,3 +403,18 @@ réglages qu'un client V2 ne connaît pas.
   en cas d'erreur. Aucune donnée d'utilisateur n'est envoyée à GitHub. Dépôt modifiable par `CHANGES_REPO` / `CHANGES_BRANCH`.
 - Tests : `tests/changes.test.mjs` (filtrage, cache, erreurs, route) ; E2E : la visite navigue seule jusqu'au générateur,
   élément mis en lumière et flèche ; après la mise à jour, bandeau « mis à jour » → nouveautés → bandeau disparu.
+
+## Évolution 8.4.0 — nouvelle adresse, consignes à chaque série, visite des nouveautés
+
+- **Déménagement automatique** : `seances-entrainement.…workers.dev` renvoie vers `seances-sport.pages.dev`
+  (variable `MOVE_TO` ; vide = désactivé ; les adresses d'aperçu ne sont pas concernées) en gardant la page ouverte.
+  Ce qui n'existe que sur l'appareil (réglages, données en attente d'envoi, données du mode invité) et la connexion
+  voyagent via un code à usage unique (256 bits, 15 min, seule son empreinte SHA-256 est stockée dans D1).
+  Sur la nouvelle adresse, confirmation « Continuer avec le compte X » avant toute connexion (un lien piégé ne peut pas
+  connecter quelqu'un au compte d'un autre à son insu). Transfert impossible (hors ligne…) → on reste sur l'ancienne
+  adresse, rien n'est perdu. Contrôle d'origine, 20 transferts / h / IP, 1,8 Mo maximum.
+- **Consignes à chaque série** : les consignes (et « À éviter ») restent affichées à chaque série, et pendant le repos.
+- **Visite des nouveautés** (`public/news.js`) : après une mise à jour, le bandeau propose « 🧭 Faire la visite » qui ne
+  montre que les nouveautés des versions pas encore visitées (même principe que la visite guidée). « Revoir les
+  nouveautés » dans Paramètres › Aide. Un nouvel appareil n'a pas de nouveautés à voir (la visite complète s'en charge).
+- Tests : `tests/move.test.mjs` ; E2E 46 étapes (déménagement compte et invité, consignes à la 2e série, visite des nouveautés).
