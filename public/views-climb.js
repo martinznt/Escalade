@@ -43,7 +43,7 @@ export function vCarnet(advanced = '') {
       <div class="row wrapf"><button class="btn" data-act="fingerTime">⏱ Temps max sur 20 mm</button><button class="btn" data-act="fingerLoad">🏋️ 10 s avec lest</button></div></section>
     <section class="card"><h3>Journal</h3>
       ${c.ascents.length ? h`${c.ascents.slice(0, 6).map(ascRow)}${c.ascents.length > 6 ? h`<details class="how mini"><summary>Tout voir (${c.ascents.length})</summary>${c.ascents.slice(6, 200).map(ascRow)}</details>` : ''}` : h`<p class="small muted">Rien pour l’instant.</p>`}</section>
-    ${advanced ? h`<details class="card how"><summary><b>⚙️ Maxima, systèmes de cotation et styles</b></summary>${advanced}</details>` : ''}`;
+    ${advanced ? h`<details class="card how" ${st.adv ? 'open' : ''}><summary data-act="carnetAdv"><b>⚙️ Maxima, systèmes de cotation et styles</b></summary>${advanced}</details>` : ''}`;
 }
 function trend(ft) {
   const list = ft.last?.metricId === 'suspension_lestee' ? ft.load : ft.time; if (list.length < 2) return '';
@@ -57,6 +57,7 @@ function projRow(p) {
     <div class="grow"><b>${p.name || 'Projet'}</b> <span class="gpill sm">${p.grade?.label || p.gradeText || ''}</span><div class="tiny muted">${s.attempts} essai${s.attempts > 1 ? 's' : ''} · ${s.sessions} séance${s.sessions > 1 ? 's' : ''}${s.days ? ` · depuis ${s.days} j` : ''}</div></div>
     <div class="proj-act"><button class="btn sm" data-act="projTry" data-id="${p.id}">＋1 essai</button><button class="btn sm pri" data-act="projDone" data-id="${p.id}">✓ Réussi</button></div></div>`;
 }
+ACT.carnetAdv = () => { C().adv = !C().adv; render(); };
 ACT.carnetKind = (el) => { C().kind = el.dataset.id; render(); };
 ACT.carnetPeriod = (el) => { C().period = el.dataset.id; render(); };
 

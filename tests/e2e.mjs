@@ -109,7 +109,7 @@ await step('performances : mesure + « je ne sais pas »', async () => {
   assert.ok(await a.count('text=Gainage bateau') > 0);
 });
 await step('cotations : système U1→U8 avec correspondance, style personnalisé, maxima multiples multi-styles', async () => {
-  await a.sub('profSub', 'climbing');
+  await a.sub('profSub', 'climbing'); await a.click('[data-act=carnetAdv]');
   await a.click('[data-act=sysNew]'); await a.click('[data-act=sysFromTpl][data-id=u8]');
   await A.waitForSelector('#sheet form[data-submit=lvlSave]');
   const u5 = A.locator('#sheet form[data-submit=lvlSave]').nth(4);
@@ -129,6 +129,19 @@ await step('cotations : système U1→U8 avec correspondance, style personnalis�
   await A.waitForSelector('text=Salle U1 → U8');
   assert.ok(await a.count('text=Dévers : 6C') > 0, 'maximum par style');
   assert.ok(await a.count('text=Arête : U5') > 0, 'style personnalisé utilisé');
+});
+await step('carnet : ajout rapide, pyramide, projet suivi jusqu’à la réussite', async () => {
+  await a.tab('home'); await a.click('[data-act=goCarnet]'); await A.waitForSelector('[data-act=ascQuick]');
+  await a.click('[data-act=ascQuick]'); await A.waitForSelector('.aq [data-act=aqGrade]');
+  await A.locator('.aq [data-act=aqGrade]', { hasText: /^6A$/ }).first().click(); await a.click('.aq [data-act=aqResult][data-v=flash]'); await a.click('.aq [data-act=aqSave]');
+  await A.waitForSelector('.pyr-row'); assert.match(await a.text('.pyr'), /6A\s*1/);
+  await a.click('[data-act=projNew]'); await A.fill('#pj-name', 'Le toit rouge');
+  await A.locator('.aq [data-act=pjGrade]', { hasText: /^6B$/ }).first().click(); await a.click('.aq [data-act=pjSave]');
+  await A.waitForSelector('.proj:has-text("Le toit rouge")');
+  await a.click('.proj [data-act=projTry]'); await a.click('.proj [data-act=projTry]'); await A.waitForSelector('.proj:has-text("2 essais")');
+  await a.click('.proj [data-act=projDone]'); await a.confirm();
+  await A.waitForSelector('text=Projets réussis (1)'); assert.match(await a.text('.pyr'), /6B\s*1/, 'la réussite du projet entre dans la pyramide');
+  await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'project' && i.d.status === 'done' && i.d.tries.length), 12000, 'projet synchronisé');
 });
 await step('objectif complexe : front lever (arbre, blocages, chemins)', async () => {
   await a.sub('profSub', 'goals'); await a.click('[data-act=goalNewSkill][data-id=front_lever]');

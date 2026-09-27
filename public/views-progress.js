@@ -6,6 +6,7 @@ import { uid, exKey } from './shared.js';
 import { CAPACITIES, MUSCLES, METRICS } from './model.js';
 import { benchmarks, periodSummary, regularity, loadAnalysis, records, timeline, journal, diagnostics, atypicalSessions, undertrained, forgottenGoals, whyNoProgress, activeGoals, goalLabel, labReport, entryActivity, activityLabel, perfText, muscleVolume, achievements, capacityState, confWord } from './brain.js';
 import { anatomySvg } from './anatomy.js';
+import { streakCard, badgesCard } from './views-motiv.js';
 
 const SUBS = [['summary', '✨ Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
 export function vProgress() {
@@ -23,7 +24,7 @@ function vSummary() {
   const kpi = (ic, label, v, d) => h`<div class="kpi"><span>${ic} ${label}</span><b>${v}</b>${delta(d)}</div>`;
   const maxCap = Math.max(1, ...b.capDiff.slice(0, 5).map((x) => Math.max(x.cur, x.prev)));
   const wins = [...s.progression.filter((p) => /record|maximum/i.test(p)).slice(0, 2).map((p) => ['🏆', p.replace(/^Nouveau (record|maximum) — /, 'Record : ')]), ...s.goalsWorked.slice(0, 1).map((g) => ['🎯', `Objectif travaillé : ${g}`])];
-  return h`<div class="row between">${seg('benchDays', String(days), [['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']])}</div>
+  return h`${streakCard()}<div class="row between">${seg('benchDays', String(days), [['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']])}<button class="btn sm" data-act="recapOpen">📸 Bilan</button></div>
     <div class="kpis">${kpi('🏋️', 'Séances', b.cur.sessions, b.deltas.sessions)}${kpi('⏱', 'Minutes', b.cur.minutes, b.deltas.minutes)}${kpi('🔁', 'Séries', b.cur.sets, b.deltas.sets)}${kpi('😮‍💨', 'Ressenti', b.cur.rpe ?? '—', null)}</div>
     <p class="tiny muted center">Comparé aux ${days} jours d’avant · uniquement toi</p>
     ${wins.length ? h`<section class="card ok-b"><span class="kicker ok-t">✨ Tes bonnes nouvelles</span>${wins.map(([ic, t]) => h`<div class="win"><span>${ic}</span>${t}</div>`)}</section>` : ''}
@@ -36,7 +37,7 @@ function vSummary() {
       ${load.signals.length ? load.signals.map((x) => h`<div class="win warnw"><span>⚠️</span>${x}</div>`) : h`<p class="small">👍 Charge stable</p>`}
       <details class="how mini"><summary>Comment c’est calculé ?</summary><p class="tiny">Charge = durée × ressenti (1 à 5). ${load.disclaimer}</p></details></section>
     <section class="card"><div class="row between"><h3>🫀 Muscles travaillés</h3>${seg('muscleDays', String(S.muscleDays || 7), [['7', '7 j'], ['30', '30 j']])}</div>${raw(anatomySvg({ heat: muscleVolume(c, S.muscleDays || 7) }))}</section>
-    ${achievements(c).length ? h`<section class="card"><h3>🌟 Jalons</h3><div class="chips">${achievements(c).slice(-4).map((a) => h`<span class="chip static">${a.icon} ${a.label}</span>`)}</div></section>` : ''}
+    ${badgesCard()}
     <details class="card fold"><summary><span>🗓️ Résumé ${per === 'week' ? 'de la semaine' : 'du mois'}</span><em>${s.sessions}</em></summary>
       <div class="chips">${chip(per === 'week', 'Semaine', 'data-act="sumKind" data-id="week"')}${chip(per === 'month', 'Mois', 'data-act="sumKind" data-id="month"')}</div>
       <p class="small">${s.sessions} séance(s) · ${s.minutes} min${s.activities.length ? ' · ' + s.activities.map((a) => `${a.label} ×${a.n}`).join(', ') : ''}</p>

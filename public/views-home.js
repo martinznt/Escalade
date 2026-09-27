@@ -11,6 +11,7 @@ import { adaptDuration, alternatives, replaceExercise, BODY_WORDS } from './gene
 import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { openGenerator, blocksOf } from './views-library.js';
 import { startPlayer } from './player.js';
+import { streakCard } from './views-motiv.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard, maybeAskOnOpen } from './views-setup.js';
 
 export const DASH_BLOCKS = {
@@ -79,6 +80,7 @@ function vDash() {
       <button class="qa" data-act="timerOpen"><span class="qi">⏱</span><b>Minuteur</b><small>Suspensions, Tabata…</small></button>
       <button class="qa" data-act="goCarnet"><span class="qi">🧗</span><b>Carnet</b><small>Blocs, voies et projets</small></button>
     </div>
+    ${S.history.length || ctx().ascents.length ? streakCard() : ''}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée — ce qui change dans ton profil</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<p class="tiny muted">Ces données alimentent tes analyses et tes prochaines séances générées.</p><button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
     ${blocks.map((b) => { try { return BLOCK_VIEWS[b]?.() || ''; } catch (e) { console.error(e); return card(DASH_BLOCKS[b] || b, h`<p class="small warn-t">Ce bloc n’a pas pu s’afficher : ${e.message}</p><p class="tiny muted">Le reste de l’accueil fonctionne. Tu peux le signaler dans Paramètres › Signaler un bug.</p>`); } })}
     <p class="tiny muted center">✎ en haut pour choisir ce qui s’affiche ici.</p>`;

@@ -341,3 +341,14 @@ canvas.confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:n
 .photo-wrap svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.photo-wrap .hold{fill:none;stroke-width:1.1}
 .aq{display:grid;gap:10px}.aq h2{margin:0}.filebtn{position:relative;cursor:pointer}.hidden{display:none}
 .stepper.sm b{font-size:1.4rem;min-width:40px;text-align:center}
+
+/* ═════════ Motivation ═════════ */
+.streak .row{gap:12px;align-items:center}.streak .flame{font-size:2.2rem;line-height:1}.streak b.big{font-size:1.15rem;display:block}
+.streak.hot{background:linear-gradient(135deg,color-mix(in srgb,#ff7a18 22%,var(--card)),var(--card));border-color:color-mix(in srgb,#ff7a18 40%,var(--line))}
+.wkdots{display:flex;gap:5px}.wkdots i{width:12px;height:12px;border-radius:50%;background:var(--line)}.wkdots i.on{background:#ff8a3d}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:8px;margin-top:8px}
+.badge{display:grid;justify-items:center;text-align:center;gap:3px;padding:10px 6px;border-radius:16px;background:var(--card2);opacity:.55;filter:grayscale(.8)}
+.badge.got{opacity:1;filter:none;background:color-mix(in srgb,var(--accent) 16%,var(--card2))}
+.badge .bi{font-size:1.8rem}.badge b{font-size:.8rem;line-height:1.2}.badge small{font-size:.68rem;color:var(--muted);line-height:1.2}
+.bprog{width:80%;height:4px;border-radius:9px;background:var(--line);overflow:hidden}.bprog i{display:block;height:100%;background:var(--accent)}
+.recap{display:grid;gap:12px}.recap h2{margin:0}.recap-img{width:100%;border-radius:18px;box-shadow:var(--shadow)}
