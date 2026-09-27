@@ -164,13 +164,21 @@ function vSet(p) {
   const ex = cur(), t = ex.mode === 'time', working = p.phase === 'work';
   const usesLoad = p.load > 0 || /kg|lest/i.test(ex.load) || p.hint?.load > 0;
   const next = p.s.exercises[p.i + 1];
-  return h`<div class="row"><div class="figbox">${raw(figure(ex, { size: 84 }))}</div><div class="grow"><h1 style="margin:0">${ex.emoji} ${ex.name}</h1><div class="muted">Série ${p.set + 1} / ${ex.sets}${ex.perSide ? ` · côté ${p.side + 1} / 2` : ''}</div></div></div>
+  return h`<div class="row"><div class="figbox">${raw(figure(ex, { size: 84 }))}</div><div class="grow">${ex.part ? h`<div class="tiny acc-t">${ex.part}</div>` : ''}<h1 style="margin:0">${ex.emoji} ${ex.name}</h1><div class="muted">Série ${p.set + 1} / ${ex.sets}${ex.perSide ? ` · côté ${p.side + 1} / 2` : ''}</div></div></div>
     <div class="center"><b class="presc">${t ? (ex.secMin >= 120 ? fmtDur(ex.secMin) + (ex.secMax !== ex.secMin ? ' à ' + fmtDur(ex.secMax) : '') : rng(ex.secMin, ex.secMax) + ' s') : rng(ex.repsMin, ex.repsMax) + (ex.unit ? ' ' + ex.unit : ' rép.')}</b>${ex.load ? h`<div class="muted">${ex.load}</div>` : ''}${p.hint ? h`<div class="small acc-t">Dernière fois : ${p.hint.last}${p.hint.next ? ' · ' + p.hint.next : ''}</div>` : ''}${ex.rest ? h`<div class="tiny muted">Repos prévu : ${fmtDur(ex.rest)}</div>` : ''}</div>
     ${working ? h`<div class="timer" id="ptimer">${mmss(Math.max(0, Math.ceil(((p.paused ? p.remaining : p.end - Date.now())) / 1000)))}</div><div class="bar"><i id="pbar2" style="width:0%"></i></div><button class="btn big pri" data-act="pWorkDone">✓ Terminer la série</button>`
       : h`${t ? stepper('secs', p.secs, 's', 'Durée') : stepper('reps', p.reps, ex.unit || 'rép.', 'Répétitions faites')}${!t && usesLoad ? stepper('load', p.load, 'kg', 'Charge') : ''}
         <button class="btn pri big" data-act="pGo" ${p.paused ? 'disabled' : ''}>${t ? `▶ Démarrer (${mmss(p.secs)})` : '✓ Série faite'}</button>`}
     ${cues(ex)}
-    ${next ? h`<p class="tiny muted center">Ensuite : ${next.name}</p>` : ''}`;
+    ${next ? h`<p class="tiny muted center">Ensuite : ${next.name}${partLeft(p)}</p>` : ''}`;
+}
+/** Séance au format choisi : temps restant de la partie en cours, et la partie suivante. */
+function partLeft(p) {
+  const ex = cur(); if (!ex?.part) return '';
+  let j = p.i, mins = 0;
+  while (j < p.s.exercises.length && p.s.exercises[j].part === ex.part) { const e = p.s.exercises[j]; mins += exMinutes(e) * (j === p.i ? Math.max(0, e.sets - p.set) / Math.max(1, e.sets) : 1); j++; }
+  const nextPart = p.s.exercises[j]?.part;
+  return ` · ${ex.part.replace(/^\S+\s/, '')} : encore ~${Math.max(1, Math.round(mins))} min${nextPart ? `, puis ${nextPart}` : ''}`;
 }
 function vRest(p) {
   const ex = cur();

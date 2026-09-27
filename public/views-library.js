@@ -4,7 +4,8 @@ import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empt
 import { linkSheet } from './share.js';
 import './duo.js';
 import './views-ai.js';
-import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon, ls } from './state.js';
+import { cleanParts } from './format.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
@@ -42,23 +43,31 @@ export function vLibrary() {
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
   const cur = ['seances', 'generate', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'seances';
-  return h`<h1>📚 Bibliothèque</h1><div class="scrollx">${seg('libSub', cur, [['seances', '📋 Mes séances'], ['generate', '🎯 Sur mesure'], ['catalog', '🗂 Prêtes'], ['best', '🏆 Top exercices'], ['exercises', '💪 Exercices'], ['common', '🌍 Partagées'], ['search', '🔍 Recherche']])}</div>
+  const tab = sub === 'best' ? 'exercises' : cur;
+  return h`<h1>📚 Bibliothèque</h1><div class="row segrow"><div class="scrollx grow">${seg('libSub', tab, [['seances', '📋 Mes séances'], ['generate', '🎯 Sur mesure'], ['catalog', '🗂 Prêtes'], ['exercises', '💪 Exercices'], ['common', '🌍 Partagées']])}</div><button class="btn sm ic ${cur === 'search' ? 'on' : ''}" data-act="libSub" data-id="search" aria-label="Rechercher" title="Rechercher">🔍</button></div>
     ${cur === 'seances' ? vSeances() : cur === 'generate' ? vGenerate() : cur === 'catalog' ? vCatalog() : cur === 'best' ? vBest() : cur === 'exercises' ? vExercises() : cur === 'common' ? vCommon() : vSearch()}`;
 }
-ACT.libSub = (el) => { go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
+ACT.libSub = (el) => { closeSheet(); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
 /* ═════════ Mes séances ═════════ */
 function vSeances() {
   const f = S.filters.seances || 'active';
   const list = S.seances.items.filter((s) => (f === 'archived' ? s.archived : f === 'templates' ? s.template && !s.archived : !s.archived));
-  return h`<div class="row wrapf"><button class="btn pri" data-act="newSeance">＋ Nouvelle séance</button><button class="btn" data-act="openImport">📋 Coller un texte</button><button class="btn" data-act="libSub" data-id="generate">🎯 Générer</button>${S.user?.guest ? '' : h`<button class="btn" data-act="duoJoinAsk">👥 Rejoindre à deux</button>`}</div>
+  return h`<button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
     <div class="chips">${[['active', 'Actives'], ['templates', 'Modèles'], ['archived', 'Archivées']].map(([k, l]) => chip(f === k, l, `data-act="seanceFilter" data-id="${k}"`))}</div>
     ${list.length ? list.map((s) => h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : ''}</div></div></div>
       <div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div></div>`)
       : empty(f === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
 }
+/** Nouvelle séance : les façons de la créer, expliquées en une ligne. */
+ACT.exMore = () => { S.exMore = true; render(); };
+ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>
+  ${[['libSub', 'generate', '🎯', 'Sur mesure', 'L’app la prépare selon ton sport, ton temps et ce que tu veux travailler.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
+    ['newSeance', '', '✍️', 'À la main', 'Tu choisis chaque exercice toi-même.'], ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
+    ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
+    .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
 ACT.seanceFilter = (el) => { S.filters.seances = el.dataset.id; render(); };
-ACT.newSeance = () => { const s = saveSeance({ id: uid(), name: 'Nouvelle séance', emoji: '🏋️', exercises: [], source: 'manual', activity: Object.keys(ctx().activities)[0] || '' }); go('library', 'seance', s.id); };
+ACT.newSeance = () => { closeSheet(); const s = saveSeance({ id: uid(), name: 'Nouvelle séance', emoji: '🏋️', exercises: [], source: 'manual', activity: Object.keys(ctx().activities)[0] || '' }); go('library', 'seance', s.id); };
 ACT.openSeance = (el) => go('library', 'seance', el.dataset.id);
 ACT.play = (el) => {
   const s = el.dataset.gen ? S.gen.result?.session : el.dataset.shared ? S.shared.detail?.session : getSeance(el.dataset.id);
@@ -72,6 +81,14 @@ function exRow(e, i, n, mode) {
 }
 export function blocksOf(s, mode) {
   const out = [];
+  // Séance au format choisi : les parties dans leur ordre (une même partie peut revenir plus loin).
+  if (s.exercises.some((e) => e.part)) {
+    let run = [];
+    const flush = () => { if (!run.length) return; const mins = Math.round(run.reduce((t, e) => t + exMinutes(e), 0)); out.push(h`<div class="blockhead">${run[0].part || BLOCKS[run[0].block]} · ~${mins} min</div>${run.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`); run = []; };
+    for (const e of s.exercises) { if (run.length && (e.part || e.block) !== (run[0].part || run[0].block)) flush(); run.push(e); }
+    flush();
+    return out;
+  }
   for (const b of ['warmup', 'main', 'cool']) {
     const list = s.exercises.filter((e) => e.block === b);
     if (!list.length) continue;
@@ -269,7 +286,7 @@ function vImport() {
     ${r ? (r.session ? h`<div class="card"><h3>${r.session.emoji} ${r.session.name}</h3><div class="muted small">${r.session.exercises.length} exercices · ~${sessionMinutes(r.session)} min</div>${r.session.exercises.map((e, i) => exRow(e, i, r.session.exercises.length, 'view'))}${r.warnings.map((w) => h`<p class="small err">⚠ ${w}</p>`)}<button class="btn pri big" data-act="impSave">Enregistrer cette séance</button></div>` : h`<div class="card"><p class="err">${r.warnings[0]}</p></div>`) : ''}`;
 }
 INPUT.impText = (el) => { S.importText = el.value; S.importResult = null; };
-ACT.openImport = () => { S.importResult = null; go('library', 'import'); };
+ACT.openImport = () => { closeSheet(); S.importResult = null; go('library', 'import'); };
 ACT.impParse = () => { S.importResult = parseSessionText(S.importText); render(); };
 ACT.impSave = () => { const s = saveSeance(S.importResult.session); S.importText = ''; S.importResult = null; toast('Séance ajoutée'); go('library', 'seance', s.id); };
 
@@ -279,6 +296,9 @@ export function openGenerator(opts = {}) {
     S.gen.init = true;
     const cfg = item('config', 'main') || {};
     S.gen.minutes = Number(cfg.durations?.[0]) || S.settings.defaultMinutes || 30;
+    // Dernier format et dernière durée utilisés sur cet appareil (confort : rien d'important n'est perdu sans).
+    const last = ls.get('sea:gen-last');
+    if (last && Number(last.minutes) >= 5) { S.gen.minutes = Math.min(240, Number(last.minutes)); if (Array.isArray(last.parts) && last.parts.length) { S.gen.parts = cleanParts(last.parts); S.gen.fmtId = String(last.fmtId || 'custom').slice(0, 40); } S.gen.durOther = ![20, 30, 45, 60, 90, 120, 180].includes(S.gen.minutes) && !S.gen.parts; }
     if (!S.gen.intentions?.length && cfg.intent) S.gen.intentions = [{ id: cfg.intent, p: 2 }];
   }
   Object.assign(S.gen, { plan: null, result: null, saved: false, priorities: {} }, opts);
@@ -301,6 +321,7 @@ ACT.genPlan = () => {
   const g = S.gen;
   if (g.mode === 'goal' && !g.goalId) { toast('Choisis un objectif (ou une autre orientation).'); return; }
   const o = genOptions();
+  ls.set('sea:gen-last', { minutes: g.minutes, parts: o.parts, fmtId: g.fmtId || '' });
   g.plan = planSession({ activityId: g.activityId, mode: g.mode, goalId: g.mode === 'goal' ? g.goalId : '', capId: g.capId || '', minutes: g.minutes, intentions: g.intentions, envId: g.envId, priorities: g.priorities, seed: g.seed ?? Math.floor(Math.random() * 1e9), ...o }, ctx());
   g.boost = o.boost;
   g.seed = g.plan.seed; g.result = null; render(); setTimeout(() => $('#genplan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
@@ -348,13 +369,14 @@ function vExercises() {
   const match = (name) => !n || name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(n);
   const lib = LIBRARY.filter((x) => x.role === 'main' && match(x.name) && (!act || x.acts.includes(act)) && (!cap || (x.caps[cap] || 0) >= 0.5));
   const c = ctx(), tried = neverTried(c, { activityId: act || undefined, level: 1 });
-  return h`<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>🤖</span><div><b>Créer un exercice avec l’assistant</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
+  const top = h`<button class="card pick row" data-act="libSub" data-id="best"><span class="catemoji">🏆</span><span class="grow"><b>Top exercices pour toi</b><small class="tiny muted" style="display:block">Les plus utiles par catégorie, selon ton profil</small></span><span class="chev">›</span></button>`;
+  return h`${top}<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>🤖</span><div><b>Créer un exercice avec l’assistant</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
     <input type="search" data-input="exQ" value="${q}" placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice">
     <div class="grid2"><select data-change="exAct" aria-label="Activité"><option value="">Toutes activités</option>${Object.entries(ACTIVITIES).map(([id, a]) => h`<option value="${id}" ${act === id ? 'selected' : ''}>${a.emoji} ${a.label}</option>`)}</select>
     <select data-change="exCap" aria-label="Capacité"><option value="">Toutes capacités</option>${Object.entries(CAPACITIES).map(([id, x]) => h`<option value="${id}" ${cap === id ? 'selected' : ''}>${x.label}</option>`)}</select></div>
     ${tried.length && !q ? h`<div class="card flat"><b class="small">🆕 Jamais essayé</b>${tried.map((t) => h`<div class="item"><div class="ico">${t.lib.emoji}</div><div class="grow"><b>${t.lib.name}</b><div class="tiny muted">${t.reason}</div></div><button class="btn sm" data-act="libInfo" data-id="${t.lib.id}">Voir</button></div>`)}</div>` : ''}
     <div class="card"><div class="row between"><h3>Mes exercices</h3><button class="btn sm" data-act="persNew">＋ Nouveau</button></div>${S.personal.filter((p) => match(p.name)).map((p) => h`<div class="item"><div class="ico">${p.data?.emoji || '💪'}</div><div class="grow"><b>${p.name}</b><div class="tiny muted">${exLine(normalizeEx(p.data))}</div></div><button class="btn sm" data-act="persInfo" data-id="${p.id}">Voir</button></div>`)}${S.personal.length ? '' : h`<p class="muted small">Aucun exercice personnel.</p>`}</div>
-    <div class="card"><h3>Catalogue intégré (${lib.length})</h3>${lib.slice(0, 60).map((x) => h`<div class="item"><div class="ico">${x.emoji}</div><div class="grow"><b>${x.name}</b><div class="tiny muted">${Object.entries(x.caps).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => capL(k)).join(', ')} · difficulté ${x.diff}/5</div></div><button class="btn sm" data-act="libInfo" data-id="${x.id}">Voir</button></div>`)}${lib.length > 60 ? h`<p class="tiny muted">Affine la recherche pour voir les ${lib.length - 60} autres.</p>` : ''}</div>
+    <div class="card"><h3>Catalogue intégré (${lib.length})</h3>${lib.slice(0, S.exMore ? 200 : 15).map((x) => h`<div class="item"><div class="ico">${x.emoji}</div><div class="grow"><b>${x.name}</b><div class="tiny muted">${Object.entries(x.caps).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => capL(k)).join(', ')} · difficulté ${x.diff}/5</div></div><button class="btn sm" data-act="libInfo" data-id="${x.id}">Voir</button></div>`)}${!S.exMore && lib.length > 15 ? h`<button class="btn ghost" data-act="exMore">Voir les ${lib.length - 15} autres exercices</button>` : ''}</div>
     <div class="card"><div class="row between"><h3>Exercices communs</h3><button class="btn sm" data-act="cexNew">＋ Proposer</button></div>${S.commonEx.filter((x) => match(x.name)).map((x) => h`<div class="item"><div class="ico">${x.data?.emoji || '💪'}</div><div class="grow"><b>${x.name}</b><div class="tiny muted">par ${x.author || 'compte supprimé'}</div></div><button class="btn sm" data-act="cexInfo" data-id="${x.id}">Voir</button></div>`)}${S.commonEx.length ? '' : h`<p class="muted small">Aucun exercice commun pour l’instant.</p>`}</div>
     <details class="card"><summary><b>Sources d’inspiration</b></summary>${SOURCES.map((s) => h`<p class="small"><b>${s.title}</b> — ${s.by}<br><span class="muted">${s.note}</span></p>`)}</details>`;
 }

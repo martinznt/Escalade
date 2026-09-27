@@ -8,7 +8,7 @@ import { S, ACT, item, putItem, render, go } from './state.js';
 /** Icônes possibles en haut à droite : [emoji, nom, action]. */
 export const ICONS = {
   cal: ['📅', 'Calendrier', 'topCal'], notif: ['🔔', 'Notifications', 'notifOpen'], timer: ['⏱', 'Minuteur', 'timerOpen'], carnet: ['🧗', 'Carnet', 'goCarnet'],
-  coach: ['💬', 'Coach', 'coachOpen'], all: ['▦', 'Toutes les fonctions', 'allOpen'], recap: ['📸', 'Bilan du mois', 'recapOpen'], gen: ['🎯', 'Séance du jour', 'genOpen'],
+  coach: ['💬', 'Coach', 'coachOpen'], all: ['☰', 'Menu : toutes les fonctions', 'allOpen'], recap: ['📸', 'Bilan du mois', 'recapOpen'], gen: ['🎯', 'Séance du jour', 'genOpen'],
   seances: ['📚', 'Mes séances', 'goLib'], progress: ['📈', 'Mes progrès', 'goProgressTop'], program: ['📆', 'Programme', 'topProgram'], streak: ['🔥', 'Ma série', 'goProgressTop'],
   badges: ['🏅', 'Badges', 'goProgressTop'],
 };
@@ -19,7 +19,7 @@ export const FEATURES = {
     hero: F('Bonjour et semaine', ['big']), gen: F('Séance du jour', ['big', 'icon'], { tile: 1 }), seances: F('Mes séances', ['big', 'icon'], { tile: 1 }),
     timer: F('Minuteur', ['big', 'icon'], { tile: 1 }), carnet: F('Carnet d’escalade', ['big', 'icon'], { tile: 1 }), progress: F('Mes progrès', ['big', 'icon'], { tile: 1 }),
     cal: F('Calendrier', ['icon', 'big']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach et commandes', ['icon', 'big']),
-    program: F('Programme', ['big', 'icon']), finger: F('Alerte doigts', ['big']), streak: F('Ma série', ['big', 'icon']), today: F('Que faire aujourd’hui ?', ['big']),
+    program: F('Programme', ['big', 'icon']), finger: F('Alerte doigts', ['big']), streak: F('Ma série', ['big', 'icon']), today: F('Que faire aujourd’hui ?', ['big']), question: F('Petite question', ['big']),
     next: F('Prochaines séances', ['big']), goals: F('Objectifs', ['big']), reco: F('Recommandations', ['big']), weekprog: F('Progression 7 jours', ['big']),
     records: F('Records', ['big']), regularity: F('Régularité', ['big']), capacities: F('Capacités', ['big']), load: F('Charge récente', ['big']), summary: F('Résumé de la semaine', ['big']),
   },
@@ -34,10 +34,10 @@ export const FEATURES = {
 };
 // Mise en page de base : simple au départ.
 export const DEFAULTS = {
-  home: [['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['streak', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  home: [['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['question', 'big'], ['streak', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   progress: [['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['recap', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  library: [['gen', 'icon'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  profile: [['carnet', 'icon'], ['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  library: [['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  profile: [['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   settings: [['notif', 'icon'], ['all', 'icon']],
 };
 export const COLORS = ['', '#d4a056', '#5fa8d3', '#5cb87a', '#ef6f5e', '#a78bfa', '#f472b6', '#ffd60a'];
@@ -131,11 +131,11 @@ ACT.layReset = async (el) => {
 
 /* ───────── Toutes les fonctions, triées ───────── */
 const ALL = [
-  ['S’entraîner', [['🎯', 'Séance du jour', 'genOpen'], ['📚', 'Mes séances', 'goLib'], ['⏱', 'Minuteur', 'timerOpen'], ['📆', 'Programme', 'topProgram'], ['💬', 'Coach', 'coachOpen']]],
+  ['S’entraîner', [['🎯', 'Séance du jour', 'genOpen'], ['📚', 'Mes séances', 'goLib'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['📆', 'Programme', 'topProgram'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Coach', 'coachOpen']]],
   ['Escalade', [['🧗', 'Carnet (blocs, voies, projets)', 'goCarnet'], ['✋', 'Test de doigts', 'goCarnet']]],
   ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📋', 'Historique', 'allGo', 'progress/history'], ['🏆', 'Records', 'allGo', 'progress/records'], ['📸', 'Bilan du mois', 'recapOpen']]],
-  ['Planifier', [['📅', 'Calendrier', 'topCal'], ['🔔', 'Rappels', 'allGo', 'settings/main'], ['🔔', 'Notifications', 'notifOpen']]],
+  ['Planifier', [['📅', 'Calendrier', 'topCal'], ['⏰', 'Rappels', 'allGo', 'settings/notifs'], ['🔔', 'Notifications', 'notifOpen']]],
   ['Moi', [['👤', 'Mon profil', 'allGo', 'profile/home'], ['🎯', 'Objectifs', 'allGo', 'profile/goals'], ['🧰', 'Matériel et lieux', 'allGo', 'profile/equipment']]],
-  ['Réglages', [['🎨', 'Apparence et ambiance', 'allGo', 'settings/main'], ['✏️', 'Mise en page', 'layEditHome'], ['❓', 'Aide et visite', 'allGo', 'settings/help'], ['💾', 'Mes données', 'allGo', 'settings/data']]],
+  ['Réglages', [['🎨', 'Affichage et ambiance', 'allGo', 'settings/display'], ['▶️', 'Pendant la séance', 'allGo', 'settings/session'], ['✏️', 'Mise en page', 'layEditHome'], ['❓', 'Aide et visite', 'allGo', 'settings/help'], ['💾', 'Mes données', 'allGo', 'settings/data']]],
 ];
 ACT.allOpen = () => openSheet(h`<div class="allf"><h2>Toutes les fonctions</h2>${ALL.map(([cat, list]) => h`<div><span class="kicker">${cat}</span><div class="allgrid">${list.map(([ic, l, act, to]) => h`<button class="allb" data-act="${act}" ${to ? raw(`data-to="${to}"`) : ''}><span>${ic}</span>${l}</button>`)}</div></div>`)}</div>`, { wide: true });

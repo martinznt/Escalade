@@ -13,7 +13,7 @@ const STEPS = [
   ['library', 'generate', '[data-act=genPlan]', '👀 Aperçu avant de commencer', '…puis l’app te montre ce qu’elle prévoit. Tu peux ajuster, puis lancer la séance ▶.'],
   ['progress', 'summary', '.kpis, .card.hero', '📈 Tes progrès', 'Tes chiffres et tes records apparaissent ici, comparés uniquement à toi-même.'],
   ['profile', 'home', '.tiles', '👤 Ton profil', 'Tout ce que l’app sait de toi : sports, mesures, objectifs, matériel. Touche une tuile pour la modifier.'],
-  ['settings', 'main', '.palette', '🎨 À ton image', 'Change les couleurs, le thème ou la taille du texte. Ça suit ton compte sur tous tes appareils.'],
+  ['settings', 'display', '.palette', '🎨 À ton image', 'Change les couleurs, le thème ou la taille du texte. Ça suit ton compte sur tous tes appareils.'],
   ['settings', 'help', '[data-act=helpTour]', '🧭 C’est parti !', 'Tu pourras relancer cette visite quand tu veux, ici. Bon entraînement 💪'],
 ];
 const T = { i: -1, onEnd: null, raf: 0, steps: STEPS };
@@ -52,6 +52,8 @@ function draw(el) {
     <div class="row">${T.i > 0 ? h`<button class="btn sm" data-act="tourPrev">‹ Retour</button>` : h`<button class="btn sm ghost" data-act="tourEnd">Passer</button>`}<span class="grow"></span>
       ${last ? h`<button class="btn pri" data-act="tourEnd">C’est compris !</button>` : h`<button class="btn pri" data-act="tourNext">Suivant ›</button>`}</div></div>`.s;
   T.el = el; place();
+  // Deuxième placement un peu après : si la page s'est redessinée, la bulle suit l'élément.
+  const i0 = T.i; for (const ms of [350, 1000]) setTimeout(() => { if (T.i === i0) place(); }, ms);
   root.querySelector('.tour-bubble [data-act=tourNext], .tour-bubble [data-act=tourEnd]')?.focus({ preventScroll: true });
 }
 /** Place le halo sur l'élément et la bulle au-dessus ou en dessous, avec la flèche qui le pointe. */
@@ -61,6 +63,8 @@ function place() {
     const root = document.getElementById('tour'); if (!root || T.i < 0) return;
     const spot = root.querySelector('.tour-spot'), bub = root.querySelector('.tour-bubble'), arrow = root.querySelector('.tour-arrow');
     const vw = window.innerWidth, vh = window.innerHeight, pad = 8;
+    // La page a pu se redessiner (données arrivées entre-temps) : on retrouve l'élément.
+    if ((!T.el || !document.body.contains(T.el)) && T.steps[T.i]?.[2]) { const again = document.querySelector(T.steps[T.i][2]); if (again && again.getBoundingClientRect().height > 0) T.el = again; }
     if (!T.el || !document.body.contains(T.el)) {
       spot.style.cssText = `left:${vw / 2}px;top:${vh / 2}px;width:0;height:0`;
       bub.style.cssText = `left:16px;right:16px;top:${Math.max(16, vh / 2 - 120)}px`; arrow.style.display = 'none'; return;

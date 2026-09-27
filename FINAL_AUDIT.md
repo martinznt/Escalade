@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.7.0
+# FINAL_AUDIT — Séances entraînement v8.9.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -490,3 +490,61 @@ réglages qu'un client V2 ne connaît pas.
 **Tests**
 - Nouveaux fichiers : `tests/duo-share.test.mjs` (16 tests ; le QR est relu par jsQR, dépendance de développement) et `tests/look.test.mjs` (6 tests).
 - E2E : 58 étapes, dont le partage par lien et une séance à deux entre deux navigateurs.
+
+## Évolution 8.8.0 : format de séance à la carte, durée libre jusqu'à 4 h
+
+**Durée libre** : de 5 min à 4 h. Les boutons vont de 20 min à 3 h, et « Autre durée » permet d'écrire un nombre de minutes. Sans format choisi, les longues séances comptent maintenant plus d'exercices (jusqu'à 12).
+
+**Format de séance** (`public/format.js`, sans DOM, testé)
+- Les parties : échauffement, corps de séance, technique, renforcement, cardio, gainage, mobilité, étirements, retour au calme.
+- On règle l'ordre et le temps de chacune. Il y a des formats tout prêts, et on peut garder les siens (item `config/formats`, JSON revalidé à la lecture, 12 au plus).
+- Le générateur construit chaque partie pour son temps et dans l'ordre choisi, sans répéter un exercice d'une partie à l'autre.
+- En escalade, la partie principale reste la grimpe, et le renforcement puise dans les exercices de renforcement.
+
+**Conseils sourcés, jamais bloquants**
+- Pas d'échauffement avant l'effort : conseil sourcé soligard2008.
+- Étirements placés avant une partie d'effort : l'app met des mouvements dynamiques à cette place, et les étirements tenus restent en fin de séance (behm2016).
+
+**Affichage**
+- La séance s'affiche par partie, avec le temps de chacune.
+- Le lecteur indique la partie en cours, le temps qu'il lui reste et la partie suivante.
+- Le générateur retient, sur l'appareil, le dernier format et la dernière durée.
+
+**Correctifs**
+- Les zones à ménager et le « pas de sauts » du profil sont aussi appliqués à la génération finale, pas seulement à l'aperçu.
+- La visite guidée retrouve l'élément à montrer si la page se redessine pendant la visite.
+
+**Tests**
+- `tests/format.test.mjs` : 9 tests, dont une séance d'escalade au format choisi et une séance de 2 h 30.
+- E2E : 59 étapes, dont une qui compose un format, règle 2 h 30 et vérifie l'ordre des parties.
+
+## Évolution 8.9.0 : une app plus simple à parcourir
+
+J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui a changé.
+
+**Accueil**
+- La « petite question » s'affichait deux fois (carte et fenêtre qui s'ouvrait toute seule). Il ne reste que la carte, placée après les raccourcis.
+- La séance du jour passe en premier, en grand, avec un bouton ▶. Mes séances, Minuteur et Carnet sont en dessous, sur une ligne.
+
+**Menu en haut** : l'icône ▦ devient ☰ « Menu ». Le menu, rangé par thème, s'enrichit de « Séances prêtes » et « Séance à deux ». Les raccourcis vers les rappels et l'affichage pointent vers les bonnes pages. Il y a moins d'icônes en double par défaut.
+
+**Bibliothèque**
+- Un seul bouton « ＋ Nouvelle séance » propose les façons de créer une séance, chacune expliquée en une ligne : sur mesure, prête, à la main, coller un texte, rejoindre un ami.
+- Il reste 5 onglets au lieu de 7. « Top exercices » se trouve dans Exercices, et la recherche passe dans une loupe 🔍.
+- Le catalogue affiche 15 exercices, avec un bouton « Voir les autres ».
+
+**Profil** : les tuiles sont rangées par thème (Moi, Mes résultats, Comprendre mes conseils, Partager). Deux noms deviennent plus parlants : « Mes capacités » et « Pourquoi ces conseils ».
+
+**Paramètres**
+- L'accueil des paramètres liste les rubriques, une par ligne, comme sur un téléphone : Affichage, Pendant la séance, Notifications, Mes données, Synchronisation, Aide, Signaler un bug.
+- Chaque rubrique a sa page, avec un bouton retour. L'onglet Paramètres rouvre toujours cette liste.
+
+**Mode ordinateur** : la séance du jour occupe deux colonnes.
+
+**Tests** : E2E à 59 étapes, adapté à la nouvelle navigation. Il vérifie aussi qu'aucune fenêtre de question ne s'ouvre toute seule.
+
+### Notifications : « vu » à cocher
+- Ouvrir la boîte ne marque plus tout comme lu. Chaque notification a son bouton « ✓ Vu », et « Tout marquer comme vu » coche toutes les nouvelles d'un coup.
+- Les nouvelles sont en haut, mises en avant avec l'étiquette « Nouveau ». Les notifications vues passent dans « Déjà vues », plus discrètes (repliées, moins de texte), et « ↺ Non vue » les remet en avant.
+- La pastille de l'icône 🔔 compte les notifications non vues.
+- Les notifications vues sont enregistrées dans le compte (item `config/inbox`), donc elles restent vues sur tous les appareils. L'ancienne date « tout lu » de l'appareil est toujours prise en compte.
