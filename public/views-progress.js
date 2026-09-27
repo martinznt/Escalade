@@ -88,8 +88,8 @@ function vTimeline() {
 }
 function vJournal() {
   const j = journal(ctx());
-  return h`<form data-submit="jnote" class="card"><label>Ajouter une note au journal<textarea name="text" maxlength="1000" required placeholder="Observation, sensation, contexte…"></textarea></label><button class="btn pri" type="submit">Ajouter</button></form>
-    ${j.length ? j.map((e) => h`<div class="card journal ${e.kind}"><div class="row"><span class="ico sm">${e.icon}</span><div class="grow"><b>${e.title}</b><div class="small">${e.text}</div>${e.note ? h`<div class="small muted">« ${e.note} »</div>` : ''}<div class="tiny muted">${fmtDateTime(e.t)}</div></div>${e.kind === 'note' ? '' : ''}</div></div>`) : empty('Ton journal regroupera tes séances, mesures, ascensions et notes.')}`;
+  return h`<form data-submit="jnote" class="card"><div class="row"><textarea name="text" maxlength="1000" required rows="1" class="grow" placeholder="📝 Une note, une sensation…" aria-label="Ajouter une note au journal"></textarea><button class="btn pri" type="submit">Ajouter</button></div></form>
+    ${j.length ? j.map((e) => h`<div class="card journal ${e.kind}"><div class="row"><span class="ico sm">${e.icon}</span><div class="grow"><div class="row between"><b>${e.title}</b><span class="tiny muted">${fmtDateTime(e.t)}</span></div><div class="small">${e.text}</div>${e.note ? h`<div class="small muted">« ${e.note} »</div>` : ''}${e.more?.length ? h`<details class="how mini"><summary>Détails</summary><p class="tiny">${e.more.join(' · ')}</p></details>` : ''}</div>${e.kind === 'note' ? '' : ''}</div></div>`) : empty('Ton journal regroupera tes séances, mesures, ascensions et notes.')}`;
 }
 SUBMIT.jnote = (f) => { const t = String(new FormData(f).get('text') || '').trim(); if (!t) return; putItem('jnote', 'jn-' + uid().slice(0, 14), { date: Date.now(), text: t }); f.reset(); buzzOk(); toast('Note ajoutée'); render(); };
 
@@ -97,11 +97,12 @@ SUBMIT.jnote = (f) => { const t = String(new FormData(f).get('text') || '').trim
 function vAnalyses() {
   const c = ctx(), d = diagnostics(c), a = atypicalSessions(c), u = undertrained(c), f = forgottenGoals(c), g = activeGoals(c)[0];
   const w = g ? whyNoProgress(g, c) : null;
-  return h`<div class="card"><h3>🔍 Diagnostics</h3>${d.items.length ? d.items.map((x) => h`<p class="small">${x.icon} ${x.text}</p>`) : h`<p class="muted small">Rien de particulier dans tes données récentes.</p>`}<p class="tiny muted">${d.disclaimer}</p></div>
-    <div class="card"><h3>🧩 Capacités sous-entraînées</h3><p class="tiny muted">${u.text}</p>${u.items.map((x) => h`<p class="small">• ${x.text}</p>`)}</div>
+  return h`<div class="card"><h3>🔍 Diagnostics</h3>${d.items.length ? d.items.slice(0, 5).map((x) => h`<div class="win"><span>${x.icon}</span>${x.text}</div>`) : h`<p class="muted small">Rien de particulier dans tes données récentes 👍</p>`}</div>
+    <div class="card"><h3>🧩 Peu travaillé ces 30 jours</h3>${u.items.length ? u.items.map((x) => h`<div class="cbar"><span>${x.label}</span><div class="track"><i class="prev" style="width:${Math.min(100, x.expected * 4)}%"></i><i class="cur" style="width:${Math.min(100, x.actual * 4)}%"></i></div><b>${x.actual} %</b></div>`) : h`<p class="small muted">${u.enough ? 'Tout est bien réparti 👍' : 'Pas encore assez de séances pour comparer.'}</p>`}
+      ${u.items.length ? h`<details class="how mini"><summary>Comment lire ?</summary><p class="tiny">Barre pleine : ta part de volume. Ombre : ce que demandent tes activités et objectifs. ${u.text}</p></details>` : ''}</div>
     <div class="card"><h3>🎯 Objectifs délaissés</h3>${f.length ? f.map((x) => h`<div class="item"><div class="grow small">${x.days != null ? `« ${x.label} » : dernière séance liée il y a ${x.days} jours (${fmtDay(x.last)}).` : `« ${x.label} » : pas encore travaillé.`}</div><button class="btn sm" data-act="todayGoal" data-id="${x.goal.id}">Séance</button></div>`) : h`<p class="muted small">Tous tes objectifs actifs ont été travaillés récemment.</p>`}</div>
-    <div class="card"><h3>📌 Séances atypiques</h3>${a.length ? a.map((x) => h`<p class="small">• ${x.text}</p>`) : h`<p class="muted small">Aucune séance inhabituelle repérée (il faut au moins 6 séances pour comparer).</p>`}<p class="tiny muted">Observation descriptive, sans jugement.</p></div>
-    ${w ? h`<div class="card"><h3>Pourquoi je ne progresse pas ? — ${w.goal}</h3>${w.hypotheses.map((x) => h`<p class="small"><b>${x.title}</b> — ${x.text}</p>`)}${howBox({ facts: w.facts, missing: w.missing })}<p class="tiny muted">${w.note}</p></div>` : ''}`;
+    <div class="card"><h3>📌 Séances atypiques</h3>${a.length ? a.map((x) => h`<div class="win"><span>📌</span>${x.text}</div>`) : h`<p class="muted small">Rien d’inhabituel 👍</p>`}</div>
+    ${w ? h`<div class="card"><h3>🤔 Pourquoi je stagne ? — ${w.goal}</h3>${w.hypotheses.map((x) => h`<details class="win fold2"><summary><b>💡 ${x.title}</b></summary><p class="small">${x.text}</p></details>`)}${howBox({ facts: w.facts, missing: w.missing })}</div>` : ''}`;
 }
 
 /* ═════════ Mode Lab : expériences personnelles ═════════ */

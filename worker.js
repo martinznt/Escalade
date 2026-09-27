@@ -346,6 +346,7 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p.startsWith('/api/admin/')) {
     if (!u.isAdmin) return fail('Droit administrateur requis.', 403);
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
+    if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
     if ((x = p.match(/^\/api\/admin\/bugs\/([\w-]{1,64})$/)) && m === 'POST') return adminBugStatus(request, env, x[1]);
     return fail('Route inconnue.', 404);
   }
@@ -815,6 +816,18 @@ async function adminActivate(request, env, u) {
   if (!r.meta?.changes) return fail('Compte introuvable.', 404);
   await rlReset(env, 'admin:' + u.id);
   return json({ ok: true, admin: true });
+}
+/** Liste des comptes pour l'administrateur : identité du compte et activité, JAMAIS les données d'entraînement
+ * (séances, performances, profil) ; l'e-mail est masqué ; aucun mot de passe ni jeton. */
+async function adminUsers(env) {
+  const r = await db(env, `SELECT us.username,us.email,us.created_at,us.is_admin,
+      (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id=us.id) AS last_login,
+      (SELECT COUNT(*) FROM history h WHERE h.user_id=us.id) AS sessions_done,
+      (SELECT MAX(h.started_at) FROM history h WHERE h.user_id=us.id) AS last_session
+    FROM users us ORDER BY us.created_at DESC LIMIT 2000`).all();
+  const mask = (e) => { const [a, d] = String(e || '').split('@'); return d ? `${a.slice(0, 1)}•••@${d}` : ''; };
+  const users = r.results.map((x) => ({ username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, lastLogin: x.last_login || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
+  return json({ ok: true, total: users.length, users });
 }
 async function adminBugs(url, env) {
   const st = ['open', 'done'].includes(url.searchParams.get('status')) ? url.searchParams.get('status') : null;

@@ -2,14 +2,14 @@
 // Charge les vues, gère l'authentification, la navigation (onglets + adresse #/onglet/sous-vue/paramètre),
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
 import { h, raw, $, toast, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession } from './shared.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
 import { vProfile } from './views-profile.js';
-import { vSettings } from './views-settings.js';
+import { vSettings, APPEAR_KEYS } from './views-settings.js';
 import { onVisible } from './player.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
@@ -40,7 +40,15 @@ function doRender() {
     <main class="wrap" id="main">${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
 }
-setRenderer(() => { doRender(); renderUpdateBar(); });
+/** Apparence liée au compte : la version la plus récente (cet appareil ou le compte) s'applique partout. */
+function syncAppearance() {
+  if (!S.user || !S.loaded) return;
+  const it = S.items.get('config/appearance'), local = window.__sea.load();
+  const mine = local._owner === S.user.id, localT = mine ? local._t || 0 : 0; // l'apparence d'un autre compte de cet appareil ne compte pas
+  if (it && !it.del && it.u > localT) { window.__sea.save({ ...local, ...Object.fromEntries(Object.entries(it.d).filter(([, v]) => v)), _t: it.u, _owner: S.user.id }); return; }
+  if (!it && mine && local._t && (S.lastSync || S.user.guest)) putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(local[k] ?? '') }), {}));
+}
+setRenderer(() => { syncAppearance(); doRender(); renderUpdateBar(); });
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
 ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }[id]; const keep = S.tab === id ? base : S.sub[id]; go(id, ['seance', 'shared-edit', 'common-detail', 'import'].includes(keep) ? base : keep || base); };
 ACT.goSync = () => go('settings', 'sync');

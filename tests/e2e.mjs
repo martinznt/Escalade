@@ -329,6 +329,11 @@ await step('l’admin voit le signalement (texte échappé, auteur) et le marque
   await C.locator('[data-act=bugStatus]').first().click(); await C.waitForTimeout(300);
   const r = (await c.api('GET', '/api/admin/bugs')).data.reports; assert.equal(r[0].status, 'done');
 });
+await step('l’admin voit la liste de tous les comptes (sans leurs données privées)', async () => {
+  await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('.ulist .urow');
+  const txt = await c.text('.ulist'); for (const name of ['Alice', 'Bob']) assert.match(txt, new RegExp(name));
+  assert.ok(await c.count('.ulist .urow') >= 3);
+});
 await step('l’admin modifie puis supprime la contribution ; pas d’accès aux données privées', async () => {
   const d = (await c.api('GET', '/api/shared/' + commonId)).data.item; assert.equal(d.canEdit, true);
   await c.tab('library'); await c.sub('libSub', 'common'); await C.locator('[data-act=commonOpen]').first().click(); await C.waitForSelector('[data-act=commonEdit]');
@@ -373,6 +378,24 @@ await step('déconnexion puis reconnexion : données intactes', async () => {
   await a2.tab('settings'); await a2.click('[data-act=logout]'); await a2.confirm(); await A2.waitForSelector('form[data-submit=login]');
   await A2.fill('input[name=password]', 'motdepasse1'); await a2.click('button[type=submit]'); await A2.waitForSelector('nav.tabs');
   await a2.tab('library'); await a2.sub('libSub', 'seances'); await A2.waitForSelector('text=Créée hors ligne'); await A2.waitForSelector('text=Tirage maison');
+});
+/* ═════════ Autre appareil ═════════ */
+console.log('Autre appareil');
+await step('tout suit le compte sur un autre appareil : données, réglages et apparence', async () => {
+  const a2 = H(A2);
+  await a2.tab('settings'); await a2.sub('setSub', 'main');
+  await A2.click('[data-act=appear][data-k=mode][data-v=light]'); await A2.click('[data-act=appear][data-k=palette][data-v=granit]'); await A2.click('[data-act=appear][data-k=size][data-v=l]');
+  await A2.fill('input[name=defaultRest]', '75'); await A2.dispatchEvent('input[name=defaultRest]', 'change');
+  await poll(async () => (await a2.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'appearance' && i.d.palette === 'granit'), 15000, 'apparence enregistrée dans le compte');
+  await poll(async () => (await a2.api('GET', '/api/settings')).data.settings.defaultRest === 75, 15000, 'réglages enregistrés dans le compte');
+  const ctxD = await newCtx(); const D = await ctxD.newPage(); watch(D, 'D'); cur = D; const d = H(D); // un autre navigateur, vierge
+  await D.goto(BASE); await D.waitForSelector('[data-act=authPick][data-id=login]'); await d.click('[data-act=authPick][data-id=login]');
+  await D.fill('input[name=username]', 'Alice'); await D.fill('input[name=password]', 'motdepasse1'); await d.click('button[type=submit]');
+  await D.waitForSelector('nav.tabs');
+  await poll(async () => (await D.evaluate(() => [document.documentElement.dataset.mode, document.documentElement.dataset.palette, document.documentElement.dataset.size].join())) === 'light,granit,l', 15000, 'apparence appliquée sur le nouvel appareil');
+  await d.tab('settings'); await d.sub('setSub', 'main'); assert.equal(await D.inputValue('input[name=defaultRest]'), '75');
+  await d.tab('library'); await d.sub('libSub', 'seances'); await D.waitForSelector('text=Tirage maison');
+  await ctxD.close(); cur = A2;
 });
 /* ═════════ Invité ═════════ */
 console.log('Invité');

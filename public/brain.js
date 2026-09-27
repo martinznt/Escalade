@@ -451,7 +451,7 @@ export function undertrained(ctx) {
       const last = lastWorked([id], ctx);
       const byGoal = activeGoals(ctx).filter((g) => goalCaps(g, ctx).some((x) => x.id === id)).map(goalLabel);
       items.push({ id, label: CAPACITIES[id]?.label || ctx.categories[id]?.label || id, expected: round(expected * 100), actual: round(actual * 100), last, byGoal,
-        text: `${CAPACITIES[id]?.label || id} : ${round(actual * 100)} % de ton volume sur 30 jours, alors qu’elle pèse environ ${round(expected * 100)} % dans ${byGoal.length ? 'tes objectifs (' + byGoal.join(', ') + ')' : 'la structure de tes activités'}.${last ? ' Dernière fois : ' + fmtDay(last) + '.' : ' Pas travaillée récemment.'}` });
+        text: `${CAPACITIES[id]?.label || ctx.categories[id]?.label || id} : ${round(actual * 100)} % de ton volume (≈ ${round(expected * 100)} % attendu)`, detail: `${byGoal.length ? 'Utile pour ' + byGoal.join(', ') + '. ' : ''}${last ? 'Dernière fois : ' + fmtDay(last) + '.' : 'Pas travaillée récemment.'}` });
     }
   }
   return { items: items.sort((a, b) => (b.expected - b.actual) - (a.expected - a.actual)).slice(0, 6), enough: true, text: 'Observation descriptive : comparaison entre ce que demandent tes objectifs / activités et ce que tu as réellement travaillé (30 jours).' };
@@ -483,7 +483,7 @@ export function testReminders(ctx, maxAgeDays = 42) {
     const m = ctx.metrics[id], all = perfsOf(id, ctx), last = latestPerf(id, ctx), unknown = all[0]?.unknown;
     const age = last ? Math.floor((ctx.now - last.date) / DAY) : null;
     if (last && age < maxAgeDays && !unknown) continue;
-    out.push({ metricId: id, label: m.label, why, age, unknown: !!unknown, test: m.test || '', text: unknown ? `Tu as indiqué « je ne sais pas » pour ${m.label} : un test te donnerait une vraie valeur.` : last ? `Dernière mesure de ${m.label} il y a ${age} jours : un nouveau test actualiserait ton profil.` : `Aucune mesure de ${m.label} (utile pour ${why}).` });
+    out.push({ metricId: id, label: m.label, why, age, unknown: !!unknown, test: m.test || '', text: unknown ? `${m.label} : tu ne sais pas encore` : last ? `${m.label} : dernière mesure il y a ${age} j` : `${m.label} : jamais mesuré` });
   }
   return out.slice(0, 6);
 }
@@ -520,15 +520,15 @@ const slotOf = (t) => { const hh = new Date(t).getHours(); return hh < 11 ? 'le 
 export function habits(ctx) {
   const recent = ctx.history.slice(0, 12), out = [];
   const push = (key, text, proposal) => { if (!ctx.habitDecisions[key]) out.push({ key, text, proposal }); };
-  for (const s of exerciseStats(ctx).values()) if (s.swappedOut >= 3 && !ctx.prefs[s.key]) push(`swap:${s.key}`, `Tu remplaces souvent « ${s.name} » (${s.swappedOut} fois). Veux-tu enregistrer que tu préfères l’éviter ? Il restera proposé s’il est indispensable à un objectif, avec une explication.`, { type: 'pref', key: s.key, label: s.name, value: 'evite', source: 'habit' });
+  for (const s of exerciseStats(ctx).values()) if (s.swappedOut >= 3 && !ctx.prefs[s.key]) push(`swap:${s.key}`, `Tu remplaces souvent « ${s.name} » (${s.swappedOut} fois). L’éviter à l’avenir ?`, { type: 'pref', key: s.key, label: s.name, value: 'evite', source: 'habit' });
   if (recent.length >= 5) {
     const mins = recent.map((h) => Math.round((h.durationSeconds || 0) / 300) * 5).filter((m) => m >= 5);
     const counts = {}; for (const m of mins) counts[m] = (counts[m] || 0) + 1;
     const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-    if (top && top[1] / recent.length >= 0.5) push(`duration:${top[0]}`, `Tes séances durent souvent environ ${top[0]} minutes (${top[1]} sur les ${recent.length} dernières). Veux-tu en faire ta durée par défaut ?`, { type: 'config', key: 'duration', value: Number(top[0]) });
+    if (top && top[1] / recent.length >= 0.5) push(`duration:${top[0]}`, `Tes séances durent souvent ~${top[0]} min. En faire ta durée par défaut ?`, { type: 'config', key: 'duration', value: Number(top[0]) });
     const envs = {}; for (const h of recent) { const e = h.data?.context?.envName; if (e) envs[e] = (envs[e] || 0) + 1; }
     const topEnv = Object.entries(envs).sort((a, b) => b[1] - a[1])[0];
-    if (topEnv && topEnv[1] / recent.length >= 0.7) push(`env:${topEnv[0]}`, `Tu t’entraînes presque toujours à « ${topEnv[0]} ». Veux-tu en faire ton environnement par défaut ?`, { type: 'env', name: topEnv[0] });
+    if (topEnv && topEnv[1] / recent.length >= 0.7) push(`env:${topEnv[0]}`, `Tu t’entraînes presque toujours à « ${topEnv[0]} ». En faire ton lieu par défaut ?`, { type: 'env', name: topEnv[0] });
     const slots = {}; for (const h of recent) { const s = slotOf(h.startedAt); slots[s] = (slots[s] || 0) + 1; }
     const topSlot = Object.entries(slots).sort((a, b) => b[1] - a[1])[0];
     if (topSlot && topSlot[1] / recent.length >= 0.7) out.push({ key: `slot:${topSlot[0]}`, text: `Tu t’entraînes surtout ${topSlot[0]} (${topSlot[1]} séances sur ${recent.length}).`, proposal: null, info: true });
@@ -694,12 +694,11 @@ export function journal(ctx, limit = 80) {
   const out = [];
   for (const h of ctx.history) {
     const q = h.data?.questionnaire || {};
-    const bits = [`${Math.round((h.durationSeconds || 0) / 60)} min`];
-    if (h.data?.rpe) bits.push(`ressenti ${h.data.rpe}/5`);
+    const bits = [`⏱ ${Math.round((h.durationSeconds || 0) / 60)} min`];
+    if (h.data?.rpe) bits.push(`😮‍💨 ${h.data.rpe}/5`);
     if (h.data?.aborted) bits.push('interrompue');
-    if (q.hardest) bits.push(`plus difficile : ${q.hardest}`);
-    if (q.felt?.length) bits.push(`muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}`);
-    out.push({ t: h.startedAt, kind: 'session', icon: '✅', title: h.sessionName, text: bits.join(' · '), note: [h.data?.note, q.comment].filter(Boolean).join(' — '), id: h.id });
+    const more = [q.hardest ? `Plus difficile : ${q.hardest}` : '', q.felt?.length ? `Muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}` : ''].filter(Boolean);
+    out.push({ t: h.startedAt, kind: 'session', icon: '✅', title: h.sessionName, text: bits.join(' · '), more, note: [h.data?.note, q.comment].filter(Boolean).join(' — '), id: h.id });
   }
   for (const p of ctx.perfs) out.push({ t: p.date, kind: 'perf', icon: p.unknown ? '❔' : '📏', title: ctx.metrics[p.metricId]?.label || 'Performance', text: perfText(p, ctx) + (p.styles?.length ? ' · ' + p.styles.map((s) => ctx.styles[s]?.label || s).join(', ') : ''), note: p.note || '' });
   for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [a.result, a.attempts ? a.attempts + ' essai(s)' : ''].filter(Boolean).join(' · '), note: a.note || '' });
