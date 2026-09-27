@@ -1,6 +1,6 @@
 // views-progress.js — Progrès : comparaisons personnelles, résumés, régularité, charge, historique, records,
 // timeline, journal, analyses descriptives et mode Lab. Toujours par rapport à soi-même, jamais aux autres.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, lineChart, fmtDay, fmtDate, fmtDateTime, relDate, numberField, buzzOk, fmtDur } from './ui.js';
+import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, subHead, tag, empty, howBox, meter, bars, lineChart, fmtDay, fmtDate, fmtDateTime, relDate, numberField, buzzOk, fmtDur } from './ui.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, deleteHistory, updateHistory, putItem, delItem, item, itemsOf } from './state.js';
 import { uid, exKey } from './shared.js';
 import { CAPACITIES, MUSCLES, METRICS } from './model.js';
@@ -10,10 +10,18 @@ import { streakCard, badgesCard } from './views-motiv.js';
 import { composePage } from './layout.js';
 
 const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
+const SUB_INFO = {
+  history: ['📋', 'Historique', (c) => (c.history.length ? `${c.history.length} séance${c.history.length > 1 ? 's' : ''} enregistrée${c.history.length > 1 ? 's' : ''}` : 'Tes séances faites, une par une')],
+  records: ['🏆', 'Records', () => 'Tes meilleures performances'], timeline: ['🕰️', 'Frise', () => 'Tout ce qui s’est passé, dans l’ordre'],
+  journal: ['📝', 'Journal', () => 'Tes notes et tes ressentis'], analyses: ['🔍', 'Analyses', () => 'Tendances, charge, pourquoi je stagne'], lab: ['🧪', 'Lab', () => 'Graphiques détaillés pour aller plus loin'],
+};
+/** Progrès : le résumé d'abord (l'essentiel), puis la liste des rubriques ; chaque rubrique a sa page. */
 export function vProgress() {
   const sub = SUBS.some(([k]) => k === S.sub.progress) ? S.sub.progress : 'summary';
   const views = { summary: vSummary, history: vHistory, records: vRecords, timeline: vTimeline, journal: vJournal, analyses: vAnalyses, lab: vLab };
-  return h`<h1>📈 Progrès</h1><div class="scrollx">${seg('progSub', sub, SUBS)}</div>${views[sub]()}`;
+  if (sub === 'summary') { const c = ctx(); return h`<h1>📈 Progrès</h1>${vSummary()}<span class="kicker">Aller plus loin</span>${menuList(Object.entries(SUB_INFO).map(([k, [ic, t, d]]) => ['progSub', k, ic, t, d(c)]))}`; }
+  const [ic, t] = SUB_INFO[sub];
+  return h`${subHead('progSub', 'summary', 'Progrès', `${ic} ${t}`)}${views[sub]()}`;
 }
 ACT.progSub = (el) => go('progress', el.dataset.id);
 const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);

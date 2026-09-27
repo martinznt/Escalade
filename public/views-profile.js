@@ -1,6 +1,6 @@
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
+import { h, subHead, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
 import { uid, normalizeEx, normalizeSession } from './shared.js';
@@ -26,8 +26,7 @@ export function vProfile() {
   if (sub === 'home') return vHub();
   const views = { body: vBody, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(vClimbAdvanced()), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
   const [ic, title] = TILES[sub];
-  return h`<div class="row subhead"><button class="btn sm ghost" data-act="profSub" data-id="home" aria-label="Retour au profil">‹ Profil</button><h1 class="grow">${ic} ${title}</h1></div>
-    <div class="scrollx">${seg('profSub', sub, SUBS)}</div>${views[sub]()}`;
+  return h`${subHead('profSub', 'home', 'Profil', `${ic} ${title}`)}${views[sub]()}`;
 }
 /* ═════════ Accueil du profil : l'essentiel en un coup d'œil, puis des tuiles ═════════ */
 function vHub() {

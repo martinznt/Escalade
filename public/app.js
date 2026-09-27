@@ -21,6 +21,7 @@ import { vSettings, APPEAR_KEYS } from './views-settings.js';
 import { onVisible, bigTap, startPlayer } from './player.js';
 import { catchLink, pendingLink, clearPending } from './share.js';
 import './duo.js';
+import './find-ui.js';
 import { setLang } from './i18n.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
@@ -62,7 +63,7 @@ function syncAppearance() {
 }
 setRenderer(() => { syncAppearance(); setLang(S.settings?.lang); doRender(); renderUpdateBar(); checkBadges(); });
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
-ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }[id]; const keep = S.tab === id || id === 'settings' ? base : S.sub[id]; /* Paramètres : toujours la liste des rubriques */ go(id, ['seance', 'shared-edit', 'common-detail', 'import'].includes(keep) ? base : keep || base); };
+ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'home', profile: 'home', settings: 'main' }[id]; go(id, base); }; // un onglet s'ouvre toujours sur sa page d'accueil (sa liste de rubriques)
 ACT.goSync = () => go('settings', 'sync');
 ACT.goAccount = () => go('settings', 'main');
 ACT.closeSheet = () => closeSheet();

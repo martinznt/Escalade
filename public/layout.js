@@ -10,13 +10,13 @@ export const ICONS = {
   cal: ['📅', 'Calendrier', 'topCal'], notif: ['🔔', 'Notifications', 'notifOpen'], timer: ['⏱', 'Minuteur', 'timerOpen'], carnet: ['🧗', 'Carnet', 'goCarnet'],
   coach: ['💬', 'Coach', 'coachOpen'], all: ['☰', 'Menu : toutes les fonctions', 'allOpen'], recap: ['📸', 'Bilan du mois', 'recapOpen'], gen: ['🎯', 'Séance du jour', 'genOpen'],
   seances: ['📚', 'Mes séances', 'goLib'], progress: ['📈', 'Mes progrès', 'goProgressTop'], program: ['📆', 'Programme', 'topProgram'], streak: ['🔥', 'Ma série', 'goProgressTop'],
-  badges: ['🏅', 'Badges', 'goProgressTop'],
+  badges: ['🏅', 'Badges', 'goProgressTop'], search: ['🔍', 'Rechercher dans l’app', 'findOpen'],
 };
 // Fonctions de chaque page. k = formes possibles, tile = s'affiche en tuile dans la grille de raccourcis.
 const F = (l, k, extra = {}) => ({ l, k, ...extra });
 export const FEATURES = {
   home: {
-    hero: F('Bonjour et semaine', ['big']), gen: F('Séance du jour', ['big', 'icon'], { tile: 1 }), seances: F('Mes séances', ['big', 'icon'], { tile: 1 }),
+    search: F('Recherche', ['icon']), hero: F('Bonjour et semaine', ['big']), gen: F('Séance du jour', ['big', 'icon'], { tile: 1 }), seances: F('Mes séances', ['big', 'icon'], { tile: 1 }),
     timer: F('Minuteur', ['big', 'icon'], { tile: 1 }), carnet: F('Carnet d’escalade', ['big', 'icon'], { tile: 1 }), progress: F('Mes progrès', ['big', 'icon'], { tile: 1 }),
     cal: F('Calendrier', ['icon', 'big']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach et commandes', ['icon', 'big']),
     program: F('Programme', ['big', 'icon']), finger: F('Alerte doigts', ['big']), streak: F('Ma série', ['big', 'icon']), today: F('Que faire aujourd’hui ?', ['big']), question: F('Petite question', ['big']),
@@ -24,21 +24,21 @@ export const FEATURES = {
     records: F('Records', ['big']), regularity: F('Régularité', ['big']), capacities: F('Capacités', ['big']), load: F('Charge récente', ['big']), summary: F('Résumé de la semaine', ['big']),
   },
   progress: {
-    streak: F('Ma série', ['big']), kpis: F('Chiffres clés', ['big']), wins: F('Bonnes nouvelles', ['big']), work: F('Ce que tu as travaillé', ['big']),
+    search: F('Recherche', ['icon']), streak: F('Ma série', ['big']), kpis: F('Chiffres clés', ['big']), wins: F('Bonnes nouvelles', ['big']), work: F('Ce que tu as travaillé', ['big']),
     regularity: F('Régularité', ['big']), load: F('Charge', ['big']), muscles: F('Muscles travaillés', ['big']), badges: F('Badges', ['big']), weeksum: F('Résumé de la période', ['big']),
     recap: F('Bilan du mois', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']),
   },
-  library: { gen: F('Séance du jour', ['icon']), timer: F('Minuteur', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach', ['icon']) },
-  profile: { carnet: F('Carnet', ['icon']), coach: F('Coach', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']) },
-  settings: { notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']) },
+  library: { search: F('Recherche', ['icon']), gen: F('Séance du jour', ['icon']), timer: F('Minuteur', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach', ['icon']) },
+  profile: { search: F('Recherche', ['icon']), carnet: F('Carnet', ['icon']), coach: F('Coach', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']) },
+  settings: { search: F('Recherche', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']) },
 };
 // Mise en page de base : simple au départ.
 export const DEFAULTS = {
-  home: [['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['question', 'big'], ['streak', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  progress: [['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['recap', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  library: [['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  profile: [['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  settings: [['notif', 'icon'], ['all', 'icon']],
+  home: [['search', 'icon'], ['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['question', 'big'], ['streak', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['recap', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  library: [['search', 'icon'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  profile: [['search', 'icon'], ['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  settings: [['search', 'icon'], ['notif', 'icon'], ['all', 'icon']],
 };
 export const COLORS = ['', '#d4a056', '#5fa8d3', '#5cb87a', '#ef6f5e', '#a78bfa', '#f472b6', '#ffd60a'];
 const OLD_DASH = { today: 'today', next: 'next', goals: 'goals', reco: 'reco', command: 'coach', progress: 'weekprog', records: 'records', regularity: 'regularity', capacities: 'capacities', load: 'load', summary: 'summary', calendar: 'cal' };

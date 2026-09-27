@@ -46,8 +46,18 @@ const H = (page) => ({
   text: (sel) => page.locator(sel).first().innerText(),
   count: (sel) => page.locator(sel).count(),
   confirm: async () => { await page.waitForSelector('#dialog.open [data-dlg="1"]'); await page.click('#dialog.open [data-dlg="1"]'); await page.waitForSelector('#dialog:not(.open)', { state: 'attached' }); },
-  tab: async (id) => { await page.click(`nav.tabs [data-id=${id}]`); await page.waitForTimeout(120); },
-  sub: async (act, id) => { await page.click(`[data-act=${act}][data-id=${id}]`); await page.waitForTimeout(120); },
+  // La Bibliothèque s'ouvre sur sa liste : les étapes qui l'utilisent partent de « Mes séances ».
+  tab: async (id) => { await page.click(`nav.tabs [data-id=${id}]`); await page.waitForTimeout(120); if (id === 'library') { await page.click('[data-act=libSub][data-id=seances]'); await page.waitForTimeout(120); } },
+  // Rubriques en liste : si la rubrique n'est pas à l'écran, on revient d'abord à la liste (bouton retour).
+  sub: async (act, id) => {
+    const sel = `[data-act=${act}][data-id=${id}]`, root = { libSub: 'home', progSub: 'summary', profSub: 'home', setSub: 'main' }[act];
+    if (!(await page.locator(sel).count()) && root) {
+      if (await page.locator(`[data-act=${act}][data-id=${root}]`).count()) await page.locator(`[data-act=${act}][data-id=${root}]`).first().click();
+      else await page.evaluate((hsh) => { location.hash = hsh; }, { libSub: '#/library/home', progSub: '#/progress/summary', profSub: '#/profile/home', setSub: '#/settings/main' }[act]);
+      await page.waitForTimeout(150);
+    }
+    await page.locator(sel).first().click(); await page.waitForTimeout(120);
+  },
   noOverflow: async (where) => { const ok = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1); assert.ok(ok, `défilement horizontal de page détecté (${where})`); },
   api: (method, path, body) => page.evaluate(async ([m, p, b]) => { const r = await fetch(p, { method: m, headers: b ? { 'Content-Type': 'application/json' } : {}, body: b ? JSON.stringify(b) : undefined }); let d = null; try { d = await r.json(); } catch {} return { status: r.status, data: d }; }, [method, path, body]),
   waitSynced: async () => { await page.waitForFunction(() => document.querySelector('.syncbadge.ok'), null, { timeout: 15000 }); },
@@ -146,7 +156,7 @@ await step('carnet : ajout rapide, pyramide, projet suivi jusqu’à la réussit
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'project' && i.d.status === 'done' && i.d.tries.length), 12000, 'projet synchronisé');
 });
 await step('ma salle : cotation U1 → U8+, espaces et matériel ; bloc noté « U7 dur, dévers » dans cette salle', async () => {
-  await a.tab('profile'); await a.click('[data-act=profSub][data-id=equipment]'); await a.click('[data-act=envNewGym]'); await A.waitForSelector('#sheet input[name=city]');
+  await a.tab('profile'); await a.sub('profSub', 'equipment'); await a.click('[data-act=envNewGym]'); await A.waitForSelector('#sheet input[name=city]');
   await a.click('#sheet [data-act=sysNew]'); await a.click('[data-act=sysFromTpl][data-id=u8plus]'); await A.waitForSelector('#sheet form[data-submit=lvlSave]'); await a.click('#sheet [data-act=closeSheet].btn');
   await a.click('[data-act=envNewGym]'); await A.fill('#sheet input[name=name]', 'Arkose Test'); await A.fill('#sheet input[name=city]', 'Montreuil');
   const sysId = await A.evaluate(() => [...document.querySelectorAll('#sheet select[name=gradeSys] option')].find((o) => /U8\+/.test(o.textContent))?.value);
@@ -175,6 +185,18 @@ await step('notifications : boîte des mises à jour (utilité, visite), répons
   assert.equal(await a.count('.topicons [data-act=notifOpen] .badge-dot'), 0, 'tout vu : plus de pastille');
   await a.click('.inbox [data-act=notifSettings]'); await A.waitForSelector('text=Son dans l’app');
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'inbox' && i.d.seenIds?.length), 12000, 'notifications vues liées au compte');
+});
+await step('recherche 🔍 dans toute l’app, et recherche limitée aux paramètres', async () => {
+  await a.tab('home'); await a.click('.topicons [data-act=findOpen]'); await A.waitForSelector('#sheet input[data-input=findQ]');
+  await A.fill('#sheet input[data-input=findQ]', 'minuteur'); await A.waitForSelector('#findres [data-act=findGo]');
+  assert.match(await a.text('#findres'), /Minuteur/);
+  await A.fill('#sheet input[data-input=findQ]', 'anglais'); await A.waitForFunction(() => /Langue/.test(document.querySelector('#findres')?.textContent || ''));
+  await a.click('#findres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/display'));
+  await A.waitForSelector('#main .found'); // l'élément trouvé est mis en lumière
+  await a.tab('settings'); await A.fill('input[data-input=setFind]', 'vibration'); await A.waitForSelector('#setfindres [data-act=findGo]');
+  assert.equal(await a.count('.setmenu.setmain.hidden'), 1, 'la liste des rubriques laisse place aux résultats');
+  assert.doesNotMatch(await a.text('#setfindres'), /Minuteur|Exercice/, 'seulement des paramètres');
+  await a.click('#setfindres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/session')); await A.waitForSelector('#main input[name=vibration]');
 });
 await step('séances prêtes : filtres, tri pour toi, sources consultables, lancer / garder ; top exercices', async () => {
   await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('.catcard');
@@ -211,18 +233,18 @@ await step('coach : question en un toucher, réponse affichée', async () => {
   assert.match(await a.text('.msg.assistant'), /Conseil du coach/); await a.click('#sheet .back'); await a.tab('profile');
 });
 await step('mon corps et mes objectifs : profil corporel, objectifs multiples, objectif écrit', async () => {
-  await a.tab('profile'); await a.click('[data-act=profSub][data-id=body]'); await A.waitForSelector('.bodyf');
+  await a.tab('profile'); await a.sub('profSub', 'body'); await A.waitForSelector('.bodyf');
   await A.fill('.bodyf input[data-k=age]', '34'); await A.press('.bodyf input[data-k=age]', 'Tab'); await A.waitForTimeout(200);
   await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); await A.waitForSelector('text=vite essoufflé');
   await a.click('[data-act=weighIn]'); await A.fill('#sheet input[name=kg]', '71.5'); await a.click('#sheet button[type=submit]'); await A.waitForSelector('text=71.5 kg');
-  await a.click('[data-act=profSub][data-id=goals]'); await a.click('[data-act=goalsToggle][data-id=poids]'); await a.click('[data-act=goalsToggle][data-id=climb]');
+  await a.sub('profSub', 'goals'); await a.click('[data-act=goalsToggle][data-id=poids]'); await a.click('[data-act=goalsToggle][data-id=climb]');
   await A.waitForSelector('[data-act=goalsToggle][data-id=poids].on');
   await a.click('[data-act=goalWrite]'); await A.fill('#sheet textarea[name=text]', 'Courir 10 km sans m’arrêter'); await a.click('#sheet button[type=submit]');
   await A.waitForSelector('#sheet [data-act=goalAiSave]', { timeout: 15000 }); assert.match(await a.text('#sheet'), /Endurance/i);
   await a.click('#sheet [data-act=goalAiSave]'); await A.waitForSelector('text=Courir 10 km');
   await poll(async () => { const it = (await a.api('GET', '/api/items?since=0')).data.items; return it.some((i) => i.c === 'config' && i.id === 'body' && i.d.age === 34 && i.d.breath === 'souvent') && it.some((i) => i.c === 'config' && i.id === 'main' && (i.d.goals || []).includes('poids')); }, 12000, 'profil corporel et objectifs sur le serveur');
-  await a.click('[data-act=profSub][data-id=body]'); await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); // on remet comme avant pour la suite
-  await a.click('[data-act=profSub][data-id=goals]'); await a.click('[data-act=goalsToggle][data-id=poids]');
+  await a.sub('profSub', 'body'); await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); // on remet comme avant pour la suite
+  await a.sub('profSub', 'goals'); await a.click('[data-act=goalsToggle][data-id=poids]');
 });
 await step('objectif complexe : front lever (arbre, blocages, chemins)', async () => {
   await a.sub('profSub', 'goals'); await a.click('[data-act=goalNewSkill][data-id=front_lever]');
@@ -628,7 +650,7 @@ await step('après une mise à jour : visite des nouveautés, seulement ce qui a
   await G.evaluate(() => localStorage.setItem('sea:news-toured', JSON.stringify('8.3.0'))); await G.reload(); await G.waitForSelector('nav.tabs');
   await G.waitForSelector('#updbar [data-act=newsTour]', { timeout: 10000 }); await g.click('#updbar [data-act=newsTour]');
   await G.waitForSelector('#tour .tour-bubble'); assert.match(await g.text('#tour .tour-bubble'), /Consignes à chaque série/);
-  assert.match(await g.text('#tour .tour-step'), new RegExp('^1 / ' + (await G.evaluate(async () => { const m = await import('/news.js'); return m.NEWS.filter((n) => n.v > '8.3.0').reduce((t, n) => t + n.steps.length, 0); })) + '$'), 'seulement les nouveautés des versions pas encore vues');
+  assert.match(await g.text('#tour .tour-step'), new RegExp('^1 / ' + (await G.evaluate(async () => { const m = await import('/news.js'); const num = (v) => v.split('.').reduce((t, x) => t * 1000 + Number(x), 0); return m.NEWS.filter((n) => num(n.v) > num('8.3.0')).reduce((t, n) => t + n.steps.length, 0); })) + '$'), 'seulement les nouveautés des versions pas encore vues');
   await g.click('#tour [data-act=tourNext]'); await g.click('#tour [data-act=tourNext]');
   await G.waitForFunction(() => location.hash.startsWith('#/settings/help'), null, { timeout: 5000 });
   await G.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
