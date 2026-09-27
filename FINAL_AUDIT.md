@@ -303,6 +303,14 @@ réglages qu'un client V2 ne connaît pas.
 - **Bibliothèque plus simple** : générateur en 2 questions (sport, durée) et un gros bouton, le reste dans « Plus
   d'options » ; simulation en pastilles, barre de répartition colorée, raisons repliées ; « Pourquoi cette séance ? »
   replié par défaut.
+- **Reste de l'app allégé** : objectif (pourcentage en grand, actions secondaires dans « ⋯ », repères en barres,
+  explications repliées), mesures (tests en lignes courtes, protocole replié), analyses (barres, cartes courtes),
+  journal (une ligne par séance, détails repliés), sports (forces en pastilles), partage (listes repliées), fiche
+  d'exercice (pastilles muscles / matériel / difficulté, erreurs et capacités repliées) ; phrases générées raccourcies
+  à la source (tests à faire, capacités peu travaillées, habitudes).
+- **Admin — liste des comptes** (`GET /api/admin/users`, Paramètres › Admin) : pseudo, inscription, e-mail masqué,
+  nombre de séances et dernière connexion, recherche ; jamais les séances, performances ni profils ; refusé à tout
+  compte non administrateur (test worker + E2E).
 
 ## Évolution 8.2.0 — plus joli, plus léger, assistant IA
 

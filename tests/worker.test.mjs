@@ -349,4 +349,17 @@ await ok('mise à jour : sw.js porte l’identifiant du déploiement, /api/versi
   assert.match(await (await worker.fetch(new Request(ORIGIN + '/sw.js'), e1)).text(), /deploy-bbb/);
   const e2 = makeEnv(); assert.ok((await (await worker.fetch(new Request(ORIGIN + '/api/version'), e2)).json()).build, 'repli sur la version de l’application');
 });
+await ok('admin : liste de tous les comptes (pseudo, activité), e-mail masqué, aucune donnée privée ; refusée aux autres', async () => {
+  const e = makeEnv(); const A = new Client(e), B = new Client(e);
+  await A.post('/api/auth/register', { username: 'chef', password: 'motdepasse1' });
+  await B.post('/api/auth/register', { username: 'membre', password: 'motdepasse2', email: 'membre@exemple.fr' });
+  await B.post('/api/history', hist('hx', Date.now() - 3600000));
+  assert.equal((await B.get('/api/admin/users')).status, 403);
+  assert.equal((await A.get('/api/admin/users')).status, 403, 'pas admin tant que non activé');
+  await A.post('/api/admin/activate', { password: 'Adm1n-Secret!' });
+  const r = await A.get('/api/admin/users'); assert.equal(r.status, 200); assert.equal(r.data.total, 2);
+  const m = r.data.users.find((x) => x.username === 'membre');
+  assert.equal(m.email, 'm•••@exemple.fr'); assert.equal(m.sessionsDone, 1); assert.ok(m.lastLogin);
+  const raw = JSON.stringify(r.data); for (const bad of ['password', 'salt', 'token', 'Jambes', 'Squats', 'membre@exemple.fr']) assert.ok(!raw.includes(bad), bad);
+});
 done('tests Worker / D1 / sécurité');

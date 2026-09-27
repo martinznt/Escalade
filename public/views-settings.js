@@ -205,9 +205,30 @@ function vAdmin() {
   if (!bugs && !S.admin.error) setTimeout(loadBugs, 0);
   return h`<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier ou supprimer toute contribution de la bibliothèque commune (Bibliothèque › Commune) et les exercices communs, et consulter les signalements. Tu n’as pas accès aux données privées des autres comptes.</p>
       <div class="row wrapf"><button class="btn" data-act="libSub" data-id="common">📚 Bibliothèque commune</button><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
+    ${vAdminUsers()}
     <div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['done', 'Traités'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>
       ${S.admin.error ? h`<p class="err small">${S.admin.error}</p>` : !bugs ? skeleton(2) : bugs.filter((b) => f === 'all' || b.status === f).length ? bugs.filter((b) => f === 'all' || b.status === f).map((b) => h`<div class="card flat"><div class="row between"><b>${b.title}</b>${tag(b.status === 'done' ? 'traité' : 'ouvert', b.status === 'done' ? 'ok' : 'warn')}</div><p class="small pre">${b.description}</p><p class="tiny muted">par ${b.author} · ${fmtDateTime(b.createdAt)}${b.page ? ' · page : ' + b.page : ''}${b.appVersion ? ' · v' + b.appVersion : ''}${b.userAgent ? ' · ' + b.userAgent.slice(0, 80) : ''}</p><button class="btn sm" data-act="bugStatus" data-id="${b.id}" data-v="${b.status === 'done' ? 'open' : 'done'}">${b.status === 'done' ? 'Rouvrir' : 'Marquer traité'}</button></div>`) : h`<p class="muted small">Aucun signalement.</p>`}</div>`;
 }
+/* Comptes existants (admin) : identité et activité uniquement, jamais les données d'entraînement. */
+async function loadUsers() { try { S.admin.users = await api('GET', '/api/admin/users'); S.admin.usersErr = ''; } catch (e) { S.admin.usersErr = e.offline ? 'Connexion requise.' : e.message; } render(); }
+function vAdminUsers() {
+  const u = S.admin.users, q = (S.admin.userQ || '').toLowerCase();
+  if (!u && !S.admin.usersErr) setTimeout(loadUsers, 0);
+  const list = u ? u.users.filter((x) => !q || x.username.toLowerCase().includes(q)) : [];
+  const d30 = u ? u.users.filter((x) => x.lastLogin && Date.now() - x.lastLogin < 30 * 86400000).length : 0;
+  return h`<div class="card"><div class="row between"><h3>👥 Comptes</h3><button class="btn sm" data-act="usersReload" aria-label="Actualiser">↻</button></div>
+    ${S.admin.usersErr ? h`<p class="err small">${S.admin.usersErr}</p>` : !u ? skeleton(2) : h`
+      <div class="kpis"><div class="kpi"><span>👥 Comptes</span><b>${u.total}</b></div><div class="kpi"><span>🟢 Actifs (30 j)</span><b>${d30}</b></div></div>
+      <input type="search" data-input="userQ" value="${S.admin.userQ || ''}" placeholder="🔎 Chercher un pseudo" aria-label="Chercher un compte">
+      <div class="ulist">${list.slice(0, 200).map((x) => h`<div class="urow"><div class="uav">${x.username.slice(0, 1).toUpperCase()}</div><div class="grow"><b>${x.username}</b> ${x.isAdmin ? tag('admin', 'acc') : ''}
+        <div class="tiny muted">inscrit ${relDate(x.createdAt)}${x.email ? ' · ' + x.email : ''}</div></div>
+        <div class="ustat"><b>${x.sessionsDone}</b><span>séance${x.sessionsDone > 1 ? 's' : ''}</span></div>
+        <div class="ustat"><span>${x.lastLogin ? relDate(x.lastLogin) : 'jamais'}</span><span class="tiny muted">connexion</span></div></div>`)}
+        ${list.length > 200 ? h`<p class="tiny muted">… ${list.length - 200} autre(s) : affine la recherche.</p>` : ''}${!list.length ? h`<p class="small muted">Aucun compte trouvé.</p>` : ''}</div>
+      <details class="how mini"><summary>Ce que tu vois ici</summary><p class="tiny">Pseudo, date d’inscription, e-mail masqué, nombre de séances réalisées et dernière connexion. Les séances, performances et profils des membres restent privés.</p></details>`}</div>`;
+}
+ACT.usersReload = () => { S.admin.users = null; loadUsers(); };
+INPUT.userQ = (el) => { S.admin.userQ = el.value; clearTimeout(INPUT.userQ.t); INPUT.userQ.t = setTimeout(() => { render(); const i = document.querySelector('input[data-input=userQ]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
 SUBMIT.adminOn = async (f) => {
   const pw = new FormData(f).get('password'); f.reset(); // la valeur saisie est effacée du formulaire immédiatement
   try { await api('POST', '/api/admin/activate', { password: pw }); const me = await api('GET', '/api/auth/me'); S.user = me.user; ls.set('sea:user', { id: me.user.id, username: me.user.username, isAdmin: me.user.isAdmin }); buzzOk(); toast('Droits administrateur activés'); loadBugs(); render(); }

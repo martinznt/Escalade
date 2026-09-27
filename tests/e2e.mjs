@@ -329,6 +329,11 @@ await step('l’admin voit le signalement (texte échappé, auteur) et le marque
   await C.locator('[data-act=bugStatus]').first().click(); await C.waitForTimeout(300);
   const r = (await c.api('GET', '/api/admin/bugs')).data.reports; assert.equal(r[0].status, 'done');
 });
+await step('l’admin voit la liste de tous les comptes (sans leurs données privées)', async () => {
+  await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('.ulist .urow');
+  const txt = await c.text('.ulist'); for (const name of ['Alice', 'Bob']) assert.match(txt, new RegExp(name));
+  assert.ok(await c.count('.ulist .urow') >= 3);
+});
 await step('l’admin modifie puis supprime la contribution ; pas d’accès aux données privées', async () => {
   const d = (await c.api('GET', '/api/shared/' + commonId)).data.item; assert.equal(d.canEdit, true);
   await c.tab('library'); await c.sub('libSub', 'common'); await C.locator('[data-act=commonOpen]').first().click(); await C.waitForSelector('[data-act=commonEdit]');
