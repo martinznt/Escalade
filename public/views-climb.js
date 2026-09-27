@@ -183,9 +183,9 @@ ACT.fingerGo = () => {
   const draw = () => {
     const now = Date.now(), prep = now < t0;
     root.className = prep ? 'ph-prep' : 'ph-work';
-    root.innerHTML = `<div class="it-top"><button class="btn sm" data-act="fingerCancel">✕ Annuler</button><span class="small">Test 20 mm</span><span></span></div>
+    root.innerHTML = h`<div class="it-top"><button class="btn sm" data-act="fingerCancel">✕ Annuler</button><span class="small">Test 20 mm</span><span></span></div>
       <div class="it-mid"><div class="it-label">${prep ? 'Prépare-toi' : 'Tiens !'}</div><div class="big-t">${prep ? Math.ceil((t0 - now) / 1000) : ((now - t0) / 1000).toFixed(1)}</div></div>
-      <div class="it-bot"><button class="btn pri big" data-act="fingerStop" ${prep ? 'disabled' : ''}>J’ai lâché</button></div>`;
+      <div class="it-bot"><button class="btn pri big" data-act="fingerStop" ${prep ? 'disabled' : ''}>J’ai lâché</button></div>`.s;
   };
   sw = { t0, id: setInterval(draw, 100) }; draw();
 };
