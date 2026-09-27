@@ -11,7 +11,7 @@ import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 import { changesRoute } from './server/changes.js';
 
-const APP_VERSION = '8.4.0';
+const APP_VERSION = '8.4.1';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;

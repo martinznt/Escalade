@@ -3,7 +3,7 @@
 // proposition d'installer l'application. Tout ce qui est répondu est enregistré comme DÉCLARÉ par l'utilisateur
 // (jamais présenté comme mesuré) et reste modifiable dans Profil.
 import { h, openSheet, closeSheet, toast, buzzOk, chip, meter } from './ui.js';
-import { S, ACT, INPUT, render, go, putItem, item, itemsOf, ctx, saveSettings } from './state.js';
+import { S, ACT, INPUT, render, go, putItem, item, itemsOf, ctx, saveSettings, ls } from './state.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, SKILLS, CAPACITIES } from './model.js';
 import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
 import { nextQuestion, pendingQuestions, bucketValue } from './questions.js';
@@ -213,6 +213,16 @@ ACT.tourStart = () => maybeTour(true);
 
 /* ═════════ Installation de l'application ═════════ */
 onInstallChange(() => render());
+/** Venu de l'ancienne application installée : dernière étape, installer la nouvelle puis supprimer l'ancienne icône. */
+export function reinstallCard() {
+  if (!ls.get('sea:reinstall')) return '';
+  if (isInstalled()) { ls.del('sea:reinstall'); return ''; }
+  const ios = isIOS() && !canPrompt();
+  return h`<section class="card acc-b install reinstall"><div class="row"><img src="/icon-192.png" alt="" width="44" height="44" class="app-mini"><div class="grow"><b>📲 Dernière étape : installe la nouvelle application</b>
+      <div class="tiny muted">Ton compte est bien là. Installe l’app ici, puis supprime l’ancienne icône (appui long › Désinstaller).</div></div></div>
+    <div class="row wrapf"><button class="btn pri" data-act="installNow">${ios ? 'Voir comment faire' : '📲 Installer'}</button><button class="btn ghost" data-act="reinstallDone">C’est fait</button></div></section>`;
+}
+ACT.reinstallDone = () => { ls.del('sea:reinstall'); render(); };
 export function installCard({ force = false } = {}) {
   if (isInstalled()) return force ? h`<section class="card flat"><p class="small">✅ L’application est installée sur cet appareil.</p></section>` : '';
   if (!force && !shouldOffer()) return '';

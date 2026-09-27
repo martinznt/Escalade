@@ -536,6 +536,24 @@ await step('ancienne adresse → nouvelle en mode invité : séances de l’appa
   await m.tab('library'); await m.sub('libSub', 'seances'); await P.waitForSelector('text=Séance invitée voyage');
   await c.close();
 });
+await step('ancienne application installée : explication, puis nouvelle adresse et « installe la nouvelle application »', async () => {
+  const { c, P } = await twoSites(); const m = H(P);
+  // Sur l'ancienne adresse seulement, l'app tourne « installée » (plein écran)
+  await c.addInitScript(() => { if (location.hostname.endsWith('.workers.dev')) { const mm = window.matchMedia.bind(window); window.matchMedia = (q) => /display-mode: standalone/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q); } });
+  env.MOVE_TO = '';
+  await P.goto(OLDO + '/'); await P.waitForSelector('[data-act=guestStart]'); await m.click('[data-act=guestStart]');
+  await P.waitForSelector('.setup'); await m.click('[data-act=setupLater]'); await P.waitForSelector('#tour .tour-x'); await m.click('#tour .tour-x');
+  delete env.MOVE_TO;
+  await P.goto('about:blank'); await P.goto(OLDO + '/');
+  await P.waitForSelector('#mv-go'); assert.match(await m.text('.move'), /nouvelle adresse[\s\S]*Installer[\s\S]*Désinstaller/);
+  assert.ok(new URL(P.url()).origin === OLDO, 'rien ne se passe sans toucher le bouton');
+  await m.click('#mv-go'); await P.waitForURL((u) => u.origin === NEWO, { timeout: 15000 });
+  await P.waitForSelector('#mv-ok'); await m.click('#mv-ok');
+  await P.waitForSelector('.reinstall'); assert.match(await m.text('.reinstall'), /installe la nouvelle application/i);
+  await m.click('.reinstall [data-act=reinstallDone]'); await P.waitForSelector('.reinstall', { state: 'detached' });
+  await P.reload(); await P.waitForSelector('nav.tabs'); assert.equal(await m.count('.reinstall'), 0);
+  await c.close();
+});
 await step('aucune erreur JavaScript dans les navigateurs', async () => assert.deepEqual(errors, []));
 console.log(`\n${n} étapes E2E OK`);
 await browser.close(); srv.server.close();

@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.4.0
+# FINAL_AUDIT — Séances entraînement v8.4.1
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -418,3 +418,11 @@ réglages qu'un client V2 ne connaît pas.
   montre que les nouveautés des versions pas encore visitées (même principe que la visite guidée). « Revoir les
   nouveautés » dans Paramètres › Aide. Un nouvel appareil n'a pas de nouveautés à voir (la visite complète s'en charge).
 - Tests : `tests/move.test.mjs` ; E2E 46 étapes (déménagement compte et invité, consignes à la 2e série, visite des nouveautés).
+
+## Évolution 8.4.1 — ancienne application installée
+
+- Une application installée ne peut pas changer d'adresse : ouverte depuis l'ancienne icône, elle affiche
+  « 📲 L'application a une nouvelle adresse » avec 3 étapes et le bouton « Ouvrir la nouvelle adresse »
+  (transfert du compte et des données comme pour le site). Hors ligne : « Réessayer », rien n'est perdu.
+- Sur la nouvelle adresse, l'accueil affiche « Dernière étape : installe la nouvelle application » (bouton Installer,
+  « C'est fait ») jusqu'à l'installation. Test E2E ajouté (47 étapes).
