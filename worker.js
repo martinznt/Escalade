@@ -10,6 +10,7 @@ import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 import { changesRoute } from './server/changes.js';
+import { vapid, sendPush, runReminders, reminderText } from './server/push.js';
 
 const APP_VERSION = '8.4.1';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
@@ -20,7 +21,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -44,6 +45,12 @@ export default {
       console.error('Erreur non gérée', err && err.stack || err);
       return json({ ok: false, error: 'Erreur serveur. Réessaie dans un instant.' }, 500);
     }
+  },
+  /** Tâche planifiée (cron, voir wrangler.json) : rappels d'entraînement. */
+  async scheduled(event, env, ctx) {
+    if (!env.DB) return;
+    const job = (async () => { await ensureSchema(env); const n = await runReminders(env); if (n) console.log('rappels envoyés', n); })().catch((e) => console.error('rappels', e?.message || e));
+    if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
   },
 };
 
@@ -310,6 +317,11 @@ async function handleApi(request, env, url) {
   if (p === '/api/handoff' && m === 'POST') { try { return await handoffCreate(request, env); } catch (e) { if (e?.status === 413) return fail('Données trop volumineuses pour être transférées.', 413); throw e; } }
   if (p === '/api/handoff/peek' && m === 'POST') return handoffPeek(request, env);
   if (p === '/api/handoff/claim' && m === 'POST') return handoffClaim(request, env, secure);
+  if (p === '/api/push/key' && m === 'GET') return json({ ok: true, key: (await vapid(env)).pub });
+  if (p === '/api/push/message' && m === 'GET') {
+    const a = await authenticate(request, env), tz = /^[\w/+-]{1,40}$/.test(url.searchParams.get('tz') || '') ? url.searchParams.get('tz') : 'Europe/Paris';
+    return json({ ok: true, ...(a ? await reminderText(env, a.user.id, tz) : { title: 'Séances entraînement', body: 'Petit rappel : un peu d’entraînement aujourd’hui ?', url: '/' }) });
+  }
   // Pages publiques (profil public, séance publiée) : lisibles sans compte, uniquement ce que la personne a choisi de publier.
   if (p.startsWith('/api/public/') && m === 'GET') return publicRoute(env, url, await authenticate(request, env));
 
@@ -403,6 +415,14 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/bugs' && m === 'POST') return bugCreate(request, env, u);
   if (p === '/api/ai/draft' && m === 'POST') return aiDraftRoute(request, env, u);
   if (p === '/api/ai/chat' && m === 'POST') return aiChatRoute(request, env, u);
+  if (p === '/api/push/subscribe' && m === 'POST') return pushSubscribe(request, env, u);
+  if (p === '/api/push/subscribe' && m === 'DELETE') { const b = await readJson(request, 2000); await db(env, 'DELETE FROM push_subs WHERE endpoint=? AND user_id=?', str(b?.endpoint, 800), u.id).run(); return json({ ok: true }); }
+  if (p === '/api/push/test' && m === 'POST') {
+    if (await limited(env, 'push-t:' + u.id, 5, 3600000)) return fail('Déjà testé plusieurs fois : réessaie plus tard.', 429);
+    const subs = (await db(env, 'SELECT endpoint FROM push_subs WHERE user_id=?', u.id).all()).results || [];
+    let ok = 0; for (const x of subs) { const r = await sendPush(env, x.endpoint); if (r === 'gone') await db(env, 'DELETE FROM push_subs WHERE endpoint=?', x.endpoint).run(); if (r === 'ok') ok++; }
+    return json({ ok: true, sent: ok, devices: subs.length });
+  }
   if (p === '/api/bugs/mine' && m === 'GET') return bugMine(env, u);
 
   // Administration (droit vérifié côté serveur à chaque appel ; l'activation se fait avec EDIT_PASSWORD)
@@ -482,7 +502,7 @@ async function deleteAccount(request, env, auth, secure) {
   if (!b || !row || !safeEq(await passHash(String(b.password ?? ''), row.password_salt), row.password_hash)) return fail('Mot de passe incorrect.', 403);
   const id = auth.user.id;
   // Données privées supprimées ; contributions à la bibliothèque commune conservées de façon anonyme (auteur : compte supprimé).
-  await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
+  await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
     .concat([
       db(env, 'DELETE FROM follows WHERE follower_id=? OR followee_id=?', id, id),
       db(env, 'UPDATE common_exercises SET created_by=NULL WHERE created_by=?', id),
@@ -851,6 +871,20 @@ async function aiDraftRoute(request, env, u) {
   if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Tu as beaucoup utilisé l’assistant : réessaie un peu plus tard.', 429);
   try { const r = await aiDraft(env, { kind, text, activityId: str(b?.activityId, 60) }); return json({ ok: true, draft: r.draft, source: 'ia' }); }
   catch (e) { console.error('ai', e?.message); return json({ error: e.status ? e.message : 'L’assistant IA n’a pas pu répondre. Réessaie dans un instant.', unavailable: e.status === 503 }, e.status === 502 ? 502 : 503); }
+}
+// Services de notification des navigateurs (Chrome/Android, Firefox, Safari/iPhone, Edge/Windows) : aucun autre hôte accepté.
+const PUSH_HOSTS = /^(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|web\.push\.apple\.com|[\w-]+\.push\.apple\.com|[\w.-]+\.notify\.windows\.com)$/;
+async function pushSubscribe(request, env, u) {
+  const b = await readJson(request, 4000);
+  let ep; try { ep = new URL(String(b?.endpoint || '')); } catch { return fail('Abonnement invalide.'); }
+  if (ep.protocol !== 'https:' || !PUSH_HOSTS.test(ep.hostname) || ep.href.length > 800) return fail('Service de notification non reconnu.');
+  const days = Array.isArray(b.days) ? [...new Set(b.days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
+  const hour = /^([01]\d|2[0-3]):[0-5]\d$/.test(b.hour || '') ? b.hour : '18:00', tz = /^[\w/+-]{1,40}$/.test(b.tz || '') ? b.tz : 'Europe/Paris';
+  const n = await db(env, 'SELECT COUNT(*) c FROM push_subs WHERE user_id=? AND endpoint<>?', u.id, ep.href).first();
+  if (Number(n?.c) >= 5) return fail('5 appareils au maximum reçoivent les rappels.', 409);
+  await db(env, `INSERT INTO push_subs(endpoint,user_id,days,hour,tz,last_day,created_at) VALUES(?,?,?,?,?,'',?)
+    ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id,days=excluded.days,hour=excluded.hour,tz=excluded.tz`, ep.href, u.id, JSON.stringify(days), hour, tz, Date.now()).run();
+  return json({ ok: true, days, hour, tz });
 }
 async function aiChatRoute(request, env, u) {
   const b = await readJson(request, 12000);

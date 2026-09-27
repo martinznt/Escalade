@@ -5,7 +5,7 @@
 // Une nouvelle version attend que l'utilisateur touche « Mettre à jour » (message SKIP_WAITING), sauf à la toute première installation.
 const BUILD = 'dev'; // remplacé par le serveur par l'identifiant du déploiement Cloudflare
 const CACHE = 'mes-seances-v8-4-1-' + BUILD;
-const SHELL = ['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/player.js',
+const SHELL = ['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt'];
 
@@ -31,5 +31,26 @@ self.addEventListener('fetch', (e) => {
     } catch {
       return (await cache.match(key)) || (req.mode === 'navigate' ? await cache.match('/') : undefined) || new Response('Hors ligne', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
+  })());
+});
+// Rappels : la notification arrive vide ; on demande le texte au serveur (avec la session), puis on l'affiche.
+self.addEventListener('push', (e) => {
+  e.waitUntil((async () => {
+    let m = { title: 'Séances entraînement', body: 'Petit rappel : un peu d’entraînement aujourd’hui ?', url: '/#/home/dash' };
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris';
+      const r = await fetch('/api/push/message?tz=' + encodeURIComponent(tz), { credentials: 'include', cache: 'no-store' });
+      if (r.ok) { const j = await r.json(); m = { title: String(j.title || m.title).slice(0, 80), body: String(j.body || m.body).slice(0, 200), url: String(j.url || m.url).startsWith('/') ? j.url : m.url }; }
+    } catch { /* hors ligne : texte par défaut */ }
+    await self.registration.showNotification(m.title, { body: m.body, icon: '/icon-192.png', badge: '/icon-192.png', tag: 'rappel', data: { url: m.url } });
+  })());
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/';
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) if (new URL(c.url).origin === location.origin) { await c.focus(); try { c.navigate(url); } catch { /* rien */ } return; }
+    await self.clients.openWindow(url);
   })());
 });

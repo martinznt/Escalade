@@ -8,6 +8,7 @@ import { parseCSV, proposeMapping, checkMapping, proposeMetricMap, buildImport, 
 import { describeOp } from './outbox.js';
 import { installCard, openSetup, showTour } from './views-setup.js';
 import { SOUND_STYLES, beep } from './sound.js';
+import { remindersCard } from './reminders.js';
 
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion'];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
@@ -49,6 +50,7 @@ function vMain() {
       <div class="grid2"><label>Repos par défaut<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest ?? 60}"><em>secondes</em></span></label>
       <label>Durée de séance habituelle<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultMinutes" min="5" max="240" value="${st.defaultMinutes ?? 30}"><em>min</em></span></label></div>
       <details class="how mini"><summary>Options avancées</summary>${[['handsFree', 'Mode mains libres (commandes vocales)'], ['autoBase', 'Proposer d’utiliser mes valeurs réalisées comme nouvelle base']].map(tog)}</details></div>
+    ${remindersCard()}
     <div class="card"><h3>ℹ️ À propos</h3><p class="small">Séances entraînement · version ${APP_VERSION}. ${S.user.guest ? 'Mode invité : données sur cet appareil uniquement.' : 'Tes données sont liées à ton compte et synchronisées ; elles restent utilisables hors ligne.'}</p>
       <p class="tiny muted">Les séances et analyses suivent des principes d’entraînement courants. Elles ne constituent ni un avis médical ni un diagnostic. Aucune comparaison avec d’autres personnes n’est faite.</p></div>`;
 }

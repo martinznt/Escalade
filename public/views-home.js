@@ -14,6 +14,7 @@ import { startPlayer } from './player.js';
 import { streakCard } from './views-motiv.js';
 import { programCard, fingerCard, activeProgram } from './views-program.js';
 import { programStatus } from './program.js';
+import { buildIcs } from './ics.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard, maybeAskOnOpen } from './views-setup.js';
 
 export const DASH_BLOCKS = {
@@ -280,10 +281,24 @@ function vCalendar() {
   const acts = {}; for (const x of inMonth) { const a = entryActivity(x, c); acts[a] = (acts[a] || 0) + 1; }
   const reg = regularity(c);
   return h`<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
+    <button class="btn" data-act="icsExport">📅 Ajouter mes séances à l’agenda du téléphone</button>
     ${activeProgram() ? programCard() : h`<section class="card prog"><b>📆 Un objectif sur plusieurs semaines ?</b><p class="small muted">4 questions, et ton calendrier se remplit tout seul.</p><button class="btn pri" data-act="progNew">Créer un programme</button></section>`}
     <div class="card"><h3>Ce mois-ci</h3><p class="small">${inMonth.length} séance(s) réalisée(s)${Object.keys(acts).length ? ' · ' + Object.entries(acts).map(([a, n]) => `${activityLabel(a, c)} ×${n}`).join(', ') : ''}.</p><p class="small muted">${reg.text}</p>
       ${activeGoals(c).length ? h`<p class="tiny muted">Objectifs suivis : ${activeGoals(c).map(goalLabel).join(', ')}.</p>` : ''}</div>`;
 }
+/** Séances prévues (programme + calendrier, 90 jours) → fichier .ics que le téléphone ouvre dans son agenda. */
+ACT.icsExport = () => {
+  const today = ymd(new Date()), hour = ls.get('sea:reminders', null)?.hour || '18:00', ev = [];
+  for (let k = 0; k < 90; k++) {
+    const d = new Date(); d.setDate(d.getDate() + k); const day = ymd(d);
+    for (const e of eventsOn(day)) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: hour, minutes: s ? Math.max(10, Math.round(sessionMinutes(s))) : 45 }); }
+    for (const x of programOn(day)) if (x.status !== 'missed' || day >= today) ev.push({ uid: `${x.pid}-${x.i}`, title: `${x.name.split(' · ')[0]} · semaine ${x.week}`, date: day, time: hour, minutes: x.minutes, desc: 'Programme Séances entraînement' });
+  }
+  if (!ev.length) { toast('Rien de prévu pour l’instant : planifie une séance ou crée un programme.'); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buildIcs(ev)], { type: 'text/calendar;charset=utf-8' })); a.download = 'seances.ics';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(`${ev.length} séance${ev.length > 1 ? 's' : ''} exportée${ev.length > 1 ? 's' : ''}. Ouvre le fichier pour les ajouter à ton agenda.`, 5000);
+};
 ACT.calMove = (el) => { const n = S.cal.m + Number(el.dataset.id); S.cal = { y: S.cal.y + Math.floor(n / 12), m: ((n % 12) + 12) % 12 }; render(); };
 ACT.calDay = (el) => openPlanSheet(el.dataset.id);
 export function openPlanSheet(date, seanceId) {

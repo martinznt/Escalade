@@ -285,6 +285,9 @@ function registerSW() {
 async function start() {
   if (await maybeMove()) return; // ancienne adresse : redirection vers la nouvelle, avec les données de l'appareil
   if (await maybeClaim()) return;
+  // Raccourcis de l'icône (appui long) : ?do=timer / ?do=gen
+  const doIt = new URLSearchParams(location.search).get('do');
+  if (doIt === 'timer' || doIt === 'gen') { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => { if (S.user) (doIt === 'timer' ? ACT.timerOpen : ACT.genOpen)?.(); }, 900); }
   registerSW();
   parseHash();
   const cached = ls.get('sea:user');
