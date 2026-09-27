@@ -20,7 +20,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -223,11 +223,70 @@ async function authenticate(request, env) {
   return { user: { id: row.id, username: row.username, email: row.email, isAdmin: !!row.is_admin }, token, hash, renew };
 }
 
+/* ═════════════ Déménagement vers la nouvelle adresse ═════════════ */
+// L'ancienne adresse (…workers.dev) envoie les visiteurs vers la nouvelle (MOVE_TO, par défaut seances-sport.pages.dev),
+// en emportant ce qui n'existe que sur l'appareil (réglages, données en attente d'envoi, données du mode invité) et la
+// connexion. Le transfert passe par un code à usage unique (256 bits, 15 min) ; seul son empreinte est stockée.
+// Sur la nouvelle adresse, la personne confirme d'abord (« Continuer avec le compte X ») : un lien piégé ne peut pas
+// connecter quelqu'un au compte d'un autre à son insu.
+const HANDOFF_TTL = 15 * 60000, HANDOFF_MAX = 1800000;
+function moveTarget(env, url) {
+  const to = env.MOVE_TO ?? 'https://seances-sport.pages.dev';
+  if (!to) return null;
+  let t; try { t = new URL(to); } catch { return null; }
+  if (t.protocol !== 'https:' || t.host === url.host) return null;
+  const from = env.MOVE_FROM || 'seances-entrainement.';
+  const matches = from.endsWith('.') ? url.hostname.startsWith(from) && url.hostname.endsWith('.workers.dev') : url.hostname === from;
+  return matches ? t.origin : null;
+}
+const handoffKey = async (code) => 'ho:' + await sha(String(code || ''));
+async function handoffCreate(request, env) {
+  if (!moveTarget(env, new URL(request.url))) return fail('Déménagement non actif sur cette adresse.', 404);
+  if (await limited(env, 'handoff:' + clientIp(request), 20, 3600000)) return fail('Trop d’essais. Réessaie plus tard.', 429);
+  const b = await readJson(request, HANDOFF_MAX);
+  if (!b) return fail('Données invalides.');
+  const local = {};
+  if (b.ls && typeof b.ls === 'object') for (const [k, v] of Object.entries(b.ls)) if (/^sea:[\w:.-]{1,80}$/.test(k) && k !== 'sea:user' && typeof v === 'string') local[k] = v;
+  const auth = await authenticate(request, env);
+  const code = b64(crypto.getRandomValues(new Uint8Array(32))), now = Date.now();
+  const value = JSON.stringify({ t: now, uid: auth?.user.id || null, guest: !auth && !!b.guest, ls: local, snap: !auth && b.guest && b.snap && typeof b.snap === 'object' ? b.snap : null });
+  if (value.length > HANDOFF_MAX) return fail('Données trop volumineuses pour être transférées.', 413);
+  await db(env, "DELETE FROM system_state WHERE key LIKE 'ho:%' AND CAST(json_extract(value,'$.t') AS INTEGER)<?", now - HANDOFF_TTL).run();
+  await db(env, 'INSERT INTO system_state(key,value) VALUES(?,?)', await handoffKey(code), value).run();
+  return json({ ok: true, code });
+}
+async function handoffRead(env, code, consume) {
+  if (!/^[\w-]{40,50}$/.test(String(code || ''))) return null;
+  const key = await handoffKey(code);
+  const row = consume ? await db(env, 'DELETE FROM system_state WHERE key=? RETURNING value', key).first() : await db(env, 'SELECT value FROM system_state WHERE key=?', key).first();
+  const v = row && safeParse(row.value);
+  return v && Date.now() - Number(v.t || 0) < HANDOFF_TTL ? v : null;
+}
+async function handoffPeek(request, env) {
+  const b = await readJson(request, 2000), v = await handoffRead(env, b?.code, false);
+  if (!v) return fail('Lien de transfert expiré ou déjà utilisé.', 404);
+  const user = v.uid ? await db(env, 'SELECT username FROM users WHERE id=?', v.uid).first() : null;
+  return json({ ok: true, username: user?.username || null, guest: !!v.guest });
+}
+async function handoffClaim(request, env, secure) {
+  const b = await readJson(request, 2000), v = await handoffRead(env, b?.code, true);
+  if (!v) return fail('Lien de transfert expiré ou déjà utilisé.', 404);
+  const out = { ok: true, ls: v.ls || {}, guest: !!v.guest, snap: v.snap || null, user: null };
+  if (!v.uid) return json(out);
+  const row = await db(env, 'SELECT id,username,email,is_admin FROM users WHERE id=?', v.uid).first();
+  if (!row) return json(out);
+  await revokePresented(request, env);
+  const token = await createSession(env, row.id);
+  out.user = { id: row.id, username: row.username, email: row.email, isAdmin: !!row.is_admin };
+  return json(out, 200, { 'Set-Cookie': cookie('session', token, SESSION_DAYS * 86400, secure) });
+}
+
 /* ═════════════ Routeur API ═════════════ */
 async function handleApi(request, env, url) {
   const p = url.pathname, m = request.method;
   if (p === '/api/version') return new Response(JSON.stringify({ version: APP_VERSION, build: buildId(env) }), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
   if (p === '/api/changes' && m === 'GET') return changesRoute(env);
+  if (p === '/api/move' && m === 'GET') return json({ ok: true, to: moveTarget(env, url) });
   if (p === '/api/health') return json({ ok: true, db: !!env.DB, version: APP_VERSION, build: buildId(env), inviteRequired: !!env.INVITE_CODE, adminConfigured: !!env.EDIT_PASSWORD });
   if (!env.DB) return fail('Base de données non configurée (binding D1 « DB »).', 500);
 
@@ -248,6 +307,9 @@ async function handleApi(request, env, url) {
   }
   if (p === '/api/auth/login' && m === 'POST') { try { return await login(request, env, secure); } catch (e) { if (e?.status === 413) return fail('Données trop volumineuses.', 413); throw e; } }
   if (p === '/api/auth/logout' && m === 'POST') return logout(request, env, secure);
+  if (p === '/api/handoff' && m === 'POST') { try { return await handoffCreate(request, env); } catch (e) { if (e?.status === 413) return fail('Données trop volumineuses pour être transférées.', 413); throw e; } }
+  if (p === '/api/handoff/peek' && m === 'POST') return handoffPeek(request, env);
+  if (p === '/api/handoff/claim' && m === 'POST') return handoffClaim(request, env, secure);
   // Pages publiques (profil public, séance publiée) : lisibles sans compte, uniquement ce que la personne a choisi de publier.
   if (p.startsWith('/api/public/') && m === 'GET') return publicRoute(env, url, await authenticate(request, env));
 

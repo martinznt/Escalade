@@ -5,6 +5,7 @@ import { h, raw, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton,
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession } from './shared.js';
+import { maybeMove, maybeClaim } from './move.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
@@ -265,6 +266,8 @@ function registerSW() {
   });
 }
 async function start() {
+  if (await maybeMove()) return; // ancienne adresse : redirection vers la nouvelle, avec les données de l'appareil
+  if (await maybeClaim()) return;
   registerSW();
   parseHash();
   const cached = ls.get('sea:user');

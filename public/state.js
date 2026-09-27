@@ -37,7 +37,7 @@ const ls = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch { /* rien */ } },
 };
-export { ls };
+export { ls, idb };
 const idb = {
   db: null,
   open() {
