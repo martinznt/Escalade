@@ -9,6 +9,7 @@ import { maybeMove, maybeClaim } from './move.js';
 import { pendingNews, latestNews, markNewsToured, initNews } from './news.js';
 import { startTour } from './tour.js';
 import './timer.js';
+import './views-coach.js';
 import { checkBadges } from './views-motiv.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';

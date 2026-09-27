@@ -83,3 +83,29 @@ export async function aiDraft(env, { kind, text, activityId }) {
   if (!draft) { const e = new Error('L’assistant n’a pas donné de réponse exploitable. Reformule ou réessaie.'); e.status = 502; throw e; }
   return { draft, model };
 }
+
+/* ───────── Discussion avec le coach ───────── */
+// Le coach reçoit la conversation (8 derniers messages) et un court résumé que l'utilisateur voit avant d'écrire :
+// sports, niveau déclaré, objectif et dernières séances. Réponse en texte, courte, filtrée.
+export function buildChat(messages, profile) {
+  const sys = `Tu es un coach sportif francophone, chaleureux et concret. Tu tutoies. Réponds en 2 à 6 phrases courtes, ou une petite liste.
+Donne des conseils pratiques d'entraînement (séance, exercice, récupération, technique d'escalade, organisation).
+Règles : pas de diagnostic médical ni de traitement ; en cas de douleur qui dure, conseille un professionnel de santé.
+Aucune comparaison avec d'autres personnes. N'invente pas de chiffres sur l'utilisateur : utilise seulement ce qui est dans son profil.
+Si la question n'a rien à voir avec le sport, réponds en une phrase et ramène la discussion à l'entraînement.
+Profil de l'utilisateur : ${str(profile, 900) || 'non renseigné'}.`;
+  const msgs = (Array.isArray(messages) ? messages : []).slice(-8).map((m) => ({ role: m?.role === 'assistant' ? 'assistant' : 'user', content: str(m?.content, 600) })).filter((m) => m.content);
+  return [{ role: 'system', content: sys }, ...msgs];
+}
+export function cleanReply(resp) {
+  const t = typeof resp === 'string' ? resp : resp?.response ?? resp?.result?.response ?? '';
+  return String(t || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/<[^>]*>/g, '').trim().slice(0, 2000);
+}
+export async function aiChat(env, { messages, profile }) {
+  if (!env.AI?.run) { const e = new Error('Coach non activé sur ce serveur.'); e.status = 503; throw e; }
+  const msgs = buildChat(messages, profile);
+  if (msgs.length < 2 || msgs.at(-1).role !== 'user') { const e = new Error('Écris ta question.'); e.status = 400; throw e; }
+  const reply = cleanReply(await env.AI.run(env.AI_MODEL || DEFAULT_MODEL, { messages: msgs, max_tokens: 500, temperature: 0.5 }));
+  if (!reply) { const e = new Error('Le coach n’a pas su répondre. Reformule ta question.'); e.status = 502; throw e; }
+  return reply;
+}

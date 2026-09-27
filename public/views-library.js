@@ -7,6 +7,7 @@ import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
 import { parseSessionText, exportSessionText, sessionMinutes, exMinutes, parseRest } from './engine.js';
+import { boostSession } from './program.js';
 import { planSession, generateFromPlan, adaptDuration, alternatives, replaceExercise, rebuildForEquipment, newPossibilities, estimateLevel, LEVEL_LABEL, levelFor, BODY_WORDS } from './generator.js';
 import { availableEquipment, graphFromExercise, goalLabel, activeGoals, neverTried, exCaps, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -285,7 +286,9 @@ function vGenerate() {
   const goals = activeGoals(c), intents = new Map((g.intentions || []).map((x) => [x.id, x.p]));
   const eq = availableEquipment(c, g.envId);
   const more = g.mode !== 'weaknesses' || (g.intentions || []).length || g.envId || g.light || ![10, 20, 30, 45, 60, 90].includes(Number(g.minutes));
+  const forme = g.forme || 'ok';
   return h`<div class="card gen">
+      <div class="formerow"><span class="small">Aujourd’hui je suis…</span><div class="chips">${[['tired', '😴 fatigué'], ['ok', '🙂 normal'], ['fresh', '💪 en forme']].map(([k, l]) => chip(forme === k, l, `data-act="gForme" data-v="${k}"`))}</div></div>
       <span class="kicker">1 · Quel sport ?</span><div class="chips big">${activityOptions().map(([id, e, l]) => chip(g.activityId === id, `${e} ${l}`, `data-act="gSet" data-k="activityId" data-v="${id}"`))}</div>
       <span class="kicker">2 · Combien de temps ?</span><div class="chips big">${[10, 20, 30, 45, 60, 90].map((m) => chip(Number(g.minutes) === m, m < 60 ? `${m} min` : m === 60 ? '1 h' : '1 h 30', `data-act="gSet" data-k="minutes" data-v="${m}"`))}</div>
       <details class="fold genmore" ${more ? 'open' : ''}><summary><span>⚙️ Plus d’options</span><em>${[g.mode !== 'weaknesses', (g.intentions || []).length, g.envId, g.light].filter(Boolean).length || ''}</em></summary>
@@ -336,7 +339,8 @@ ACT.prio = (el) => {
   if (d === '0') pr[id] = 0; else if (d === 'add') pr[id] = 1.5; else pr[id] = Math.max(0.2, Math.min(3, (pr[id] || 1) + Number(d) * 0.5));
   g.priorities = pr; ACT.genPlan();
 };
-ACT.genDo = () => { const g = S.gen; if (!g.plan) return; g.result = generateFromPlan(g.plan, ctx()); g.saved = false; g.swaps = []; buzzOk(); render(); setTimeout(() => $('#genresult')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30); };
+ACT.gForme = (el) => { const g = S.gen; g.forme = el.dataset.v; g.light = g.forme === 'tired'; g.plan = null; g.result = null; render(); };
+ACT.genDo = () => { const g = S.gen; if (!g.plan) return; g.result = generateFromPlan(g.plan, ctx()); if (g.forme === 'fresh') g.result = { ...g.result, session: boostSession(g.result.session, 1) }; g.saved = false; g.swaps = []; buzzOk(); render(); setTimeout(() => $('#genresult')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30); };
 function vGenResult(r) {
   const s = r.session;
   return h`<div id="genresult" class="card"><div class="row"><div class="ico acc">${s.emoji}</div><div class="grow"><h3>${s.name}</h3><div class="muted small">~${sessionMinutes(s)} min ${levelTag(r.meta.level)}</div></div></div>

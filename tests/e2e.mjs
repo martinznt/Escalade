@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 
-const env = makeEnv();
+const env = makeEnv({ AI: { run: async (_m, o) => ({ response: o.messages ? `Conseil du coach : ${o.messages.at(-1).content}` : '{}' }) } });
 // Historique GitHub simulé pour « Voir les nouveautés » (aucun appel réseau pendant les tests).
 const realFetch = globalThis.fetch;
 globalThis.fetch = (u, o) => String(u).startsWith('https://api.github.com/') ? Promise.resolve(new Response(JSON.stringify([
@@ -143,6 +143,27 @@ await step('carnet : ajout rapide, pyramide, projet suivi jusqu’à la réussit
   await A.waitForSelector('text=Projets réussis (1)'); assert.match(await a.text('.pyr'), /6B\s*1/, 'la réussite du projet entre dans la pyramide');
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'project' && i.d.status === 'done' && i.d.tries.length), 12000, 'projet synchronisé');
 });
+await step('programme : création en 4 questions, calendrier rempli, séance du jour avec la forme', async () => {
+  await a.tab('home'); await a.click('[data-act=homeSub][data-id=cal]'); await a.click('[data-act=progNew]'); await A.waitForSelector('.pwiz');
+  await a.click('.pwiz [data-act=pwSet][data-k=goal][data-v=force]'); await a.click('.pwiz [data-act=pwSet][data-k=weeks][data-v="4"]');
+  const today = (new Date().getDay() + 6) % 7;
+  for (const d of [0, 1, 2, 3, 4, 5, 6]) { const on = await A.locator(`.pwiz [data-act=pwDay][data-v="${d}"].on`).count(); if (!on && d === today) await a.click(`.pwiz [data-act=pwDay][data-v="${d}"]`); }
+  assert.match(await a.text('.pwsum'), /séances/); await a.click('.pwiz [data-act=pwSave]');
+  await A.waitForSelector('.prog [data-act=progPlay]'); assert.match(await a.text('.prog'), /Semaine 1 \/ 4/);
+  await a.click('.prog [data-act=progPlay]'); await A.waitForSelector('.forme'); await a.click('.forme [data-act=progGo][data-f=ok]');
+  await A.waitForSelector('#player.open');
+  // on fait une série puis on termine : la séance compte pour le programme
+  if (await a.count('#player [data-act=pSkipWarm]')) await a.click('#player [data-act=pSkipWarm]');
+  if (await a.count('#player [data-act=pGo]')) await a.click('#player [data-act=pGo]'); if (await a.count('#player [data-act=pWorkDone]')) await a.click('#player [data-act=pWorkDone]');
+  await a.click('#player [data-act=pQuit]'); await a.confirm(); await A.waitForSelector('#player [data-act=pSave]'); await a.click('#player [data-act=pSave]');
+  await poll(async () => (await a.api('GET', '/api/history')).data.history.some((x) => x.data?.program?.i >= 0), 12000, 'séance liée au programme sur le serveur');
+  await a.tab('home'); await A.waitForSelector('.prog'); assert.match(await a.text('.prog'), /1 séance sur/);
+});
+await step('coach : question en un toucher, réponse affichée', async () => {
+  await a.click('[data-act=coachOpen]'); await A.waitForSelector('.chat [data-act=chatIdea]');
+  await a.click('.chat [data-act=chatIdea]'); await A.waitForSelector('.msg.assistant:not(.typing)', { timeout: 10000 });
+  assert.match(await a.text('.msg.assistant'), /Conseil du coach/); await a.click('#sheet .back'); await a.tab('profile');
+});
 await step('objectif complexe : front lever (arbre, blocages, chemins)', async () => {
   await a.sub('profSub', 'goals'); await a.click('[data-act=goalNewSkill][data-id=front_lever]');
   await A.waitForSelector('text=Capacités requises');
@@ -203,8 +224,9 @@ await step('questionnaire adaptatif puis enregistrement', async () => {
   await A.waitForSelector('text=ce qui change dans ton profil');
 });
 await step('historique réellement enregistré sur le serveur (durée, pause, questionnaire)', async () => {
-  await poll(async () => (await a.api('GET', '/api/history')).data.history.length === 1, 12000, 'historique sur le serveur');
-  const h = (await a.api('GET', '/api/history')).data.history[0];
+  const mine = async () => (await a.api('GET', '/api/history')).data.history.find((x) => x.sessionName === 'Tirage maison');
+  await poll(async () => !!(await mine()), 12000, 'historique sur le serveur');
+  const h = await mine();
   const names = h.data.exercises.map((e) => e.name);
   assert.ok(names.includes('Tractions australiennes') && names.includes('Gainage bateau (hollow body)'), 'les 2 exercices de la séance');
   assert.ok(h.data.exercises.length > 2, 'échauffement automatique ajouté devant une séance faite à la main'); assert.equal(h.data.rpe, 4); assert.equal(h.data.questionnaire.comment, 'Bonne séance, commentaire conservé');
@@ -261,7 +283,7 @@ await step('export JSON', async () => {
   await a.tab('settings'); await a.sub('setSub', 'data');
   const [dl] = await Promise.all([A.waitForEvent('download'), a.click('[data-act=export]')]);
   const data = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
-  assert.equal(data.app, 'mes-seances'); assert.ok(data.items.some((i) => i.c === 'perf')); assert.ok(data.history.length === 1);
+  assert.equal(data.app, 'mes-seances'); assert.ok(data.items.some((i) => i.c === 'perf')); assert.ok(data.history.length === 2 && data.history.some((x) => x.sessionName === 'Tirage maison'), 'séance + séance du programme');
   assert.ok(!JSON.stringify(data).includes('secret-admin-de-test'));
 });
 await step('calendrier : planifier une séance, prévu visible, enregistré sur le serveur', async () => {
@@ -401,7 +423,7 @@ await step('retour en ligne : tout est synchronisé, sans doublon', async () => 
   assert.equal(items.filter((i) => i.c === 'perf' && i.d.metricId === 'max_pompes').length, 1);
   assert.equal(items.filter((i) => i.c === 'jnote').length, 1);
   const s = (await a2.api('GET', '/api/sync')).data.items; assert.equal(s.filter((x) => x.name === 'Créée hors ligne').length, 1);
-  assert.equal((await a2.api('GET', '/api/history')).data.history.length, 2, 'pas de doublon d’historique (séance jouée + import CSV)');
+  assert.equal((await a2.api('GET', '/api/history')).data.history.length, 3, 'pas de doublon d’historique (séance jouée + séance du programme + import CSV)');
 });
 await step('déconnexion puis reconnexion : données intactes', async () => {
   const a2 = H(A2);

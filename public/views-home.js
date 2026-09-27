@@ -12,6 +12,8 @@ import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { openGenerator, blocksOf } from './views-library.js';
 import { startPlayer } from './player.js';
 import { streakCard } from './views-motiv.js';
+import { programCard, fingerCard, activeProgram } from './views-program.js';
+import { programStatus } from './program.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard, maybeAskOnOpen } from './views-setup.js';
 
 export const DASH_BLOCKS = {
@@ -25,6 +27,8 @@ export function eventsOn(date) {
   const wd = (d) => new Date(d + 'T12:00:00').getDay();
   return S.events.filter((e) => e.date === date || (e.recurrence?.freq === 'weekly' && e.date <= date && wd(e.date) === wd(date) && (!e.recurrence.until || date <= e.recurrence.until)));
 }
+/** Séances du programme en cours prévues ce jour-là (pas encore faites). */
+const programOn = (date) => { const p = activeProgram(); if (!p) return []; const st = programStatus(p, S.history); return st.list.filter((x) => x.date === date && x.status !== 'done').map((x) => ({ ...x, pid: p.id, name: p.name })); };
 const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt)) === date);
 
 export function vHome() {
@@ -80,6 +84,7 @@ function vDash() {
       <button class="qa" data-act="timerOpen"><span class="qi">⏱</span><b>Minuteur</b><small>Suspensions, Tabata…</small></button>
       <button class="qa" data-act="goCarnet"><span class="qi">🧗</span><b>Carnet</b><small>Blocs, voies et projets</small></button>
     </div>
+    ${programCard()}${fingerCard()}
     ${S.history.length || ctx().ascents.length ? streakCard() : ''}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée — ce qui change dans ton profil</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<p class="tiny muted">Ces données alimentent tes analyses et tes prochaines séances générées.</p><button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
     ${blocks.map((b) => { try { return BLOCK_VIEWS[b]?.() || ''; } catch (e) { console.error(e); return card(DASH_BLOCKS[b] || b, h`<p class="small warn-t">Ce bloc n’a pas pu s’afficher : ${e.message}</p><p class="tiny muted">Le reste de l’accueil fonctionne. Tu peux le signaler dans Paramètres › Signaler un bug.</p>`); } })}
@@ -100,7 +105,7 @@ const BLOCK_VIEWS = {
       ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}">✨</button>`}</div>`)}`);
   },
   command() {
-    return card('🗣️ Dis-le simplement', h`<form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Séance de 20 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>
+    return card('🗣️ Dis-le simplement', h`<button class="btn coachbtn" data-act="coachOpen">💬 Poser une question au coach</button><form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Séance de 20 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>
       <details class="how mini"><summary>Exemples</summary><p class="tiny">« Remplace les tractions » · « Ajoute 5 minutes de gainage » · « Je n’ai que 12 minutes » · « Montre mes records » · « Je n’ai pas de barre aujourd’hui ».</p></details>`);
   },
   next() {
@@ -266,7 +271,7 @@ function monthGrid(mini = false) {
     <div class="cal">${JOURS.map((j) => h`<div class="h">${j}</div>`)}${cells.map((d) => {
       if (!d) return h`<div></div>`;
       const done = c.history.filter((x) => ymd(new Date(x.startedAt)) === d), planned = eventsOn(d);
-      return h`<button class="d ${d === today ? 'today' : ''} ${done.length ? 'has-done' : ''}" data-act="calDay" data-id="${d}" aria-label="${d}${done.length ? ', ' + done.length + ' séance(s) réalisée(s)' : ''}${planned.length ? ', ' + planned.length + ' prévue(s)' : ''}">${Number(d.slice(8))}<span class="dots">${done.slice(0, 3).map((x) => raw(`<i class="done" style="background:${ACT_COLORS[entryActivity(x, c)] || 'var(--ok)'}"></i>`))}${planned.slice(0, 2).map(() => raw('<i class="plan"></i>'))}</span></button>`;
+      return h`<button class="d ${d === today ? 'today' : ''} ${done.length ? 'has-done' : ''}" data-act="calDay" data-id="${d}" aria-label="${d}${done.length ? ', ' + done.length + ' séance(s) réalisée(s)' : ''}${planned.length ? ', ' + planned.length + ' prévue(s)' : ''}">${Number(d.slice(8))}<span class="dots">${done.slice(0, 3).map((x) => raw(`<i class="done" style="background:${ACT_COLORS[entryActivity(x, c)] || 'var(--ok)'}"></i>`))}${planned.slice(0, 2).map(() => raw('<i class="plan"></i>'))}${programOn(d).slice(0, 1).map(() => raw('<i class="prog"></i>'))}</span></button>`;
     })}</div>`;
 }
 function vCalendar() {
@@ -274,7 +279,8 @@ function vCalendar() {
   const inMonth = c.history.filter((x) => { const d = new Date(x.startedAt); return d.getFullYear() === y && d.getMonth() === m; });
   const acts = {}; for (const x of inMonth) { const a = entryActivity(x, c); acts[a] = (acts[a] || 0) + 1; }
   const reg = regularity(c);
-  return h`<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée (couleur = activité)</span><span><i class="lg plan"></i> prévue</span></div></div>
+  return h`<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
+    ${activeProgram() ? programCard() : h`<section class="card prog"><b>📆 Un objectif sur plusieurs semaines ?</b><p class="small muted">4 questions, et ton calendrier se remplit tout seul.</p><button class="btn pri" data-act="progNew">Créer un programme</button></section>`}
     <div class="card"><h3>Ce mois-ci</h3><p class="small">${inMonth.length} séance(s) réalisée(s)${Object.keys(acts).length ? ' · ' + Object.entries(acts).map(([a, n]) => `${activityLabel(a, c)} ×${n}`).join(', ') : ''}.</p><p class="small muted">${reg.text}</p>
       ${activeGoals(c).length ? h`<p class="tiny muted">Objectifs suivis : ${activeGoals(c).map(goalLabel).join(', ')}.</p>` : ''}</div>`;
 }
@@ -287,7 +293,8 @@ export function openPlanSheet(date, seanceId) {
   openSheet(h`<h2 style="margin:0">${new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
     ${done.length ? h`<b class="small ok-t">Réalisé</b>${done.map((x) => h`<div class="item"><div class="ico sm">✅</div><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.aborted ? ' · interrompue' : ''}</div></div></div>`)}` : ''}
     ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${e.recurrence ? 'se répète chaque semaine' : e.completed ? 'marquée faite' : future ? 'à venir' : ''}</div></div>${s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
-    ${!done.length && !evs.length ? h`<p class="muted small">Rien ce jour-là.</p>` : ''}
+    ${programOn(date).map((x) => h`<div class="item"><div class="ico sm">📆</div><div class="grow"><b>${x.name.split(' · ')[0]} · S${x.week}</b><div class="tiny muted">${x.minutes} min · programme${x.status === 'missed' ? ' · manquée' : ''}</div></div>${date <= ymd(new Date()) ? h`<button class="btn pri sm" data-act="progPlay" data-id="${x.pid}" data-i="${x.i}">▶</button>` : ''}</div>`)}
+    ${!done.length && !evs.length && !programOn(date).length ? h`<p class="muted small">Rien ce jour-là.</p>` : ''}
     ${list.length ? h`<form data-submit="addEvent" class="card flat"><h3>Planifier une séance</h3>
       <label>Séance<select name="sid">${list.map((s) => h`<option value="${s.id}" ${s.id === seanceId ? 'selected' : ''}>${s.emoji} ${s.name}</option>`)}</select></label>
       <label class="chk"><input type="checkbox" name="weekly"> Répéter chaque semaine</label>

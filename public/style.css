@@ -352,3 +352,26 @@ canvas.confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:n
 .badge .bi{font-size:1.8rem}.badge b{font-size:.8rem;line-height:1.2}.badge small{font-size:.68rem;color:var(--muted);line-height:1.2}
 .bprog{width:80%;height:4px;border-radius:9px;background:var(--line);overflow:hidden}.bprog i{display:block;height:100%;background:var(--accent)}
 .recap{display:grid;gap:12px}.recap h2{margin:0}.recap-img{width:100%;border-radius:18px;box-shadow:var(--shadow)}
+
+/* ═════════ Programme ═════════ */
+.prog{display:grid;gap:8px}.prog .meter,.pview .meter{height:8px}.prog .nextrow,.prog .warnrow{gap:10px;align-items:center}
+.prog .warnrow{padding:8px 10px;border-radius:12px;background:color-mix(in srgb,var(--warn,#e0a030) 14%,transparent)}
+.cal .dots i.prog{background:transparent;border:1.5px dashed var(--accent);box-sizing:border-box}.legend .lg.prog{border:1.5px dashed var(--accent);background:transparent}
+.pwiz{display:grid;gap:10px}.pwiz h2{margin:0}.pwiz .chips.days .chip{min-width:52px;justify-content:center}.pwsum{display:grid;gap:4px}
+.pview{display:grid;gap:10px}.pview h2{margin:0}.pweek{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:8px}
+.pdots{display:flex;gap:6px;flex-wrap:wrap}.pd{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;background:var(--card2);color:var(--muted)}
+.pd.done{background:var(--accent);color:var(--on-accent,#000)}.pd.missed{background:color-mix(in srgb,#ef6f5e 30%,var(--card2));color:#ef6f5e}.pd.today{outline:2px solid var(--accent)}
+.forme{display:grid;gap:14px}.forme h2{margin:0;text-align:center}.formes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.forme-b{display:grid;justify-items:center;gap:4px;padding:16px 6px;border-radius:18px;border:1px solid var(--line);background:var(--card2);color:var(--text);cursor:pointer}
+.forme-b span{font-size:2.2rem}.forme-b small{color:var(--muted);font-size:.72rem;text-align:center}
+.gen .formerow{display:grid;gap:6px;padding-bottom:10px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+
+/* ═════════ Coach ═════════ */
+.coachbtn{width:100%;margin-bottom:8px}
+.chat{display:grid;gap:10px}.chat h2{margin:0}
+.chat-log{display:grid;gap:8px;max-height:52vh;overflow:auto;padding:4px 2px;align-content:start}
+.msg{max-width:86%;padding:10px 13px;border-radius:18px;line-height:1.45;white-space:pre-wrap;font-size:.95rem}
+.msg.user{justify-self:end;background:var(--accent);color:var(--on-accent,#000);border-bottom-right-radius:6px}
+.msg.assistant{justify-self:start;background:var(--card2);border-bottom-left-radius:6px}
+.msg.typing{display:flex;gap:4px}.msg.typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:blink 1s infinite}.msg.typing i:nth-child(2){animation-delay:.2s}.msg.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{50%{opacity:.25}}

@@ -52,7 +52,7 @@ function initInputs(keepLoad) {
   p.load = keepLoad && prev ? prev.load : hint?.load || parseKg(ex.load) || 0;
   p.hint = hint;
 }
-export function startPlayer(session, { eventId = null, fromGenerator = false } = {}) {
+export function startPlayer(session, { eventId = null, fromGenerator = false, program = null } = {}) {
   const s = normalizeSession(session);
   if (!s.exercises.length) { toast('Cette séance est vide : ajoute au moins un exercice.'); return; }
   // Séance faite à la main sans échauffement : on en ajoute un court (réglable dans Paramètres, « Passer » à tout moment).
@@ -65,7 +65,7 @@ export function startPlayer(session, { eventId = null, fromGenerator = false } =
     s, eventId, fromGenerator, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pauseStart: 0, pausedMs: 0,
     workStart: 0, workPausedMs: 0, restStart: 0, restMs: 0, remaining: 0, lastBeep: 0, swaps: [...(fromGenerator ? S.gen.swaps || [] : [])],
     log: s.exercises.map((e) => ({ name: e.name, libId: e.libId, group: e.group, intensity: e.intensity, risk: e.risk, muscles: e.muscles, caps: e.caps, prim: e.prim, sec: e.sec, isNew: e.isNew, sets: [] })),
-    quiz: { felt: [], hardest: '', easiest: '', difficulty: 0, comment: '', likes: {}, answers: {} }, useBase: !!S.settings.autoBase, prs: [], warmAdded, hr: { sum: 0, n: 0, max: 0 },
+    quiz: { felt: [], hardest: '', easiest: '', difficulty: 0, comment: '', likes: {}, answers: {} }, useBase: !!S.settings.autoBase, prs: [], warmAdded, hr: { sum: 0, n: 0, max: 0 }, program,
   };
   initInputs(false);
   $('#player').classList.add('open'); document.body.classList.add('noscroll');
@@ -267,6 +267,7 @@ function saveResult() {
       questionnaire: { felt: q.felt, hardest: q.hardest, easiest: q.easiest, difficulty: q.difficulty || 0, comment: q.comment.trim().slice(0, 600), likes, answers: Object.entries(q.answers).map(([k, a]) => ({ q: k, a })) },
       swaps: p.swaps.map((s) => ({ from: s.from, to: s.to })),
       ...(p.hr.n >= 5 ? { hr: { avg: Math.round(p.hr.sum / p.hr.n), max: p.hr.max } } : {}),
+      ...(p.program ? { program: { id: p.program.id, i: p.program.i } } : {}),
       exercises: done.map((l) => ({ name: l.name, libId: l.libId, group: l.group, intensity: l.intensity, risk: l.risk, muscles: l.muscles, caps: exCaps(l.ex, c), prim: exMuscles(l.ex, c).prim, sec: exMuscles(l.ex, c).sec, sets: l.sets })),
     },
   };

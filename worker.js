@@ -5,7 +5,7 @@ import { SCHEMA, ADD_COLUMNS } from './schema.js';
 import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
-import { aiDraft } from './server/ai.js';
+import { aiDraft, aiChat } from './server/ai.js';
 import { estimateLevel } from './public/estimate.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
@@ -20,7 +20,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -402,6 +402,7 @@ async function routeAuthed(request, env, url, auth, secure) {
   // Signalements de bugs
   if (p === '/api/bugs' && m === 'POST') return bugCreate(request, env, u);
   if (p === '/api/ai/draft' && m === 'POST') return aiDraftRoute(request, env, u);
+  if (p === '/api/ai/chat' && m === 'POST') return aiChatRoute(request, env, u);
   if (p === '/api/bugs/mine' && m === 'GET') return bugMine(env, u);
 
   // Administration (droit vérifié côté serveur à chaque appel ; l'activation se fait avec EDIT_PASSWORD)
@@ -669,6 +670,8 @@ function cleanHistoryData(d) {
       answers: (Array.isArray(q.answers) ? q.answers : []).slice(0, 6).map((a) => ({ q: str(a?.q, 120), a: str(a?.a, 200) })).filter((a) => a.q && a.a),
     } : null,
     swaps: (Array.isArray(d.swaps) ? d.swaps : []).slice(0, 20).map((s) => ({ from: str(s?.from, 80), to: str(s?.to, 80) })).filter((s) => s.from),
+    hr: d.hr && typeof d.hr === 'object' && Number(d.hr.avg) > 0 ? { avg: clamp(d.hr.avg, 30, 250, 0), max: clamp(d.hr.max, 30, 250, 0) } : undefined,
+    program: d.program && /^[\w:.-]{1,80}$/.test(String(d.program.id || '')) ? { id: String(d.program.id), i: Math.round(clamp(d.program.i, 0, 999, 0)) } : undefined,
     exercises: (Array.isArray(d.exercises) ? d.exercises : []).slice(0, 60).map((e) => ({
       name: str(e?.name, 80), libId: str(e?.libId, 40), group: str(e?.group, 20),
       intensity: ['low', 'mod', 'high'].includes(e?.intensity) ? e.intensity : '', risk: ['finger', 'shoulder', 'elbow', 'knee'].includes(e?.risk) ? e.risk : '',
@@ -848,6 +851,14 @@ async function aiDraftRoute(request, env, u) {
   if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Tu as beaucoup utilisé l’assistant : réessaie un peu plus tard.', 429);
   try { const r = await aiDraft(env, { kind, text, activityId: str(b?.activityId, 60) }); return json({ ok: true, draft: r.draft, source: 'ia' }); }
   catch (e) { console.error('ai', e?.message); return json({ error: e.status ? e.message : 'L’assistant IA n’a pas pu répondre. Réessaie dans un instant.', unavailable: e.status === 503 }, e.status === 502 ? 502 : 503); }
+}
+async function aiChatRoute(request, env, u) {
+  const b = await readJson(request, 12000);
+  if (!b || !Array.isArray(b.messages)) return fail('Données invalides.');
+  if (!env.AI?.run) return json({ error: 'Coach non activé sur ce serveur.', unavailable: true }, 503);
+  if (await limited(env, 'ai-c:' + u.id, 20, 600000) || await limited(env, 'ai-cd:' + u.id, 80, DAY)) return fail('Beaucoup de questions d’un coup : réessaie un peu plus tard.', 429);
+  try { return json({ ok: true, reply: await aiChat(env, { messages: b.messages, profile: str(b.profile, 900) }) }); }
+  catch (e) { console.error('ai-chat', e?.message); return json({ error: e.status ? e.message : 'Le coach n’a pas pu répondre. Réessaie dans un instant.' }, e.status === 400 ? 400 : e.status === 502 ? 502 : 503); }
 }
 async function bugCreate(request, env, u) {
   const b = await readJson(request, 30000);
