@@ -493,7 +493,7 @@ SUBMIT.avoidSave = (f) => { const d = Object.fromEntries(new FormData(f)); S.set
 /* ═════════ Profil public et communauté ═════════ */
 export async function loadSocial() {
   const so = S.social; so.error = ''; so.loading = true; render();
-  try { so.me = await api('GET', '/api/social/me'); so.feed = await api('GET', '/api/social/feed?tz=' + new Date().getTimezoneOffset()); const mine = await api('GET', '/api/shared?scope=public&mine=1'); so.mine = mine.items; }
+  try { so.me = await api('GET', '/api/social/me'); so.feed = await api('GET', '/api/social/feed?tz=' + new Date().getTimezoneOffset()); const [mine, links] = await Promise.all([api('GET', '/api/shared?scope=public&mine=1'), api('GET', '/api/shared?scope=link&mine=1')]); so.mine = mine.items; so.links = links.items; }
   catch (e) { so.error = e.offline ? 'Connexion requise pour le partage.' : e.message; }
   so.loading = false; render();
 }
@@ -517,6 +517,7 @@ function vPublic() {
       <button class="btn pri" type="submit">Enregistrer mes choix de partage</button>
       <p class="tiny muted">Lien public (si visibilité publique) : ${location.origin}/#/profile/public/${S.user.username}</p></form>
     <div class="card"><h3>Mes séances publiques</h3>${(so.mine || []).length ? so.mine.map((x) => h`<div class="item"><div class="grow"><b>${x.title}</b><div class="tiny muted">${x.exerciseCount} exercices · modifiée ${relDate(x.updatedAt)}</div></div><button class="btn danger sm" data-act="pubDel" data-id="${x.id}">Retirer</button></div>`) : h`<p class="muted small">Publie une séance depuis son écran (bouton « Partager »).</p>`}</div>
+    ${(so.links || []).length ? h`<div class="card"><h3>🔗 Mes liens de partage</h3><p class="tiny muted">Seules les personnes qui ont le lien voient ces séances. Retire un lien quand tu veux.</p>${so.links.map((x) => h`<div class="item"><div class="grow"><b>${x.title}</b><div class="tiny muted">${x.exerciseCount} exercices · créé ${relDate(x.createdAt || x.updatedAt)}</div></div><button class="btn sm" data-act="shShow" data-id="${x.id}" data-name="${x.title}">QR</button><button class="btn danger sm" data-act="pubDel" data-id="${x.id}">Retirer</button></div>`)}</div>` : ''}
     ${so.me.pending.length ? h`<div class="card"><h3>Demandes d’abonnement</h3>${so.me.pending.map((r) => h`<div class="item"><div class="grow"><b>${r.username}</b></div><button class="btn pri sm" data-act="socRespond" data-id="${r.id}" data-accept="1">Accepter</button><button class="btn sm" data-act="socRespond" data-id="${r.id}" data-accept="">Refuser</button></div>`)}</div>` : ''}
     <div class="card"><h3>Trouver quelqu’un</h3><input type="search" data-input="socSearch" placeholder="Pseudo (2 lettres minimum)" aria-label="Chercher un pseudo" autocomplete="off"><div id="socResults"></div></div>
     <h2>Profils suivis</h2>${so.feed?.people?.length ? so.feed.people.map(vPerson) : empty('Tu ne suis personne, ou ils n’ont rien partagé.')}`;
@@ -546,7 +547,7 @@ INPUT.socSearch = (el) => {
 ACT.socFollow = async (el) => { try { const r = await api('POST', '/api/social/follow', { username: el.dataset.user }); toast(r.status === 'accepted' ? 'Abonné' : 'Demande envoyée'); loadSocial(); } catch (e) { toast(e.offline ? 'Connexion requise.' : e.message); } };
 ACT.socUnfollow = async (el) => { try { await api('POST', '/api/social/unfollow', { username: el.dataset.user }); loadSocial(); } catch (e) { toast(e.message); } };
 ACT.socRespond = async (el) => { try { await api('POST', '/api/social/respond', { id: el.dataset.id, accept: !!el.dataset.accept }); loadSocial(); } catch (e) { toast(e.message); } };
-ACT.pubDel = async (el) => { if (!(await ask('Retirer cette séance de ton profil public ?', { danger: true, ok: 'Retirer' }))) return; try { await api('DELETE', `/api/shared/${encodeURIComponent(el.dataset.id)}`); loadSocial(); } catch (e) { toast(e.message); } };
+ACT.pubDel = async (el) => { if (!(await ask('Retirer cette séance partagée ? Le lien et le QR code ne marcheront plus.', { danger: true, ok: 'Retirer' }))) return; try { await api('DELETE', `/api/shared/${encodeURIComponent(el.dataset.id)}`); loadSocial(); } catch (e) { toast(e.message); } };
 ACT.pubCopy = async (el) => {
   try {
     const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`);

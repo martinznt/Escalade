@@ -481,3 +481,11 @@ html[data-vibe=neon][data-mode=dark] .btn.pri{box-shadow:0 0 18px color-mix(in s
 .src{border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:99px;padding:2px 9px;font-size:.72rem;cursor:pointer}
 .bestrow{display:flex;gap:12px;align-items:center;text-align:left}.rank{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent,#000);font-weight:800;flex:none}
 .chips.nowrap{flex-wrap:nowrap}
+/* Partage (lien + QR) et séance à deux */
+.sharesheet{display:grid;gap:12px;justify-items:center}
+.qrbox{background:#fff;padding:8px;border-radius:16px;width:min(240px,70vw);box-shadow:var(--shadow)}.qrbox svg{display:block;width:100%;height:auto}
+.linkbox{width:100%;font-size:.85rem;text-align:center}
+.duocode{font:700 2rem/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;color:var(--accent)}
+.duocode.sm{font-size:1.1rem}.duocode.in{width:100%;max-width:260px;text-align:center;text-transform:uppercase;padding:10px}
+.duobar{display:flex;align-items:center;gap:8px;justify-content:center;padding:6px 10px;margin:6px 0;border-radius:999px;background:color-mix(in srgb,var(--accent) 14%,var(--card));border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line))}
+.duobar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok,#3c3);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok,#3c3) 25%,transparent)}.duobar .dot.off{background:var(--bad,#c33)}

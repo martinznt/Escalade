@@ -18,6 +18,8 @@ export const SCHEMA = [
   // Rappels d'entraînement (notifications) : un abonnement par appareil.
   "CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, days TEXT NOT NULL DEFAULT '[]', hour TEXT NOT NULL DEFAULT '18:00', tz TEXT NOT NULL DEFAULT 'Europe/Paris', last_day TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_push_user ON push_subs(user_id)",
+  "CREATE TABLE IF NOT EXISTS duo_rooms (code TEXT PRIMARY KEY, owner_id TEXT NOT NULL, members_json TEXT NOT NULL, session_json TEXT NOT NULL, state_json TEXT NOT NULL, v INTEGER NOT NULL DEFAULT 1, by_id TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS idx_duo_exp ON duo_rooms(expires_at)",
   // Intentions communes (ajoutées par un administrateur, visibles par tous) et propositions des utilisateurs.
   "CREATE TABLE IF NOT EXISTS community_intents (id TEXT PRIMARY KEY, activity TEXT NOT NULL DEFAULT '', label TEXT NOT NULL, emoji TEXT NOT NULL DEFAULT '', caps_json TEXT NOT NULL DEFAULT '{}', created_by TEXT, created_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS proposals (id TEXT PRIMARY KEY, user_id TEXT, kind TEXT NOT NULL, activity TEXT NOT NULL DEFAULT '', label TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', payload_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'open', reply TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, reviewed_by TEXT, reviewed_at INTEGER, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",

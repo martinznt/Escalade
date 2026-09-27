@@ -2,9 +2,9 @@
 // Charge les vues, gère l'authentification, la navigation (onglets + adresse #/onglet/sous-vue/paramètre),
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
 import { h, raw, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
-import { normalizeSession } from './shared.js';
+import { normalizeSession, uid } from './shared.js';
 import { maybeMove, maybeClaim } from './move.js';
 import { pendingNews, latestNews, markNewsToured, initNews } from './news.js';
 import { startTour } from './tour.js';
@@ -18,7 +18,9 @@ import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
 import { vProfile } from './views-profile.js';
 import { vSettings, APPEAR_KEYS } from './views-settings.js';
-import { onVisible, bigTap } from './player.js';
+import { onVisible, bigTap, startPlayer } from './player.js';
+import { catchLink, pendingLink, clearPending } from './share.js';
+import './duo.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
 const VIEWS = { home: vHome, progress: vProgress, library: vLibrary, profile: vProfile, settings: vSettings };
@@ -33,10 +35,11 @@ function syncBadge() {
 function doRender() {
   const app = $('#app');
   const pub = (location.hash || '').match(/^#\/profile\/public\/([^/]+)$/);
-  if (!S.user) { app.innerHTML = (pub ? vPublicVisitor(decodeURIComponent(pub[1])) : vAuth()).s; return; }
+  const pl = pendingLink();
+  if (!S.user) { app.innerHTML = (pub ? vPublicVisitor(decodeURIComponent(pub[1])) : pl && !S.authMode ? h`<main class="wrap">${vLanding(pl)}</main>` : vAuth()).s; return; }
   if (!S.loaded) { app.innerHTML = h`<main class="wrap">${skeleton(4)}</main>`.s; return; }
   let body;
-  try { body = pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
+  try { body = pl ? vLanding(pl) : pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
   catch (e) {
     console.error(e);
     const where = String(e?.stack || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/https?:\/\/[^/]+\//, '')).join(' · ');
@@ -157,6 +160,39 @@ function vPublicVisitor(name) {
     ${S.publicSession ? h`<div class="card"><h3>${S.publicSession.title}</h3>${blocksOf(normalizeSession(S.publicSession.session), 'view')}</div>` : ''}
     ${S.user ? h`<button class="btn" data-act="tab" data-id="home">‹ Retour à mon espace</button>` : ''}</main>`;
 }
+/* ═════════ Arrivée par un lien partagé (séance ou séance à deux) ═════════ */
+function vLanding(pl) {
+  const out = h`<button class="btn ghost" data-act="linkClose">${S.user ? '‹ Retour à mon espace' : 'Ignorer'}</button>`;
+  if (pl.kind === 'duo') {
+    return h`<div class="card acc-b center"><h1>👥 Séance à deux</h1><p>On t’invite à faire une séance ensemble. Code : <b class="duocode sm">${pl.id}</b></p>
+      ${S.user && !S.user.guest ? h`<button class="btn pri big" data-act="duoJoinLink" data-code="${pl.id}">Rejoindre la séance</button>`
+        : h`<p class="small muted">Il faut un compte (gratuit) pour partager les chronos.</p><button class="btn pri big" data-act="linkLogin" data-mode="${S.user ? 'up' : 'login'}">${S.user ? 'Créer mon compte' : 'Me connecter'}</button>${S.user ? '' : h`<button class="btn" data-act="linkLogin" data-mode="register">Créer un compte</button>`}`}</div>${out}`;
+  }
+  const L = S.linkView;
+  if (!L || L.id !== pl.id) {
+    S.linkView = { id: pl.id };
+    api('GET', `/api/public/s/${encodeURIComponent(pl.id)}`, undefined, { quiet401: true, guestOk: true }).then((r) => { S.linkView = { id: pl.id, item: r.item }; render(); })
+      .catch((e) => { S.linkView = { id: pl.id, error: e.offline ? 'Pas de connexion : réessaie quand tu as du réseau.' : e.message }; render(); });
+    return skeleton(2);
+  }
+  if (L.error) return h`<div class="card"><h2>Séance introuvable</h2><p class="muted">${L.error}</p><p class="small">La personne a peut-être retiré le lien.</p></div>${out}`;
+  if (!L.item) return skeleton(2);
+  const it = L.item, s = normalizeSession(it.session);
+  return h`<div class="card acc-b"><p class="tiny muted">Séance partagée${it.author ? ` par ${it.author}` : ''}</p><h1 style="margin:.1em 0">${s.emoji || '🏋️'} ${it.title}</h1>
+      <p class="small muted">${it.exerciseCount} exercices · environ ${it.durationMin} min</p>
+      ${S.user ? h`<div class="grid2"><button class="btn pri big" data-act="linkSave">💾 Garder</button><button class="btn big" data-act="linkPlay">▶ Faire maintenant</button></div>`
+        : h`<div class="stack"><button class="btn pri big" data-act="linkLogin" data-mode="login">Me connecter pour la garder</button><button class="btn" data-act="linkLogin" data-mode="register">Créer un compte</button><button class="btn ghost" data-act="guestStart">Essayer sans compte</button></div>`}</div>
+    <div class="card">${blocksOf(s, 'view')}</div>${out}`;
+}
+ACT.linkLogin = (el) => { if (el.dataset.mode === 'up') { ACT.guestUpgrade?.(); return; } S.authMode = el.dataset.mode === 'register' ? 'register' : 'login'; render(); };
+ACT.linkClose = () => { clearPending(); S.linkView = null; if (S.user) go('home', 'dash'); else render(); };
+ACT.linkSave = () => {
+  const it = S.linkView?.item; if (!it) return;
+  const now = Date.now(), src = normalizeSession(it.session);
+  const s = saveSeance({ ...src, id: uid(), name: it.title, source: 'copy', exercises: src.exercises.map((e) => ({ ...e, id: uid(), note: '' })), origin: { kind: 'link', id: it.id, author: it.author || '', copiedAt: now }, createdAt: now, updatedAt: now });
+  clearPending(); S.linkView = null; toast('Gardée dans Mes séances'); go('library', 'seance', s.id);
+};
+ACT.linkPlay = () => { const it = S.linkView?.item; if (!it) return; clearPending(); S.linkView = null; render(); startPlayer(it.session); };
 ACT.pubLogin = () => { location.hash = ''; S.authMode = 'login'; render(); };
 ACT.tourStart2 = () => maybeTour(true);
 ACT.pubView = async (el) => { try { const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`, undefined, { quiet401: true }); S.publicSession = r.item; render(); } catch (e) { toast(e.message); } };
@@ -179,7 +215,7 @@ document.addEventListener('submit', (e) => {
 document.addEventListener('change', (e) => { const el = e.target.closest('[data-change]'); if (!el) return; const fn = CHG[el.dataset.change]; if (fn) try { fn(el); } catch (err) { console.error(err); toast(err.message, 4000, 'bad'); } });
 document.addEventListener('input', (e) => { const el = e.target.closest('[data-input]'); if (!el) return; const fn = INPUT[el.dataset.input]; if (fn) fn(el); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) closeSheet(); });
-window.addEventListener('hashchange', () => { parseHash(); closeSheet(); render(); });
+window.addEventListener('hashchange', () => { catchLink(); parseHash(); closeSheet(); render(); });
 window.addEventListener('online', () => syncAll());
 window.addEventListener('offline', () => { S.sync = 'offline'; render(); });
 document.addEventListener('visibilitychange', () => {
@@ -294,6 +330,7 @@ async function start() {
   const doIt = new URLSearchParams(location.search).get('do');
   if (doIt === 'timer' || doIt === 'gen') { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => { if (S.user) (doIt === 'timer' ? ACT.timerOpen : ACT.genOpen)?.(); }, 900); }
   registerSW();
+  catchLink();
   parseHash();
   const cached = ls.get('sea:user');
   if (cached?.guest) { S.user = { ...GUEST }; render(); await loadLocal(); render(); window.__seaStarted = true; return; }

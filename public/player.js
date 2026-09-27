@@ -104,7 +104,7 @@ function completeSet(secondsDone) {
   const p = S.player, ex = cur();
   if (ex.perSide && p.side === 0) { p.side = 1; p.phase = 'ready'; buzz(80); toast('Change de côté'); draw(); return; }
   p.log[p.i].sets.push({ reps: ex.mode === 'reps' ? p.reps : 0, seconds: ex.mode === 'time' ? secondsDone : 0, load: p.load || 0, done: true });
-  p.side = 0; buzzOk();
+  p.side = 0; p.duoWhy = 'set'; buzzOk();
   if (p.set + 1 < ex.sets) { p.set++; startRest(ex.rest); }
   else nextExercise();
 }
@@ -137,21 +137,22 @@ function finish(aborted) {
   draw();
   if (p.prs.length) setTimeout(() => celebrate(), 250);
 }
-function closePlayer() { clearInterval(timer); unwake(); voiceStop(); stopHr(); S.player = null; $('#player').classList.remove('open'); $('#player').innerHTML = ''; document.body.classList.remove('noscroll'); render(); }
+function closePlayer() { duoHook?.('close'); clearInterval(timer); unwake(); voiceStop(); stopHr(); S.player = null; $('#player').classList.remove('open'); $('#player').innerHTML = ''; document.body.classList.remove('noscroll'); render(); }
 
 /* ───────── Affichage ───────── */
 function draw(anim = false) {
   const p = S.player; if (!p) return; const root = $('#player');
-  if (p.phase === 'done') { root.innerHTML = vQuiz(p).s; return; }
+  if (p.phase === 'done') { root.innerHTML = vQuiz(p).s; duoHook?.('draw'); return; }
   const n = p.s.exercises.length, pct = Math.round((p.i / n) * 100);
   const big = !!S.settings.bigMode, warm = cur()?.block === 'warmup' && p.warmAdded;
   root.innerHTML = h`<div class="pl ${anim ? 'slide' : ''} ${big ? 'big' : ''}"><div class="row between"><button class="btn sm" data-act="pQuit">✕ Terminer</button><span class="muted small">Exercice ${p.i + 1} / ${n} · <span id="pclock">${mmss(Math.floor(clock.real(p) / 1000))}</span> <b id="phr" class="hr">${hrNow() ? `❤ ${hrNow()}` : ''}</b></span><button class="btn sm" data-act="pSkip">Passer ⏭</button></div>
-    <div class="row ptools"><button class="btn sm ${S.settings.voice ? 'on' : ''}" data-act="pVoice" aria-pressed="${S.settings.voice ? 'true' : 'false'}">${S.settings.voice ? '🔊 Coach' : '🔇 Coach'}</button><button class="btn sm ${big ? 'on' : ''}" data-act="pBig" aria-pressed="${big ? 'true' : 'false'}">Aa Grand</button>${hrSupported() ? h`<button class="btn sm ${hrConnected() ? 'on' : ''}" data-act="pHr">${hrConnected() ? '❤ Cardio' : '❤ Capteur'}</button>` : ''}</div>
+    <div class="row ptools"><button class="btn sm ${S.settings.voice ? 'on' : ''}" data-act="pVoice" aria-pressed="${S.settings.voice ? 'true' : 'false'}">${S.settings.voice ? '🔊 Coach' : '🔇 Coach'}</button><button class="btn sm ${big ? 'on' : ''}" data-act="pBig" aria-pressed="${big ? 'true' : 'false'}">Aa Grand</button>${hrSupported() ? h`<button class="btn sm ${hrConnected() ? 'on' : ''}" data-act="pHr">${hrConnected() ? '❤ Cardio' : '❤ Capteur'}</button>` : ''}${S.user && !S.user.guest ? h`<button class="btn sm ${S.duo ? 'on' : ''}" data-act="duoOpen">👥 ${S.duo ? S.duo.members.length ? 'À ' + (S.duo.members.length + 1) : 'En attente' : 'À deux'}</button>` : ''}</div>
+    ${S.duo ? h`<div class="duobar small"><span class="dot ${S.duo.lost ? 'off' : ''}"></span>${S.duo.members.length ? `Avec ${S.duo.members.join(', ')}` : `Code ${S.duo.code} : en attente de ton partenaire`}${S.duo.lost ? ' · connexion perdue' : ''}</div>` : ''}
     ${warm ? h`<div class="card flat row warmnote"><span class="grow small">On commence par ${p.warmAdded > 1 ? `${p.warmAdded} exercices` : 'un exercice'} d’échauffement.</span><button class="btn sm" data-act="pSkipWarm">Passer</button></div>` : ''}
     ${big && p.phase !== 'done' ? h`<p class="tiny muted center">Touche l’écran n’importe où pour valider</p>` : ''}
     <div class="bar"><i style="width:${pct}%"></i></div>${p.paused ? h`<div class="card flat center warn-b">⏸ En pause — le temps de pause n’est pas compté</div>` : ''}${p.phase === 'rest' ? vRest(p) : vSet(p)}
     <div class="row wrapf center-row"><button class="btn" data-act="pPause">${p.paused ? '▶ Reprendre' : '⏸ Pause'}</button></div></div>`.s;
-  tick();
+  tick(); duoHook?.('draw');
 }
 function stepper(k, value, unit, label) { return h`<div class="center"><div class="muted small">${label}</div><div class="stepper"><button data-act="pAdj" data-k="${k}" data-d="-1" aria-label="Moins">−</button><b>${value}<span class="small muted"> ${unit}</span></b><button data-act="pAdj" data-k="${k}" data-d="1" aria-label="Plus">+</button></div></div>`; }
 /** Consignes de l'exercice, affichées à chaque série (et pendant le repos, pour la série qui suit). */
@@ -215,7 +216,7 @@ Object.assign(ACT, {
   pPause: () => { const p = S.player; if (!p || p.phase === 'done') return; if (p.paused) { const before = p.pauseStart; clock.resume(p); if (p.phase === 'rest') p.restPaused = (p.restPaused || 0) + (Date.now() - before); } else clock.pause(p); draw(); },
   pRestAdd: () => { const p = S.player; if (!p || p.phase !== 'rest') return; if (p.paused) p.remaining = Math.max(0, p.remaining || 0) + 30000; else p.end += 30000; p.total += 30000; draw(); },
   pRestSkip: () => { const p = S.player; if (p.paused) { const before = p.pauseStart; clock.resume(p); p.restPaused = (p.restPaused || 0) + (Date.now() - before); } endRest(); draw(); },
-  pSkip: async () => { if (!(await ask('Passer cet exercice ?', { ok: 'Passer' }))) return; if (S.player.phase === 'rest') endRest(); nextExercise(); },
+  pSkip: async () => { if (!(await ask('Passer cet exercice ?', { ok: 'Passer' }))) return; if (S.player.phase === 'rest') endRest(); S.player.duoWhy = 'skip'; nextExercise(); },
   pQuit: async () => {
     const p = S.player, any = p.log.some((l) => l.sets.length);
     if (!any) { if (await ask('Quitter la séance sans rien enregistrer ?', { ok: 'Quitter', danger: true })) closePlayer(); return; }
@@ -223,9 +224,10 @@ Object.assign(ACT, {
   },
   pDiscard: async () => { if (await ask('Ne pas enregistrer cette séance ?', { ok: 'Ne pas enregistrer', danger: true })) closePlayer(); },
   pSave: () => saveResult(),
+  pRedraw: () => draw(),
   pVoice: () => { S.settings.voice = !S.settings.voice; saveSettings(); if (S.settings.voice) speak('Coach activé.'); else try { speechSynthesis.cancel(); } catch { /* rien */ } draw(); },
   pBig: () => { S.settings.bigMode = !S.settings.bigMode; saveSettings(); draw(); },
-  pSkipWarm: () => { const p = S.player; if (p.phase === 'rest') endRest(); while (p.i < p.s.exercises.length && p.s.exercises[p.i].block === 'warmup' && p.i < p.warmAdded) { p.i++; } p.i--; nextExercise(); },
+  pSkipWarm: () => { const p = S.player; if (p.phase === 'rest') endRest(); p.duoWhy = 'skip'; while (p.i < p.s.exercises.length && p.s.exercises[p.i].block === 'warmup' && p.i < p.warmAdded) { p.i++; } p.i--; nextExercise(); },
   pHr: async () => {
     if (hrConnected()) { toast(`Fréquence cardiaque : ${hrNow()} bpm`); return; }
     try { const name = await hrConnect(); toast(`${name} connecté`); startHr(); draw(); }
@@ -313,6 +315,50 @@ function handleVoice(t) {
   else if (/\b(passe|saute|suivant)/.test(t)) (p.phase === 'rest' ? ACT.pRestSkip() : nextExercise());
   else if (/\b(plus|trente|ajoute)/.test(t) && p.phase === 'rest') ACT.pRestAdd();
   else if (/\b(fait|termine|valide|ok|go|demarre|partez)/.test(t)) (p.phase === 'work' ? ACT.pWorkDone() : p.phase === 'ready' ? ACT.pGo() : ACT.pRestSkip());
+}
+/* ───────── Séance à deux : état partagé (position + chrono) ───────── */
+let duoHook = null;
+export const setDuoHook = (fn) => { duoHook = fn; };
+/** Ce qui est partagé avec le partenaire : où on en est et le chrono. Les séries, charges et notes restent à chacun. */
+export function duoSnapshot(p = S.player) {
+  if (!p) return null;
+  return { i: p.i, set: p.set, side: p.side, phase: p.phase, end: p.phase === 'rest' || p.phase === 'work' ? p.end : 0, total: p.total, remaining: p.paused ? Math.round(p.remaining || 0) : 0, paused: !!p.paused, why: p.duoWhy || 'set' };
+}
+const posKey = (a) => a.i * 1000 + a.set * 2 + a.side;
+/**
+ * Applique l'état reçu du partenaire (heures déjà converties en heure locale).
+ * Si le partenaire a validé des séries, elles sont comptées ici avec les valeurs affichées ; s'il a passé un exercice, rien n'est compté.
+ * Retourne 'done' si le partenaire a fini, true si l'affichage a changé.
+ */
+export function applyDuo(st) {
+  const p = S.player; if (!p || p.phase === 'done' || !st) return false;
+  if (st.phase === 'done') return 'done';
+  const n = p.s.exercises.length, skip = st.why === 'skip';
+  if (posKey(p) > posKey(st)) return false; // on est déjà plus loin : c'est notre état qui partira
+  let moved = false, guard = 0; const i0 = p.i;
+  while (posKey(p) < posKey(st) && p.i < n && guard++ < 3000) {
+    moved = true;
+    if (p.phase === 'rest') endRest(); else if (p.phase === 'work') p.phase = 'ready';
+    const ex = cur(), lastEx = st.i === p.i;
+    if (skip && !lastEx) { p.i++; p.set = 0; p.side = 0; if (p.i < n) initInputs(false); continue; }
+    if (ex.perSide && p.side === 0) { p.side = 1; continue; }
+    p.log[p.i].sets.push({ reps: ex.mode === 'reps' ? p.reps : 0, seconds: ex.mode === 'time' ? p.secs : 0, load: p.load || 0, done: true });
+    p.side = 0;
+    if (p.set + 1 < ex.sets) { p.set++; initInputs(true); } else { p.i++; p.set = 0; if (p.i < n) initInputs(false); }
+  }
+  if (p.i >= n) { finish(false); return true; }
+  const now = Date.now(), timed = st.phase === 'rest' || st.phase === 'work';
+  if (st.phase === 'rest' && p.phase !== 'rest') { p.phase = 'rest'; p.restStart = now; p.restPaused = 0; p.said = ''; p.lastBeep = 0; }
+  else if (st.phase === 'work' && p.phase !== 'work') { p.phase = 'work'; p.workStart = st.end - st.total; p.workPausedMs = 0; p.secs = Math.round(st.total / 1000); p.said = ''; p.lastBeep = 0; }
+  else if (st.phase === 'ready' && p.phase === 'rest') endRest();
+  else if (st.phase === 'ready' && p.phase === 'work') p.phase = 'ready';
+  if (timed) p.total = st.total;
+  if (st.paused && !p.paused) clock.pause(p);
+  else if (!st.paused && p.paused) clock.resume(p);
+  if (st.paused) p.remaining = st.remaining; else if (timed) p.end = st.end;
+  if (moved) { buzz(60); if (p.i !== i0) sayExercise(cur()); }
+  draw(moved);
+  return true;
 }
 export function onVisible() { if (S.player) { wake(); tick(); } }
 export { closePlayer };

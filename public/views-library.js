@@ -1,6 +1,8 @@
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
 import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
+import { linkSheet } from './share.js';
+import './duo.js';
 import './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon } from './state.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
@@ -49,7 +51,7 @@ ACT.libSub = (el) => { go('library', el.dataset.id); if (el.dataset.id === 'comm
 function vSeances() {
   const f = S.filters.seances || 'active';
   const list = S.seances.items.filter((s) => (f === 'archived' ? s.archived : f === 'templates' ? s.template && !s.archived : !s.archived));
-  return h`<div class="row wrapf"><button class="btn pri" data-act="newSeance">＋ Nouvelle séance</button><button class="btn" data-act="openImport">📋 Coller un texte</button><button class="btn" data-act="libSub" data-id="generate">✨ Générer</button></div>
+  return h`<div class="row wrapf"><button class="btn pri" data-act="newSeance">＋ Nouvelle séance</button><button class="btn" data-act="openImport">📋 Coller un texte</button><button class="btn" data-act="libSub" data-id="generate">✨ Générer</button>${S.user?.guest ? '' : h`<button class="btn" data-act="duoJoinAsk">👥 Rejoindre à deux</button>`}</div>
     <div class="chips">${[['active', 'Actives'], ['templates', 'Modèles'], ['archived', 'Archivées']].map(([k, l]) => chip(f === k, l, `data-act="seanceFilter" data-id="${k}"`))}</div>
     ${list.length ? list.map((s) => h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : ''}</div></div></div>
       <div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div></div>`)
@@ -89,7 +91,7 @@ function vEditor(s, mode) {
   const intents = new Map((s.intentions || []).map((x) => [x.id, x.p]));
   return h`<div class="row"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
-    ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
+    ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
     <div class="card"><div class="row"><input type="text" data-change="sEmoji" value="${s.emoji}" maxlength="4" class="emoji-in" aria-label="Emoji"><input type="text" data-change="sName" value="${s.name}" maxlength="100" aria-label="Nom de la séance"></div>
       <div class="grid2"><label>Activité<select data-change="sActivity"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
       <label>Environnement<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}</select></label></div>
@@ -245,12 +247,13 @@ ACT.sPublish = (el) => {
     <p class="small">Ce qui sera publié : le titre, l’activité, les exercices et leurs prescriptions, les intentions, le matériel et la durée.</p>
     <p class="small muted">Retiré automatiquement : tes notes de progression personnelles (${notes}), les charges chiffrées issues de tes performances (${loads}), les explications liées à ton profil, ton lieu et ton objectif. Aucun historique ni performance n’est partagé.</p>
     <p class="small">Niveau estimé : ${levelTag(lv)}</p>${levelDetails(lv)}
-    <div class="row wrapf"><button class="btn pri" data-act="sPublishDo" data-id="${s.id}" data-scope="common">📚 Bibliothèque commune</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="public">🌍 Mon profil public</button><button class="btn" data-act="closeSheet">Annuler</button></div>`, { wide: true });
+    <div class="row wrapf"><button class="btn pri" data-act="sPublishDo" data-id="${s.id}" data-scope="common">📚 Bibliothèque commune</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="link">🔗 Lien et QR code</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="public">🌍 Mon profil public</button><button class="btn" data-act="closeSheet">Annuler</button></div>`, { wide: true });
 };
 ACT.sPublishDo = async (el) => {
   const s = getSeance(el.dataset.id); if (!s) return;
   try {
     const r = await api('POST', '/api/shared', { id: uid(), scope: el.dataset.scope, session: s, title: s.name }, { opId: 'op-' + uid() });
+    if (el.dataset.scope === 'link') { buzzOk(); linkSheet(r.id, s.name); return; }
     closeSheet(); buzzOk(); toast(el.dataset.scope === 'common' ? `Publiée dans la bibliothèque commune (niveau estimé : ${LEVEL_LABEL[r.level.level].toLowerCase()})` : 'Publiée sur ton profil public');
     S.shared.common = null;
   } catch (e) { toast(e.offline ? 'Connexion requise pour publier.' : e.message, 4500, 'bad'); }
