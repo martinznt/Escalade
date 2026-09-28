@@ -28,7 +28,7 @@ export function vCarnet() {
   return h`<section class="card carnet-hero"><h2>🧗 Mon carnet</h2>
       <div class="grid2"><button class="btn pri big" data-act="ascQuick">＋ Bloc ou voie</button><button class="btn big" data-act="projNew">📌 Nouveau projet</button></div></section>
     <div class="setmenu">${[['goProjects', '', '📌', 'Mes projets', nProj ? `${nProj} en cours · rangés avec tes objectifs` : 'Rangés avec tes objectifs'], ['allGo', 'profile/perfs', '🏆', 'Pyramide, maxima et test de doigts', 'Dans Records et mesures']].map(([act, to, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${to ? raw(`data-to="${to}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
-    <section class="card"><h3>Mes blocs et voies</h3>
+    <section class="card"><div class="row between wrapf"><h3>Mes blocs et voies</h3><button class="btn sm ghost" data-act="jOpenClimb">Tout le journal ›</button></div>
       ${c.ascents.length ? h`${c.ascents.slice(0, 6).map(ascRow)}${c.ascents.length > 6 ? h`<details class="how mini"><summary>Tout voir (${c.ascents.length})</summary>${c.ascents.slice(6, 200).map(ascRow)}</details>` : ''}` : h`<p class="small muted">Rien pour l’instant.</p>`}</section>
     `;
 }
@@ -73,6 +73,7 @@ export function fingerCard() {
       ${ft.due && ft.last ? h`<p class="small acc-t">C’est le moment de refaire le test.</p>` : ''}
       <div class="row wrapf"><button class="btn" data-act="fingerTime">⏱ Temps max sur 20 mm</button><button class="btn" data-act="fingerLoad">🏋️ 10 s avec lest</button></div></section>`;
 }
+ACT.jOpenClimb = () => { S.jf = 'ascent'; S.jMax = 60; go('progress', 'journal'); };
 ACT.goProjects = () => { S.filters.goals = 'active'; go('profile', 'goals'); };
 ACT.carnetKind = (el) => { C().kind = el.dataset.id; render(); };
 ACT.carnetPeriod = (el) => { C().period = el.dataset.id; render(); };
