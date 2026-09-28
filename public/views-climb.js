@@ -25,9 +25,7 @@ const gradeChips = (sys, levelId, act) => h`<div class="chips grades">${sortedLe
 export function vCarnet(advanced = '') {
   const c = ctx(), st = C(), days = PERIODS.find((p) => p[0] === st.period)?.[2] || 0;
   const py = pyramid(c.ascents, { kind: st.kind, since: days ? Date.now() - days * 86400000 : 0 });
-  const projects = itemsOf('project').sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
-  const active = projects.filter((p) => p.status === 'active'), done = projects.filter((p) => p.status === 'done');
-  const ft = fingerTest(c.perfs);
+  const nProj = itemsOf('project').filter((p) => p.status === 'active').length;
   return h`<section class="card carnet-hero"><h2>🧗 Mon carnet</h2>
       <div class="grid2"><button class="btn pri big" data-act="ascQuick">＋ Bloc ou voie</button><button class="btn big" data-act="projNew">📌 Nouveau projet</button></div></section>
     <section class="card"><div class="row between"><h3>Ma pyramide</h3>${seg('carnetKind', st.kind, [['bloc', 'Bloc'], ['voie', 'Voie']])}</div>
@@ -36,13 +34,7 @@ export function vCarnet(advanced = '') {
           <div class="pyr-bar"><i class="f" style="width:${Math.round((r.flash / Math.max(1, r.total)) * r.pct * 100)}%"></i><i class="s" style="width:${Math.round((r.send / Math.max(1, r.total)) * r.pct * 100)}%"></i></div><b>${r.total}</b></div>`)}</div>
         <p class="tiny muted"><span class="dot f"></span> flash <span class="dot s"></span> réussi · ${py.total} réussite${py.total > 1 ? 's' : ''} en ${py.systemName}</p>`
       : h`<p class="small muted">Note tes réussites en ${st.kind === 'bloc' ? 'bloc' : 'voie'} : ta pyramide se construit toute seule.</p>`}</section>
-    <section class="card"><div class="row between"><h3>📌 Mes projets</h3>${active.length ? '' : h`<button class="btn sm" data-act="projNew">＋</button>`}</div>
-      ${active.length ? active.map(projRow) : h`<p class="small muted">Un bloc ou une voie qui te résiste ? Ajoute-le en projet pour compter tes essais jusqu’à la réussite.</p>`}
-      ${done.length ? h`<details class="how mini"><summary>🎉 Projets réussis (${done.length})</summary>${done.map((p) => h`<div class="item"><div class="grow"><b>${p.name || 'Projet'}</b> ${p.grade?.label || p.gradeText || ''}<div class="tiny muted">Réussi le ${fmtDay(p.doneAt)} · ${projectStats(p).attempts} essais</div></div><button class="btn sm ic" data-act="projOpen" data-id="${p.id}" aria-label="Ouvrir">›</button></div>`)}</details>` : ''}</section>
-    <section class="card"><h3>✋ Test de doigts</h3>
-      ${ft.last ? h`<p class="small">Dernier test ${relDate(ft.last.date)} : <b>${ft.last.metricId === 'suspension_lestee' ? `10 s avec ${ft.last.value} kg` : `${ft.last.value} s sur 20 mm`}</b>${trend(ft)}</p>` : h`<p class="small muted">Un petit test par mois pour voir tes doigts progresser. Poutre, réglette de 20 mm, bien échauffé.</p>`}
-      ${ft.due && ft.last ? h`<p class="small acc-t">C’est le moment de refaire le test.</p>` : ''}
-      <div class="row wrapf"><button class="btn" data-act="fingerTime">⏱ Temps max sur 20 mm</button><button class="btn" data-act="fingerLoad">🏋️ 10 s avec lest</button></div></section>
+    <div class="setmenu">${[['goProjects', '', '📌', 'Mes projets', nProj ? `${nProj} en cours · rangés avec tes objectifs` : 'Rangés avec tes objectifs'], ['allGo', 'profile/perfs', '✋', 'Test de doigts', 'Avec tes mesures et tes records']].map(([act, to, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${to ? raw(`data-to="${to}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
     <section class="card"><h3>Journal</h3>
       ${c.ascents.length ? h`${c.ascents.slice(0, 6).map(ascRow)}${c.ascents.length > 6 ? h`<details class="how mini"><summary>Tout voir (${c.ascents.length})</summary>${c.ascents.slice(6, 200).map(ascRow)}</details>` : ''}` : h`<p class="small muted">Rien pour l’instant.</p>`}</section>
     ${advanced ? h`<details class="card how" ${st.adv ? 'open' : ''}><summary data-act="carnetAdv"><b>⚙️ Maxima, systèmes de cotation et styles</b></summary>${advanced}</details>` : ''}`;
@@ -57,10 +49,27 @@ const ascWhere = (a) => { const e = a.context?.env && ctx().envs.find((x) => x.i
 const ascRow = (a) => h`<div class="item"><span class="gpill" ${a.grade?.color ? raw(`style="--lc:${esc(a.grade.color)}"`) : ''}>${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${RESULT_WORD[a.result] || a.result}${a.nuance ? ` · ${a.nuance}` : ''}${a.attempts > 1 ? ` · ${a.attempts} essais` : ''}${ascWhere(a) ? ` · ${ascWhere(a)}` : ''} · ${fmtDay(a.date)}</div></div><button class="btn ghost sm ic" data-act="ascDel" data-id="${a.id}" aria-label="Supprimer">✕</button></div>`;
 function projRow(p) {
   const s = projectStats(p), ph = p.hasPhoto ? item('photo', p.id) : null;
-  return h`<div class="proj"><button class="proj-thumb" data-act="projOpen" data-id="${p.id}" aria-label="Ouvrir le projet">${ph?.data ? raw(`<img src="${esc(ph.data)}" alt="">`) : p.kind === 'voie' ? '🧗' : '🪨'}</button>
+  return h`<div class="proj card"><button class="proj-thumb" data-act="projOpen" data-id="${p.id}" aria-label="Ouvrir le projet">${ph?.data ? raw(`<img src="${esc(ph.data)}" alt="">`) : p.kind === 'voie' ? '🧗' : '🪨'}</button>
     <div class="grow"><b>${p.name || 'Projet'}</b> <span class="gpill sm">${p.grade?.label || p.gradeText || ''}</span><div class="tiny muted">${s.attempts} essai${s.attempts > 1 ? 's' : ''} · ${s.sessions} séance${s.sessions > 1 ? 's' : ''}${s.days ? ` · depuis ${s.days} j` : ''}</div></div>
     <div class="proj-act"><button class="btn sm" data-act="projTry" data-id="${p.id}">＋1 essai</button><button class="btn sm pri" data-act="projDone" data-id="${p.id}">✓ Réussi</button></div></div>`;
 }
+/** Projets d'escalade : rangés avec les objectifs (ce sont des objectifs « réussir ce bloc / cette voie »). */
+export function projectsSection(status = 'active') {
+  const list = itemsOf('project').filter((p) => p.status === status).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+  if (!list.length) return '';
+  return h`<span class="kicker">🧗 Projets d’escalade</span>${list.map(projRow)}`;
+}
+/** Projets réussis, pour la liste des objectifs réussis. */
+export const doneProjects = () => itemsOf('project').filter((p) => p.status === 'done');
+/** Test de doigts : avec les mesures (il enregistre des mesures). */
+export function fingerCard() {
+  const ft = fingerTest(ctx().perfs);
+  return h`<section class="card"><h3>✋ Test de doigts</h3>
+      ${ft.last ? h`<p class="small">Dernier test ${relDate(ft.last.date)} : <b>${ft.last.metricId === 'suspension_lestee' ? `10 s avec ${ft.last.value} kg` : `${ft.last.value} s sur 20 mm`}</b>${trend(ft)}</p>` : h`<p class="small muted">Un petit test par mois pour voir tes doigts progresser. Poutre, réglette de 20 mm, bien échauffé.</p>`}
+      ${ft.due && ft.last ? h`<p class="small acc-t">C’est le moment de refaire le test.</p>` : ''}
+      <div class="row wrapf"><button class="btn" data-act="fingerTime">⏱ Temps max sur 20 mm</button><button class="btn" data-act="fingerLoad">🏋️ 10 s avec lest</button></div></section>`;
+}
+ACT.goProjects = () => { S.filters.goals = 'active'; go('profile', 'goals'); };
 ACT.carnetAdv = () => { C().adv = !C().adv; render(); };
 ACT.carnetKind = (el) => { C().kind = el.dataset.id; render(); };
 ACT.carnetPeriod = (el) => { C().period = el.dataset.id; render(); };
@@ -150,7 +159,7 @@ ACT.pjSave = () => {
   const id = 'pj-' + uid().slice(0, 14);
   if (q.photo) putItem('photo', id, q.photo);
   putItem('project', id, { kind: q.kind, name: q.name.trim() || (q.kind === 'voie' ? 'Ma voie projet' : 'Mon bloc projet'), grade, gradeText: '', place: q.place.trim(), status: 'active', tries: [], holds: [], hasPhoto: !!q.photo, startedAt: Date.now(), doneAt: 0, note: '' });
-  closeSheet(); buzzOk(); render(); toast('Projet créé. Bonne chance !');
+  closeSheet(); buzzOk(); ACT.goProjects(); toast('Projet créé : il est dans tes objectifs. Bonne chance !');
   if (q.photo) setTimeout(() => ACT.projOpen({ dataset: { id } }), 150);
 };
 ACT.projTry = (el) => { const p = item('project', el.dataset.id); if (!p) return; putItem('project', p.id, addTries(p, 1)); buzzOk(); render(); if ($('#sheet.open .projd')) ACT.projOpen(el); };

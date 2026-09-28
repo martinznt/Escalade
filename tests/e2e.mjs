@@ -151,7 +151,7 @@ await step('cotations : système U1→U8 avec correspondance, style personnalis�
   assert.ok(await a.count('text=Dévers : 6C') > 0, 'maximum par style');
   assert.ok(await a.count('text=Arête : U5') > 0, 'style personnalisé utilisé');
 });
-await step('carnet : ajout rapide, pyramide, projet suivi jusqu’à la réussite', async () => {
+await step('carnet : ajout rapide, pyramide ; projet rangé avec les objectifs, suivi jusqu’à la réussite', async () => {
   await a.tab('home'); await a.click('[data-act=goCarnet]'); await A.waitForSelector('[data-act=ascQuick]');
   await a.click('[data-act=ascQuick]'); await A.waitForSelector('.aq [data-act=aqGrade]');
   await A.locator('.aq [data-act=aqGrade]', { hasText: /^6A$/ }).first().click(); await a.click('.aq [data-act=aqResult][data-v=flash]'); await a.click('.aq [data-act=aqSave]');
@@ -161,7 +161,8 @@ await step('carnet : ajout rapide, pyramide, projet suivi jusqu’à la réussit
   await A.waitForSelector('.proj:has-text("Le toit rouge")');
   await a.click('.proj [data-act=projTry]'); await a.click('.proj [data-act=projTry]'); await A.waitForSelector('.proj:has-text("2 essais")');
   await a.click('.proj [data-act=projDone]'); await a.confirm();
-  await A.waitForSelector('text=Projets réussis (1)'); assert.match(await a.text('.pyr'), /6B\s*1/, 'la réussite du projet entre dans la pyramide');
+  await A.waitForSelector('.setrow:has-text("Le toit rouge")'); assert.match(await a.text('main'), /Objectifs réussis[\s\S]*Le toit rouge/, 'le projet réussi est avec les objectifs réussis');
+  await a.tab('home'); await a.click('[data-act=goCarnet]'); await A.waitForSelector('.pyr-row'); assert.match(await a.text('.pyr'), /6B\s*1/, 'la réussite du projet entre dans la pyramide');
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'project' && i.d.status === 'done' && i.d.tries.length), 12000, 'projet synchronisé');
 });
 await step('ma salle : cotation U1 → U8+, espaces et matériel ; bloc noté « U7 dur, dévers » dans cette salle', async () => {

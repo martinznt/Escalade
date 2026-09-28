@@ -10,7 +10,7 @@ import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addL
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
 import { openGenerator } from './views-library.js';
-import { vCarnet } from './views-climb.js';
+import { vCarnet, projectsSection, doneProjects, fingerCard } from './views-climb.js';
 import { bodyFields, bodyToggle, cleanBody, bodyAdjust } from './body.js';
 import { sourcesLine } from './srcui.js';
 import { GOALS, INTENT_OF } from './views-setup.js';
@@ -22,7 +22,7 @@ import { celebrate } from './fx.js';
 
 const SUBS = [['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
 const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
-  climbing: ['🧗', 'Carnet', 'blocs, voies, projets'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
+  climbing: ['🧗', 'Carnet', 'blocs, voies, pyramide'], goals: ['🎯', 'Objectifs', 'figures, projets d’escalade'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 /** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
 const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment', 'prefs']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['map', 'understand']], ['Partager', ['public']]];
 export function vProfile() {
@@ -172,7 +172,9 @@ function vPerfs() {
   const c = ctx(), rem = testReminders(c);
   const groups = new Map();
   for (const p of c.perfs) { if (!groups.has(p.metricId)) groups.set(p.metricId, []); groups.get(p.metricId).push(p); }
+  const climber = Object.keys(c.activities).some((a) => a.startsWith('climbing'));
   return h`<div class="row wrapf"><button class="btn pri" data-act="perfAdd">＋ Saisir une performance</button><button class="btn" data-act="metricNew">＋ Métrique personnalisée</button></div>
+    ${climber ? fingerCard() : ''}
     ${rem.length ? h`<div class="card flat"><h3>📏 À mesurer</h3>${rem.map((t) => h`<div class="item"><div class="grow"><b class="small">${t.label}</b><div class="tiny muted">${t.unknown ? 'tu ne sais pas encore' : t.age != null ? `il y a ${t.age} j` : 'jamais mesuré'} · pour ${t.why}</div>${t.test ? h`<details class="how mini"><summary>Comment faire le test ?</summary><p class="tiny">${t.test}</p></details>` : ''}</div><button class="btn sm pri" data-act="perfAdd" data-id="${t.metricId}">Saisir</button></div>`)}</div>` : ''}
     ${groups.size ? [...groups.entries()].map(([mid, list]) => { const m = c.metrics[mid] || { label: mid, unit: '' }; const t = metricTrend(mid, c); const pts = list.filter((p) => !p.unknown && p.value != null).sort((a, b) => a.date - b.date).map((p) => ({ v: p.value })); return h`<div class="card"><div class="row between"><h3>${m.label}</h3><button class="btn sm" data-act="perfAdd" data-id="${mid}">＋</button></div>
       ${m.tiers ? h`<p class="tiny muted">${metricTierText(m)}</p>` : ''}${t ? h`<p class="small">${t.dir > 0 ? '📈' : t.dir < 0 ? '📉' : '➖'} ${t.text}</p>` : ''}${pts.length >= 2 ? lineChart(pts, m.unit) : ''}
@@ -282,22 +284,27 @@ function vGoals() {
   const c = ctx();
   if (S.param) { const g = c.goals.find((x) => x.id === S.param); if (g) return vGoalDetail(g); }
   const f = ['done', 'archived'].includes(S.filters.goals) ? S.filters.goals : 'active', st = (g) => g.status || 'active';
-  const list = c.goals.filter((g) => st(g) === f), nArch = c.goals.filter((g) => st(g) === 'archived').length;
+  const list = c.goals.filter((g) => st(g) === f), nArch = c.goals.filter((g) => st(g) === 'archived').length + itemsOf('project').filter((p) => p.status === 'archived').length;
   // Réussis ou archivés : une sous-liste avec son retour (jamais une rangée d'onglets).
+  if (f === 'done') return h`<button class="btn sm ghost" data-act="goalFilter" data-id="active">‹ Objectifs en cours</button>${doneList(c.goals)}`;
   if (f !== 'active') return h`<button class="btn sm ghost" data-act="goalFilter" data-id="active">‹ Objectifs en cours</button><h2>${f === 'done' ? '🏆 Objectifs réussis' : '🗄️ Objectifs archivés'}</h2>
-    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}`;
+    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : itemsOf('project').some((p) => p.status === f) ? '' : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}${f === 'archived' ? projectsSection('archived') : ''}${f === 'done' && doneProjects().length ? doneList(c.goals) : ''}`;
   return h`${goalsPicker()}<div class="row wrapf"><button class="btn pri" data-act="goalNew">＋ Objectif précis</button></div>
     <span class="kicker">En cours</span>
     ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}
-    ${doneGoals(c.goals).length ? doneList(c.goals, 5) : ''}
+    ${projectsSection('active')}
+    ${doneGoals(c.goals).length || doneProjects().length ? doneList(c.goals, 5) : ''}
     ${nArch ? menuList([['goalFilter', 'archived', '🗄️', `Objectifs archivés (${nArch})`, 'Mis de côté, gardés dans l’historique']]) : ''}
     <div class="card flat"><h3>Figures proposées</h3><div class="chips">${Object.entries(SKILLS).map(([id, s]) => chip(false, `${s.emoji} ${s.label}`, `data-act="goalNewSkill" data-id="${id}"`))}</div></div>`;
 }
 /** Objectifs réussis, datés (aussi affichés dans Progrès). */
 export function doneList(goals, max = 0) {
-  const d = doneGoals(goals), shown = max ? d.slice(0, max) : d;
+  const d = [...doneGoals(goals).map((g) => ({ at: g.doneAt || 0, row: h`<button class="setrow" data-act="goalOpen" data-id="${g.id}"><span class="sic">🏆</span><span class="grow"><b>${goalLabel(g)}</b><small>${g.doneAt ? 'le ' + new Date(g.doneAt).toLocaleDateString('fr-FR') : ''}</small></span><span class="chev">›</span></button>` })),
+    ...doneProjects().map((p) => ({ at: p.doneAt || 0, row: h`<button class="setrow" data-act="projOpen" data-id="${p.id}"><span class="sic">🧗</span><span class="grow"><b>${p.name || 'Projet'} ${p.grade?.label || p.gradeText || ''}</b><small>Projet réussi${p.doneAt ? ' le ' + new Date(p.doneAt).toLocaleDateString('fr-FR') : ''}</small></span><span class="chev">›</span></button>` }))].sort((x, y) => y.at - x.at);
+  if (!d.length) return '';
+  const shown = max ? d.slice(0, max) : d;
   return h`<section class="card"><h3>🏆 Objectifs réussis <span class="tiny muted">${d.length}</span></h3>
-    ${shown.map((g) => h`<button class="setrow" data-act="goalOpen" data-id="${g.id}"><span class="sic">🏆</span><span class="grow"><b>${goalLabel(g)}</b><small>${g.doneAt ? 'le ' + new Date(g.doneAt).toLocaleDateString('fr-FR') : ''}</small></span><span class="chev">›</span></button>`)}
+    <div class="setmenu">${shown.map((x) => x.row)}</div>
     ${max && d.length > max ? h`<button class="btn sm ghost" data-act="goalsDoneAll">Voir les ${d.length}</button>` : ''}</section>`;
 }
 ACT.goalsDoneAll = () => { S.filters.goals = 'done'; go('profile', 'goals'); };
@@ -381,7 +388,7 @@ function goalForm(g) {
   const c = ctx(), t = g?.type || S.goalType || 'metric';
   const systems = Object.values(c.systems).filter((s) => !s.archived);
   return h`<h2 style="margin:0">${g ? 'Modifier l’objectif' : 'Nouvel objectif'}</h2><form data-submit="goalSave" class="stack"><input type="hidden" name="id" value="${g?.id || ''}">
-    <label>Type<select name="type" data-change="goalType">${[['skill', 'Figure / skill'], ['metric', 'Performance à atteindre'], ['grade', 'Niveau d’escalade'], ['sessions', 'Nombre de séances'], ['ascents', 'Réussites en escalade'], ['custom', 'Autre (valeur manuelle)']].map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label>
+    <label>Type<select name="type" data-change="goalType">${[...(g ? [] : [['project', 'Un bloc ou une voie précis (projet d’escalade)']]), ['skill', 'Figure / skill'], ['metric', 'Performance à atteindre'], ['grade', 'Niveau d’escalade'], ['sessions', 'Nombre de séances'], ['ascents', 'Réussites en escalade'], ['custom', 'Autre (valeur manuelle)']].map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label>
     ${t === 'skill' ? h`<label>Figure<select name="skillId">${Object.entries(SKILLS).map(([id, s]) => h`<option value="${id}" ${g?.skillId === id ? 'selected' : ''}>${s.emoji} ${s.label}</option>`)}</select></label>` : ''}
     ${t === 'metric' ? h`<label>Métrique<select name="metricId" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure">${metricOptions(Object.entries(c.metrics).filter(([, m]) => m.kind !== 'grade'), g?.metricId)}</select></label>${numberField('target', 'Valeur visée', g?.target ?? '', { required: true })}` : ''}
     ${t === 'grade' ? h`<label>Discipline<select name="metricId"><option value="max_bloc" ${g?.metricId !== 'max_voie' ? 'selected' : ''}>Bloc</option><option value="max_voie" ${g?.metricId === 'max_voie' ? 'selected' : ''}>Voie</option></select></label><label>Système<select name="systemId" data-change="goalSys">${systems.map((s) => h`<option value="${s.id}" ${(g?.gradeTarget?.systemId || S.goalSys || 'font') === s.id ? 'selected' : ''}>${s.name}</option>`)}</select></label><label>Niveau visé<select name="levelId">${sortedLevels(c.systems[g?.gradeTarget?.systemId || S.goalSys || 'font']).map((l) => h`<option value="${l.id}" ${g?.gradeTarget?.levelId === l.id ? 'selected' : ''}>${l.label}</option>`)}</select></label>` : ''}
@@ -390,7 +397,7 @@ function goalForm(g) {
     <label>Échéance (facultatif)<input type="date" name="deadline" value="${g?.deadline || ''}"></label>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button></div></form>`;
 }
-CHG.goalType = (el) => { S.goalType = el.value; openSheet(goalForm(el.form.id.value ? { ...item('goal', el.form.id.value), type: el.value } : null), { wide: true }); };
+CHG.goalType = (el) => { if (el.value === 'project') { closeSheet(); setTimeout(() => ACT.projNew(), 120); return; } S.goalType = el.value; openSheet(goalForm(el.form.id.value ? { ...item('goal', el.form.id.value), type: el.value } : null), { wide: true }); };
 CHG.goalSys = (el) => { S.goalSys = el.value; const sel = el.form.querySelector('[name=levelId]'); sel.innerHTML = sortedLevels(ctx().systems[el.value]).map((l) => `<option value="${l.id}">${l.label.replace(/[<>&"]/g, '')}</option>`).join(''); };
 SUBMIT.goalSave = (f) => {
   const d = Object.fromEntries(new FormData(f)), c = ctx(), prev = d.id ? item('goal', d.id) : null;
