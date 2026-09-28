@@ -2,6 +2,7 @@
 // montre seulement ce qui a changé et qu'il faut savoir. Chaque version ajoute ses étapes ici.
 // Étape : [onglet, sous-page, sélecteur de l'élément (ou '' pour une bulle au centre), titre, texte].
 import { APP_VERSION, ls } from './state.js';
+import { catchUpSteps, missedVersions } from './catchup.js';
 
 export const NEWS = [
   // Les premières versions (avant la visite des nouveautés) : leur visite montre ce qu'elles ont apporté, qui existe toujours.
@@ -127,14 +128,13 @@ export const NEWS = [
 const KEY = 'sea:news-toured';
 const num = (v) => String(v || '0').split('.').map((x) => Number(x) || 0).reduce((t, x) => t * 1000 + x, 0);
 
-/** Étapes des versions pas encore visitées (jusqu'à la version actuelle), la plus ancienne d'abord. */
-export function pendingNews() {
-  const done = num(ls.get(KEY, '0')), now = num(APP_VERSION);
-  return NEWS.filter((n) => num(n.v) > done && num(n.v) <= now).flatMap((n) => n.steps);
-}
+/** Étapes de rattrapage : toutes les versions pas encore visitées depuis la dernière visite, en une seule visite. */
+export function pendingNews() { return catchUpSteps(NEWS, ls.get(KEY, '0'), APP_VERSION, { since: ls.get(KEY + '-at', 0) }); }
+/** Versions ratées depuis la dernière visite (la plus ancienne d'abord). */
+export const missedNews = () => missedVersions(NEWS, ls.get(KEY, '0'), APP_VERSION);
 /** Étapes de la dernière version (pour « Revoir les nouveautés »). */
 export const latestNews = () => NEWS.filter((n) => num(n.v) <= num(APP_VERSION)).at(-1)?.steps || [];
-export const markNewsToured = () => ls.set(KEY, APP_VERSION);
+export const markNewsToured = () => { ls.set(KEY, APP_VERSION); ls.set(KEY + '-at', Date.now()); };
 /** Première utilisation de l'appareil : rien de « nouveau » à montrer (la visite complète s'en charge).
  *  Appareil déjà utilisé avant l'arrivée de cette visite : on montre les nouveautés depuis la 8.3. */
 export function initNews() {

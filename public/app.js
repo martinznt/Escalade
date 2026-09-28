@@ -8,7 +8,7 @@ import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession, uid } from './shared.js';
 import { maybeMove, maybeClaim } from './move.js';
-import { pendingNews, latestNews, markNewsToured, initNews } from './news.js';
+import { pendingNews, latestNews, markNewsToured, initNews, missedNews } from './news.js';
 import { startTour } from './tour.js';
 import './timer.js';
 import './views-coach.js';
@@ -244,12 +244,12 @@ function renderUpdateBar() {
   const hidden = !(UPD.available || UPD.fresh) || S.player || Date.now() < UPD.later || document.body.classList.contains('touring');
   if (hidden) { bar?.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'updbar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
-  const tour = pendingNews().length > 0;
+  const tour = pendingNews().length > 0, missed = missedNews().length;
   const html = UPD.available
     ? h`<div class="ut"><span>🆕 <b>Nouvelle version prête</b></span><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button></div>
       <div class="ub"><button class="btn sm" data-act="updWhat">👀 Nouveautés</button><button class="btn pri sm" data-act="updNow">Mettre à jour</button></div>`
-    : h`<div class="ut"><span>🎉 <b>L’app a été mise à jour</b></span><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button></div>
-      <div class="ub">${tour ? h`<button class="btn sm" data-act="updWhat">👀 Détails</button><button class="btn pri sm" data-act="newsTour">🧭 Faire la visite</button>` : h`<button class="btn pri sm" data-act="updWhat">👀 Voir les nouveautés</button>`}</div>`;
+    : h`<div class="ut"><span>🎉 <b>${missed > 1 ? `${missed} mises à jour depuis ta dernière visite` : 'L’app a été mise à jour'}</b></span><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button></div>
+      <div class="ub">${tour ? h`<button class="btn sm" data-act="updWhat">👀 Détails</button><button class="btn pri sm" data-act="newsTour">🧭 ${missed > 1 ? `Tout rattraper (${pendingNews().length} étapes)` : 'Faire la visite'}</button>` : h`<button class="btn pri sm" data-act="updWhat">👀 Voir les nouveautés</button>`}</div>`;
   if (bar.innerHTML !== html.s) bar.innerHTML = html.s;
   bar.classList.toggle('fresh', !UPD.available);
 }
@@ -265,7 +265,7 @@ ACT.newsTour = () => {
 /** Aperçu de ce qui a changé : les dernières modifications publiées (historique du dépôt GitHub). */
 ACT.updWhat = async () => {
   const since = UPD.since;
-  const tour = pendingNews().length > 0;
+  const tour = pendingNews().length > 0, missed = missedNews();
   if (UPD.fresh) { UPD.fresh = false; writeSeen(UPD.boot); renderUpdateBar(); }
   openSheet(h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>${skeleton(3)}</div>`);
   let list = [];
@@ -274,11 +274,14 @@ ACT.updWhat = async () => {
   const older = !recent.length;
   if (older) recent = list.slice(0, 4);
   const day = (t) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-  const body = h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>
-    ${recent.length ? h`<p class="small muted">${older ? 'Les dernières améliorations du site :' : `${recent.length} amélioration${recent.length > 1 ? 's' : ''} depuis ta dernière visite :`}</p>
+  // Plusieurs versions ratées : la liste de chacune (connue sans Internet), puis le détail des modifications.
+  const missedList = missed.length ? h`<p class="small muted">${missed.length > 1 ? `${missed.length} mises à jour depuis ta dernière visite :` : 'Cette mise à jour :'}</p>
+    <div class="setmenu">${missed.slice().reverse().map((n) => h`<div class="setrow"><span class="sic">🆕</span><span class="grow"><b>${n.title}</b><small>Version ${n.v} · ${n.why}</small></span></div>`)}</div>` : '';
+  const body = h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>${missedList}
+    ${missed.length ? '' : recent.length ? h`<p class="small muted">${older ? 'Les dernières améliorations du site :' : `${recent.length} amélioration${recent.length > 1 ? 's' : ''} depuis ta dernière visite :`}</p>
       <ol class="newslist">${recent.slice(0, 8).map((c) => h`<li><span class="nd">${day(c.date)}</span><div><b>${c.title}</b>${c.points?.length ? h`<ul>${c.points.map((p) => h`<li>${p}</li>`)}</ul>` : ''}</div></li>`)}</ol>`
       : h`<p class="small muted">Petites améliorations et corrections. ${navigator.onLine ? '' : 'Connecte-toi à Internet pour voir le détail.'}</p>`}
-    <div class="row">${UPD.available ? h`<button class="btn pri" data-act="updNow">Mettre à jour maintenant</button>` : tour ? h`<button class="btn pri" data-act="newsTour">🧭 Visite des nouveautés</button>` : ''}<span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`;
+    <div class="row">${UPD.available ? h`<button class="btn pri" data-act="updNow">Mettre à jour maintenant</button>` : tour ? h`<button class="btn pri" data-act="newsTour">🧭 ${missed.length > 1 ? `Tout rattraper (${pendingNews().length} étapes)` : 'Visite des nouveautés'}</button>` : ''}<span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`;
   if (document.querySelector('#sheet.open .news')) openSheet(body);
 };
 ACT.updNow = async () => {
