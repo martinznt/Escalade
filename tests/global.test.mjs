@@ -87,6 +87,8 @@ await ok('textes, annonces, mise en page, questions, sources : validés ; lien d
 });
 await ok('nommer ou retirer un administrateur : réservé aux admins ; jamais zéro administrateur', async () => {
   const users = (await A.get('/api/admin/users')).data.users, bruno = users.find((x) => x.username === 'Bruno'), admina = users.find((x) => x.username === 'Admina');
+  assert.ok(bruno.lastSeen > Date.now() - 60000 && admina.lastSeen > Date.now() - 60000, 'dernière visite connue pour chaque compte');
+  assert.ok(!('password_hash' in bruno) && !('last_seen' in bruno), 'rien d’autre que les champs prévus');
   assert.equal((await B.post(`/api/admin/users/${admina.id}/role`, { admin: false })).status, 403);
   assert.equal((await A.post(`/api/admin/users/${admina.id}/role`, { admin: false })).status, 409, 'dernier administrateur : refusé');
   assert.equal((await A.post(`/api/admin/users/${bruno.id}/role`, { admin: true })).status, 200);

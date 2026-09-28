@@ -9,11 +9,14 @@ import { chooseScope, saveLayoutGlobal, isAdmin as isAdminUser } from './content
 
 /** Icônes possibles en haut à droite : [emoji, nom, action]. */
 export const ICONS = {
-  cal: ['📅', 'Calendrier', 'topCal'], notif: ['🔔', 'Notifications', 'notifOpen'], timer: ['⏱', 'Minuteur', 'timerOpen'], carnet: ['🧗', 'Carnet', 'goCarnet'],
-  coach: ['💬', 'Coach', 'coachOpen'], all: ['☰', 'Menu : toutes les fonctions', 'allOpen'], recap: ['📸', 'Bilan du mois', 'recapOpen'], gen: ['🎯', 'Séance du jour', 'genOpen'],
-  seances: ['📚', 'Mes séances', 'goLib'], progress: ['📈', 'Mes progrès', 'goProgressTop'], program: ['📆', 'Programme', 'topProgram'], streak: ['🔥', 'Ma série', 'goProgressTop'],
+  cal: ['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], notif: ['🔔', 'Notifications', 'notifOpen'], timer: ['⏱', 'Minuteur', 'timerOpen'], carnet: ['🧗', 'Carnet', 'goCarnet'],
+  coach: ['💬', 'Assistant', 'coachOpen'], all: ['☰', 'Menu : toutes les fonctions', 'allOpen'], recap: ['📸', 'Bilan du mois', 'recapOpen'], gen: ['🎯', 'Séance du jour', 'genOpen'],
+  seances: ['📚', 'Mes séances', 'goLib'], progress: ['📈', 'Mes progrès', 'goProgressTop'], program: ['📆', 'Planning', 'topCal'], streak: ['🔥', 'Ma série', 'goProgressTop'],
   badges: ['🏅', 'Badges', 'goProgressTop'], search: ['🔍', 'Rechercher dans l’app', 'findOpen'],
 };
+// Symboles compris de tous : icône seule. Les autres ont leur mot dessous.
+const CLEAR = new Set(['search', 'notif', 'cal', 'all', 'timer']);
+const SHORT = { coach: 'Assistant', recap: 'Bilan', carnet: 'Carnet', gen: 'Séance', seances: 'Séances', progress: 'Progrès', program: 'Planning', streak: 'Série', badges: 'Badges' };
 // Fonctions de chaque page. k = formes possibles, tile = s'affiche en tuile dans la grille de raccourcis.
 const F = (l, k, extra = {}) => ({ l, k, ...extra });
 export const FEATURES = {
@@ -26,7 +29,7 @@ export const FEATURES = {
     records: F('Records', ['big']), regularity: F('Régularité', ['big']), capacities: F('Capacités', ['big']), load: F('Charge récente', ['big']), summary: F('Résumé de la semaine', ['big']),
   },
   progress: {
-    search: F('Recherche', ['icon']), streak: F('Ma série', ['big']), kpis: F('Chiffres clés', ['big']), wins: F('Bonnes nouvelles', ['big']), work: F('Ce que tu as travaillé', ['big']),
+    search: F('Recherche', ['icon']), streak: F('Ma série', ['big']), kpis: F('Chiffres clés', ['big']), wins: F('Bonnes nouvelles', ['big']), goalsdone: F('Objectifs réussis', ['big']), work: F('Ce que tu as travaillé', ['big']),
     regularity: F('Régularité', ['big']), load: F('Charge', ['big']), muscles: F('Muscles travaillés', ['big']), badges: F('Badges', ['big']), weeksum: F('Résumé de la période', ['big']),
     recap: F('Bilan du mois', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']),
   },
@@ -36,8 +39,8 @@ export const FEATURES = {
 };
 // Mise en page de base : simple au départ.
 export const DEFAULTS = {
-  home: [['search', 'icon'], ['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['question', 'big'], ['streak', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['recap', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  home: [['search', 'icon'], ['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['question', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['goalsdone', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['notif', 'icon'], ['all', 'icon']],
   library: [['search', 'icon'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   profile: [['search', 'icon'], ['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   settings: [['search', 'icon'], ['notif', 'icon'], ['all', 'icon']],
@@ -77,8 +80,8 @@ export function topIcons(page) {
   if (editing(page)) return h`<button class="btn sm" data-act="layQuit">✕ Quitter</button>`;
   const icons = shown(page).filter((e) => e.as === 'icon' && ICONS[e.id]);
   const unread = S.notifUnread || 0;
-  return h`<nav class="topicons" aria-label="Raccourcis">${icons.map((e) => { const [ic, label, act] = ICONS[e.id]; return h`<button class="ti" data-act="${act}" data-id="${e.id}" aria-label="${label}" title="${label}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>${ic}${e.id === 'notif' && unread ? h`<i class="badge-dot">${unread > 9 ? '9+' : unread}</i>` : ''}</button>`; })}
-    ${FEATURES[page] && !S.lay ? h`<button class="ti edit" data-act="layEdit" aria-label="Personnaliser cette page" title="Personnaliser cette page">✏️</button>` : ''}</nav>`;
+  return h`<nav class="topicons" aria-label="Raccourcis">${icons.map((e) => { const [ic, label, act] = ICONS[e.id]; const w = CLEAR.has(e.id) ? '' : SHORT[e.id] || label; return h`<button class="ti ${w ? 'lbl' : ''}" data-act="${act}" data-id="${e.id}" aria-label="${label}" title="${label}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>${w ? h`<span>${ic}</span><small>${w}</small>` : ic}${e.id === 'notif' && unread ? h`<i class="badge-dot">${unread > 9 ? '9+' : unread}</i>` : ''}</button>`; })}
+    ${FEATURES[page] && !S.lay ? h`<button class="ti edit lbl" data-act="layEdit" aria-label="Personnaliser cette page" title="Personnaliser cette page"><span>✏️</span><small>Page</small></button>` : ''}</nav>`;
 }
 
 /**
@@ -111,7 +114,7 @@ function editor(page) {
     <div class="edlist">${list.map((e, i) => { const f = feats[e.id]; return h`<div class="edrow ${e.as}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>
       <div class="row"><span class="edic">${ICONS[e.id]?.[0] || (f.tile ? '▢' : '▭')}</span><b class="grow small">${f.l}${e.forced ? h` <span class="tag warn">🚫 masqué pour tous</span>` : ''}</b>
         <button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descendre">↓</button></div>
-      <div class="row wrapf"><div class="seg sm">${[...f.k, 'off'].map((k) => h`<button type="button" class="${e.as === k ? 'on' : ''}" data-act="layAs" data-id="${e.id}" data-v="${k}">${FORM[k]}</button>`)}</div><span class="grow"></span>
+      <div class="row wrapf"><div class="chips choice sm">${[...f.k, 'off'].map((k) => h`<button type="button" class="chip ${e.as === k ? 'on' : ''}" data-act="layAs" data-id="${e.id}" data-v="${k}">${FORM[k]}</button>`)}</div><span class="grow"></span>
         <button type="button" class="swc cur" data-act="layPick" data-id="${e.id}" aria-label="Couleur" ${raw(e.color ? `style="background:${e.color}"` : '')}>${e.color ? '' : '🎨'}</button></div>
       ${S.lay.pick === e.id ? h`<div class="swatches">${COLORS.map((c) => h`<button type="button" class="swc ${e.color === c ? 'on' : ''}" data-act="layColor" data-id="${e.id}" data-v="${c}" aria-label="${c ? 'Couleur ' + c : 'Sans couleur'}" ${raw(c ? `style="background:${c}"` : '')}>${c ? '' : '∅'}</button>`)}</div>` : ''}</div>`; })}</div>
     <div class="editdock"><button class="btn" data-act="layQuit">✕ Quitter</button><button class="btn" data-act="layPreview">👁 Aperçu</button><button class="btn pri" data-act="laySave">✓ Enregistrer</button></div>`;
@@ -162,10 +165,10 @@ ACT.layReset = async (el) => {
 
 /* ───────── Toutes les fonctions, triées ───────── */
 const ALL = [
-  ['S’entraîner', [['🎯', 'Séance du jour', 'genOpen'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['📆', 'Programme', 'topProgram'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Coach', 'coachOpen']]],
-  ['Escalade', [['🧗', 'Carnet (blocs, voies, projets)', 'goCarnet'], ['✋', 'Test de doigts', 'goCarnet']]],
-  ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📋', 'Historique', 'allGo', 'progress/history'], ['🏆', 'Records', 'allGo', 'progress/records'], ['📸', 'Bilan du mois', 'recapOpen']]],
-  ['Planifier', [['📅', 'Calendrier', 'topCal'], ['⏰', 'Rappels', 'allGo', 'settings/notifs'], ['🔔', 'Notifications', 'notifOpen']]],
+  ['S’entraîner', [['✨', 'Créer une séance (ou séance du jour)', 'cpNew'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Assistant (questions, exercices avec tes mots)', 'coachOpen']]],
+  ['Escalade', [['🧗', 'Carnet (blocs, voies)', 'goCarnet'], ['📌', 'Projets (dans Objectifs)', 'goProjects'], ['✋', 'Test de doigts (Mesures)', 'allGo', 'profile/perfs']]],
+  ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📝', 'Journal (séances, blocs, notes)', 'allGo', 'progress/journal'], ['🏆', 'Records et mesures', 'allGo', 'profile/perfs'], ['🔎', 'Mon analyse', 'allGo', 'profile/analyse']]],
+  ['Planifier', [['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], ['🔔', 'Notifications', 'notifOpen']]],
   ['Moi', [['👤', 'Mon profil', 'allGo', 'profile/home'], ['🎯', 'Objectifs', 'allGo', 'profile/goals'], ['🧰', 'Matériel et lieux', 'allGo', 'profile/equipment']]],
   ['Aider l’app', [['💡', 'Proposer une amélioration', 'ideaNew']]],
   ['Réglages', [['🎨', 'Affichage et ambiance', 'allGo', 'settings/display'], ['▶️', 'Pendant la séance', 'allGo', 'settings/session'], ['✏️', 'Mise en page', 'layEditHome'], ['❓', 'Aide et visite', 'allGo', 'settings/help'], ['💾', 'Mes données', 'allGo', 'settings/data']]],

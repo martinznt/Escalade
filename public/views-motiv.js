@@ -51,7 +51,7 @@ ACT.recapOpen = async (el) => {
   const cv = drawRecap(r, back ? 0 : st.streak, c);
   const url = cv.toDataURL('image/png');
   S.recap = { cv, name: `bilan-${r.label.replace(/\s+/g, '-')}.png` };
-  openSheet(h`<div class="recap"><h2>📸 Mon bilan du mois</h2><div class="seg">${[0, 1].map((m) => h`<button type="button" class="${m === back ? 'on' : ''}" data-act="recapOpen" data-m="${m}">${m ? 'Mois dernier' : 'Ce mois-ci'}</button>`)}</div>
+  openSheet(h`<div class="recap"><h2>📸 Mon bilan du mois</h2><div class="chips choice">${[0, 1].map((m) => h`<button type="button" class="chip ${m === back ? 'on' : ''}" data-act="recapOpen" data-m="${m}">${m ? 'Mois dernier' : 'Ce mois-ci'}</button>`)}</div>
     <img src="${url}" alt="Bilan de ${r.label}" class="recap-img">
     <div class="grid2"><button class="btn pri" data-act="recapShare">Partager</button><button class="btn" data-act="recapSave">Télécharger</button></div></div>`, { wide: true });
 };

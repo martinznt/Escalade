@@ -690,6 +690,7 @@ export function timeline(ctx) {
 }
 
 /* ═════════════ Journal (uniquement des données existantes) ═════════════ */
+const RESULT_FR = { flash: '⚡ flash', send: '✓ réussi', work: '💪 réussi après travail', top: 'top', attempt: 'essai', fail: 'pas encore' };
 export function journal(ctx, limit = 80) {
   const out = [];
   for (const h of ctx.history) {
@@ -701,7 +702,7 @@ export function journal(ctx, limit = 80) {
     out.push({ t: h.startedAt, kind: 'session', icon: '✅', title: h.sessionName, text: bits.join(' · '), more, note: [h.data?.note, q.comment].filter(Boolean).join(' — '), id: h.id });
   }
   for (const p of ctx.perfs) out.push({ t: p.date, kind: 'perf', icon: p.unknown ? '❔' : '📏', title: ctx.metrics[p.metricId]?.label || 'Performance', text: perfText(p, ctx) + (p.styles?.length ? ' · ' + p.styles.map((s) => ctx.styles[s]?.label || s).join(', ') : ''), note: p.note || '' });
-  for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [a.result, a.attempts ? a.attempts + ' essai(s)' : ''].filter(Boolean).join(' · '), note: a.note || '' });
+  for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [RESULT_FR[a.result] || a.result, a.attempts > 1 ? a.attempts + ' essais' : a.result === 'flash' ? '' : a.attempts ? '1 essai' : ''].filter(Boolean).join(' · '), note: a.note || '' });
   for (const n of ctx.jnotes) out.push({ t: n.date, kind: 'note', icon: '📝', title: 'Note', text: n.text, note: '' });
   return out.filter((x) => x.t && x.t <= ctx.now + 5 * 60000).sort((a, b) => b.t - a.t).slice(0, limit);
 }
@@ -789,7 +790,7 @@ export function understandProfile(ctx) {
   const inferred = states.filter((s) => s.level != null).map((s) => `${s.label} : ${STATUS_WORD[s.status]} (niveau ≈ ${round(s.level, 1)} / 2, confiance ${confWord(s.confidence)})`);
   const recommended = [...testReminders(ctx).map((t) => t.text), ...undertrained(ctx).items.map((u) => `Travailler davantage : ${u.label}`)];
   const missing = [...new Set(states.flatMap((s) => s.missing))].slice(0, 12);
-  if (!ctx.envs.length) missing.push('Aucun environnement / matériel décrit : le générateur reste prudent.');
+  if (!ctx.envs.length) missing.push('Aucun lieu ni matériel décrit : le générateur reste prudent.');
   if (!Object.keys(ctx.activities).length) missing.push('Aucune activité choisie dans ton profil.');
   return {
     measured, declared, calculated, inferred, recommended, missing,

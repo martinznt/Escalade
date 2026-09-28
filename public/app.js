@@ -1,12 +1,14 @@
 // app.js — point d'entrée de « Séances entraînement » (PWA, sans bibliothèque externe, fonctionne hors ligne).
 // Charge les vues, gère l'authentification, la navigation (onglets + adresse #/onglet/sous-vue/paramètre),
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
+import { returnBar, hintsBar } from './nav.js';
+import './picker.js';
 import { h, raw, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession, uid } from './shared.js';
 import { maybeMove, maybeClaim } from './move.js';
-import { pendingNews, latestNews, markNewsToured, initNews } from './news.js';
+import { pendingNews, latestNews, markNewsToured, initNews, missedNews } from './news.js';
 import { startTour } from './tour.js';
 import './timer.js';
 import './views-coach.js';
@@ -29,11 +31,13 @@ const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['l
 const VIEWS = { home: vHome, progress: vProgress, library: vLibrary, profile: vProfile, settings: vSettings };
 
 /* ═════════ Rendu ═════════ */
+// Tout va bien : rien à montrer (le point vert seul ne voulait rien dire). Sinon, un mot clair.
+const SYNC_WORD = { sync: () => 'Envoi…', pending: (n) => `${n} à envoyer`, offline: () => 'Hors ligne', error: () => 'Synchro ⚠️', auth: () => 'Reconnexion' };
 function syncBadge() {
   const n = pendingCount();
   if (S.user?.guest) return h`<button class="syncbadge guest" data-act="goAccount" aria-label="Mode invité : créer un compte">👀 Invité</button>`;
   const label = { ok: 'Synchronisé', sync: 'Synchronisation…', pending: `${n} modification(s) en attente`, offline: `Hors ligne${n ? ` · ${n} en attente` : ''}`, error: 'Erreur de synchronisation', auth: 'Reconnexion nécessaire', idle: '' }[S.sync] || '';
-  return h`<button class="syncbadge ${S.sync}" data-act="goSync" aria-label="${label}" title="${label}"><span class="dot"></span>${S.sync === 'offline' ? 'Hors ligne' : n ? String(n) : ''}</button>`;
+  return h`<button class="syncbadge ${S.sync}" data-act="goSync" aria-label="${label}" title="${label}"><span class="dot"></span>${SYNC_WORD[S.sync]?.(n) || ''}</button>`;
 }
 function doRender() {
   const app = $('#app');
@@ -51,7 +55,7 @@ function doRender() {
       <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
   }
   app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
-    <main class="wrap" id="main">${body}</main>
+    <main class="wrap" id="main">${returnBar()}${hintsBar()}${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
 }
 /** Apparence liée au compte : la version la plus récente (cet appareil ou le compte) s'applique partout. */
@@ -129,6 +133,7 @@ async function enter(user, fresh) {
   parseHash();
   if (fresh || !location.hash) go('home', 'dash'); else render();
   syncAll();
+  setTimeout(() => import('./reminders.js').then((m) => m.ensurePush()).catch(() => {}), 4000); // réabonnement aux notifications si besoin
 }
 SUBMIT.login = (f) => authSubmit(f, 'login');
 SUBMIT.register = (f) => authSubmit(f, 'register');
@@ -208,8 +213,6 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   Promise.resolve().then(() => fn(el, e)).catch((err) => { console.error(err); toast('Action impossible : ' + (err?.message || 'erreur inattendue'), 4500, 'bad'); });
 });
-// Textes d'explication repliés sur 2 lignes : un toucher les déplie (sans déclencher d'action).
-document.addEventListener('click', (e) => { const p = e.target.closest('.card p.tiny.muted, .card p.small.muted'); if (p && !e.target.closest('[data-act], a, button')) p.classList.toggle('x'); });
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-submit]'); if (!f) return;
   e.preventDefault();
@@ -241,12 +244,12 @@ function renderUpdateBar() {
   const hidden = !(UPD.available || UPD.fresh) || S.player || Date.now() < UPD.later || document.body.classList.contains('touring');
   if (hidden) { bar?.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'updbar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
-  const tour = pendingNews().length > 0;
+  const tour = pendingNews().length > 0, missed = missedNews().length;
   const html = UPD.available
     ? h`<div class="ut"><span>🆕 <b>Nouvelle version prête</b></span><button class="btn ghost sm ic" data-act="updLater" aria-label="Plus tard">✕</button></div>
       <div class="ub"><button class="btn sm" data-act="updWhat">👀 Nouveautés</button><button class="btn pri sm" data-act="updNow">Mettre à jour</button></div>`
-    : h`<div class="ut"><span>🎉 <b>L’app a été mise à jour</b></span><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button></div>
-      <div class="ub">${tour ? h`<button class="btn sm" data-act="updWhat">👀 Détails</button><button class="btn pri sm" data-act="newsTour">🧭 Faire la visite</button>` : h`<button class="btn pri sm" data-act="updWhat">👀 Voir les nouveautés</button>`}</div>`;
+    : h`<div class="ut"><span>🎉 <b>${missed > 1 ? `${missed} mises à jour depuis ta dernière visite` : 'L’app a été mise à jour'}</b></span><button class="btn ghost sm ic" data-act="updSeen" aria-label="Fermer">✕</button></div>
+      <div class="ub">${tour ? h`<button class="btn sm" data-act="updWhat">👀 Détails</button><button class="btn pri sm" data-act="newsTour">🧭 ${missed > 1 ? `Tout rattraper (${pendingNews().length} étapes)` : 'Faire la visite'}</button>` : h`<button class="btn pri sm" data-act="updWhat">👀 Voir les nouveautés</button>`}</div>`;
   if (bar.innerHTML !== html.s) bar.innerHTML = html.s;
   bar.classList.toggle('fresh', !UPD.available);
 }
@@ -262,7 +265,7 @@ ACT.newsTour = () => {
 /** Aperçu de ce qui a changé : les dernières modifications publiées (historique du dépôt GitHub). */
 ACT.updWhat = async () => {
   const since = UPD.since;
-  const tour = pendingNews().length > 0;
+  const tour = pendingNews().length > 0, missed = missedNews();
   if (UPD.fresh) { UPD.fresh = false; writeSeen(UPD.boot); renderUpdateBar(); }
   openSheet(h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>${skeleton(3)}</div>`);
   let list = [];
@@ -271,11 +274,14 @@ ACT.updWhat = async () => {
   const older = !recent.length;
   if (older) recent = list.slice(0, 4);
   const day = (t) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-  const body = h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>
-    ${recent.length ? h`<p class="small muted">${older ? 'Les dernières améliorations du site :' : `${recent.length} amélioration${recent.length > 1 ? 's' : ''} depuis ta dernière visite :`}</p>
+  // Plusieurs versions ratées : la liste de chacune (connue sans Internet), puis le détail des modifications.
+  const missedList = missed.length ? h`<p class="small muted">${missed.length > 1 ? `${missed.length} mises à jour depuis ta dernière visite :` : 'Cette mise à jour :'}</p>
+    <div class="setmenu">${missed.slice().reverse().map((n) => h`<div class="setrow"><span class="sic">🆕</span><span class="grow"><b>${n.title}</b><small>Version ${n.v} · ${n.why}</small></span></div>`)}</div>` : '';
+  const body = h`<div class="news"><h2>🆕 Quoi de neuf ?</h2>${missedList}
+    ${missed.length ? '' : recent.length ? h`<p class="small muted">${older ? 'Les dernières améliorations du site :' : `${recent.length} amélioration${recent.length > 1 ? 's' : ''} depuis ta dernière visite :`}</p>
       <ol class="newslist">${recent.slice(0, 8).map((c) => h`<li><span class="nd">${day(c.date)}</span><div><b>${c.title}</b>${c.points?.length ? h`<ul>${c.points.map((p) => h`<li>${p}</li>`)}</ul>` : ''}</div></li>`)}</ol>`
       : h`<p class="small muted">Petites améliorations et corrections. ${navigator.onLine ? '' : 'Connecte-toi à Internet pour voir le détail.'}</p>`}
-    <div class="row">${UPD.available ? h`<button class="btn pri" data-act="updNow">Mettre à jour maintenant</button>` : tour ? h`<button class="btn pri" data-act="newsTour">🧭 Visite des nouveautés</button>` : ''}<span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`;
+    <div class="row">${UPD.available ? h`<button class="btn pri" data-act="updNow">Mettre à jour maintenant</button>` : tour ? h`<button class="btn pri" data-act="newsTour">🧭 ${missed.length > 1 ? `Tout rattraper (${pendingNews().length} étapes)` : 'Visite des nouveautés'}</button>` : ''}<span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`;
   if (document.querySelector('#sheet.open .news')) openSheet(body);
 };
 ACT.updNow = async () => {

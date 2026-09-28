@@ -14,7 +14,7 @@ import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.22.0';
+const APP_VERSION = '8.25.1';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -23,7 +23,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -229,12 +229,17 @@ async function revokePresented(request, env) {
   const t = cookiesOf(request).session;
   if (t) await db(env, 'DELETE FROM sessions WHERE token_hash=?', await sha(t)).run();
 }
+const SEEN_EVERY = 10 * 60000;
 async function authenticate(request, env) {
   const token = cookiesOf(request).session;
   if (!token) return null;
   const now = Date.now(), hash = await sha(token);
-  const row = await db(env, 'SELECT u.id,u.username,u.email,u.is_admin,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', hash, now).first();
+  const row = await db(env, 'SELECT u.id,u.username,u.email,u.is_admin,u.last_seen,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', hash, now).first();
   if (!row) return null;
+  // Dernière visite : au plus une écriture toutes les 10 minutes par compte (pour la liste des comptes de l'admin).
+  if (!row.last_seen || now - row.last_seen > SEEN_EVERY) {
+    try { await db(env, 'UPDATE users SET last_seen=? WHERE id=?', now, row.id).run(); } catch (e) { console.error('last_seen', e); }
+  }
   let renew = false;
   if (row.expires_at - now < (SESSION_DAYS - 1) * DAY) { // prolonge au plus une fois par jour
     await db(env, 'UPDATE sessions SET expires_at=? WHERE token_hash=?', now + SESSION_DAYS * DAY, hash).run();
@@ -455,6 +460,12 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/proposals' && m === 'POST') return proposalCreate(request, env, u);
   if (p === '/api/proposals/mine' && m === 'GET') return json({ ok: true, proposals: (await db(env, 'SELECT id,kind,activity,label,detail,status,reply,created_at FROM proposals WHERE user_id=? ORDER BY created_at DESC LIMIT 50', u.id).all()).results || [] });
   if (p === '/api/push/subscribe' && m === 'DELETE') { const b = await readJson(request, 2000); await db(env, 'DELETE FROM push_subs WHERE endpoint=? AND user_id=?', str(b?.endpoint, 800), u.id).run(); return json({ ok: true }); }
+  // État de l'abonnement de cet appareil (pour l'afficher et le réparer tout seul s'il a disparu).
+  if (p === '/api/push/status' && m === 'GET') {
+    const ep = str(url.searchParams.get('endpoint'), 800), row = ep ? await db(env, 'SELECT types,days,hour FROM push_subs WHERE endpoint=? AND user_id=?', ep, u.id).first() : null;
+    let types = []; try { types = JSON.parse(row?.types || '[]'); } catch { types = []; }
+    return json({ ok: true, subscribed: !!row, types });
+  }
   if (p === '/api/push/test' && m === 'POST') {
     if (await limited(env, 'push-t:' + u.id, 5, 3600000)) return fail('Déjà testé plusieurs fois : réessaie plus tard.', 429);
     const subs = (await db(env, 'SELECT endpoint FROM push_subs WHERE user_id=?', u.id).all()).results || [];
@@ -469,6 +480,12 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p.startsWith('/api/admin/')) {
     if (!u.isAdmin) return fail('Droit administrateur requis.', 403);
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
+    if (p === '/api/admin/push-status' && m === 'GET') {
+      const st = async (k) => (await db(env, 'SELECT value FROM system_state WHERE key=?', k).first())?.value || '';
+      let last = null; try { last = JSON.parse(await st('last_notify') || 'null'); } catch { last = null; }
+      const n = await db(env, 'SELECT COUNT(*) c FROM push_subs').first();
+      return json({ ok: true, build: buildId(env), lastBuild: await st('last_build'), last, devices: Number(n?.c) || 0 });
+    }
     if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
     if ((x = p.match(/^\/api\/admin\/users\/([\w-]{1,64})\/role$/)) && m === 'POST') {
       // Nommer ou retirer un administrateur. On ne peut pas retirer le dernier administrateur.
@@ -1125,13 +1142,13 @@ async function adminActivate(request, env, u) {
 /** Liste des comptes pour l'administrateur : identité du compte et activité, JAMAIS les données d'entraînement
  * (séances, performances, profil) ; l'e-mail est masqué ; aucun mot de passe ni jeton. */
 async function adminUsers(env) {
-  const r = await db(env, `SELECT us.id,us.username,us.email,us.created_at,us.is_admin,
+  const r = await db(env, `SELECT us.id,us.username,us.email,us.created_at,us.is_admin,us.last_seen,
       (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id=us.id) AS last_login,
       (SELECT COUNT(*) FROM history h WHERE h.user_id=us.id) AS sessions_done,
       (SELECT MAX(h.started_at) FROM history h WHERE h.user_id=us.id) AS last_session
     FROM users us ORDER BY us.created_at DESC LIMIT 2000`).all();
   const mask = (e) => { const [a, d] = String(e || '').split('@'); return d ? `${a.slice(0, 1)}•••@${d}` : ''; };
-  const users = r.results.map((x) => ({ id: x.id, username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, lastLogin: x.last_login || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
+  const users = r.results.map((x) => ({ id: x.id, username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, lastLogin: x.last_login || null, lastSeen: Math.max(x.last_seen || 0, x.last_login || 0) || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
   return json({ ok: true, total: users.length, users });
 }
 async function adminBugs(url, env) {

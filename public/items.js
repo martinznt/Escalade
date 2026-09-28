@@ -98,8 +98,10 @@ export const SCHEMAS = {
     maps: ['list', { levelId: ['id'], ref: ['id'], refLevel: ['s', 40] }, 150], archived: ['b'],
   },
   style: { label: ['s', 40], activity: ['s', 40], archived: ['b'] },
-  env: { name: ['s', 60], type: ['e', ['maison', 'salle', 'exterieur', 'escalade', 'piscine', 'piste', 'autre'], 'autre'], equipment: ['ids', 40], isDefault: ['b'], archived: ['b'],
+  env: { name: ['s', 60], type: ['e', ['maison', 'salle', 'exterieur', 'escalade', 'falaise', 'piscine', 'piste', 'autre'], 'autre'], equipment: ['ids', 40], isDefault: ['b'], archived: ['b'],
     // Salle précise : ville, cotation de la salle, espaces et leur matériel.
+    // Falaise / site : ses secteurs (où l'on a grimpé).
+    sectors: ['strs', 30, 60],
     city: ['s', 60], gradeSys: ['id'], areas: ['list', { id: ['e', ['bloc', 'voie', 'entrainement', 'muscu', 'etirement'], 'bloc'], items: ['ids', 30], note: ['s', 120] }, 8] },
   // Préférence explicite ou confirmée : aime / neutre / évite (jamais une suppression automatique).
   pref: { key: ['s', 80], label: ['s', 80], value: ['e', ['aime', 'neutre', 'evite'], 'neutre'], source: ['e', ['explicit', 'habit', 'questionnaire'], 'explicit'], reason: ['s', 200] },

@@ -7,13 +7,14 @@ import './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon, ls } from './state.js';
 import { cleanParts } from './format.js';
 import { vClimbPlan } from './views-climbplan.js';
+import { setReturn } from './nav.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
 import { orderAdvice, similarOptions } from './guide.js';
 import { exWhat, exUse, exWhyHere, sessionWhat, sessionUse, sessionWhy } from './explain.js';
 import { CATS, SORTS, FORMS, GROUPS, groupSessions, filterSessions, activeFilters, categoriesOf, autoCategories, sportsOf, placeOf, intensityOf, INTENSITY_LABEL } from './sfilter.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
-import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
+import { capOptionGroups, CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
 import { parseSessionText, exportSessionText, sessionMinutes, exMinutes, parseRest } from './engine.js';
 import { boostSession } from './program.js';
 import { vGenerateForm, genOptions } from './views-gen.js';
@@ -57,9 +58,9 @@ export function vLibrary() {
   return h`${subHead('libSub', 'home', 'Bibliothèque', `${ic} ${t}`)}${views[cur]()}`;
 }
 const LIB_INFO = {
+  generate: ['🎯', 'Séance sur mesure', () => ''],
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
-  generate: ['🎯', 'Sur mesure', () => 'L’app prépare une séance pour toi, au format que tu veux'],
-  climbplan: ['🧗', 'Structurer ma séance', () => 'Escalade : ton objectif ou tes parties (cotations, styles). Ou 🎲 Surprends-moi, tous sports'],
+  climbplan: ['✨', 'Créer une séance', () => draftText() || 'Tous sports : l’app choisit, te guide, ou tu composes'],
   catalog: ['🗂', 'Séances prêtes', () => `${CATALOG.length} séances expliquées et sourcées`],
   exercises: ['💪', 'Exercices', () => `${LIBRARY.length} exercices, et le top pour toi`],
   common: ['🌍', 'Partagées', () => 'Les séances publiées par la communauté'],
@@ -68,7 +69,7 @@ const LIB_INFO = {
 /** Bibliothèque : créer une séance, puis la liste des rubriques (même format que les paramètres). */
 function vLibHome() {
   return h`<h1>📚 Bibliothèque</h1><button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
-    ${menuList(Object.entries(LIB_INFO).map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
+    ${draftBanner()}${menuList(Object.entries(LIB_INFO).filter(([k]) => k !== 'generate').map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
 }
 ACT.libSub = (el) => { closeSheet(); S.sel = null; window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
@@ -96,7 +97,7 @@ function vSeances() {
       : list.length ? h`<button class="btn sm ghost" data-act="selStart">☑ Sélectionner plusieurs séances</button>` : ''}
     ${list.length ? groupSessions(list, f.group).map((g) => h`${g.key ? h`<div class="blockhead">${groupName(f.group, g.key)} · ${g.items.length}</div>` : ''}${g.items.map(seanceCard)}`)
       : nf ? h`<div class="card flat"><p class="muted">Aucune séance avec ces filtres.</p><button class="btn" data-act="sfClear">Effacer les filtres</button></div>`
-      : empty(st === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
+      : empty(st === 'active' ? 'Aucune séance pour l’instant.' : 'Rien ici.', st === 'active' ? h`<button class="btn pri" data-act="cpNew">✨ Créer une séance</button>` : '')}`;
 }
 function seanceCard(s) {
   const sel = S.sel?.includes(s.id); const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card ${sel ? 'on-b' : ''}"><div class="row">${S.sel ? h`<button class="selbox ${sel ? 'on' : ''}" data-act="selTog" data-id="${s.id}" aria-pressed="${!!sel}" aria-label="Sélectionner">${sel ? '✓' : ''}</button>` : ''}<div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
@@ -183,11 +184,14 @@ let sfT = null;
 INPUT.sfQ = (el) => { sf().q = el.value; clearTimeout(sfT); sfT = setTimeout(() => { const pos = el.selectionStart; render(); const i = $('.sfbar input'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch { /* rien */ } } }, 250); };
 /** Nouvelle séance : les façons de la créer, expliquées en une ligne. */
 ACT.exMore = () => { S.exMore = true; render(); };
-ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>
-  ${[['libSub', 'generate', '🎯', 'Sur mesure', 'L’app la prépare selon ton sport, ton temps et ce que tu veux travailler.'], ['cpSurprise', '', '🎲', 'Surprends-moi', 'Dis juste ce que tu veux (ou rien) : une séance nouvelle pour toi, ou pour progresser.'], ['libSub', 'climbplan', '🧗', 'Escalade structurée', 'Ton objectif (ex. réussir un U8 en dévers) ou tes parties : cotations, styles, structure.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
-    ['newSeance', '', '✍️', 'À la main', 'Tu choisis chaque exercice toi-même.'], ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
+ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>${draftBanner()}
+  ${[['cpNew', '', '✨', 'Créer une séance', 'Tous sports. L’app choisit tout, te guide, ou tu composes toi-même.'], ['newSeance', '', '📄', 'Page blanche', 'Une séance vide : tu ajoutes tes exercices un par un.'], ['libSub', 'seances', '📂', 'Reprendre une de mes séances', 'La relancer, la modifier ou la dupliquer.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
+    ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
     ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
+/** Séance en cours de création (brouillon gardé) : on peut la reprendre où on en était. */
+function draftText() { const d = S.cp || ls.get('sea:climbplan', null); return d && (d.step || 1) > 1 ? `En cours : étape ${d.step}/5` : ''; }
+function draftBanner() { const t = draftText(); return t ? h`<button class="card flat acc-b row" data-act="cpResume"><span class="grow small">📝 <b>Reprendre ma séance en cours</b> · ${t.replace('En cours : ', '')}</span><span class="chev">›</span></button>` : ''; }
 /* Fusionner des séances : on en choisit 2 à 4, l'app conseille (note, ordre) et crée une NOUVELLE séance ; les originales ne changent pas. */
 const mergeable = () => S.seances.items.filter((s) => !s.archived && s.exercises.length);
 function mergeSheet() {
@@ -271,7 +275,7 @@ function vEditor(s, mode) {
     ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
     ${sessionBrief(s, { edit: !shared })}
     <div class="card"><div class="row"><input type="text" data-change="sEmoji" value="${s.emoji}" maxlength="4" class="emoji-in" aria-label="Emoji"><input type="text" data-change="sName" value="${s.name}" maxlength="100" aria-label="Nom de la séance"></div>
-      <div class="grid2"><label>Sport principal<select data-change="sActivity"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
+      <div class="grid2"><label>Sport principal<select data-change="sActivity" data-pick="yes" data-add="actNewAndBack" data-add-label="Ajouter un sport"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
       <label>Lieu<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label></div>
       <b class="small">Autres sports dans cette séance</b><div class="chips">${activityOptions().filter(([id]) => id !== s.activity).map(([id, e, l]) => chip((s.sports || []).includes(id), `${e} ${l}`, `data-act="sSport" data-id="${id}"`))}</div>
       <b class="small">Catégories ${s.tags?.length ? '' : h`<span class="tiny muted">(reconnues automatiquement, touche pour choisir)</span>`}</b>
@@ -287,6 +291,7 @@ function vEditor(s, mode) {
     ${shared ? '' : h`<div class="row wrapf"><button class="btn" data-act="sDup" data-id="${s.id}">⧉ Dupliquer</button><button class="btn" data-act="sTemplate" data-id="${s.id}">${s.template ? '★ Retirer des modèles' : '☆ Enregistrer comme modèle'}</button><button class="btn" data-act="sArchive" data-id="${s.id}">${s.archived ? '↩ Désarchiver' : '🗄 Archiver'}</button>
       <button class="btn" data-act="planSeance" data-id="${s.id}">📅 Planifier</button><button class="btn" data-act="sText" data-id="${s.id}">📤 Texte</button><button class="btn" data-act="sPublish" data-id="${s.id}">🌍 Partager</button><button class="btn danger" data-act="sDelete" data-id="${s.id}">🗑 Supprimer</button>${contentAdmin() ? h`<button class="btn" data-act="seanceToCatalog" data-id="${s.id}">🌍 En faire une séance prête</button>` : S.user && !S.user.guest ? h`<button class="btn" data-act="propose" data-k="catalog" data-id="${s.id}">💡 Proposer comme séance prête</button>` : ''}</div>`}`;
 }
+ACT.actNewAndBack = (el) => { setReturn('Retour à ma séance', `library/seance/${S.param}`); go('profile', 'activities'); setTimeout(() => ACT.actNew?.(el), 200); };
 ACT.backSeances = () => go('library', 'seances');
 const edit = (fn) => { const e = editing(); if (!e) return; e.save(fn(e.s)); };
 CHG.sName = (el) => edit((s) => ({ ...s, name: el.value.trim() || 'Séance' }));
@@ -570,7 +575,7 @@ function vExercises() {
   return h`${top}${contentAdmin() ? h`<button class="btn" data-act="exNewGlobal">🌍 ＋ Exercice pour tout le monde</button>` : ''}<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>🤖</span><div><b>Créer un exercice avec l’assistant</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
     <input type="search" data-input="exQ" value="${q}" placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice">
     <div class="grid2"><select data-change="exAct" aria-label="Activité"><option value="">Toutes activités</option>${Object.entries(ACTIVITIES).map(([id, a]) => h`<option value="${id}" ${act === id ? 'selected' : ''}>${a.emoji} ${a.label}</option>`)}</select>
-    <select data-change="exCap" aria-label="Capacité"><option value="">Toutes capacités</option>${Object.entries(CAPACITIES).map(([id, x]) => h`<option value="${id}" ${cap === id ? 'selected' : ''}>${x.label}</option>`)}</select></div>
+    <select data-change="exCap" aria-label="Capacité"><option value="">Toutes capacités</option>${raw(capOptionGroups(Object.keys(CAPACITIES), cap))}</select></div>
     ${tried.length && !q ? h`<div class="card flat"><b class="small">🆕 Jamais essayé</b>${tried.map((t) => h`<div class="item"><div class="ico">${t.lib.emoji}</div><div class="grow"><b>${t.lib.name}</b><div class="tiny muted">${t.reason}</div></div><button class="btn sm" data-act="libInfo" data-id="${t.lib.id}">Voir</button></div>`)}</div>` : ''}
     <div class="card"><div class="row between"><h3>Mes exercices</h3><button class="btn sm" data-act="persNew">＋ Nouveau</button></div>${S.personal.filter((p) => match(p.name)).map((p) => h`<div class="item"><div class="ico">${p.data?.emoji || '💪'}</div><div class="grow"><b>${p.name}</b><div class="tiny muted">${exLine(normalizeEx(p.data))}</div></div><button class="btn sm" data-act="persInfo" data-id="${p.id}">Voir</button>${shareButton('exercise', p.id)}</div>`)}${S.personal.length ? '' : h`<p class="muted small">Aucun exercice personnel.</p>`}</div>
     <div class="card"><h3>Catalogue intégré (${lib.length})</h3>${lib.slice(0, S.exMore ? 200 : 15).map((x) => h`<div class="item"><div class="ico">${x.emoji}</div><div class="grow"><b>${x.name}</b><div class="tiny muted">${Object.entries(x.caps).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => capL(k)).join(', ')} · difficulté ${x.diff}/5</div></div><button class="btn sm" data-act="libInfo" data-id="${x.id}">Voir</button></div>`)}${!S.exMore && lib.length > 15 ? h`<button class="btn ghost" data-act="exMore">Voir les ${lib.length - 15} autres exercices</button>` : ''}</div>

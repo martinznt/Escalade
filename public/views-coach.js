@@ -17,11 +17,12 @@ export function profileSummary() {
 }
 function body() {
   const msgs = S.chat || [];
-  return h`<div class="chat"><div class="row between"><h2>💬 Le coach</h2>${msgs.length ? h`<button class="btn sm ghost" data-act="chatClear">Effacer</button>` : ''}</div>
+  return h`<div class="chat"><div class="row between"><h2>💬 L’assistant</h2>${msgs.length ? h`<button class="btn sm ghost" data-act="chatClear">Effacer</button>` : ''}</div>
     <div class="chat-log" id="chatlog">${msgs.length ? msgs.map((m) => h`<div class="msg ${m.role}">${m.content}</div>`) : h`<p class="small muted">Pose une question, ou dis ce que tu veux (« Séance de 20 min pour les jambes », « Je n’ai que 12 minutes »). Par exemple :</p><div class="chips">${IDEAS.map((q) => h`<button type="button" class="chip" data-act="chatIdea" data-q="${q}">${q}</button>`)}</div>`}
       ${S.chatBusy ? h`<div class="msg assistant typing"><i></i><i></i><i></i></div>` : ''}</div>
     <form data-submit="chatSend" class="row chat-in"><input name="q" maxlength="500" class="grow" placeholder="Ta question ou ta demande…" autocomplete="off" aria-label="Ta question" ${S.chatBusy ? 'disabled' : ''}><button class="btn pri" type="submit" ${S.chatBusy ? 'disabled' : ''}>Envoyer</button></form>
-    <details class="how mini"><summary>Ce que le coach sait de toi</summary><p class="tiny">${profileSummary()}</p><p class="tiny muted">Ses réponses sont des conseils généraux, pas un avis médical.</p></details></div>`;
+    <div class="row wrapf"><button class="btn sm" data-act="aiOpen">✍️ Créer un exercice avec mes mots</button><button class="btn sm" data-act="cpNew">✨ Créer une séance</button></div>
+    <details class="how mini"><summary>Ce que l’assistant sait de toi</summary><p class="tiny">${profileSummary()}</p><p class="tiny muted">Ses réponses sont des conseils généraux, pas un avis médical.</p></details></div>`;
 }
 const draw = () => { openSheet(body(), { wide: true }); const l = $('#chatlog'); if (l) l.scrollTop = l.scrollHeight; setTimeout(() => $('.chat-in input')?.focus(), 50); };
 ACT.coachOpen = () => {

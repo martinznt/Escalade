@@ -1,39 +1,60 @@
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
-import { h, subHead, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
+import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
 import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
 import { uid, normalizeEx, normalizeSession } from './shared.js';
-import { CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
+import { capOptionGroups, CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
 import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addLevel, moveLevel, removeLevel, renameLevel, setMapping, sortedLevels, gradeSnapshot, maximaSummary, snapshotText, REFERENCE, LEVEL_WORDS } from './grading.js';
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
-import { openGenerator } from './views-library.js';
-import { vCarnet } from './views-climb.js';
+import { openWizard } from './views-climbplan.js';
+import { vCarnet, projectsSection, doneProjects, fingerCard, pyramidCard } from './views-climb.js';
+import { recordsCards } from './views-progress.js';
 import { bodyFields, bodyToggle, cleanBody, bodyAdjust } from './body.js';
 import { sourcesLine } from './srcui.js';
 import { GOALS, INTENT_OF } from './views-setup.js';
 import { profileSummary } from './views-coach.js';
 import { byId } from './library.js';
+import { donePerf, nextGoals, doneGoals } from './goaldone.js';
+import { allPlaces, placeStats, kindOfEnv, placesOf, KIND_LABEL } from './places.js';
+import { celebrate } from './fx.js';
 
-const SUBS = [['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
-const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
-  climbing: ['🧗', 'Carnet', 'blocs, voies, projets'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['🧰', 'Matériel', 'lieux, équipement'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
+const SUBS = [['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const TILES = { analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
+  climbing: ['🧗', 'Carnet', 'blocs, voies, pyramide'], goals: ['🎯', 'Objectifs', 'figures, projets d’escalade'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 /** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
-const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment', 'prefs']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['map', 'understand']], ['Partager', ['public']]];
+const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['analyse']], ['Partager', ['public']]];
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
   if (sub === 'home') return vHub();
-  const views = { body: vBody, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(vClimbAdvanced()), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
+  // Préférences : avec « Mon corps » ; capacités et « pourquoi » : dans « Mon analyse ».
+  if (sub === 'prefs') { setTimeout(() => go('profile', 'body'), 0); return ''; }
+  if (sub === 'map' || sub === 'understand') { const [ic, title] = TILES[sub]; return h`${subHead('profSub', 'analyse', 'Mon analyse', `${ic} ${title}`)}${(sub === 'map' ? vMap : vUnderstand)()}`; }
+  const views = { analyse: vAnalyseHub, body: () => h`${vBody()}<span class="kicker">❤️ Mes préférences</span>${vPrefs()}`, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
   const [ic, title] = TILES[sub];
   return h`${subHead('profSub', 'home', 'Profil', `${ic} ${title}`)}${views[sub]()}`;
 }
 /* ═════════ Accueil du profil : l'essentiel en un coup d'œil, puis des tuiles ═════════ */
+/** Profil à compléter : ce qui rend les séances plus justes, chaque ligne mène à l'endroit où le faire. Disparaît une fois complet. */
+function completeCard(c, acts, goals, climbing) {
+  const items = [
+    [!acts.length, '🏅', 'Tes sports', 'profile/activities'],
+    [!c.envs.length, '📍', 'Ton lieu (salle, falaise, maison…)', 'profile/equipment'],
+    [c.envs.length && !c.envs.some((e) => e.equipment?.length), '🧰', 'Le matériel de ton lieu', 'profile/equipment'],
+    [climbing && !c.perfs.some((p) => ['max_bloc', 'max_voie'].includes(p.metricId) && !p.unknown), '📏', 'Ton niveau max en escalade', 'profile/perfs'],
+    [!goals.length, '🎯', 'Un objectif', 'profile/goals'],
+    [!item('config', 'body')?.age && !item('config', 'body')?.weight, '🫀', 'Ton corps (âge, forme)', 'profile/body'],
+  ], left = items.filter((x) => x[0]), done = items.length - left.length;
+  if (!left.length) return '';
+  return h`<section class="card"><div class="row between"><h3>🧩 Pour des séances plus justes</h3><span class="tiny muted">${done}/${items.length}</span></div>${meter((done / items.length) * 100)}
+    <div class="setmenu">${left.map(([, ic, t, to]) => h`<button class="setrow" data-act="allGo" data-to="${to}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b></span><span class="chev">›</span></button>`)}</div></section>`;
+}
 function vHub() {
   const c = ctx(), acts = Object.values(c.activities), st = profileCapacities(c), sw = strengthsWeaknesses(st), goals = activeGoals(c);
   const known = st.filter((x) => x.level != null).length;
-  const counts = { understand: known ? `${known} capacité${known > 1 ? 's' : ''}` : '', activities: acts.length || '', perfs: c.perfs.filter((p) => !p.unknown).length || '', goals: goals.length || '', equipment: c.envs.length || '' };
+  const counts = { understand: known ? `${known} capacité${known > 1 ? 's' : ''}` : '', activities: acts.length || '', perfs: c.perfs.filter((p) => !p.unknown).length || '', goals: `${goals.length || 0} en cours${doneGoals(c.goals).length ? ` · 🏆 ${doneGoals(c.goals).length}` : ''}`, equipment: c.envs.length || '' };
   const climbing = acts.some((a) => a.id.startsWith('climbing'));
   const tiles = Object.entries(TILES).filter(([k]) => k !== 'climbing' || climbing);
   const pill = (x, cls) => h`<button class="chip ${cls}" data-act="capOpen" data-id="${x.capId}">${x.label}</button>`;
@@ -44,20 +65,26 @@ function vHub() {
       <section class="card ok-b"><span class="kicker ok-t">💪 Tes points forts</span><div class="chips">${sw.strengths.length ? sw.strengths.slice(0, 3).map((x) => pill(x, 'okc')) : h`<span class="small muted">Bientôt…</span>`}</div></section>
       <section class="card warn-b"><span class="kicker warn-t">🌱 À travailler</span><div class="chips">${sw.weaknesses.length ? sw.weaknesses.slice(0, 3).map((x) => pill(x, 'warnc')) : h`<span class="small muted">Rien de flagrant</span>`}</div></section></div>`
       : h`<section class="card flat row"><span class="grow small">🧩 Ajoute une ou deux mesures pour voir tes points forts.</span><button class="btn sm pri" data-act="profSub" data-id="perfs">Ajouter</button></section>`}
+    ${completeCard(c, acts, goals, climbing)}
     ${GROUPS.map(([title, ids]) => { const list = tiles.filter(([k]) => ids.includes(k)); return list.length ? h`<span class="kicker">${title}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; })}`;
 }
-ACT.profSub = (el) => { go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
+ACT.profSub = (el) => { if (el.dataset.id === 'goals') S.filters.goals = 'active'; go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
 const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;
 const statusTag = (s) => tag(STATUS_WORD[s.status], s.status === 'fort' ? 'ok' : s.status === 'faible' ? 'warn' : s.status === 'developpement' ? 'info' : '');
 
 /* ═════════ Comprendre mon profil ═════════ */
+/** Mon analyse : tout ce que l'app comprend de toi, au même endroit. */
+function vAnalyseHub() {
+  return menuList([['profSub', 'map', '🗺️', 'Mes capacités', 'Forces et points à travailler, muscles travaillés'], ['allGo', '', '🔍', 'Tendances et diagnostics', 'Peu travaillé, objectifs délaissés, pourquoi je stagne', 'progress/analyses'],
+    ['profSub', 'understand', '🔎', 'Pourquoi ces conseils', 'Ce que l’app sait de toi, et ce qui manque'], ['allGo', '', '🧪', 'Lab', 'Tester une idée sur quelques semaines', 'progress/lab']]);
+}
 function vUnderstand() {
   const u = understandProfile(ctx());
   const stats = [['📏', 'Mesuré', u.measured, 'ok'], ['🗣️', 'Déclaré', u.declared, 'info'], ['🧮', 'Calculé', u.calculated, ''], ['≈', 'Estimé', u.inferred, 'warn']];
   const list = (items) => h`<ul class="clean">${items.slice(0, 12).map((x) => h`<li>${x}</li>`)}</ul>${items.length > 12 ? h`<p class="tiny muted">… et ${items.length - 12} autre(s)</p>` : ''}`;
   const todo = testReminders(ctx()).slice(0, 3);
   return h`<div class="statgrid">${stats.map(([ic, l, items, cls]) => h`<button class="stat2 ${cls}" data-act="uOpen" data-id="${l}"><b>${items.length}</b><span>${ic} ${l}</span></button>`)}</div>
-    ${todo.length ? h`<section class="card acc-b"><span class="kicker">✅ Pour mieux te connaître</span>${todo.map((t) => h`<div class="todo row"><span class="grow">📏 ${t.label}</span><button class="btn sm pri" data-act="perfAdd" data-id="${t.metricId}">Saisir</button></div>`)}</section>` : ''}
+    ${todo.length ? menuList([['allGo', '', '📏', `${todo.length} mesure${todo.length > 1 ? 's' : ''} à faire pour mieux te connaître`, 'Dans Records et mesures', 'profile/perfs']]) : ''}
     ${stats.map(([ic, l, items]) => h`<details class="card fold" id="u-${l}"><summary><span>${ic} ${l}</span><em>${items.length}</em></summary>${items.length ? list(items) : h`<p class="small muted">Rien pour l’instant.</p>`}</details>`)}
     ${u.missing.length ? h`<details class="card fold"><summary><span>❔ Ce qui manque</span><em>${u.missing.length}</em></summary>${list(u.missing)}</details>` : ''}
     <details class="card fold"><summary><span>💡 Comment l’app décide</span></summary><ol class="small">${u.method.map((m) => h`<li>${m}</li>`)}</ol></details>`;
@@ -94,7 +121,7 @@ ACT.capOpen = (el) => {
     <div class="row wrapf"><button class="btn pri" data-act="capTrain" data-id="${g.capId}">🎯 Séance ciblée</button><button class="btn" data-act="closeSheet">Fermer</button></div>`, { wide: true });
 };
 ACT.capDecl = (el) => { putItem('capdecl', 'cd-' + el.dataset.id, { capId: el.dataset.id, level: Number(el.dataset.v) }); toast(Number(el.dataset.v) === -1 ? 'Noté : « je ne sais pas ». Un test pourra aider.' : 'Niveau déclaré enregistré'); ACT.capOpen(el); render(); };
-ACT.capTrain = (el) => { closeSheet(); openGenerator({ mode: 'weaknesses', capId: el.dataset.id, priorities: { [el.dataset.id]: 3 }, autoPlan: true }); };
+ACT.capTrain = (el) => { closeSheet(); openWizard({ focus: { label: CAPACITIES[el.dataset.id]?.label || el.dataset.id, caps: { [el.dataset.id]: 3 } } }); };
 
 /* ═════════ Activités et catégories ═════════ */
 function vActivities() {
@@ -105,17 +132,18 @@ function vActivities() {
       ${acts.filter((a) => !a.preset && !a.archived).map((a) => h`<div class="item"><div class="ico">${a.emoji || '🏅'}</div><div class="grow"><b>${a.label}</b><div class="tiny muted">${itemsOf('category').filter((x) => x.activityId === a.id && !x.archived).map((x) => x.label).join(', ') || 'aucune catégorie'}</div></div><button class="btn sm" data-act="actEdit" data-id="${a.id}">✎</button></div>`)}
       ${!acts.some((a) => !a.preset && !a.archived) ? h`<p class="muted small">Basketball, cyclisme, tennis, ski… : crée ton activité avec ses propres catégories, métriques et exercices.</p>` : ''}</div>
     ${Object.values(c.activities).map((a) => vActivityCard(a))}
+    ${Object.keys(c.activities).some((a) => a.startsWith('climbing')) ? h`<span class="kicker">🧗 Escalade : cotations et styles</span>${climbSystemsStyles()}` : h`<details class="card how"><summary><b>🧗 Escalade : cotations et styles</b></summary>${climbSystemsStyles()}</details>`}
     <div class="card"><div class="row between"><h3>Mes métriques personnalisées</h3><button class="btn sm" data-act="metricNew">＋ Métrique</button></div>${itemsOf('metric').filter((m) => !m.archived).map((m) => h`<div class="item"><div class="grow"><b>${m.label}</b><div class="tiny muted">${m.unit || 'sans unité'} · ${m.activityId ? activityLabel(m.activityId, c) : 'toutes activités'} · ${(m.caps || []).map((x) => capL(x.id)).join(', ') || 'aucune capacité liée'}</div></div><button class="btn sm" data-act="metricEdit" data-id="${m.id}">✎</button></div>`)}</div>`;
 }
 function vActivityCard(a) {
   const c = ctx(), native = ACTIVITIES[a.id];
   const cats = [...(native?.categories || []).map(([id, label, caps]) => ({ id: 'native:' + id, label, caps: caps.map((x) => ({ id: x, w: 1 })), native: true })), ...Object.values(c.categories).filter((x) => x.activityId === a.id)];
   const st = profileCapacities(c, a.id), sw = strengthsWeaknesses(st);
-  return h`<div class="card flat"><div class="row between wrapf"><b>${a.emoji} ${a.label}</b><div class="row tight"><button class="btn sm" data-act="aiCap" data-id="${a.id}">🤖 Avec l’assistant</button><button class="btn sm" data-act="catNew" data-id="${a.id}">＋ Catégorie</button></div></div>
+  return h`<div class="card flat"><div class="row between wrapf"><b>${a.emoji} ${a.label}</b><div class="row tight wrapf"><button class="btn sm" data-act="aiCap" data-id="${a.id}">🤖 Avec l’assistant</button><button class="btn sm" data-act="catNew" data-id="${a.id}">＋ Catégorie</button></div></div>
     <div class="chips">${cats.map((x) => x.native ? h`<span class="chip static" title="${x.caps.map((k) => capL(k.id)).join(', ')}">${x.label}</span>` : chip(false, `${x.emoji ? x.emoji + ' ' : ''}${x.label} ✎`, `data-act="catEdit" data-id="${x.id}"`))}</div>
     ${sw.strengths.length || sw.weaknesses.length ? h`<div class="chips">${sw.strengths.slice(0, 3).map((s) => h`<button class="chip okc" data-act="capOpen" data-id="${s.capId}">💪 ${s.label}</button>`)}${sw.weaknesses.slice(0, 3).map((s) => h`<button class="chip warnc" data-act="capOpen" data-id="${s.capId}">🌱 ${s.label}</button>`)}</div>` : ''}</div>`;
 }
-ACT.actNew = () => openSheet(h`<h2 style="margin:0">Nouvelle activité</h2><form data-submit="actSave" class="stack"><input type="hidden" name="id" value=""><div class="row"><input name="emoji" value="🏅" maxlength="4" class="emoji-in" aria-label="Emoji"><input name="label" required maxlength="60" placeholder="Ex. Basketball, cyclisme, tennis…" aria-label="Nom"></div><label>Mots-clés (séparés par des virgules)<input name="aliases" maxlength="180"></label><button class="btn pri" type="submit">Créer</button></form>`);
+ACT.actNew = (el) => openSheet(h`<h2 style="margin:0">Nouvelle activité</h2><form data-submit="actSave" class="stack"><input type="hidden" name="id" value=""><div class="row"><input name="emoji" value="🏅" maxlength="4" class="emoji-in" aria-label="Emoji"><input name="label" required maxlength="60" value="${el?.dataset?.q || ''}" placeholder="Ex. Basketball, cyclisme, tennis…" aria-label="Nom"></div><label>Mots-clés (séparés par des virgules)<input name="aliases" maxlength="180"></label><button class="btn pri" type="submit">Créer</button></form>`);
 ACT.actEdit = (el) => { const a = item('activity', el.dataset.id); if (!a) return; openSheet(h`<h2 style="margin:0">Modifier l’activité</h2><form data-submit="actSave" class="stack"><input type="hidden" name="id" value="${a.id}"><div class="row"><input name="emoji" value="${a.emoji || '🏅'}" maxlength="4" class="emoji-in" aria-label="Emoji"><input name="label" required maxlength="60" value="${a.label}" aria-label="Nom"></div><label>Mots-clés<input name="aliases" maxlength="180" value="${(a.aliases || []).join(', ')}"></label><div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button><button class="btn danger" type="button" data-act="actArchive" data-id="${a.id}">Archiver</button></div></form>`); };
 SUBMIT.actSave = (f) => { const d = Object.fromEntries(new FormData(f)); const id = d.id || 'custom-' + uid().slice(0, 12); putItem('activity', id, { label: d.label, emoji: d.emoji, aliases: String(d.aliases || '').split(',').map((x) => x.trim()).filter(Boolean), preset: '', archived: false }); closeSheet(); buzzOk(); toast('Activité enregistrée'); render(); };
 ACT.actArchive = async (el) => { const a = item('activity', el.dataset.id); if (a && (await ask(`Archiver « ${a.label} » ?`, { detail: 'L’historique et les performances liées sont conservés.' }))) { putItem('activity', a.id, { ...a, archived: true }); closeSheet(); render(); } };
@@ -133,18 +161,20 @@ ACT.catNew = (el) => openSheet(catForm(null, el.dataset.id), { wide: true });
 ACT.catEdit = (el) => { const cat = item('category', el.dataset.id); if (cat) openSheet(catForm(cat, cat.activityId), { wide: true }); };
 SUBMIT.catSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd), prev = d.id ? item('category', d.id) || {} : {}; putItem('category', d.id || 'cat-' + uid().slice(0, 12), { emoji: prev.emoji, guide: prev.guide, howTo: prev.howTo, source: prev.source, activityId: d.activityId, label: d.label, description: d.description, caps: fd.getAll('caps').map((id) => ({ id, w: 1 })) }); closeSheet(); toast('Catégorie enregistrée'); render(); };
 ACT.catDel = async (el) => { const cat = item('category', el.dataset.id); if (!cat) return; const used = itemsOf('metric').some((m) => (m.caps || []).some((x) => x.id === cat.id)); if (!(await ask(`Supprimer la catégorie « ${cat.label} » ?`, { danger: true, ok: used ? 'Archiver' : 'Supprimer', detail: used ? 'Des métriques y sont reliées : elle sera archivée (masquée) pour ne rien casser.' : '' }))) return; if (used) putItem('category', cat.id, { ...cat, archived: true }); else delItem('category', cat.id); closeSheet(); render(); };
-function metricForm(m) {
+function metricForm(m, pre = '') {
   const c = ctx(), caps = new Set((m?.caps || []).map((x) => x.id));
   return h`<h2 style="margin:0">${m ? 'Modifier la métrique' : 'Nouvelle métrique'}</h2><form data-submit="metricSave" class="stack"><input type="hidden" name="id" value="${m?.id || ''}">
-    <label>Ce qui est mesuré<input name="label" required maxlength="80" value="${m?.label || ''}" placeholder="Ex. Détente au panier, 40 km vélo…"></label>
+    <label>Ce qui est mesuré<input name="label" required maxlength="80" value="${m?.label || pre}" placeholder="Ex. Détente au panier, 40 km vélo…"></label>
     <div class="grid2"><label>Unité<input name="unit" maxlength="20" value="${m?.unit || ''}" placeholder="reps, kg, s, km, cm…"></label><label>Sens<select name="dir"><option value="1" ${m?.dir !== -1 ? 'selected' : ''}>Plus c’est haut, mieux c’est</option><option value="-1" ${m?.dir === -1 ? 'selected' : ''}>Plus c’est bas, mieux c’est (temps)</option></select></label></div>
     <label>Activité<select name="activityId"><option value="">Toutes</option>${Object.values(c.activities).map((a) => h`<option value="${a.id}" ${m?.activityId === a.id ? 'selected' : ''}>${a.label}</option>`)}</select></label>
     <label>Capacités suivies</label><div class="chips">${[...Object.entries(CAPACITIES), ...Object.values(c.categories).map((x) => [x.id, { label: x.label + ' (catégorie)' }])].map(([id, x]) => h`<label class="chip ${caps.has(id) ? 'on' : ''}"><input type="checkbox" class="hidden" name="caps" value="${id}" ${caps.has(id) ? 'checked' : ''} data-change="chipToggle">${x.label}</label>`)}</div>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${m ? h`<button class="btn danger" type="button" data-act="metricArchive" data-id="${m.id}">Archiver</button>` : ''}</div></form>`;
 }
-ACT.metricNew = () => openSheet(metricForm(null), { wide: true });
+ACT.metricNew = (el) => { S.metricBack = el?.dataset?.from === 'metricId' && document.querySelector('#sheet form[data-submit=perfSave]') ? 'perf' : ''; openSheet(metricForm(null, el?.dataset?.q || ''), { wide: true }); };
 ACT.metricEdit = (el) => { const m = item('metric', el.dataset.id); if (m) openSheet(metricForm(m), { wide: true }); };
-SUBMIT.metricSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd); putItem('metric', d.id || 'm-' + uid().slice(0, 12), { label: d.label, unit: d.unit, dir: Number(d.dir) === -1 ? -1 : 1, activityId: d.activityId, kind: 'other', caps: fd.getAll('caps').map((id) => ({ id, w: 1 })) }); closeSheet(); toast('Métrique enregistrée'); render(); };
+SUBMIT.metricSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd), mid = d.id || 'm-' + uid().slice(0, 12); putItem('metric', mid, { label: d.label, unit: d.unit, dir: Number(d.dir) === -1 ? -1 : 1, activityId: d.activityId, kind: 'other', caps: fd.getAll('caps').map((id) => ({ id, w: 1 })) }); closeSheet(); toast('Mesure enregistrée'); render();
+  // Créée depuis la liste d'une saisie : on revient à la saisie, avec cette mesure choisie.
+  if (S.metricBack === 'perf') { S.metricBack = ''; setTimeout(() => ACT.perfAdd({ dataset: { id: mid } }), 150); } };
 ACT.metricArchive = (el) => { const m = item('metric', el.dataset.id); if (m) { putItem('metric', m.id, { ...m, archived: true }); closeSheet(); toast('Métrique archivée (performances conservées)'); render(); } };
 
 /* ═════════ Performances (valeurs observées) ═════════ */
@@ -152,12 +182,15 @@ function vPerfs() {
   const c = ctx(), rem = testReminders(c);
   const groups = new Map();
   for (const p of c.perfs) { if (!groups.has(p.metricId)) groups.set(p.metricId, []); groups.get(p.metricId).push(p); }
+  const climber = Object.keys(c.activities).some((a) => a.startsWith('climbing'));
   return h`<div class="row wrapf"><button class="btn pri" data-act="perfAdd">＋ Saisir une performance</button><button class="btn" data-act="metricNew">＋ Métrique personnalisée</button></div>
+    ${recordsCards()}
+    ${climber ? h`<span class="kicker">🧗 Escalade</span>${climbMaxima()}${pyramidCard()}${fingerCard()}` : ''}
     ${rem.length ? h`<div class="card flat"><h3>📏 À mesurer</h3>${rem.map((t) => h`<div class="item"><div class="grow"><b class="small">${t.label}</b><div class="tiny muted">${t.unknown ? 'tu ne sais pas encore' : t.age != null ? `il y a ${t.age} j` : 'jamais mesuré'} · pour ${t.why}</div>${t.test ? h`<details class="how mini"><summary>Comment faire le test ?</summary><p class="tiny">${t.test}</p></details>` : ''}</div><button class="btn sm pri" data-act="perfAdd" data-id="${t.metricId}">Saisir</button></div>`)}</div>` : ''}
     ${groups.size ? [...groups.entries()].map(([mid, list]) => { const m = c.metrics[mid] || { label: mid, unit: '' }; const t = metricTrend(mid, c); const pts = list.filter((p) => !p.unknown && p.value != null).sort((a, b) => a.date - b.date).map((p) => ({ v: p.value })); return h`<div class="card"><div class="row between"><h3>${m.label}</h3><button class="btn sm" data-act="perfAdd" data-id="${mid}">＋</button></div>
       ${m.tiers ? h`<p class="tiny muted">${metricTierText(m)}</p>` : ''}${t ? h`<p class="small">${t.dir > 0 ? '📈' : t.dir < 0 ? '📉' : '➖'} ${t.text}</p>` : ''}${pts.length >= 2 ? lineChart(pts, m.unit) : ''}
       ${list.slice(0, 8).map((p) => h`<div class="item"><div class="grow"><b>${perfText(p, c)}</b> ${tag(({ measured: 'mesuré', declared: 'déclaré', imported: 'importé', session: 'relevé en séance' })[p.source] || p.source, SOURCE_TAG[({ measured: 'mesuré', declared: 'déclaré' })[p.source]] || '')}${p.styles?.length ? h`<div class="tiny muted">${p.styles.map((s) => c.styles[s]?.label || s).join(', ')}</div>` : ''}<div class="tiny muted">${fmtDay(p.date)}${p.note ? ' · ' + p.note : ''}</div></div><button class="btn sm ic" data-act="perfEdit" data-id="${p.id}" aria-label="Modifier">✎</button><button class="btn danger sm ic" data-act="perfDel" data-id="${p.id}" aria-label="Supprimer">✕</button></div>`)}</div>`; })
-      : empty('Aucune performance. Saisis un test (tractions max, 5 km, suspension…) ou indique « je ne sais pas » : l’application te proposera un test.')}`;
+      : empty('Aucune performance. Saisis un test (tractions max, 5 km, suspension…) ou indique « je ne sais pas » : l’application te proposera un test.', h`<button class="btn pri" data-act="perfAdd">＋ Saisir une performance</button>`)}`;
 }
 function perfForm(p, metricId) {
   const c = ctx(), mid = p?.metricId || metricId || '', m = c.metrics[mid];
@@ -168,12 +201,13 @@ function perfForm(p, metricId) {
   const styles = Object.values(c.styles).filter((s) => !s.archived && (s.activity === 'climbing' || !s.activity || s.activity === 'escalade'));
   const d = p?.date ? new Date(p.date) : new Date();
   return h`<h2 style="margin:0">${p ? 'Modifier la performance' : 'Nouvelle performance'}</h2><form data-submit="perfSave" class="stack"><input type="hidden" name="id" value="${p?.id || ''}">
-    <label>Métrique<select name="metricId" data-change="perfMetric" required><option value="">— choisir —</option>${list.map(([id, x]) => h`<option value="${id}" ${id === mid ? 'selected' : ''}>${x.label}${x.native ? '' : ' (perso)'}</option>`)}</select></label>
+    <label>Métrique<select name="metricId" data-change="perfMetric" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure" required><option value="">— choisir —</option>${metricOptions(list, mid)}</select></label>
     ${m?.test ? h`<p class="tiny muted">Protocole : ${m.test}</p>` : ''}${m?.tiers ? h`<p class="tiny muted">${metricTierText(m)}</p>` : ''}
     ${isGrade ? h`<label>Système de cotation<select name="systemId" data-change="perfSystem">${systems.map((s) => h`<option value="${s.id}" ${(p?.grade?.systemId || S.perfSys) === s.id ? 'selected' : ''}>${s.name}</option>`)}</select></label>
       <label>Niveau<select name="levelId">${sortedLevels(c.systems[p?.grade?.systemId || S.perfSys] || systems[0]).map((l) => h`<option value="${l.id}" ${p?.grade?.levelId === l.id ? 'selected' : ''}>${l.label}</option>`)}</select></label>
       <label>Styles (plusieurs possibles)</label><div class="chips">${styles.map((s) => h`<label class="chip ${(p?.styles || []).includes(s.id) ? 'on' : ''}"><input type="checkbox" class="hidden" name="styles" value="${s.id}" ${(p?.styles || []).includes(s.id) ? 'checked' : ''} data-change="chipToggle">${s.label}</label>`)}</div>
-      <label>Contexte<select name="ctxKind"><option value="">—</option>${[['salle', 'Salle'], ['falaise', 'Falaise / extérieur']].map(([k, l]) => h`<option value="${k}" ${p?.context?.kind === k ? 'selected' : ''}>${l}</option>`)}</select></label>`
+      <label>Où ?<select name="ctxEnv"><option value="">—</option>${[['salle', '🏢 Salles'], ['falaise', '🌄 Falaises']].map(([k, l]) => { const list = placesOf(ctx().envs, k); return list.length ? h`<optgroup label="${l}">${list.map((e) => h`<option value="${e.id}" ${p?.context?.env === e.id ? 'selected' : ''}>${e.name}</option>`)}</optgroup>` : ''; })}<option value="salle" ${!p?.context?.env && p?.context?.kind === 'salle' ? 'selected' : ''}>En salle (autre)</option><option value="falaise" ${!p?.context?.env && p?.context?.kind === 'falaise' ? 'selected' : ''}>En falaise (autre)</option></select></label>
+      <label>Secteur <span class="tiny muted">(falaise, facultatif)</span><input name="ctxSector" maxlength="60" list="sectors-dl" value="${p?.context?.place || ''}"><datalist id="sectors-dl">${[...new Set(placesOf(ctx().envs, 'falaise').flatMap((e) => e.sectors || []))].map((x) => h`<option value="${x}">`)}</datalist></label>`
       : m ? numberField('value', 'Valeur', p?.value ?? '', { unit: m.unit, step: 'any' }) : ''}
     ${m ? h`<label class="chk"><input type="checkbox" name="unknown" ${p?.unknown ? 'checked' : ''}> Je ne sais pas (aucune valeur enregistrée, un test te sera proposé)</label>` : ''}
     <div class="grid2"><label>Date<input type="date" name="date" value="${d.toISOString().slice(0, 10)}" max="${new Date().toISOString().slice(0, 10)}"></label><label>Source<select name="source"><option value="measured" ${p?.source === 'measured' ? 'selected' : ''}>Mesuré (test fait)</option><option value="declared" ${!p || p.source === 'declared' ? 'selected' : ''}>Déclaré (de mémoire)</option></select></label></div>
@@ -193,22 +227,24 @@ SUBMIT.perfSave = (f) => {
   let grade = null, value = null;
   if (!unknown && m.kind === 'grade') { grade = gradeSnapshot(c.systems[d.systemId], d.levelId); if (!grade) { toast('Choisis un niveau.'); return; } }
   if (!unknown && m.kind !== 'grade') { value = d.value === '' ? null : Number(d.value); if (value == null || !Number.isFinite(value)) { toast('Saisis une valeur numérique, ou coche « je ne sais pas ».'); return; } }
-  putItem('perf', d.id || 'p-' + uid().slice(0, 14), { metricId: d.metricId, value, unknown, unit: m.unit, date, source: d.source, grade, styles: fd.getAll('styles'), context: { kind: d.ctxKind || '' }, note: d.note });
+  putItem('perf', d.id || 'p-' + uid().slice(0, 14), { metricId: d.metricId, value, unknown, unit: m.unit, date, source: d.source, grade, styles: fd.getAll('styles'), context: perfContext(d), note: d.note });
   closeSheet(); buzzOk(); toast(unknown ? 'Noté « je ne sais pas » : un test te sera proposé.' : 'Performance enregistrée'); render();
 };
 ACT.perfDel = async (el) => { const p = item('perf', el.dataset.id); if (p && (await ask('Supprimer cette performance ?', { ok: 'Supprimer', danger: true }))) { delItem('perf', p.id); render(); } };
 
 /* ═════════ Escalade : systèmes de cotation, styles, maxima, journal ═════════ */
-function vClimbAdvanced() {
-  const c = ctx();
-  const userSys = Object.values(c.systems).filter((s) => !s.builtin);
-  const maxPerfs = c.perfs.filter((p) => p.metricId === 'max_bloc' || p.metricId === 'max_voie');
-  const sum = maximaSummary(maxPerfs, c.styles);
-  return h`<div class="card"><div class="row between"><h3>🧗 Mes maxima</h3><button class="btn sm pri" data-act="perfAdd" data-id="max_bloc">＋ Bloc</button><button class="btn sm pri" data-act="perfAdd" data-id="max_voie">＋ Voie</button></div>
+/** Maxima d'escalade (dans Records et mesures). */
+export function climbMaxima() {
+  const c = ctx(), maxPerfs = c.perfs.filter((p) => p.metricId === 'max_bloc' || p.metricId === 'max_voie'), sum = maximaSummary(maxPerfs, c.styles);
+  return h`<div class="card"><div class="row between wrapf"><h3>🧗 Mes maxima</h3><div class="row tight wrapf"><button class="btn sm pri" data-act="perfAdd" data-id="max_bloc">＋ Bloc</button><button class="btn sm pri" data-act="perfAdd" data-id="max_voie">＋ Voie</button></div></div>
       <p class="tiny muted">Plusieurs maxima possibles : par système de cotation, par style (multi-sélection) et par contexte. Chaque saisie garde le système utilisé à ce moment-là.</p>
       ${sum.length ? sum.map((x) => h`<div class="card flat"><b>${x.systemName}</b> ${c.systems[x.systemId]?.archived ? tag('archivé') : !c.systems[x.systemId] ? tag('supprimé') : ''}<p class="small">Meilleur : <b>${snapshotText(x.best.grade, c.systems)}</b> (${fmtDay(x.best.date)})</p>${x.byStyle.length ? h`<div class="chips">${x.byStyle.map((s) => h`<span class="chip static">${s.label} : ${s.perf.grade.label}</span>`)}</div>` : ''}
-        <details><summary class="small">${x.entries.length} saisie(s)</summary>${x.entries.map((p) => h`<div class="item"><div class="grow small">${p.grade.label} · ${fmtDay(p.date)}${p.styles?.length ? ' · ' + p.styles.map((s) => c.styles[s]?.label || s).join(', ') : ''}${p.context?.kind ? ' · ' + p.context.kind : ''}</div><button class="btn sm ic" data-act="perfEdit" data-id="${p.id}">✎</button><button class="btn danger sm ic" data-act="perfDel" data-id="${p.id}">✕</button></div>`)}</details></div>`) : h`<p class="muted small">Aucun maximum enregistré.</p>`}</div>
-    <div class="card"><div class="row between"><h3>Systèmes de cotation</h3><button class="btn sm" data-act="sysNew">＋ Système</button></div>
+        <details><summary class="small">${x.entries.length} saisie(s)</summary>${x.entries.map((p) => h`<div class="item"><div class="grow small">${p.grade.label} · ${fmtDay(p.date)}${p.styles?.length ? ' · ' + p.styles.map((s) => c.styles[s]?.label || s).join(', ') : ''}${p.context?.kind ? ' · ' + p.context.kind : ''}</div><button class="btn sm ic" data-act="perfEdit" data-id="${p.id}">✎</button><button class="btn danger sm ic" data-act="perfDel" data-id="${p.id}">✕</button></div>`)}</details></div>`) : h`<p class="muted small">Aucun maximum enregistré.</p>`}</div>`;
+}
+/** Systèmes de cotation et styles d'escalade (dans Mes sports). */
+export function climbSystemsStyles() {
+  const c = ctx(), userSys = Object.values(c.systems).filter((s) => !s.builtin);
+  return h`<div class="card"><div class="row between"><h3>Systèmes de cotation</h3><button class="btn sm" data-act="sysNew">＋ Système</button></div>
       ${Object.values(BUILTIN_SYSTEMS).map((s) => h`<div class="item"><div class="grow"><b>${s.name}</b> ${s.global ? tag('🌍 pour tous', 'acc') : tag('intégré')}<div class="tiny muted">${s.levels.length} niveaux${s.maps.length ? ' · correspondance usuelle vers Fontainebleau' : ''}</div></div><button class="btn sm" data-act="sysDup" data-id="${s.id}">Dupliquer</button></div>${s.global && S.user?.isAdmin ? h`<div class="row"><button class="btn sm ghost" data-act="glReset" data-k="grading" data-id="${s.id}">↺ Retirer pour tous</button></div>` : ''}`)}
       ${userSys.map((s) => h`<div class="item"><div class="grow"><b>${s.name}</b> ${s.archived ? tag('archivé') : ''}<div class="tiny muted">${s.activity} · ${s.levels.length} niveaux · ${s.maps.length} correspondance(s)</div><div class="lvlrow">${sortedLevels(s).slice(0, 12).map((l) => raw(`<span class="lvl" style="${l.color ? `background:${l.color}` : ''}">${l.label.replace(/[<>&"]/g, '')}</span>`))}</div><div class="row wrapf">${shareButton('grading', s.id)}</div></div><button class="btn sm" data-act="sysEdit" data-id="${s.id}">✎</button></div>`)}</div>
     <div class="card"><div class="row between"><h3>Styles</h3><button class="btn sm" data-act="styleNew">＋ Style</button></div>
@@ -260,12 +296,31 @@ ACT.ascDel = async (el) => { if (await ask('Supprimer cette entrée ?', { danger
 function vGoals() {
   const c = ctx();
   if (S.param) { const g = c.goals.find((x) => x.id === S.param); if (g) return vGoalDetail(g); }
-  const list = c.goals.filter((g) => (S.filters.goals || 'active') === 'all' || (g.status || 'active') === (S.filters.goals || 'active'));
+  const f = ['done', 'archived'].includes(S.filters.goals) ? S.filters.goals : 'active', st = (g) => g.status || 'active';
+  const list = c.goals.filter((g) => st(g) === f), nArch = c.goals.filter((g) => st(g) === 'archived').length + itemsOf('project').filter((p) => p.status === 'archived').length;
+  // Réussis ou archivés : une sous-liste avec son retour (jamais une rangée d'onglets).
+  if (f === 'done') return h`<button class="btn sm ghost" data-act="goalFilter" data-id="active">‹ Objectifs en cours</button>${doneList(c.goals)}`;
+  if (f !== 'active') return h`<button class="btn sm ghost" data-act="goalFilter" data-id="active">‹ Objectifs en cours</button><h2>${f === 'done' ? '🏆 Objectifs réussis' : '🗄️ Objectifs archivés'}</h2>
+    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : itemsOf('project').some((p) => p.status === f) ? '' : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}${f === 'archived' ? projectsSection('archived') : ''}${f === 'done' && doneProjects().length ? doneList(c.goals) : ''}`;
   return h`${goalsPicker()}<div class="row wrapf"><button class="btn pri" data-act="goalNew">＋ Objectif précis</button></div>
-    <div class="chips">${[['active', 'Actifs'], ['done', 'Atteints'], ['archived', 'Archivés'], ['all', 'Tous']].map(([k, l]) => chip((S.filters.goals || 'active') === k, l, `data-act="goalFilter" data-id="${k}"`))}</div>
-    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…')}
+    <span class="kicker">En cours</span>
+    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}
+    ${projectsSection('active')}
+    ${doneGoals(c.goals).length || doneProjects().length ? doneList(c.goals, 5) : ''}
+    ${nArch ? menuList([['goalFilter', 'archived', '🗄️', `Objectifs archivés (${nArch})`, 'Mis de côté, gardés dans l’historique']]) : ''}
     <div class="card flat"><h3>Figures proposées</h3><div class="chips">${Object.entries(SKILLS).map(([id, s]) => chip(false, `${s.emoji} ${s.label}`, `data-act="goalNewSkill" data-id="${id}"`))}</div></div>`;
 }
+/** Objectifs réussis, datés (aussi affichés dans Progrès). */
+export function doneList(goals, max = 0) {
+  const d = [...doneGoals(goals).map((g) => ({ at: g.doneAt || 0, row: h`<button class="setrow" data-act="goalOpen" data-id="${g.id}"><span class="sic">🏆</span><span class="grow"><b>${goalLabel(g)}</b><small>${g.doneAt ? 'le ' + new Date(g.doneAt).toLocaleDateString('fr-FR') : ''}</small></span><span class="chev">›</span></button>` })),
+    ...doneProjects().map((p) => ({ at: p.doneAt || 0, row: h`<button class="setrow" data-act="projOpen" data-id="${p.id}"><span class="sic">🧗</span><span class="grow"><b>${p.name || 'Projet'} ${p.grade?.label || p.gradeText || ''}</b><small>Projet réussi${p.doneAt ? ' le ' + new Date(p.doneAt).toLocaleDateString('fr-FR') : ''}</small></span><span class="chev">›</span></button>` }))].sort((x, y) => y.at - x.at);
+  if (!d.length) return '';
+  const shown = max ? d.slice(0, max) : d;
+  return h`<section class="card"><h3>🏆 Objectifs réussis <span class="tiny muted">${d.length}</span></h3>
+    <div class="setmenu">${shown.map((x) => x.row)}</div>
+    ${max && d.length > max ? h`<button class="btn sm ghost" data-act="goalsDoneAll">Voir les ${d.length}</button>` : ''}</section>`;
+}
+ACT.goalsDoneAll = () => { S.filters.goals = 'done'; go('profile', 'goals'); };
 /* ═════════ Mon corps ═════════ */
 function vBody() {
   const b = item('config', 'body') || {}, c = ctx(), goals = item('config', 'main')?.goals || [];
@@ -339,23 +394,23 @@ ACT.goalAiSave = () => {
   putItem('goal', id, { type: d.metricId ? 'metric' : 'custom', label: d.label, metricId: d.metricId || '', target: d.target ?? null, current: null, unit: d.metricId ? METRICS[d.metricId]?.unit || '' : '', caps: d.caps.map((c) => ({ id: c.id, w: c.w })), status: 'active', startedAt: Date.now(), deadline: d.weeks ? new Date(Date.now() + d.weeks * 7 * 86400000).toISOString().slice(0, 10) : '', note: (d.steps || []).join(' · ').slice(0, 300) });
   S.goalDraft = null; closeSheet(); toast('Objectif ajouté'); go('profile', 'goals', id);
 };
-ACT.goalFilter = (el) => { S.filters.goals = el.dataset.id; render(); };
+ACT.goalFilter = (el) => { S.filters.goals = el.dataset.id; render(); window.scrollTo(0, 0); };
 ACT.goalNew = () => openSheet(goalForm(null), { wide: true });
 ACT.goalNewSkill = (el) => { closeSheet(); const s = SKILLS[el.dataset.id]; const ex = ctx().goals.find((g) => g.skillId === el.dataset.id && g.status === 'active'); if (ex) { go('profile', 'goals', ex.id); return; } const id = 'g-' + uid().slice(0, 12); putItem('goal', id, { type: 'skill', skillId: el.dataset.id, label: s.label, status: 'active', startedAt: Date.now() }); toast(`Objectif « ${s.label} » créé`); go('profile', 'goals', id); };
 function goalForm(g) {
   const c = ctx(), t = g?.type || S.goalType || 'metric';
   const systems = Object.values(c.systems).filter((s) => !s.archived);
   return h`<h2 style="margin:0">${g ? 'Modifier l’objectif' : 'Nouvel objectif'}</h2><form data-submit="goalSave" class="stack"><input type="hidden" name="id" value="${g?.id || ''}">
-    <label>Type<select name="type" data-change="goalType">${[['skill', 'Figure / skill'], ['metric', 'Performance à atteindre'], ['grade', 'Niveau d’escalade'], ['sessions', 'Nombre de séances'], ['ascents', 'Réussites en escalade'], ['custom', 'Autre (valeur manuelle)']].map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label>
+    <label>Type<select name="type" data-change="goalType">${[...(g ? [] : [['project', 'Un bloc ou une voie précis (projet d’escalade)']]), ['skill', 'Figure / skill'], ['metric', 'Performance à atteindre'], ['grade', 'Niveau d’escalade'], ['sessions', 'Nombre de séances'], ['ascents', 'Réussites en escalade'], ['custom', 'Autre (valeur manuelle)']].map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label>
     ${t === 'skill' ? h`<label>Figure<select name="skillId">${Object.entries(SKILLS).map(([id, s]) => h`<option value="${id}" ${g?.skillId === id ? 'selected' : ''}>${s.emoji} ${s.label}</option>`)}</select></label>` : ''}
-    ${t === 'metric' ? h`<label>Métrique<select name="metricId">${Object.entries(c.metrics).filter(([, m]) => m.kind !== 'grade').map(([id, m]) => h`<option value="${id}" ${g?.metricId === id ? 'selected' : ''}>${m.label}</option>`)}</select></label>${numberField('target', 'Valeur visée', g?.target ?? '', { required: true })}` : ''}
+    ${t === 'metric' ? h`<label>Métrique<select name="metricId" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure">${metricOptions(Object.entries(c.metrics).filter(([, m]) => m.kind !== 'grade'), g?.metricId)}</select></label>${numberField('target', 'Valeur visée', g?.target ?? '', { required: true })}` : ''}
     ${t === 'grade' ? h`<label>Discipline<select name="metricId"><option value="max_bloc" ${g?.metricId !== 'max_voie' ? 'selected' : ''}>Bloc</option><option value="max_voie" ${g?.metricId === 'max_voie' ? 'selected' : ''}>Voie</option></select></label><label>Système<select name="systemId" data-change="goalSys">${systems.map((s) => h`<option value="${s.id}" ${(g?.gradeTarget?.systemId || S.goalSys || 'font') === s.id ? 'selected' : ''}>${s.name}</option>`)}</select></label><label>Niveau visé<select name="levelId">${sortedLevels(c.systems[g?.gradeTarget?.systemId || S.goalSys || 'font']).map((l) => h`<option value="${l.id}" ${g?.gradeTarget?.levelId === l.id ? 'selected' : ''}>${l.label}</option>`)}</select></label>` : ''}
     ${['sessions', 'ascents', 'custom'].includes(t) ? h`<label>Nom<input name="label" maxlength="80" value="${g?.label || ''}" required placeholder="${t === 'sessions' ? '3 séances par semaine pendant 1 mois' : 'Mon objectif'}"></label>${numberField('target', 'Cible', g?.target ?? '', { required: true })}${t === 'custom' ? numberField('current', 'Valeur actuelle', g?.current ?? 0) : ''}` : ''}
     ${['metric', 'grade', 'skill'].includes(t) ? h`<label>Nom (facultatif)<input name="label" maxlength="80" value="${g?.label || ''}"></label>` : ''}
     <label>Échéance (facultatif)<input type="date" name="deadline" value="${g?.deadline || ''}"></label>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button></div></form>`;
 }
-CHG.goalType = (el) => { S.goalType = el.value; openSheet(goalForm(el.form.id.value ? { ...item('goal', el.form.id.value), type: el.value } : null), { wide: true }); };
+CHG.goalType = (el) => { if (el.value === 'project') { closeSheet(); setTimeout(() => ACT.projNew(), 120); return; } S.goalType = el.value; openSheet(goalForm(el.form.id.value ? { ...item('goal', el.form.id.value), type: el.value } : null), { wide: true }); };
 CHG.goalSys = (el) => { S.goalSys = el.value; const sel = el.form.querySelector('[name=levelId]'); sel.innerHTML = sortedLevels(ctx().systems[el.value]).map((l) => `<option value="${l.id}">${l.label.replace(/[<>&"]/g, '')}</option>`).join(''); };
 SUBMIT.goalSave = (f) => {
   const d = Object.fromEntries(new FormData(f)), c = ctx(), prev = d.id ? item('goal', d.id) : null;
@@ -370,25 +425,60 @@ SUBMIT.goalSave = (f) => {
 };
 function vGoalDetail(g) {
   const c = ctx(), pr = goalProgress(g, c), tab = S.goalTab || 'overview', sk = SKILLS[g.skillId];
-  const tabs = [['overview', 'Vue d’ensemble'], ['blockers', 'Ce qui bloque'], ...(sk ? [['tree', 'Progression'], ['paths', 'Chemins']] : []), ['graph', 'Graphe'], ['whatif', 'Et si… ?'], ['why', 'Pourquoi je stagne ?']];
-  return h`<div class="row"><button class="btn sm" data-act="goalBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2></div>
-    <div class="card hero ghero"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
+  const secs = [['blockers', '🧱', 'Ce qui bloque', 'Les capacités qui te freinent le plus'], ...(sk ? [['tree', '🪜', 'Progression', 'Les étapes jusqu’à l’objectif'], ['paths', '🛤️', 'Chemins', 'Les façons d’y arriver']] : []), ['graph', '🕸️', 'Graphe', 'Ce qui compte pour cet objectif, en image'], ['whatif', '🔮', 'Et si… ?', 'Ce que ça change si tu progresses sur un point'], ['why', '🤔', 'Pourquoi je stagne ?', 'Les raisons possibles, d’après tes données']];
+  return h`<button class="btn sm ghost" data-act="goalBack">‹ Objectifs</button><h2 style="margin:.2em 0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2>
+    <div class="card hero ghero stack"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
       ${sk ? h`<details class="how mini"><summary>C’est quoi, ${sk.label} ?</summary><p class="small">${sk.desc}</p></details>` : ''}
-      <div class="row"><button class="btn pri grow" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button>
-      <details class="menu"><summary class="btn ic" aria-label="Plus d’actions">⋯</summary><div class="menu-list"><button class="btn" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="done">✅ Atteint</button><button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div></details></div></div>
-    <div class="scrollx">${seg('goalTab', tab, tabs)}</div>${({ overview: goalOverview, blockers: goalBlockers, tree: goalTree, paths: goalPathsV, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[tab](g)}`;
+      ${g.status === 'done' ? h`<p class="small ok-t">🏆 Réussi le ${g.doneAt ? new Date(g.doneAt).toLocaleDateString('fr-FR') : '—'}</p>`
+        : (pr.pct ?? 0) >= 100 ? h`<div class="card flat ok-b row"><span class="grow small">🎉 Tu es à 100 % : tu l’as réussi ?</span><button class="btn sm pri" data-act="goalDone" data-id="${g.id}">🏆 Oui !</button></div>` : ''}
+      ${g.status === 'done' ? h`<button class="btn pri" data-act="goalNext" data-id="${g.id}">➡️ Objectif suivant</button>` : h`<button class="btn pri" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button><button class="btn" data-act="goalDone" data-id="${g.id}">🏆 J’ai réussi</button>`}</div>
+    <div class="row wrapf"><button class="btn sm" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn sm" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn sm" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn sm danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div>
+    ${goalOverview(g)}
+    <div class="setmenu secs">${secs.map(([k, ic, t, d]) => h`<details class="setsec" data-id="${k}" ${tab === k ? 'open' : ''}><summary class="setrow"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></summary><div class="secbody">${tab === k ? ({ blockers: goalBlockers, tree: goalTree, paths: goalPathsV, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[k](g) : ''}</div></details>`)}</div>`;
 }
 ACT.goalBack = () => { S.goalTab = 'overview'; go('profile', 'goals'); };
 ACT.goalTab = (el) => { S.goalTab = el.dataset.id; render(); };
+// Rubriques de l'objectif : une liste qui s'ouvre sur place (plus de barre d'onglets) ; le contenu est construit à l'ouverture.
+document.addEventListener('toggle', (e) => { const d = e.target; if (!d.matches?.('details.setsec')) return; if (!d.open) { if (S.goalTab === d.dataset.id) S.goalTab = ''; return; } if (S.goalTab !== d.dataset.id) { S.goalTab = d.dataset.id; render(); } }, true);
 ACT.goalOpen = (el) => { closeSheet(); S.goalTab = 'overview'; go('profile', 'goals', el.dataset.id); };
 ACT.goalEdit = (el) => { S.goalType = null; openSheet(goalForm(item('goal', el.dataset.id)), { wide: true }); };
-ACT.goalTrain = (el) => openGenerator({ mode: 'goal', goalId: el.dataset.id, activityId: SKILLS[item('goal', el.dataset.id)?.skillId]?.activity || '', autoPlan: true });
+// Séance pour cet objectif : l'assistant s'ouvre avec l'objectif déjà coché (et son sport).
+ACT.goalTrain = (el) => {
+  const g = item('goal', el.dataset.id); if (!g) return; const sport = g.activityId || SKILLS[g.skillId]?.activity || '';
+  const prev = S.cp || {}; S.cp = { ...prev, step: 2, aim: 'goals', goalIds: [g.id], ...(sport ? { sport } : {}), result: null, built: null, partsTouched: false };
+  go('library', 'climbplan');
+};
+/* Objectif réussi : daté, dans la progression, performance ajoutée au profil (si on veut), et objectif suivant proposé. */
+ACT.goalDone = (el) => {
+  const g = item('goal', el.dataset.id); if (!g) return; const perf = donePerf(g);
+  openSheet(h`<form data-submit="goalDoneGo" class="stack"><input type="hidden" name="id" value="${g.id}"><h2 style="margin:0">🏆 ${goalLabel(g)}</h2>
+    <p class="small">Bravo ! Il sera daté et apparaîtra dans ta progression et dans tes objectifs réussis.</p>
+    <label>Réussi le<input type="date" name="day" value="${new Date().toISOString().slice(0, 10)}" max="${new Date().toISOString().slice(0, 10)}"></label>
+    ${perf ? h`<label class="row"><input type="checkbox" name="perf" checked><span class="small">Enregistrer ${perf.grade ? `${perf.grade.label} comme ${perf.metricId === 'max_voie' ? 'ton max en voie' : 'ton max en bloc'}` : `${perf.value} comme ta performance`} dans ton profil</span></label>` : ''}
+    <button class="btn pri big">🏆 C’est réussi</button></form>`);
+};
+SUBMIT.goalDoneGo = (f) => {
+  const d = Object.fromEntries(new FormData(f)), g = item('goal', d.id); if (!g) return;
+  const at = d.day ? Math.min(Date.now(), new Date(d.day + 'T12:00:00').getTime()) : Date.now();
+  putItem('goal', g.id, { ...g, status: 'done', doneAt: at });
+  const perf = d.perf ? donePerf(g, at) : null; if (perf) putItem('perf', 'p-' + uid().slice(0, 12), perf);
+  closeSheet(); celebrate?.(); toast('🏆 Objectif réussi !', 3500); render();
+  setTimeout(() => ACT.goalNext({ dataset: { id: g.id } }), 900);
+};
+ACT.goalNext = (el) => {
+  const g = item('goal', el.dataset.id); if (!g) return; const ideas = nextGoals(g, ctx());
+  openSheet(h`<div class="stack"><h2 style="margin:0">➡️ Et maintenant ?</h2><p class="small muted">Des idées pour continuer, à partir de « ${goalLabel(g)} ».</p>
+    ${ideas.length ? h`<div class="setmenu">${ideas.map((x, i) => h`<button class="setrow" data-act="goalNextAdd" data-id="${g.id}" data-i="${i}"><span class="sic">🎯</span><span class="grow"><b>${x.label}</b><small>${x.why}</small></span><span class="chev">＋</span></button>`)}</div>` : ''}
+    <button class="btn" data-act="goalNewFrom">＋ Un autre objectif</button><button class="btn ghost" data-act="closeSheet">Plus tard</button></div>`);
+};
+ACT.goalNextAdd = (el) => { const g = item('goal', el.dataset.id), x = g && nextGoals(g, ctx())[Number(el.dataset.i)]; if (!x) return; const id = 'g-' + uid().slice(0, 12); putItem('goal', id, x.data); closeSheet(); toast('Nouvel objectif ajouté'); go('profile', 'goals', id); };
+ACT.goalNewFrom = () => { closeSheet(); go('profile', 'goals'); setTimeout(() => ACT.goalNew?.(), 150); };
 ACT.goalStatus = (el) => { const g = item('goal', el.dataset.id); if (!g) return; putItem('goal', g.id, { ...g, status: el.dataset.v, doneAt: el.dataset.v === 'done' ? Date.now() : g.doneAt }); toast(el.dataset.v === 'done' ? 'Bravo ! Objectif atteint 🎉' : 'Objectif mis à jour'); render(); };
 ACT.goalDel = async (el) => { const g = item('goal', el.dataset.id); if (g && (await ask(`Supprimer l’objectif « ${goalLabel(g)} » ?`, { danger: true, ok: 'Supprimer' }))) { delItem('goal', g.id); go('profile', 'goals'); } };
 function goalOverview(g) {
   const c = ctx(), caps = goalCaps(g, c);
   return h`<div class="card"><h3>Capacités requises</h3>${caps.map((x) => { const st = capacityState(x.id, c); return h`<button class="item pick" data-act="capOpen" data-id="${x.id}"><div class="grow"><b>${capL(x.id)}</b> <span class="tiny muted">poids ${x.w}</span><div>${statusTag(st)} ${st.level != null ? h`<span class="tiny muted">confiance ${confWord(st.confidence)}</span>` : ''}</div></div></button>`; })}</div>
-    ${SKILLS[g.skillId] ? h`<div class="card"><h3>📏 Tes repères</h3>${SKILLS[g.skillId].criteria.map((cr) => { const m = c.metrics[cr.metric], p = perfsOf(cr.metric, c).find((x) => !x.unknown); const ratio = p && p.value != null ? Math.min(100, Math.round((m.dir === -1 ? cr.target / p.value : p.value / cr.target) * 100)) : 0; return h`<div class="prow crit"><div class="grow"><div class="row between"><b class="small">${m.label}</b><span class="tiny ${p ? '' : 'muted'}">${p ? perfText(p, c) : '—'} / ${cr.target} ${m.unit}</span></div><div class="track"><i style="width:${ratio}%"></i></div><details class="how mini"><summary>Pourquoi ce repère ?</summary><p class="tiny">${cr.why} Repère indicatif, pas une garantie.</p></details></div><button class="btn sm ${p ? '' : 'pri'}" data-act="perfAdd" data-id="${cr.metric}">${p ? '＋' : 'Saisir'}</button></div>`; })}</div>` : ''}`;
+    ${SKILLS[g.skillId] ? h`<div class="card"><h3>📏 Tes repères</h3>${SKILLS[g.skillId].criteria.map((cr) => { const m = c.metrics[cr.metric], p = perfsOf(cr.metric, c).find((x) => !x.unknown); const ratio = p && p.value != null ? Math.min(100, Math.round((m.dir === -1 ? cr.target / p.value : p.value / cr.target) * 100)) : 0; return h`<div class="prow crit"><div class="grow"><div class="row between wrapf"><b class="small">${m.label}</b><span class="tiny nowrap ${p ? '' : 'muted'}">${p ? perfText(p, c) : 'pas noté'} / ${cr.target} ${m.unit === 'reps' ? 'rép.' : m.unit}</span></div><div class="track"><i style="width:${ratio}%"></i></div><details class="how mini"><summary>Pourquoi ce repère ?</summary><p class="tiny">${cr.why} Repère indicatif, pas une garantie.</p></details></div><button class="btn sm ${p ? '' : 'pri'}" data-act="perfAdd" data-id="${cr.metric}">${p ? '＋ Noter' : 'Saisir'}</button></div>`; })}</div>` : ''}`;
 }
 function goalBlockers(g) {
   const b = blockers(g, ctx());
@@ -424,7 +514,7 @@ function goalGraph(g) {
 function goalWhatIf(g) {
   const caps = goalCaps(g, ctx()), cap = S.whatCap || caps[0]?.id, n = S.whatN || 2;
   const w = cap ? whatIf(cap, n, ctx()) : null;
-  return h`<div class="card"><h3>Simulation « Et si… ? »</h3><label>Si je travaillais<select data-change="whatCap">${caps.map((x) => h`<option value="${x.id}" ${x.id === cap ? 'selected' : ''}>${capL(x.id)}</option>`)}</select></label>
+  return h`<div class="card"><h3>Simulation « Et si… ? »</h3><label>Si je travaillais<select data-change="whatCap">${raw(capOptionGroups(caps.map((x) => x.id), cap, capL))}</select></label>
     <div class="chips">${[1, 2, 3, 4].map((k) => chip(n === k, `${k}× / semaine`, `data-act="whatN" data-id="${k}"`))}</div>${w ? h`<p class="small">${w.text}</p><p class="tiny muted">${w.disclaimer}</p>` : ''}</div>`;
 }
 CHG.whatCap = (el) => { S.whatCap = el.value; render(); };
@@ -435,13 +525,63 @@ function goalWhy(g) {
 }
 
 /* ═════════ Matériel et environnements ═════════ */
+/* Longues listes de mesures : rangées par catégorie (et triées dans le sélecteur). */
+const METRIC_GROUPS = [['grade', '🧗 Niveaux d’escalade'], ['doigts', '✋ Doigts'], ['haut', '💪 Haut du corps'], ['gainage', '🧱 Gainage'], ['jambes', '🦵 Jambes et explosivité'], ['souplesse', '🤸 Souplesse'], ['course', '🏃 Course'], ['natation', '🏊 Natation'], ['corps', '⚖️ Corps'], ['perso', '✍️ Mes mesures'], ['autre', '📏 Autres']];
+export function metricGroup(id, m) {
+  const caps = Object.keys(m.caps || {}), has = (re) => caps.some((c) => re.test(c));
+  if (!m.native) return 'perso';
+  if (m.kind === 'grade') return 'grade';
+  if ((m.acts || []).includes('running')) return 'course';
+  if ((m.acts || []).includes('swimming')) return 'natation';
+  if (/^body_|poids|taille/.test(id)) return 'corps';
+  if (has(/doigts|pince/)) return 'doigts';
+  if (has(/^mobilite/)) return 'souplesse';
+  if (has(/^gainage/)) return 'gainage';
+  if (has(/jambes|explosivite|chaine_posterieure/)) return 'jambes';
+  if (has(/tirage|poussee|blocage|scapulaire|epaules/)) return 'haut';
+  return 'autre';
+}
+function metricOptions(list, selected) {
+  const by = new Map(METRIC_GROUPS.map(([k]) => [k, []]));
+  for (const [id, x] of list) by.get(metricGroup(id, x))?.push([id, x]);
+  return h`${METRIC_GROUPS.filter(([k]) => by.get(k).length).map(([k, l]) => h`<optgroup label="${l}">${by.get(k).sort((a, b) => a[1].label.localeCompare(b[1].label, 'fr')).map(([id, x]) => h`<option value="${id}" ${id === selected ? 'selected' : ''}>${x.label}</option>`)}</optgroup>`)}`;
+}
+/** Contexte d'une mesure : le lieu précis (salle ou falaise) et le secteur. */
+function perfContext(d) {
+  const env = ctx().envs.find((e) => e.id === d.ctxEnv);
+  if (env) return { env: env.id, kind: kindOfEnv(env) === 'falaise' ? 'falaise' : 'salle', place: String(d.ctxSector || '').trim().slice(0, 60) };
+  return { kind: ['salle', 'falaise'].includes(d.ctxEnv) ? d.ctxEnv : '', place: String(d.ctxSector || '').trim().slice(0, 60) };
+}
+/* ═════════ Mes lieux : salles, falaises (et secteurs), maison… et ce que tu y as fait ═════════ */
 function vEquipment() {
-  const c = ctx(), un = new Set(item('config', 'equipment')?.unavailable || []), main = item('config', 'main') || {};
-  return h`<div class="row wrapf"><button class="btn pri" data-act="envNewGym">🧗 ＋ Ma salle d’escalade</button><button class="btn" data-act="envNew">＋ Autre lieu</button></div>
-    ${c.envs.length ? c.envs.map((e) => h`<div class="card"><div class="row between"><div><b>${e.name}</b> ${tag(ENV_TYPES[e.type] || e.type)}${e.city ? h` <span class="tiny muted">📍 ${e.city}</span>` : ''}${e.gradeSys && c.systems[e.gradeSys] ? h` <span class="tiny muted">· ${c.systems[e.gradeSys].name}</span>` : ''}${e.areas?.length ? h`<div class="tiny muted">${e.areas.map((a) => (GYM_AREAS[a.id]?.[0] || '') + ' ' + (GYM_AREAS[a.id]?.[1] || a.id)).join(' · ')}</div>` : ''} ${(main.envId ? main.envId === e.id : e.isDefault) ? tag('par défaut', 'acc') : ''}</div><button class="btn sm" data-act="envEdit" data-id="${e.id}">✎</button></div><p class="small muted">${e.equipment.map((k) => EQUIPMENT[k] || k).join(', ') || 'Aucun matériel'}</p>${(main.envId ? main.envId !== e.id : !e.isDefault) ? h`<button class="btn sm" data-act="envDefault" data-id="${e.id}">Utiliser par défaut</button>` : ''}</div>`) : empty('Aucun environnement. Décris où tu t’entraînes (maison, salle, extérieur, salle d’escalade, piscine, piste…) et ton matériel : le générateur ne proposera que ce qui est possible.')}
+  const c = ctx(), un = new Set(item('config', 'equipment')?.unavailable || []);
+  if (S.param) { const e = c.envs.find((x) => x.id === S.param); if (e) return vPlaceDetail(e); }
+  const groups = allPlaces(c.envs, c);
+  return h`<div class="row wrapf"><button class="btn pri" data-act="envNewGym">🏢 ＋ Salle d’escalade</button><button class="btn" data-act="envNewCrag">🌄 ＋ Falaise</button><button class="btn" data-act="envNew">＋ Autre lieu</button></div>
+    ${groups.length ? groups.map((g) => h`<span class="kicker">${KIND_LABEL[g.kind][0]} ${KIND_LABEL[g.kind][1]}</span><div class="setmenu">${g.places.map(({ env: e, stats: st }) => h`<button class="setrow" data-act="placeOpen" data-id="${e.id}"><span class="sic">${KIND_LABEL[kindOfEnv(e)][0]}</span><span class="grow"><b>${e.name}</b>${c.defEnv?.id === e.id ? h` <span class="tag ok">par défaut</span>` : ''}<small>${placeLine(e, st)}</small></span><span class="chev">›</span></button>`)}</div>`)
+      : empty('Aucun lieu pour l’instant. Ajoute ta salle, ta falaise ou ta maison : l’app adapte les séances à leur matériel et garde ce que tu y fais.')}
     <div class="card"><h3>Indisponible aujourd’hui</h3><p class="tiny muted">Une barre prise, pas de poutre ? Décoche-le : les séances générées s’adaptent et expliquent les remplacements.</p>
       <div class="chips">${[...new Set(c.envs.flatMap((e) => e.equipment))].map((k) => chip(!un.has(k), EQUIPMENT[k] || k, `data-act="eqToggle" data-id="${k}"`))}</div>${un.size ? h`<button class="btn sm" data-act="eqReset">Tout est disponible</button>` : ''}</div>`;
 }
+const placeLine = (e, st) => [e.city, st.sessions.length ? `${st.sessions.length} séance(s)` : '', st.ascents.length ? `${st.sent} bloc(s)/voie(s) réussi(s)` : '', st.bestBloc ? `max bloc ${st.bestBloc}` : '', st.bestVoie ? `max voie ${st.bestVoie}` : '', st.last ? `dernière fois ${relDate(st.last)}` : '', !st.count ? 'rien d’enregistré ici pour l’instant' : ''].filter(Boolean).join(' · ');
+function vPlaceDetail(e) {
+  const c = ctx(), st = placeStats(e.id, c, e.name), sys = e.gradeSys && c.systems[e.gradeSys];
+  const asc = (a) => h`<div class="item"><span class="gpill">${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${fmtDay(a.date)} · ${({ flash: '⚡ flash', send: '✓ réussi', work: '💪 après travail', top: '✓ réussi', attempt: '… essayé', fail: '✗' })[a.result] || ''}</div></div></div>`;
+  return h`<div class="row"><button class="btn sm" data-act="placeBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${KIND_LABEL[kindOfEnv(e)][0]} ${e.name}</h2></div>
+    <div class="card"><p class="small">${ENV_TYPES[e.type] || e.type}${e.city ? ` · ${e.city}` : ''}${sys ? ` · cotation ${sys.name}` : ''}</p>
+      ${e.equipment?.length && e.type !== 'falaise' ? h`<p class="tiny muted">🧰 ${e.equipment.map((k) => EQUIPMENT[k] || k).join(', ')}</p>` : ''}
+      ${e.sectors?.length ? h`<p class="tiny muted">📌 Secteurs : ${e.sectors.join(', ')}</p>` : ''}
+      <div class="row wrapf"><button class="btn pri" data-act="placeTrain" data-id="${e.id}">✨ Créer une séance ici</button>${['escalade', 'falaise'].includes(e.type) ? h`<button class="btn" data-act="placeLog" data-id="${e.id}">🧗 Noter un bloc / une voie ici</button>` : ''}
+        <button class="btn" data-act="envEdit" data-id="${e.id}">✎ Modifier</button>${c.defEnv?.id === e.id ? '' : h`<button class="btn" data-act="envDefault" data-id="${e.id}">Par défaut</button>`}</div></div>
+    <div class="kpis">${[['🏋️', 'Séances', st.sessions.length], ['⏱', 'Minutes', st.minutes], ['🧗', 'Réussis', st.sent], ...(st.bestBloc ? [['🪨', 'Max bloc', st.bestBloc]] : []), ...(st.bestVoie ? [['🧗', 'Max voie', st.bestVoie]] : [])].map(([ic, l, v]) => h`<div class="kpi"><span>${ic}</span><b>${v}</b><small>${l}</small></div>`)}</div>
+    ${st.sectors.length ? st.sectors.map((sec) => h`<section class="card"><h3>${sec.name ? `📌 ${sec.name}` : st.sectors.length > 1 ? 'Sans secteur' : 'Blocs et voies'} <span class="tiny muted">${sec.sent}/${sec.list.length} réussi(s)</span></h3>${sec.list.slice(0, 12).map(asc)}</section>`) : ''}
+    ${st.sessions.length ? h`<section class="card"><h3>Séances faites ici</h3>${st.sessions.slice(0, 15).map((x) => h`<div class="item"><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">${fmtDay(x.startedAt)} · ${Math.round((x.durationSeconds || 0) / 60)} min</div></div></div>`)}</section>` : ''}
+    ${!st.count ? empty('Rien d’enregistré ici pour l’instant. Crée une séance ici, ou note un bloc / une voie : tout apparaîtra sur cette page.') : ''}`;
+}
+ACT.placeOpen = (el) => go('profile', 'equipment', el.dataset.id);
+ACT.placeBack = () => go('profile', 'equipment');
+ACT.placeTrain = (el) => { S.cp = { ...(S.cp || {}), envId: el.dataset.id, step: 2, result: null, built: null, partsTouched: false }; go('library', 'climbplan'); };
+ACT.placeLog = (el) => { S.aqEnvPreset = el.dataset.id; ACT.ascQuick?.(); };
 function envForm(e) {
   const t = e?.type || S.envType || 'maison', eq = new Set(e?.equipment || ENV_TEMPLATES[t] || []);
   const eqChips = (name, keys, sel) => h`<div class="chips">${keys.map((k) => h`<label class="chip ${sel.has(k) ? 'on' : ''}"><input type="checkbox" class="hidden" name="${name}" value="${k}" ${sel.has(k) ? 'checked' : ''} data-change="chipToggle">${EQUIPMENT[k] || k}</label>`)}</div>`;
@@ -455,13 +595,19 @@ function envForm(e) {
       <label>Cotation de la salle</label><div class="row wrapf"><select name="gradeSys" class="grow"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin || x.global).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select><button class="btn sm" type="button" data-act="sysNew">＋ Créer (U1 → U8+, couleurs…)</button></div>
       <label>Les espaces de la salle et leur matériel</label>
       ${Object.entries(GYM_AREAS).map(([id, [ic, label, sugg]]) => { const a = areas.get(id), sel = new Set(a?.items || (e ? [] : sugg.slice(0, 2))); const keys = [...new Set([...sugg, ...sel])]; return h`<div class="card flat garea"><label class="chk"><input type="checkbox" name="areaOn" value="${id}" ${on(id) ? 'checked' : ''}> <b>${ic} ${label}</b></label>${eqChips('ar_' + id, keys, sel)}<input name="arn_${id}" maxlength="120" value="${a?.note || ''}" placeholder="Précision (facultatif) : ex. poutre Beastmaker 2000"></div>`; })}`;
+  } else if (t === 'falaise') {
+    const c = ctx(), systems = Object.values(c.systems).filter((x) => !x.archived);
+    body = h`<label>Région ou ville <span class="tiny muted">(facultatif)</span><input name="city" maxlength="60" value="${e?.city || ''}" placeholder="Ex. Fontainebleau, Céüse"></label>
+      <label>Cotation utilisée<select name="gradeSys"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select></label>
+      <label>Secteurs <span class="tiny muted">(un par ligne : tu les choisiras en notant tes blocs et tes voies)</span><textarea name="sectors" rows="4" placeholder="Ex. Bas Cuvier&#10;Apremont&#10;Secteur des dalles">${(e?.sectors || []).join('\n')}</textarea></label>`;
   } else body = h`<label>Matériel disponible</label>${eqChips('eq', Object.keys(EQUIPMENT), eq)}`;
-  return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle' : 'Nouvel environnement'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
+  return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle d’escalade' : t === 'falaise' ? 'Nouvelle falaise' : 'Nouveau lieu'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
     ${head}${body}
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${e ? h`<button class="btn danger" type="button" data-act="envDel" data-id="${e.id}">Supprimer</button>` : ''}</div></form>`;
 }
 ACT.envNew = () => { S.envType = 'maison'; openSheet(envForm(null), { wide: true }); };
 ACT.envNewGym = () => { S.envType = 'escalade'; openSheet(envForm(null), { wide: true }); };
+ACT.envNewCrag = () => { S.envType = 'falaise'; openSheet(envForm(null), { wide: true }); };
 ACT.envEdit = (el) => { const e = item('env', el.dataset.id); if (e) openSheet(envForm(e), { wide: true }); };
 CHG.envType = (el) => { if (!el.form.id.value) { S.envType = el.value; openSheet(envForm(null), { wide: true }); } };
 SUBMIT.envSave = (f) => {
@@ -470,11 +616,14 @@ SUBMIT.envSave = (f) => {
   if (d.type === 'escalade') {
     const areas = fd.getAll('areaOn').filter((id) => GYM_AREAS[id]).map((id) => ({ id, items: fd.getAll('ar_' + id), note: String(fd.get('arn_' + id) || '') }));
     putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', areas, equipment: [...new Set(areas.flatMap((a) => a.items))] });
+  } else if (d.type === 'falaise') {
+    const sectors = [...new Set(String(d.sectors || '').split('\n').map((x) => x.trim()).filter(Boolean))].slice(0, 30);
+    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', sectors, equipment: ['wall'] });
   } else putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, equipment: fd.getAll('eq') });
-  closeSheet(); buzzOk(); toast(d.type === 'escalade' ? 'Salle enregistrée' : 'Environnement enregistré'); render();
+  closeSheet(); buzzOk(); toast({ escalade: 'Salle enregistrée', falaise: 'Falaise enregistrée' }[d.type] || 'Lieu enregistré'); render();
 };
 ACT.envDel = async (el) => { const e = item('env', el.dataset.id); if (e && (await ask(`Supprimer « ${e.name} » ?`, { danger: true, ok: 'Supprimer' }))) { delItem('env', e.id); closeSheet(); render(); } };
-ACT.envDefault = (el) => { putItem('config', 'main', { ...(item('config', 'main') || {}), envId: el.dataset.id }); toast('Environnement par défaut modifié'); render(); };
+ACT.envDefault = (el) => { putItem('config', 'main', { ...(item('config', 'main') || {}), envId: el.dataset.id }); toast(`📍 ${item('env', el.dataset.id)?.name || 'Lieu'} : c’est ton lieu par défaut`); render(); };
 ACT.eqToggle = (el) => { const conf = item('config', 'equipment') || {}, un = new Set(conf.unavailable || []); un.has(el.dataset.id) ? un.delete(el.dataset.id) : un.add(el.dataset.id); putItem('config', 'equipment', { ...conf, unavailable: [...un] }); render(); };
 ACT.eqReset = () => { putItem('config', 'equipment', { unavailable: [] }); render(); };
 

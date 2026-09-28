@@ -2,6 +2,7 @@
 // montre seulement ce qui a changé et qu'il faut savoir. Chaque version ajoute ses étapes ici.
 // Étape : [onglet, sous-page, sélecteur de l'élément (ou '' pour une bulle au centre), titre, texte].
 import { APP_VERSION, ls } from './state.js';
+import { catchUpSteps, missedVersions } from './catchup.js';
 
 export const NEWS = [
   // Les premières versions (avant la visite des nouveautés) : leur visite montre ce qu'elles ont apporté, qui existe toujours.
@@ -98,11 +99,11 @@ export const NEWS = [
     ['library', 'exercises', '#main [data-act=libInfo]', '🎯 Chaque exercice', 'Touche un exercice (ou son nom dans une séance) : c’est quoi, à quoi ça sert, et pourquoi il est là.'],
   ] },
   { v: '8.19.0', date: '2026-10-06', title: 'Structurer ta séance d’escalade', why: 'Dis ce que tu veux réussir à la fin (ex. un U8 en dévers) et le temps que tu as : l’app construit toute la séance. Ou structure-la toi-même : parties, bloc ou voie, intensité, cotations, styles, et plusieurs propositions de structure.', steps: [
-    ['library', 'climbplan', '[data-act=cpMode][data-id=goal]', '🎯 Ton objectif', 'Choisis la cotation à réussir, les styles et ton temps : échauffement sur des niveaux bien plus faciles, montée, puis essais.'],
-    ['library', 'climbplan', '[data-act=cpMode][data-id=parts]', '🧩 À ta façon', 'Tes parties (ex. 1 h 30 bloc intense, 30 min tranquille, voie max), une structure au choix pour chacune, et « adapter à ce que j’ai fait avant ».'],
+    ['library', 'climbplan', '.steps', '🎯 Ton objectif', 'Choisis la cotation à réussir, les styles et ton temps : échauffement sur des niveaux bien plus faciles, montée, puis essais.'],
+    ['library', 'climbplan', '.steps', '🧩 À ta façon', 'Tes parties (ex. 1 h 30 bloc intense, 30 min tranquille, voie max), une structure au choix pour chacune, et « adapter à ce que j’ai fait avant ».'],
   ] },
   { v: '8.20.0', date: '2026-10-07', title: 'Surprends-moi', why: 'Dis seulement ce que tu veux (sport, temps, forme… ou rien) : l’app te prépare une séance différente de d’habitude, ou qui te fait progresser, et t’explique pourquoi. Échauffement et étirements réglables partout.', steps: [
-    ['library', 'climbplan', '[data-act=cpMode][data-id=surprise]', '🎲 Surprends-moi', 'Nouveau pour toi (styles, structures, exercices jamais faits) ou pour progresser (tes styles faibles, ton objectif).'],
+    ['library', 'climbplan', '.steps', '🎲 Surprends-moi', 'Nouveau pour toi (styles, structures, exercices jamais faits) ou pour progresser (tes styles faibles, ton objectif).'],
   ] },
   { v: '8.21.0', date: '2026-10-08', title: 'Idées avec l’endroit, mise en page plus claire', why: 'Quand tu proposes une idée, tu peux montrer l’endroit exact à changer ; l’administrateur y va en un clic et le modifie pour tout le monde. Le mode ✏️ de mise en page explique ce qu’il fait, a un aperçu et un bouton Quitter.', steps: [
     ['settings', 'main', '[data-act=ideaNew]', '📍 Montre l’endroit', 'Écris ton idée, puis « Choisir l’endroit à changer » et touche l’élément concerné.'],
@@ -112,19 +113,36 @@ export const NEWS = [
     ['library', 'climbplan', '[data-act=cpHelp][data-id=guide]', '🧭 L’app me guide', 'Pour chaque partie : des exercices expliqués (ce qu’ils travaillent, où les placer, quoi prendre pour travailler plus une chose). Tu coches.'],
     ['library', 'climbplan', '[data-act=cpHelp][data-id=free]', '✋ Je compose', 'Tes parties et tes exercices, dans tout le catalogue.'],
   ] },
+  { v: '8.23.0', date: '2026-10-10', title: 'Une seule façon de créer une séance, et tes lieux', why: 'Créer une séance se fait en 5 étapes pour tous les sports : comment l’app t’aide, sport + lieu (le matériel suit), plusieurs objectifs, le format puis les exercices. Tes salles et falaises (avec secteurs) gardent tout ce que tu y as fait, et tes objectifs réussis sont enregistrés.', steps: [
+    ['library', 'climbplan', '.steps', '✨ Créer une séance', 'Étape par étape : comment l’app t’aide, sport, lieu et temps, tes objectifs, le format, puis les exercices. « ‹ Retour » à chaque étape.'],
+    ['profile', 'equipment', '[data-act=envNewCrag]', '📍 Mes lieux', 'Salles et falaises (avec leurs secteurs). Touche un lieu pour voir tout ce que tu y as fait.'],
+    ['profile', 'goals', '.setsec', '🏆 Objectifs réussis', 'Un bouton « J’ai réussi » enregistre la perf dans ton profil et propose la suite. Tout est rangé par section, sans onglets.'],
+    ['settings', 'notifs', '.card', '🔔 Notifications', 'Si tu ne reçois plus les nouveautés : « 🩺 Vérifier cet appareil » répare l’abonnement.'],
+  ] },
+  { v: '8.24.0', date: '2026-10-11', title: 'Tous les sports comme l’escalade', why: 'Course, natation, muscu, renfo : choisis ton sport et une performance à atteindre (10 km en 50 min, 100 kg au squat, 15 tractions…). La séance se construit comme pour une cotation : échauffement, montée, travail à l’allure ou à la charge visée, retour au calme. Chaque partie a ses structures au choix (fractionné, seuil, 5×5, EMOM…). Et tout se lit sans rien de caché, même sur un petit téléphone.', steps: [
+    ['library', 'climbplan', '.steps', '🎯 Atteindre une performance', 'À l’étape « Pour quoi ? », choisis « Atteindre une performance » et écris ta cible : allures et charges sont calculées depuis tes perfs notées.'],
+    ['profile', 'goals', '.kicker', '📋 Objectifs en liste', 'Plus de rangée d’onglets : tes objectifs en cours, puis les réussis et les archivés, rangés en rubriques.'],
+  ] },
+  { v: '8.25.0', date: '2026-10-12', title: 'Tout est regroupé, et on rattrape ce qu’on a raté', why: 'Les fonctions qui se ressemblaient sont réunies : les projets d’escalade avec les objectifs, une seule page Records et mesures, un seul Journal, Mon analyse, Mon corps et mes préférences, un Planning, un Assistant, et une seule façon de créer une séance. Si tu as raté plusieurs mises à jour, une seule visite te montre tout.', steps: [
+    ['profile', 'goals', '.kicker', '📌 Projets = objectifs', 'Tes projets d’escalade sont rangés avec tes objectifs, et « Réussi » les met dans tes objectifs réussis.'],
+    ['profile', 'perfs', '#main h1', '🏆 Records et mesures', 'Records des séances, mesures, maxima, pyramide et test de doigts : tout au même endroit.'],
+    ['progress', 'journal', '.chips', '📝 Un seul Journal', 'Séances, blocs et voies, mesures, notes, étapes : un seul fil, avec des filtres.'],
+    ['profile', 'analyse', '.setmenu', '🔎 Mon analyse', 'Capacités, tendances, pourquoi ces conseils et le Lab, réunis.'],
+    ['home', 'cal', '#main h1', '📅 Planning', 'Calendrier, programme et rappels au même endroit.'],
+    ['library', 'climbplan', '.steps', '✨ Une seule façon de créer une séance', '« Séance du jour », « Que faire aujourd’hui » et l’Assistant ouvrent tous cet assistant, déjà rempli.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';
 const num = (v) => String(v || '0').split('.').map((x) => Number(x) || 0).reduce((t, x) => t * 1000 + x, 0);
 
-/** Étapes des versions pas encore visitées (jusqu'à la version actuelle), la plus ancienne d'abord. */
-export function pendingNews() {
-  const done = num(ls.get(KEY, '0')), now = num(APP_VERSION);
-  return NEWS.filter((n) => num(n.v) > done && num(n.v) <= now).flatMap((n) => n.steps);
-}
+/** Étapes de rattrapage : toutes les versions pas encore visitées depuis la dernière visite, en une seule visite. */
+export function pendingNews() { return catchUpSteps(NEWS, ls.get(KEY, '0'), APP_VERSION, { since: ls.get(KEY + '-at', 0) }); }
+/** Versions ratées depuis la dernière visite (la plus ancienne d'abord). */
+export const missedNews = () => missedVersions(NEWS, ls.get(KEY, '0'), APP_VERSION);
 /** Étapes de la dernière version (pour « Revoir les nouveautés »). */
 export const latestNews = () => NEWS.filter((n) => num(n.v) <= num(APP_VERSION)).at(-1)?.steps || [];
-export const markNewsToured = () => ls.set(KEY, APP_VERSION);
+export const markNewsToured = () => { ls.set(KEY, APP_VERSION); ls.set(KEY + '-at', Date.now()); };
 /** Première utilisation de l'appareil : rien de « nouveau » à montrer (la visite complète s'en charge).
  *  Appareil déjà utilisé avant l'arrivée de cette visite : on montre les nouveautés depuis la 8.3. */
 export function initNews() {

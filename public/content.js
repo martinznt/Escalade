@@ -183,7 +183,7 @@ export function vAdminContent() {
   const list = SPORT_INTENTS[act] || [];
   const changes = GL.items.slice().sort((a, b) => b.updatedAt - a.updatedAt);
   const title = (g) => g.hidden ? `Masqué : ${g.id}` : g.data?.name || g.data?.label || g.data?.title || g.data?.q || (g.data?.to ? `« ${g.data.from} » → « ${g.data.to} »` : '') || (g.kind === 'layout' ? 'Mise en page de base' : g.id);
-  const KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
+  const KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', hint: '💡 Raccourci', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
   return h`<div class="card"><h3>🌍 Contenu pour tout le monde</h3><p class="small muted">Sur chaque exercice ou séance prête, « ✏️ Modifier » te demande si c’est pour toi ou pour tout le monde. Ici : les intentions par sport, et tout ce qui a été changé.</p>
       <div class="row wrapf"><button class="btn sm" data-act="exNewGlobal">＋ Exercice pour tout le monde</button><button class="btn sm" data-act="allGo" data-to="library/catalog">🗂 Séances prêtes</button></div></div>
     <div class="card"><h3>🛠 Modifier l’app sans code</h3>${menuList([
@@ -191,6 +191,7 @@ export function vAdminContent() {
       ['announceNew', '', '📣', 'Écrire une annonce', 'Un message ou une note de mise à jour, envoyé en notification à tout le monde.'],
       ['layEditAt', '', '🧩', 'Mise en page pour tous', 'Sur chaque page, ✏️ en haut puis « Pour tout le monde ». Ce que tu masques est masqué pour tous.', 'home/dash'],
       ['allGo', '', '❓', 'Questions fréquentes et sources', 'Dans Aide : ✏️ sur chaque question et chaque source, ou ＋ pour en ajouter.', 'settings/help'],
+      ['hintNew', '', '💡', 'Ajouter un raccourci', 'Une indication cliquable sur une page, qui mène à une autre (ex. « Note ton max ici »).'],
     ])}</div>
     <div class="card"><h3>🧭 Intentions par sport</h3><div class="chips">${Object.keys(SPORT_INTENTS).map((k) => h`<button type="button" class="chip ${k === act ? 'on' : ''}" data-act="admAct" data-v="${k}">${ACTIVITIES[k]?.emoji || ''} ${ACTIVITIES[k]?.label || k}</button>`)}</div>
       ${list.map((x) => h`<div class="item"><div class="grow"><b>${x.emoji} ${x.label}</b>${x.globalEdit ? h` <span class="tag">🌍 modifiée</span>` : ''}</div><button class="btn sm ic" data-act="intEdit" data-id="${x.id}" aria-label="Modifier">✏️</button><button class="btn sm ic danger" data-act="intHide" data-id="${x.id}" aria-label="Masquer">🙈</button></div>`)}
@@ -198,6 +199,14 @@ export function vAdminContent() {
     <div class="card"><h3>📝 Changements pour tout le monde (${changes.length})</h3>${changes.length ? changes.slice(0, 60).map((g) => h`<div class="item"><div class="grow"><b class="small">${title(g)}</b><div class="tiny muted">${KIND[g.kind]} · ${new Date(g.updatedAt).toLocaleDateString('fr-FR')}${g.by ? ` · ${g.by}` : ''}</div></div><button class="btn sm ghost" data-act="glReset" data-k="${g.kind}" data-id="${g.id}">↺ Annuler</button></div>`) : h`<p class="small muted">Rien n’a encore été changé.</p>`}</div>`;
 }
 ACT.admAct = (el) => { S.admAct = el.dataset.v; render(); };
+/* Raccourcis ajoutés par un administrateur : sur une page, une indication qui mène à une autre (pour tout le monde). */
+const ROUTES = [['home/dash', 'Accueil'], ['progress/summary', 'Progrès'], ['library/home', 'Bibliothèque'], ['library/seances', 'Mes séances'], ['library/climbplan', 'Créer une séance'], ['library/exercises', 'Exercices'], ['library/catalog', 'Séances prêtes'], ['profile/home', 'Profil'], ['profile/goals', 'Objectifs'], ['profile/perfs', 'Mesures'], ['profile/climbing', 'Carnet'], ['profile/equipment', 'Mes lieux'], ['settings/main', 'Paramètres']];
+ACT.hintNew = () => { if (!isAdmin()) return; const opt = (sel) => ROUTES.map(([k, l]) => h`<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`);
+  openSheet(h`<form data-submit="hintGo" class="stack"><h2 style="margin:0">💡 Nouveau raccourci</h2><p class="small muted">Il s’affiche en haut de la page choisie, pour tout le monde ; chacun peut le masquer.</p>
+    <label>Sur la page<select name="where">${opt('home/dash')}</select></label><label>Texte<input name="text" required maxlength="120" placeholder="Ex. Note ton max en bloc ici"></label>
+    <div class="grid2"><label>Mène à<select name="go">${opt('profile/perfs')}</select></label><label>Icône<input name="icon" maxlength="4" value="💡"></label></div>
+    <button class="btn pri big">Ajouter pour tout le monde</button></form>`); };
+SUBMIT.hintGo = async (f) => { const d = Object.fromEntries(new FormData(f)); try { await putGlobal('hint', 'h-' + uid().slice(0, 10), { data: { where: d.where, go: d.go, text: d.text, icon: d.icon, back: 'Retour' } }); closeSheet(); toast('Raccourci ajouté pour tout le monde'); } catch (e) { toast(e.message, 4500, 'bad'); } };
 ACT.intEdit = (el) => {
   const act = S.admAct, x = (SPORT_INTENTS[act] || []).find((i) => i.id === el.dataset.id) || { id: '', emoji: '🧭', label: '' };
   openSheet(h`<form data-submit="intEditGo" class="stack"><input type="hidden" name="id" value="${x.id}"><h2 style="margin:0">${x.id ? '✏️ Modifier l’intention' : '＋ Nouvelle intention'} · ${ACTIVITIES[act]?.label || act}</h2>
@@ -264,7 +273,7 @@ SUBMIT.proposeGo = async (f) => {
 };
 
 /* ───────── Administrateurs : ouvrir une proposition là où elle se trouve ───────── */
-const TARGET = { grading: 'profile/climbing', style: 'profile/climbing', exercise: 'library/exercises', catalog: 'library/catalog', format: 'library/generate', intent: 'library/generate', category: 'settings/admin', idea: 'settings/admin' };
+const TARGET = { grading: 'profile/activities', style: 'profile/activities', exercise: 'library/exercises', catalog: 'library/catalog', format: 'library/generate', intent: 'library/generate', category: 'settings/admin', idea: 'settings/admin' };
 function preview(p) {
   const d = p.payload?.data || {};
   if (p.kind === 'grading') return h`<div class="lvlrow">${(d.levels || []).map((l) => raw(`<span class="lvl" style="${l.color ? `background:${l.color}` : ''}">${String(l.label).replace(/[<>&"]/g, '')}</span>`))}</div><p class="tiny muted">${d.activity || ''} · ${(d.levels || []).length} niveaux · ${(d.maps || []).length} correspondance(s)</p>`;

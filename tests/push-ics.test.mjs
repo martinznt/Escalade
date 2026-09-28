@@ -101,4 +101,16 @@ await ok('annonce dès la première requête après le déploiement (sans attend
     assert.ok(sent.length >= 1, 'les appareils abonnés sont prévenus tout de suite');
   } finally { globalThis.fetch = realFetch; delete env.CF_VERSION_METADATA; }
 });
+await ok('suivi : l’état de l’abonnement de l’appareil, et ce qu’a donné la dernière annonce (visible par l’admin seulement)', async () => {
+  const env = makeEnv(), u = new Client(env); await u.register('suiviuser');
+  await u.post('/api/push/subscribe', { endpoint: EP + 's1', days: [0], hour: '18:00', types: ['update'] });
+  await u.post('/api/push/subscribe', { endpoint: EP + 's2', days: [0], hour: '18:00', types: ['reminder'] });
+  const st = (await u.get('/api/push/status?endpoint=' + encodeURIComponent(EP + 's1'))).data; assert.equal(st.subscribed, true); assert.deepEqual(st.types, ['update']);
+  assert.equal((await u.get('/api/push/status?endpoint=' + encodeURIComponent(EP + 'inconnu'))).data.subscribed, false);
+  const f = async (url) => new Response(null, { status: url.endsWith('s1') ? 410 : 201 });
+  await updateNotice(env, 'v1', f); await updateNotice(env, 'v2', f);
+  const row = JSON.parse((await env.DB.prepare("SELECT value FROM system_state WHERE key='last_notify'").first()).value);
+  assert.equal(row.targeted, 1); assert.equal(row.gone, 1); assert.equal(row.sent, 0);
+  assert.equal((await u.get('/api/admin/push-status')).status, 403);
+});
 done();

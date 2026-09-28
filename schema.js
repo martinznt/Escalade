@@ -46,6 +46,7 @@ export const SCHEMA = [
 export const ADD_COLUMNS = [
   ['users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0'],
   ['users', 'admin_since', 'INTEGER'],
+  ['users', 'last_seen', 'INTEGER'], // dernière visite (compte connecté), pour la liste des comptes de l'admin
   ['user_data', 'v2_migrated', 'INTEGER NOT NULL DEFAULT 0'],
   ['profiles', 'bio', "TEXT NOT NULL DEFAULT ''"],
   ['profiles', 'share_json', "TEXT NOT NULL DEFAULT '{}'"],

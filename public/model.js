@@ -41,6 +41,11 @@ export const CAPACITIES = {
   technique_course: { label: 'Technique de course', family: 'technique', desc: 'Économie et posture de course.' },
   technique_nage: { label: 'Technique de nage', family: 'technique', desc: 'Efficacité, glisse et respiration dans l’eau.' },
 };
+/** Options d'une liste de capacités, rangées par famille (Force, Puissance…), pour le sélecteur. */
+export function capOptionGroups(ids, selected, label = (id) => CAPACITIES[id]?.label || id) {
+  const by = {}; for (const id of ids) { const f = CAPACITIES[id]?.family || 'autre'; (by[f] ||= []).push(id); }
+  return Object.entries(by).map(([f, list]) => `<optgroup label="${CAP_FAMILIES[f] || 'Autres'}">${list.sort((a, b) => String(label(a)).localeCompare(String(label(b)), 'fr')).map((id) => `<option value="${id}"${id === selected ? ' selected' : ''}>${String(label(id)).replace(/[<>&"]/g, '')}</option>`).join('')}</optgroup>`).join('');
+}
 export const CAP_FAMILIES = { force: 'Force', puissance: 'Puissance', gainage: 'Gainage', endurance: 'Endurance', technique: 'Technique', mobilite: 'Mobilité', prevention: 'Prévention' };
 
 /* ───────── Muscles (noms français, vue de face / de dos) et leur lien vers les capacités ───────── */
@@ -84,9 +89,10 @@ export const GYM_AREAS = {
   entrainement: ['🏋️', 'Espace entraînement', ['hangboard', 'campus', 'boardwall', 'spraywall', 'bar', 'rings', 'band']], muscu: ['💪', 'Musculation', ['weights', 'kettlebell', 'barbell', 'bench', 'dips', 'box']],
   etirement: ['🧘', 'Étirements', ['mat', 'band', 'rope']],
 };
-export const ENV_TYPES = { maison: 'Maison', salle: 'Salle de sport', exterieur: 'Extérieur', escalade: 'Salle d’escalade', piscine: 'Piscine', piste: 'Piste / terrain', autre: 'Autre' };
+export const ENV_TYPES = { maison: 'Maison', salle: 'Salle de sport', exterieur: 'Extérieur', escalade: 'Salle d’escalade', falaise: 'Falaise / site d’escalade', piscine: 'Piscine', piste: 'Piste / terrain', autre: 'Autre' };
 // Modèles proposés à la création d'un environnement (l'utilisateur coche ensuite son matériel réel).
 export const ENV_TEMPLATES = {
+  falaise: ['wall'],
   maison: ['mat', 'band'], salle: ['bar', 'dips', 'weights', 'barbell', 'bench', 'kettlebell', 'machine', 'box', 'mat', 'band', 'rope', 'treadmill'],
   exterieur: ['track', 'hill'], escalade: ['wall', 'hangboard', 'bar', 'mat', 'band'], piscine: ['pool', 'pullbuoy'], piste: ['track'], autre: [],
 };

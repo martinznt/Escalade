@@ -12,7 +12,7 @@ ok('accents, majuscules et ponctuation ignorés', () => {
 });
 ok('le bon résultat en premier pour les recherches courantes', () => {
   assert.equal(top('minuteur'), 'Minuteur'); assert.equal(top('langue'), 'Langue'); assert.equal(top('mot de passe'), 'Changer le mot de passe');
-  assert.equal(top('rappel'), 'Rappels d’entraînement'); assert.equal(top('records'), 'Records');
+  assert.equal(top('rappel'), 'Rappels d’entraînement'); assert.equal(top('records'), 'Records et mesures');
 });
 ok('synonymes : « anglais » trouve la langue, « tabata » le minuteur, « poids » mon corps', () => {
   assert.equal(top('anglais'), 'Langue'); assert.equal(top('tabata'), 'Minuteur'); assert.ok(findIn(ALL, 'poids').some((r) => r.title === 'Mon corps'));

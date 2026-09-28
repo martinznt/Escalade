@@ -63,7 +63,8 @@ export function ask(message, { ok = 'Confirmer', cancel = 'Annuler', danger = fa
 }
 
 /* ───────── Composants ───────── */
-export const seg = (act, cur, opts, extra = '') => h`<div class="seg" role="tablist">${opts.map(([v, l]) => h`<button type="button" role="tab" class="${cur === v ? 'on' : ''}" aria-selected="${cur === v}" data-act="${act}" data-id="${v}" ${raw(extra)}>${l}</button>`)}</div>`;
+// Un choix parmi quelques-uns : des pastilles qui passent à la ligne (jamais une barre d'onglets).
+export const seg = (act, cur, opts, extra = '') => h`<div class="chips choice" role="radiogroup">${opts.map(([v, l]) => h`<button type="button" role="radio" class="chip ${cur === v ? 'on' : ''}" aria-checked="${cur === v}" data-act="${act}" data-id="${v}" ${raw(extra)}>${l}</button>`)}</div>`;
 /** Liste de rubriques (comme les réglages d'un téléphone) : [action, id, icône, titre, description]. */
 export const menuList = (rows) => h`<div class="setmenu">${rows.map(([act, id, ic, t, d, to]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''} ${to ? raw(`data-to="${to}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b>${d ? h`<small>${d}</small>` : ''}</span><span class="chev">›</span></button>`)}</div>`;
 /** En-tête d'une sous-page : retour vers la liste, puis le titre. */

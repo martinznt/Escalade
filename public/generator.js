@@ -363,7 +363,7 @@ export function generateFromPlan(plan, ctx) {
   const why = [], facts = [], inferences = [], missing = [...plan.missing], excludedTxt = [];
   const B = budget(plan.minutes, plan.light);
   let exercises = [];
-  facts.push(`Durée demandée : ${plan.minutes} min · activité : ${plan.activityLabel}${plan.envName ? ` · environnement : ${plan.envName}` : ''}.`);
+  facts.push(`Durée demandée : ${plan.minutes} min · activité : ${plan.activityLabel}${plan.envName ? ` · lieu : ${plan.envName}` : ''}.`);
   facts.push(`Matériel disponible : ${plan.equipment.length ? plan.equipment.map((n) => EQUIPMENT[n] || n).join(', ') : 'aucun déclaré'}.`);
   inferences.push(`Niveau pris en compte : ${['débutant', 'intermédiaire', 'avancé'][plan.level]} (${plan.levelHow}).`);
   for (const d of plan.distribution) inferences.push(`${d.label} ciblé(e) à ${d.pct} % : ${d.reasons.join(' ; ')}.`);

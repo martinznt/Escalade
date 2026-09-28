@@ -1,5 +1,6 @@
 // views-progress.js — Progrès : comparaisons personnelles, résumés, régularité, charge, historique, records,
 // timeline, journal, analyses descriptives et mode Lab. Toujours par rapport à soi-même, jamais aux autres.
+import { doneList } from './views-profile.js';
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, subHead, tag, empty, howBox, meter, bars, lineChart, fmtDay, fmtDate, fmtDateTime, relDate, numberField, buzzOk, fmtDur } from './ui.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, deleteHistory, updateHistory, putItem, delItem, item, itemsOf } from './state.js';
 import { uid, exKey } from './shared.js';
@@ -11,19 +12,25 @@ import { composePage } from './layout.js';
 
 const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
 const SUB_INFO = {
-  history: ['📋', 'Historique', (c) => (c.history.length ? `${c.history.length} séance${c.history.length > 1 ? 's' : ''} enregistrée${c.history.length > 1 ? 's' : ''}` : 'Tes séances faites, une par une')],
-  records: ['🏆', 'Records', () => 'Tes meilleures performances'], timeline: ['🕰️', 'Frise', () => 'Tout ce qui s’est passé, dans l’ordre'],
-  journal: ['📝', 'Journal', () => 'Tes notes et tes ressentis'], analyses: ['🔍', 'Analyses', () => 'Tendances, charge, pourquoi je stagne'], lab: ['🧪', 'Lab', () => 'Graphiques détaillés pour aller plus loin'],
+  journal: ['📝', 'Journal', (c) => (c.history.length ? `${c.history.length} séance${c.history.length > 1 ? 's' : ''}, blocs et voies, mesures, notes, étapes` : 'Séances, blocs et voies, mesures, notes, étapes')],
+  records: ['🏆', 'Records et mesures', () => 'Records, tests, maxima (dans ton profil)'], analyse: ['🔎', 'Mon analyse', () => 'Capacités, tendances, pourquoi ces conseils, lab'],
 };
 /** Progrès : le résumé d'abord (l'essentiel), puis la liste des rubriques ; chaque rubrique a sa page. */
 export function vProgress() {
   const sub = SUBS.some(([k]) => k === S.sub.progress) ? S.sub.progress : 'summary';
-  const views = { summary: vSummary, history: vHistory, records: vRecords, timeline: vTimeline, journal: vJournal, analyses: vAnalyses, lab: vLab };
+  // Les records ont rejoint « Records et mesures » (Profil) : l'ancienne adresse y mène.
+  if (sub === 'records') { setTimeout(() => go('profile', 'perfs'), 0); return ''; }
+  // Historique et frise ont rejoint le Journal (le détail d'une séance garde son adresse).
+  if ((sub === 'history' && !S.param) || sub === 'timeline') { S.jf = sub === 'history' ? 'session' : 'step'; setTimeout(() => go('progress', 'journal'), 0); return ''; }
+  if (sub === 'history') return h`${subHead('progSub', 'journal', 'Journal', '📋 Séance')}${vHistory()}`;
+  const views = { summary: vSummary, history: vHistory, journal: vJournal, analyses: vAnalyses, lab: vLab };
   if (sub === 'summary') { const c = ctx(); return h`<h1>📈 Progrès</h1>${vSummary()}<span class="kicker">Aller plus loin</span>${menuList(Object.entries(SUB_INFO).map(([k, [ic, t, d]]) => ['progSub', k, ic, t, d(c)]))}`; }
+  // Tendances et Lab font partie de « Mon analyse » (profil).
+  if (sub === 'analyses' || sub === 'lab') return h`${subHead('profSub', 'analyse', 'Mon analyse', sub === 'lab' ? '🧪 Lab' : '🔍 Tendances et diagnostics')}${views[sub]()}`;
   const [ic, t] = SUB_INFO[sub];
   return h`${subHead('progSub', 'summary', 'Progrès', `${ic} ${t}`)}${views[sub]()}`;
 }
-ACT.progSub = (el) => go('progress', el.dataset.id);
+ACT.progSub = (el) => { if (el.dataset.id === 'journal' && !el.dataset.keep) S.jf = S.jf || 'all'; return el.dataset.id === 'records' ? go('profile', 'perfs') : el.dataset.id === 'analyse' ? go('profile', 'analyse') : go('progress', el.dataset.id); };
 const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);
 
 function vSummary() {
@@ -44,7 +51,8 @@ function vSummary() {
   const SUM = () => h`<details class="card fold"><summary><span>🗓️ Résumé ${per === 'week' ? 'de la semaine' : 'du mois'}</span><em>${s.sessions}</em></summary>
       <div class="chips">${chip(per === 'week', 'Semaine', 'data-act="sumKind" data-id="week"')}${chip(per === 'month', 'Mois', 'data-act="sumKind" data-id="month"')}</div>
       <p class="small">${s.sessions} séance(s) · ${s.minutes} min${s.activities.length ? ' · ' + s.activities.map((a) => `${a.label} ×${a.n}`).join(', ') : ''}</p>
-      ${s.undertrained.length ? h`<p class="small">🧩 Peu travaillé : ${s.undertrained.join(', ')}</p>` : ''}</details>`;
+      ${s.undertrained.length ? h`<p class="small">🧩 Peu travaillé : ${s.undertrained.join(', ')}</p>` : ''}
+      <button class="btn" data-act="recapOpen">📸 Mon bilan du mois en image</button></details>`;
   const kpisView = () => h`<div class="kpiwrap"><div class="row between">${seg('benchDays', String(days), [['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']])}</div>
     <div class="kpis">${kpi('🏋️', 'Séances', b.cur.sessions, b.deltas.sessions)}${kpi('⏱', 'Minutes', b.cur.minutes, b.deltas.minutes)}${kpi('🔁', 'Séries', b.cur.sets, b.deltas.sets)}${kpi('😮‍💨', 'Ressenti', b.cur.rpe ?? '—', null)}</div>
     <p class="tiny muted center">Comparé aux ${days} jours d’avant · uniquement toi</p></div>`;
@@ -52,6 +60,7 @@ function vSummary() {
     streak: () => streakCard(),
     kpis: kpisView,
     wins: () => (wins.length ? h`<section class="card ok-b"><span class="kicker ok-t">Tes bonnes nouvelles</span>${wins.map(([ic, t]) => h`<div class="win"><span>${ic}</span>${t}</div>`)}</section>` : ''),
+    goalsdone: () => doneList(ctx().goals, 3),
     work: () => (b.capDiff.length ? WORK() : ''),
     regularity: () => REG(),
     load: () => LOAD(),
@@ -66,16 +75,13 @@ ACT.muscleDays = (el) => { S.muscleDays = Number(el.dataset.id); render(); };
 
 /* ═════════ Historique ═════════ */
 function vHistory() {
-  const c = ctx();
   if (S.param) { const e = S.history.find((x) => x.id === S.param); if (e) return vEntry(e); }
-  const list = c.history;
-  return h`${c.future.length ? h`<div class="card flat warn-b small">${c.future.length} séance(s) datée(s) dans le futur ne sont pas comptées comme réalisées (horloge ou import erroné).</div>` : ''}
-    ${list.length ? list.slice(0, 80).map((x) => h`<button class="card pick hist" data-act="histOpen" data-id="${x.id}"><div class="row"><div class="grow"><b>${x.sessionName}</b> ${x._failed ? tag('non synchronisée', 'bad') : ''}${x.data?.aborted ? tag('interrompue', 'warn') : ''}<div class="muted small">${fmtDateTime(x.startedAt)} · ${Math.round((x.durationSeconds || 0) / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''} · ${activityLabel(entryActivity(x, c), c)}</div></div><span class="muted">›</span></div></button>`) : empty('Aucune séance réalisée pour l’instant.')}`;
+  S.jf = 'session'; setTimeout(() => go('progress', 'journal'), 0); return '';
 }
 ACT.histOpen = (el) => go('progress', 'history', el.dataset.id);
 function vEntry(e) {
   const q = e.data?.questionnaire || {}, d = e.data || {};
-  return h`<div class="row"><button class="btn sm" data-act="progSub" data-id="history" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${e.sessionName}</h2></div>
+  return h`<h2 style="margin:0">${e.sessionName}</h2>
     <div class="card"><p class="small">${fmtDateTime(e.startedAt)} · durée ${fmtDur(e.durationSeconds || 0)}${d.activeSeconds ? ' · actif ' + fmtDur(d.activeSeconds) : ''}${d.pausedSeconds ? ' · pause ' + fmtDur(d.pausedSeconds) : ''}${d.plannedMin ? ' · prévu ' + d.plannedMin + ' min' : ''}</p>
       ${d.context?.envName ? h`<p class="small">Lieu : ${d.context.envName}</p>` : ''}${d.aborted ? h`<p class="small warn-t">Séance interrompue avant la fin.</p>` : ''}
       ${q.felt?.length ? h`<p class="small">Muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}</p>` : ''}${q.hardest ? h`<p class="small">Plus difficile : ${q.hardest}</p>` : ''}${q.easiest ? h`<p class="small">Plus facile : ${q.easiest}</p>` : ''}
@@ -88,27 +94,35 @@ SUBMIT.histSave = (f) => { const d = Object.fromEntries(new FormData(f)), e = S.
 ACT.histDel = async (el) => { if (!(await ask('Supprimer cette séance de l’historique ?', { ok: 'Supprimer', danger: true }))) return; deleteHistory(el.dataset.id); go('progress', 'history'); };
 
 /* ═════════ Records ═════════ */
-function vRecords() {
+/** Records des séances (dans Profil › Records et mesures). */
+export function recordsCards() {
   const c = ctx(), r = records(c);
   const names = new Map(); for (const hh of c.history) for (const e of hh.data?.exercises || []) names.set(exKey(e.name), e.name);
   const key = S.progressEx && names.has(S.progressEx) ? S.progressEx : [...names.keys()][0] || '';
   const pts = [];
   for (const hh of [...c.history].reverse()) { const ex = (hh.data?.exercises || []).find((e) => exKey(e.name) === key); if (!ex) continue; const sets = (ex.sets || []).filter((s) => s.done !== false); const load = Math.max(0, ...sets.map((s) => s.load || 0)), sec = Math.max(0, ...sets.map((s) => s.seconds || 0)), reps = Math.max(0, ...sets.map((s) => s.reps || 0)); pts.push({ v: load || sec || reps, u: load ? 'kg' : sec ? 's' : 'rép.' }); }
-  return h`<div class="card"><h3>🏆 Records personnels</h3>${r.length ? r.map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.kind === 'perf' ? 'performance' : 'meilleure série'} · ${fmtDay(x.date)}</div></div><span>${x.text}</span></div>`) : h`<p class="muted small">Aucun record encore.</p>`}</div>
+  return h`<div class="card"><h3>🏆 Records des séances</h3>${r.length ? r.map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.kind === 'perf' ? 'performance' : 'meilleure série'} · ${fmtDay(x.date)}</div></div><span>${x.text}</span></div>`) : h`<p class="muted small">Tes meilleures séries apparaîtront ici après tes séances.</p>`}</div>
     ${names.size ? h`<div class="card"><h3>Évolution d’un exercice</h3><select data-change="progEx" aria-label="Exercice">${[...names].map(([k, n]) => h`<option value="${k}" ${k === key ? 'selected' : ''}>${n}</option>`)}</select>${lineChart(pts, pts[0]?.u || '')}</div>` : ''}`;
 }
 CHG.progEx = (el) => { S.progressEx = el.value; render(); };
 
 /* ═════════ Timeline et journal ═════════ */
-function vTimeline() {
-  const t = timeline(ctx());
-  return t.length ? h`<ol class="timeline">${t.slice(0, 120).map((e) => h`<li class="${e.kind}"><span class="ico sm">${e.icon}</span><div><b class="small">${e.text}</b><div class="tiny muted">${fmtDay(e.t)}</div></div></li>`)}</ol>` : empty('Ta timeline se remplira avec tes records, objectifs et étapes.');
-}
+/** Le journal : tout ce qui s'est passé, au même endroit (séances, blocs et voies, mesures, notes, étapes), avec des filtres. */
+const JF = [['all', 'Tout'], ['session', '🏋️ Séances'], ['ascent', '🧗 Blocs et voies'], ['perf', '📏 Mesures'], ['note', '📝 Notes'], ['step', '🏆 Étapes et records']];
 function vJournal() {
-  const j = journal(ctx());
-  return h`<form data-submit="jnote" class="card"><div class="row"><textarea name="text" maxlength="1000" required rows="1" class="grow" placeholder="📝 Une note, une sensation…" aria-label="Ajouter une note au journal"></textarea><button class="btn pri" type="submit">Ajouter</button></div></form>
-    ${j.length ? j.map((e) => h`<div class="card journal ${e.kind}"><div class="row"><span class="ico sm">${e.icon}</span><div class="grow"><div class="row between"><b>${e.title}</b><span class="tiny muted">${fmtDateTime(e.t)}</span></div><div class="small">${e.text}</div>${e.note ? h`<div class="small muted">« ${e.note} »</div>` : ''}${e.more?.length ? h`<details class="how mini"><summary>Détails</summary><p class="tiny">${e.more.join(' · ')}</p></details>` : ''}</div>${e.kind === 'note' ? '' : ''}</div></div>`) : empty('Ton journal regroupera tes séances, mesures, ascensions et notes.')}`;
+  const c = ctx(), f = JF.some(([k]) => k === S.jf) ? S.jf : 'all', max = S.jMax || 60;
+  const steps = timeline(c).map((e) => ({ t: e.t, kind: 'step', icon: e.icon, title: e.text, text: '', note: '' }));
+  const all = [...journal(c, 2000), ...steps].sort((x, y) => y.t - x.t), list = all.filter((e) => f === 'all' || e.kind === f);
+  return h`<form data-submit="jnote" class="card"><textarea name="text" maxlength="1000" required rows="2" placeholder="📝 Une note, une sensation…" aria-label="Ajouter une note au journal"></textarea><button class="btn pri" type="submit">＋ Ajouter au journal</button></form>
+    ${c.future.length ? h`<div class="card flat warn-b small">${c.future.length} séance(s) datée(s) dans le futur ne sont pas comptées comme réalisées (horloge ou import erroné).</div>` : ''}
+    <div class="chips">${JF.map(([k, l]) => chip(f === k, l, `data-act="jFilter" data-id="${k}"`))}</div>
+    ${list.length ? list.slice(0, max).map((e) => { const inner = h`<span class="ico sm">${e.icon}</span><div class="grow"><div class="row between wrapf"><b>${e.title}</b><span class="tiny muted">${e.kind === 'step' ? fmtDay(e.t) : fmtDateTime(e.t)}</span></div>${e.text ? h`<div class="small">${e.text}</div>` : ''}${e.note ? h`<div class="small muted">« ${e.note} »</div>` : ''}${e.more?.length ? h`<div class="tiny muted">${e.more.join(' · ')}</div>` : ''}</div>`;
+        return e.kind === 'session' && e.id ? h`<button class="card pick journal session row" data-act="histOpen" data-id="${e.id}">${inner}<span class="chev">›</span></button>` : h`<div class="card journal ${e.kind} row">${inner}</div>`; })
+      : empty(f === 'all' ? 'Ton journal regroupera tes séances, blocs et voies, mesures, notes et étapes.' : 'Rien de ce type pour l’instant.', f === 'all' || f === 'session' ? h`<button class="btn pri" data-act="genOpen">▶ Faire la séance du jour</button> <button class="btn" data-act="cpNew">✨ Créer une séance</button>` : '')}
+    ${list.length > max ? h`<button class="btn ghost" data-act="jMore">Voir plus (${list.length - max})</button>` : ''}`;
 }
+ACT.jFilter = (el) => { S.jf = el.dataset.id; S.jMax = 60; render(); };
+ACT.jMore = () => { S.jMax = (S.jMax || 60) + 60; render(); };
 SUBMIT.jnote = (f) => { const t = String(new FormData(f).get('text') || '').trim(); if (!t) return; putItem('jnote', 'jn-' + uid().slice(0, 14), { date: Date.now(), text: t }); f.reset(); buzzOk(); toast('Note ajoutée'); render(); };
 
 /* ═════════ Analyses descriptives ═════════ */

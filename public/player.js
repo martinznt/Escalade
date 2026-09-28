@@ -12,7 +12,7 @@ import { normalizeSession, uid, exKey, parseKg, norm } from './shared.js';
 import { progressHint, applyPerformedBase, exMinutes, sessionMinutes } from './engine.js';
 import { MUSCLES, CAPACITIES } from './model.js';
 import { byId } from './library.js';
-import { exCaps, exMuscles, entryActivity } from './brain.js';
+import { exCaps, exMuscles, entryActivity, activeGoals, goalCaps, goalLabel } from './brain.js';
 import { warmupFor } from './generator.js';
 import { hrSupported, hrConnect, hrConnected, hrNow, onHr } from './hr.js';
 import { celebrate } from './fx.js';
@@ -203,6 +203,7 @@ function vQuiz(p) {
   return h`<div class="pl"><div class="center"><div class="ico acc big" style="margin:0 auto">🎉</div><h1>${p.aborted ? 'Séance interrompue' : 'Séance terminée'}</h1>
       <p class="muted">${fmtDur(p.durationSeconds)} de séance · ${fmtDur(p.activeSeconds)} actif${p.pausedSeconds ? ' · ' + fmtDur(p.pausedSeconds) + ' de pause (non comptée)' : ''} · ${done.length} exercice(s) · ${sets} série(s)</p></div>
     ${p.prs.map((x) => h`<div class="card acc-b">🏆 Nouveau record : <b>${x}</b></div>`)}
+    ${(() => { const g = goalsServed(done, c); return g.length ? h`<div class="card ok-b small">🎯 Cette séance a travaillé ce qui compte pour : <b>${g.join(', ')}</b></div>` : ''; })()}
     ${sets ? h`<div class="card"><h3>Questionnaire rapide</h3><p class="tiny muted">Tes réponses affinent ton profil, tes préférences et les prochaines séances. Tout est facultatif.</p>
       ${muscles.length ? h`<b class="small">Quels muscles as-tu le plus sentis ?</b><div class="chips">${muscles.map((m) => h`<button type="button" class="chip ${q.felt.includes(m) ? 'on' : ''}" data-act="qFelt" data-v="${m}">${MUSCLES[m]?.label || m}</button>`)}</div>` : ''}
       ${done.length > 1 ? h`<b class="small">Exercice le plus difficile ?</b><div class="chips">${done.map((l) => h`<button type="button" class="chip ${q.hardest === l.name ? 'on' : ''}" data-act="qPick" data-k="hardest" data-v="${l.name}">${l.name}</button>`)}</div>
@@ -214,6 +215,11 @@ function vQuiz(p) {
       ${stored ? h`<label class="chk"><input type="checkbox" data-change="qBase" ${p.useBase ? 'checked' : ''}> Utiliser mes valeurs réalisées comme nouvelle base de « ${stored.name} » <span class="tiny muted">(seulement quand elles sont supérieures ou égales à la prescription)</span></label>` : ''}
     </div>` : h`<p class="muted center">Aucune série réalisée : rien à enregistrer.</p>`}
     <button class="btn pri big" data-act="pSave" ${sets ? '' : 'disabled'}>💾 Enregistrer</button><button class="btn" data-act="pDiscard">Ne pas enregistrer</button></div>`;
+}
+/** Objectifs en cours que la séance a fait travailler (capacités des exercices faits ∩ capacités de l'objectif). */
+function goalsServed(done, c) {
+  const w = {}; for (const l of done) for (const [k, v] of Object.entries(exCaps(l.ex, c) || {})) w[k] = (w[k] || 0) + v;
+  return activeGoals(c).filter((g) => { const gc = goalCaps(g, c), tot = gc.reduce((t, x) => t + x.w, 0); if (!tot) return false; return gc.reduce((t, x) => t + (w[x.id] ? x.w : 0), 0) / tot >= 0.4; }).map(goalLabel).slice(0, 3);
 }
 Object.assign(ACT, {
   qFelt: (el) => { const q = S.player.quiz, v = el.dataset.v; q.felt = q.felt.includes(v) ? q.felt.filter((x) => x !== v) : [...q.felt, v]; draw(); },

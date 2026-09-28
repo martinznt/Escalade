@@ -1,6 +1,6 @@
 // views-settings.js — Paramètres : séance, apparence, compte, données (export / import JSON, import CSV),
 // synchronisation et diagnostic, administration (EDIT_PASSWORD vérifié par le serveur), signalement de bug.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton } from './ui.js';
+import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead } from './ui.js';
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, ctx, go, render, api, queue, saveSettings, syncAll, retryFailed, discardFailed, restoreConflict, pendingCount, persistNow, clearLocal, DEFAULT_SETTINGS, putItem, itemsOf, addHistory, saveEvent, ls, writePending, persist, bump, syncSoon } from './state.js';
 import { uid, mergeSeances, readStored, normalizeSession } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
@@ -38,8 +38,9 @@ export function vSettings() {
   const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin'].includes(k)) : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
   const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
-  const title = sub === 'main' ? 'Paramètres' : subs.find(([k]) => k === sub)[1];
-  return h`<h1>${title}</h1>${sub !== 'main' && !['display', 'session'].includes(sub) ? back() : ''}${views[sub]()}`;
+  if (sub === 'main') return h`<h1>Paramètres</h1>${views.main()}`;
+  const ic = MENU.find(([k]) => k === sub)?.[1];
+  return h`${subHead('setSub', 'main', 'Paramètres', `${ic ? ic + ' ' : ''}${subs.find(([k]) => k === sub)[1]}`)}${views[sub]()}`;
 }
 ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug' && !S.user?.guest) loadMyBugs(); };
 
@@ -67,7 +68,6 @@ function prefs() {
   const tog = ([k, l]) => h`<label class="chk"><input type="checkbox" data-change="pref" name="${k}" ${st[k] ? 'checked' : ''}> ${l}</label>`;
   return { st, a, segA, tog };
 }
-const back = () => h`<button class="btn sm ghost setback" data-act="setSub" data-id="main">‹ Paramètres</button>`;
 /* ═════════ Toutes les mises à jour, de la plus récente à la première ═════════ */
 function vUpdates() {
   const notes = announcements().filter((a) => a.update);
@@ -82,8 +82,8 @@ function vUpdates() {
 /* ═════════ Affichage et mise en page ═════════ */
 function vDisplay() {
   const { st, a, segA, tog } = prefs();
-  return h`${back()}
-    <div class="card"><h3>🎨 Affichage</h3>
+  return h`
+    <div class="card"><h3>🌈 Thème et couleurs</h3>
       <label>Thème</label>${segA('mode', [['dark', '🌙 Sombre'], ['light', '☀️ Clair'], ['auto', '🔁 Comme mon téléphone']])}
       <label>Ambiance</label><div class="vibes">${VIBES.map(([id, n, d]) => h`<button type="button" class="vibe ${(a.vibe || 'classique') === id ? 'on' : ''}" data-act="appear" data-k="vibe" data-v="${id}" data-vibe-preview="${id}"><span class="vprev"><i></i><i></i><i></i></span><b>${n}</b><small>${d}</small></button>`)}</div>
       <label>Couleur</label><div class="palette">${(a.vibe || 'classique') !== 'classique' ? h`<button type="button" class="sw none ${a.accent ? '' : 'on'}" title="Couleur de l’ambiance" aria-label="Couleur de l’ambiance" data-act="appearColor" data-v="">∅</button>` : ''}${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${((a.vibe || 'classique') === 'classique' ? a.palette === id && !a.accent : a.accent === c) ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appearColor" data-id="${id}" data-v="${c}"></button>`)}</div>
@@ -99,7 +99,7 @@ function vDisplay() {
 /* ═════════ Pendant la séance ═════════ */
 function vSession() {
   const { st, tog } = prefs();
-  return h`${back()}
+  return h`
     <div class="card"><h3>▶ Pendant la séance</h3>
       ${[['voice', '🗣️ Coach vocal : il annonce les séries, le repos et le décompte'], ['sound', '🔔 Bips pour les chronos'], ['vibration', '📳 Vibration à la fin du repos'], ['keepAwake', '💡 Garder l’écran allumé'], ['autoWarm', '🔥 Ajouter un échauffement de 5 min à mes séances'], ['bigMode', '🔠 Grand affichage (touche l’écran pour valider)']].map(tog)}
       <div class="grid2"><label>Son des bips<select data-change="pref" name="soundStyle">${SOUND_STYLES.map(([v, l]) => h`<option value="${v}" ${st.soundStyle === v ? 'selected' : ''}>${l}</option>`)}</select></label>
@@ -277,12 +277,21 @@ ACT.hardReload = async () => { if (!(await ask('Recharger l’application ?', { 
 
 /* ═════════ Administration ═════════ */
 async function loadBugs() { try { S.admin.bugs = (await api('GET', '/api/admin/bugs')).reports; } catch (e) { S.admin.error = e.offline ? 'Connexion requise.' : e.message; } render(); }
+/** Suivi des notifications « nouvelle mise à jour » : quand la dernière est partie et vers combien d'appareils. */
+function pushStatusCard() {
+  const p = S.admin.push; if (!p) return '';
+  const l = p.last, when = l?.at ? new Date(l.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  return h`<details class="card how"><summary>🔔 Notifications de mise à jour</summary>
+    <p class="small">${l ? `Dernière envoyée le ${when} : ${l.sent} appareil(s) joint(s) sur ${l.targeted} abonné(s) aux nouveautés${l.gone ? `, ${l.gone} abonnement(s) expiré(s) retiré(s)` : ''}${l.errors ? `, ${l.errors} en erreur` : ''}.` : 'Aucune notification de mise à jour envoyée pour l’instant.'}</p>
+    <p class="tiny muted">${p.devices} appareil(s) abonné(s) en tout. Version en ligne : ${p.build}${p.lastBuild && p.lastBuild !== p.build ? ` (annonce en attente : ${p.lastBuild})` : ''}. Un appareil qui ne reçoit rien : Paramètres › Notifications › « 🩺 Vérifier cet appareil ».</p></details>`;
+}
 function vAdmin() {
   if (!S.user.isAdmin) return h`<form data-submit="adminOn" class="card" autocomplete="off"><h3>🛡️ Administration</h3><p class="small muted">Saisis le mot de passe administrateur pour activer les droits d’administration sur ton compte. Il est vérifié uniquement par le serveur et n’est jamais conservé sur cet appareil.</p>
     <label>Mot de passe administrateur<input type="password" name="password" autocomplete="off" required></label><button class="btn pri" type="submit">Activer</button></form>`;
   const bugs = S.admin.bugs, f = S.admin.filter || 'open';
   if (!bugs && !S.admin.error) setTimeout(loadBugs, 0);
-  return h`<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier presque tout pour tous les comptes : exercices, séances prêtes, intentions par sport, formats de séance et bibliothèque commune. À chaque changement, l’app te demande si c’est pour toi ou pour tout le monde. Tu n’as pas accès aux données privées des autres comptes.</p>
+  if (S.admin.push === undefined) { S.admin.push = null; api('GET', '/api/admin/push-status').then((r) => { S.admin.push = r; render(); }).catch(() => {}); }
+  return h`${pushStatusCard()}<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier presque tout pour tous les comptes : exercices, séances prêtes, intentions par sport, formats de séance et bibliothèque commune. À chaque changement, l’app te demande si c’est pour toi ou pour tout le monde. Tu n’as pas accès aux données privées des autres comptes.</p>
       <div class="row wrapf"><button class="btn" data-act="libSub" data-id="common">📚 Bibliothèque commune</button><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
     ${vAdminContent()}
     ${vAdminProposals()}${vAdminUsers()}
@@ -321,20 +330,27 @@ async function loadUsers() { try { const r = await api('GET', '/api/admin/users'
 function vAdminUsers() {
   const u = S.admin.users, q = (S.admin.userQ || '').toLowerCase();
   if (!u && !S.admin.usersErr) setTimeout(loadUsers, 0);
-  const list = u ? u.users.filter((x) => !q || x.username.toLowerCase().includes(q)) : [];
-  const d30 = u ? u.users.filter((x) => x.lastLogin && Date.now() - x.lastLogin < 30 * 86400000).length : 0;
+  const seen = (x) => x.lastSeen || x.lastLogin || 0, by = S.admin.userSort === 'created' ? (a, b) => (b.createdAt || 0) - (a.createdAt || 0) : (a, b) => seen(b) - seen(a);
+  const list = u ? u.users.filter((x) => !q || x.username.toLowerCase().includes(q)).sort(by) : [];
+  const since = (d) => (u ? u.users.filter((x) => seen(x) && Date.now() - seen(x) < d * 86400000).length : 0);
+  const recent = u ? u.users.filter(seen).sort((a, b) => seen(b) - seen(a)).slice(0, 10) : [];
   return h`<div class="card"><div class="row between"><h3>👥 Comptes</h3><button class="btn sm" data-act="usersReload" aria-label="Actualiser">↻</button></div>
     ${S.admin.usersErr ? h`<p class="err small">${S.admin.usersErr}</p>` : !u ? skeleton(2) : h`
-      <div class="kpis"><div class="kpi"><span>👥 Comptes</span><b>${u.total}</b></div><div class="kpi"><span>🟢 Actifs (30 j)</span><b>${d30}</b></div></div>
+      <div class="kpis"><div class="kpi"><span>👥 Comptes</span><b>${u.total}</b></div><div class="kpi"><span>🟢 Aujourd’hui</span><b>${since(1)}</b></div><div class="kpi"><span>📅 7 jours</span><b>${since(7)}</b></div><div class="kpi"><span>🗓️ 30 jours</span><b>${since(30)}</b></div></div>
+      <span class="kicker">🕑 Dernières connexions</span>
+      ${recent.length ? h`<div class="setmenu">${recent.map((x) => h`<div class="setrow"><span class="sic">${x.username.slice(0, 1).toUpperCase()}</span><span class="grow"><b>${x.username}</b> ${x.isAdmin ? tag('admin', 'acc') : ''}<small>${fmtDateTime(seen(x))} · ${relDate(seen(x))}</small></span></div>`)}</div>` : h`<p class="small muted">Personne ne s’est encore connecté.</p>`}
+      <span class="kicker">Tous les comptes</span>
+      <div class="chips">${chip(S.admin.userSort !== 'created', 'Dernière visite d’abord', 'data-act="userSort" data-id="seen"')}${chip(S.admin.userSort === 'created', 'Inscription la plus récente', 'data-act="userSort" data-id="created"')}</div>
       <input type="search" data-input="userQ" value="${S.admin.userQ || ''}" placeholder="🔎 Chercher un pseudo" aria-label="Chercher un compte">
       <div class="ulist">${list.slice(0, 200).map((x) => h`<div class="urow"><div class="uav">${x.username.slice(0, 1).toUpperCase()}</div><div class="grow"><b>${x.username}</b> ${x.isAdmin ? tag('admin', 'acc') : ''}
         <div class="tiny muted">inscrit ${relDate(x.createdAt)}${x.email ? ' · ' + x.email : ''}</div></div>
         <div class="ustat"><b>${x.sessionsDone}</b><span>séance${x.sessionsDone > 1 ? 's' : ''}</span></div>
-        <div class="ustat"><span>${x.lastLogin ? relDate(x.lastLogin) : 'jamais'}</span><span class="tiny muted">connexion</span><button class="btn sm ${x.isAdmin ? 'ghost' : ''}" data-act="userRole" data-id="${x.id}" data-v="${x.isAdmin ? '0' : '1'}">${x.isAdmin ? 'Retirer admin' : 'Nommer admin'}</button></div></div>`)}
+        <div class="ustat"><span title="${seen(x) ? fmtDateTime(seen(x)) : ''}">${seen(x) ? relDate(seen(x)) : 'jamais'}</span><span class="tiny muted">dernière visite</span><button class="btn sm ${x.isAdmin ? 'ghost' : ''}" data-act="userRole" data-id="${x.id}" data-v="${x.isAdmin ? '0' : '1'}">${x.isAdmin ? 'Retirer admin' : 'Nommer admin'}</button></div></div>`)}
         ${list.length > 200 ? h`<p class="tiny muted">… ${list.length - 200} autre(s) : affine la recherche.</p>` : ''}${!list.length ? h`<p class="small muted">Aucun compte trouvé.</p>` : ''}</div>
-      <details class="how mini"><summary>Ce que tu vois ici</summary><p class="tiny">Pseudo, date d’inscription, e-mail masqué, nombre de séances réalisées et dernière connexion. Les séances, performances et profils des membres restent privés.</p></details>`}</div>`;
+      <details class="how mini"><summary>Ce que tu vois ici</summary><p class="tiny">Pseudo, date d’inscription, e-mail masqué, nombre de séances réalisées et dernière visite (à 10 minutes près). Les séances, performances et profils des membres restent privés.</p></details>`}</div>`;
 }
 ACT.usersReload = () => { S.admin.users = null; loadUsers(); };
+ACT.userSort = (el) => { S.admin.userSort = el.dataset.id; render(); };
 INPUT.userQ = (el) => { S.admin.userQ = el.value; clearTimeout(INPUT.userQ.t); INPUT.userQ.t = setTimeout(() => { render(); const i = document.querySelector('input[data-input=userQ]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
 SUBMIT.adminOn = async (f) => {
   const pw = new FormData(f).get('password'); f.reset(); // la valeur saisie est effacée du formulaire immédiatement

@@ -4,7 +4,7 @@
 import { normalizeEx } from '../public/shared.js';
 import { cleanParts } from '../public/format.js';
 
-export const KINDS = ['exercise', 'catalog', 'intent', 'format', 'grading', 'style', 'text', 'announce', 'layout', 'faq', 'source'];
+export const KINDS = ['exercise', 'catalog', 'intent', 'format', 'grading', 'style', 'text', 'announce', 'layout', 'faq', 'source', 'hint'];
 export const ID_OK = /^[\w-]{1,64}$/;
 const str = (v, n) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n);
 const strs = (a, n, len) => (Array.isArray(a) ? a.map((x) => str(x, len)).filter(Boolean).slice(0, n) : []);
@@ -55,6 +55,11 @@ export function cleanGlobal(kind, d) {
     const pages = {}; for (const [k, v] of Object.entries(d.pages || {}).slice(0, 8)) if (/^\w{1,20}$/.test(k) && Array.isArray(v)) pages[k] = v.slice(0, 40).map((e) => ({ id: str(e?.id, 30), as: ['big', 'icon', 'off'].includes(e?.as) ? e.as : 'off', color: /^#[0-9a-f]{6}$/i.test(String(e?.color || '')) ? e.color : '' })).filter((e) => /^\w{1,30}$/.test(e.id));
     const off = {}; for (const [k, v] of Object.entries(d.off || {}).slice(0, 8)) if (/^\w{1,20}$/.test(k) && Array.isArray(v)) off[k] = v.slice(0, 40).map((x) => str(x, 30)).filter((x) => /^\w{1,30}$/.test(x));
     return { pages, off };
+  }
+  if (kind === 'hint') { // raccourci contextuel ajouté par un administrateur : sur telle page, mène à telle autre
+    const route = (v) => (/^(home|progress|library|profile|settings)\/[\w-]{0,40}$/.test(String(v || '')) ? String(v) : '');
+    const where = route(d.where), go = route(d.go), text = str(d.text, 120);
+    return where && go && text ? { where, go, text, icon: str(d.icon, 8) || '💡', back: str(d.back, 60) || 'Retour' } : null;
   }
   if (kind === 'faq') { const q = str(d.q, 200), a = str(d.a, 1500); return q && a ? { q, a, order: int(d.order, 0, 999, 100) } : null; }
   if (kind === 'source') {

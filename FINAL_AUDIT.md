@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.22.0
+# FINAL_AUDIT — Séances entraînement v8.25.1
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -913,3 +913,71 @@ Dans Bibliothèque › Structurer ma séance, on choisit d'abord **comment** cr�
 **Tests**
 - Nouveau fichier `guide.test.mjs` (6 tests) : options et matériel, conseils, « je veux plus de », ordre, assemblage et temps, exercices proches.
 - E2E : les trois niveaux d'aide, la durée d'une partie modifiée, un choix dans les options, et 🧭 dans une séance enregistrée.
+
+## Évolution 8.23.0 : un seul assistant « Créer une séance », les lieux, les objectifs réussis
+
+**Créer une séance (tous les sports)** — un seul assistant en 5 étapes, avec « ‹ Retour / Suivant › » :
+1. Comment l'app aide (choisit tout / guide / je compose).
+2. Sport (« ＋ Ajouter un sport »), lieu (le matériel du lieu est affiché et utilisé), cotation, forme, temps.
+3. Pour quoi : plusieurs objectifs cochés (« ＋ Ajouter des objectifs ici »), ce qu'on veut travailler (ajoutable avec ses mots), zones à ménager ; ou une cotation à réussir (escalade), ou « Surprends-moi ».
+4. Le format (parties et temps), proposé puis modifiable.
+5. Les exercices, partie par partie.
+Le brouillon est gardé (« Reprendre ma séance » sur l'accueil). Les anciens modes séparés sont retirés.
+
+**Lieux** — « 📍 Mes lieux » : salles, falaises (avec secteurs), autres lieux. Chaque lieu montre ce qui y a été fait (séances, blocs et voies par secteur, meilleurs niveaux). Dans le carnet, « Où ? » : en salle / en falaise → le lieu → le secteur, ajoutables sur place.
+
+**Objectifs réussis** — « 🏆 J'ai réussi » : date, perf enregistrée dans le profil (exactement la cible, marquée « déclarée »), objectifs suivants proposés. Liste des objectifs réussis dans Objectifs et dans Progrès. La page Objectifs n'a plus d'onglets : des sections repliables.
+
+**Grandes listes** — les listes de 10 choix ou plus ouvrent un sélecteur : recherche, catégories triées, « ＋ Ajouter » si absent (mesures, sports, capacités…).
+
+**Raccourcis contextuels** — une ou deux indications utiles par page (masquables), qui mènent à la bonne page avec une barre « ‹ Retour ». Les administrateurs peuvent en ajouter.
+
+**Notifications** — réabonnement automatique de l'appareil (au plus une fois par ~20 h), « 🩺 Vérifier cet appareil », et côté admin le suivi du dernier envoi (ciblés, envoyés, expirés, erreurs).
+
+**Mise en page** — toutes les sous-pages ont le même en-tête (« ‹ retour » au-dessus du titre, Paramètres compris) ; liste des sources repliée ; saisie du journal sur toute la largeur ; « Rejoindre un ami » reste écrit (seuls les symboles clairs sont en icône).
+
+**Sécurité** — inchangée : aucun secret côté client, droits d'administration décidés par le serveur, contenus « hint » globaux réservés aux admins.
+
+**Tests** — nouveaux : `goaldone`, `places`, `hints` ; `climbplan`, `push-ics`, `global`, `model` étendus. E2E réécrits pour l'assistant en 5 étapes.
+
+## Évolution 8.24.0 : tous les sports comme l'escalade, rien de caché sur aucun écran
+
+**Tous les sports** (nouveau module `sportplan.js`, sans DOM, testé)
+- Course, natation, musculation et renforcement ont des parties « travail » avec intensité et structure au choix, comme la grimpe : fractionné long, 30/30, seuil, côtes, allure objectif ; séries de 100 m, pyramide, sprints, éducatifs ; 5×5, force 5×3, volume, pyramide, montée vers le max ; séries faciles, EMOM, pyramide, séries max, circuit.
+- « Atteindre une performance » (étape « Pour quoi ? ») : 10 km en 50 min, 100 kg au squat, 15 tractions… construit toute la séance (échauffement, montée, spécifique, objectif, retour au calme).
+- Allures et charges : calculées depuis la cible et la meilleure perf **notée** (ex. 1 km à 5:00 /km ; 5×5 à 80 % = 80 kg). Sans perf notée : consignes au ressenti et invitation à noter sa perf. L'essai à la charge visée n'est proposé que si elle est à 5 % du max noté. Conseil honnête (« ambitieux », « un cran au-dessus », « déjà atteint »).
+- Tous les sports sont proposés dans l'assistant, même pas encore ajoutés au profil. Chaque exercice affiche sa dose (durée ou répétitions, charge, repos).
+
+**Rien de caché, sur tous les écrans**
+- Vérification automatique de 43 pages, 11 états de l'assistant (escalade, course, muscu, natation, renfo) et 6 fenêtres, à 320, 390, 768 et 1280 px : débordement, texte coupé, défilement de côté, contenu sous la barre du bas. Résultat final : aucun problème.
+- Corrigés : descriptions coupées à 2 lignes (maintenant en entier) ; lignes de boutons qui dépassaient à 320 px (sports, parties de l'assistant) ; actions de l'objectif cachées dans un menu « ⋯ » rogné par la carte (maintenant visibles) ; « Je suis à » coincé dans une demi-case.
+- Plus d'onglets : les filtres Objectifs (Actifs/Réussis/Archivés/Tous) deviennent des rubriques ; les petits sélecteurs (Bloc/Voie, 3 mois/1 an/Tout, 7/30/90 jours…) deviennent des pastilles.
+- Barre du haut : un mot sous les symboles pas évidents (Coach, Bilan, Carnet, Page…) ; le point vert de synchronisation n'apparaît plus (un mot clair seulement s'il y a quelque chose à dire : « 2 à envoyer », « Hors ligne »…).
+
+**Tests** — nouveau `sportplan.test.mjs` (11 tests) ; E2E : 71 étapes, dont « course 10 km en 50 min ».
+
+## Évolution 8.25.0 : les fonctions qui se ressemblaient sont regroupées ; visite de rattrapage
+
+**Regroupements** (les anciennes adresses mènent à la nouvelle page)
+1. Créer une séance : « Séance du jour », « Que faire aujourd'hui ? », séance pour un objectif ou une capacité, commandes de l'assistant → l'assistant « Créer une séance », déjà rempli, séance prête (étape 5), modifiable en revenant en arrière.
+2. Planning : calendrier, programme et rappels sur une seule page.
+3. Assistant : le coach s'appelle « Assistant » et mène aussi à « Créer un exercice avec mes mots ».
+4. Projets d'escalade rangés avec les objectifs (en cours, réussis, archivés) ; « Nouveau projet » est un type d'objectif.
+5. Test de doigts avec les mesures.
+6. Une seule page « Records et mesures » : records des séances, évolution d'un exercice, mesures, maxima, pyramide, test de doigts.
+7. « À mesurer » n'apparaît plus qu'une fois (Mon analyse y renvoie).
+8. Un seul Journal (séances, blocs et voies, mesures, notes, étapes et records) avec filtres ; Historique et Frise y mènent.
+9. Résumé : bilan du mois en image depuis le résumé ; série et badges une seule fois.
+10. « Mon analyse » : capacités, tendances et diagnostics, pourquoi ces conseils, Lab.
+11. « Mon corps et mes préférences ».
+12. « Mes sports » avec les cotations et les styles d'escalade.
+
+**Visite de rattrapage** (`catchup.js`, sans DOM, testé) : quand plusieurs mises à jour ont été ratées depuis la dernière visite, une seule visite reprend tout (un résumé d'abord, sans doublon — le texte le plus récent gagne —, les pages regroupées suivies). La barre et « Quoi de neuf » disent combien de mises à jour ont été ratées et les listent (connues sans Internet).
+
+**Tests** — nouveau `catchup.test.mjs` (4) ; E2E mis à jour (projets dans Objectifs, pyramide et maxima dans Records et mesures, cotations dans Mes sports, séance du jour → assistant, visite de rattrapage). Vérification de mise en page à 320/390/768/1280 px : aucun problème.
+
+## Évolution 8.25.1 : dernières connexions visibles par les administrateurs
+- Le serveur note la **dernière visite** de chaque compte connecté (colonne `users.last_seen`, ajoutée sans rien casser ; au plus une écriture toutes les 10 minutes par compte). Avant, seule la date de la dernière *identification* était connue : un membre resté connecté semblait absent.
+- Admin › Comptes : combien de membres sont venus aujourd'hui, sur 7 jours et sur 30 jours ; « 🕑 Dernières connexions » (les 10 plus récentes, date et heure) ; tous les comptes triés par dernière visite ou par inscription.
+- Confidentialité inchangée : l'admin voit l'identité du compte et son activité (date de visite, nombre de séances), jamais les séances, performances ou profils. Réservé aux administrateurs (vérifié par le serveur).
+- Test D1 : la dernière visite est connue pour chaque compte, et aucun champ en trop n'est renvoyé.
