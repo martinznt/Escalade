@@ -9,7 +9,7 @@ import { capOptionGroups, CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES
 import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addLevel, moveLevel, removeLevel, renameLevel, setMapping, sortedLevels, gradeSnapshot, maximaSummary, snapshotText, REFERENCE, LEVEL_WORDS } from './grading.js';
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
-import { openGenerator } from './views-library.js';
+import { openWizard } from './views-climbplan.js';
 import { vCarnet, projectsSection, doneProjects, fingerCard, pyramidCard } from './views-climb.js';
 import { recordsCards } from './views-progress.js';
 import { bodyFields, bodyToggle, cleanBody, bodyAdjust } from './body.js';
@@ -121,7 +121,7 @@ ACT.capOpen = (el) => {
     <div class="row wrapf"><button class="btn pri" data-act="capTrain" data-id="${g.capId}">🎯 Séance ciblée</button><button class="btn" data-act="closeSheet">Fermer</button></div>`, { wide: true });
 };
 ACT.capDecl = (el) => { putItem('capdecl', 'cd-' + el.dataset.id, { capId: el.dataset.id, level: Number(el.dataset.v) }); toast(Number(el.dataset.v) === -1 ? 'Noté : « je ne sais pas ». Un test pourra aider.' : 'Niveau déclaré enregistré'); ACT.capOpen(el); render(); };
-ACT.capTrain = (el) => { closeSheet(); openGenerator({ mode: 'weaknesses', capId: el.dataset.id, priorities: { [el.dataset.id]: 3 }, autoPlan: true }); };
+ACT.capTrain = (el) => { closeSheet(); openWizard({ focus: { label: CAPACITIES[el.dataset.id]?.label || el.dataset.id, caps: { [el.dataset.id]: 3 } } }); };
 
 /* ═════════ Activités et catégories ═════════ */
 function vActivities() {
@@ -132,7 +132,7 @@ function vActivities() {
       ${acts.filter((a) => !a.preset && !a.archived).map((a) => h`<div class="item"><div class="ico">${a.emoji || '🏅'}</div><div class="grow"><b>${a.label}</b><div class="tiny muted">${itemsOf('category').filter((x) => x.activityId === a.id && !x.archived).map((x) => x.label).join(', ') || 'aucune catégorie'}</div></div><button class="btn sm" data-act="actEdit" data-id="${a.id}">✎</button></div>`)}
       ${!acts.some((a) => !a.preset && !a.archived) ? h`<p class="muted small">Basketball, cyclisme, tennis, ski… : crée ton activité avec ses propres catégories, métriques et exercices.</p>` : ''}</div>
     ${Object.values(c.activities).map((a) => vActivityCard(a))}
-    ${Object.keys(c.activities).some((a) => a.startsWith('climbing')) ? h`<span class="kicker">🧗 Escalade : cotations et styles</span>${climbSystemsStyles()}` : ''}
+    ${Object.keys(c.activities).some((a) => a.startsWith('climbing')) ? h`<span class="kicker">🧗 Escalade : cotations et styles</span>${climbSystemsStyles()}` : h`<details class="card how"><summary><b>🧗 Escalade : cotations et styles</b></summary>${climbSystemsStyles()}</details>`}
     <div class="card"><div class="row between"><h3>Mes métriques personnalisées</h3><button class="btn sm" data-act="metricNew">＋ Métrique</button></div>${itemsOf('metric').filter((m) => !m.archived).map((m) => h`<div class="item"><div class="grow"><b>${m.label}</b><div class="tiny muted">${m.unit || 'sans unité'} · ${m.activityId ? activityLabel(m.activityId, c) : 'toutes activités'} · ${(m.caps || []).map((x) => capL(x.id)).join(', ') || 'aucune capacité liée'}</div></div><button class="btn sm" data-act="metricEdit" data-id="${m.id}">✎</button></div>`)}</div>`;
 }
 function vActivityCard(a) {

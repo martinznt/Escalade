@@ -35,7 +35,7 @@ export function catchUpSteps(news, done, now, { since = 0 } = {}) {
   const steps = out.filter(Boolean);
   if (missed.length > 1) {
     const when = since ? ` (depuis le ${new Date(since).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })})` : '';
-    steps.unshift(['', '', '', `🧭 ${missed.length} mises à jour à rattraper${when}`, `On fait le tour de tout ce qui a changé : ${missed.map((n) => `« ${n.title} »`).join(', ')}. Tu peux quitter la visite à tout moment et la reprendre dans Paramètres › Toutes les mises à jour.`]);
+    steps.unshift(['', '', '', `🧭 ${missed.length} mises à jour à rattraper${when}`, `On fait le tour de tout ce qui a changé : ${(missed.length > 4 ? missed.slice(-3) : missed).map((n) => `« ${n.title} »`).join(', ')}${missed.length > 4 ? ` et ${missed.length - 3} autres` : ''}. Tu peux quitter la visite à tout moment et la reprendre dans Paramètres › Toutes les mises à jour.`]);
   }
   return steps;
 }

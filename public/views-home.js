@@ -1,16 +1,17 @@
 // views-home.js — Accueil : tableau de bord personnalisable, « Que faire aujourd'hui ? », commandes en langage
 // naturel, calendrier visuel (planifié / réalisé), premier lancement.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk, subHead } from './ui.js';
+import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk, subHead, menuList } from './ui.js';
 import { sceneSvg, moodLine } from './scene.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings } from './state.js';
 import { uid, summarizeHistory } from './shared.js';
-import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, EQUIPMENT, CAPACITIES } from './model.js';
+import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, EQUIPMENT, CAPACITIES, SKILLS } from './model.js';
+import { openWizard } from './views-climbplan.js';
 import { sessionMinutes } from './engine.js';
 import { parseCommand } from './commands.js';
 import { todayOptions, regularity, benchmarks, activeGoals, goalLabel, goalProgress, records, profileCapacities, strengthsWeaknesses, STATUS_WORD, testReminders, forgottenGoals, undertrained, habits, neverTried, loadAnalysis, periodSummary, achievements, entryActivity, activityLabel, blockers, whyNoProgress } from './brain.js';
 import { adaptDuration, alternatives, replaceExercise, BODY_WORDS } from './generator.js';
 import { addExerciseToSession, findExerciseInSession } from './engine.js';
-import { openGenerator, blocksOf } from './views-library.js';
+import { blocksOf } from './views-library.js';
 import { startPlayer } from './player.js';
 import { streakCard } from './views-motiv.js';
 import { composePage } from './layout.js';
@@ -37,7 +38,7 @@ const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Calendrier')}${vCalendar()}`;
+  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}${vCalendar()}`;
   return h`${reinstallCard()}${vDash()}`;
 }
 function hero() {
@@ -99,7 +100,8 @@ ACT.goLib = () => go('library', 'seances');
 ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
 ACT.topCal = () => { go('home', 'cal'); window.scrollTo(0, 0); };
 ACT.goProgressTop = () => { go('progress', 'summary'); window.scrollTo(0, 0); };
-ACT.topProgram = () => { const p = activeProgram(); if (p) ACT.progOpen({ dataset: { id: p.id } }); else ACT.progNew(); };
+// Programme, calendrier et rappels : une seule page « Planning ».
+ACT.topProgram = () => ACT.topCal();
 /** « Je suis à : … » : changer de lieu d'un toucher (la séance du jour s'adapte à son matériel). */
 function whereAmI() {
   const c = ctx(), envs = c.envs.filter((e) => !e.archived); if (envs.length < 2) return '';
@@ -108,7 +110,7 @@ function whereAmI() {
 ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); closeSheet(); go(t, sub); window.scrollTo(0, 0); };
 ACT.layEditHome = () => { closeSheet(); go('home', 'dash'); setTimeout(() => ACT.layEdit(), 150); };
 ACT.loopClose = () => { S.lastLoop = null; render(); };
-ACT.genOpen = () => openGenerator({});
+ACT.genOpen = () => openWizard({});
 ACT.newSeanceHome = () => ACT.newSeance();
 const card = (title, body, extra = '') => h`<section class="card"><div class="row between"><h3>${title}</h3>${extra}</div>${body}</section>`;
 const BLOCK_VIEWS = {
@@ -175,11 +177,12 @@ const BLOCK_VIEWS = {
 };
 ACT.goProgress = (el) => go('progress', el.dataset.id);
 ACT.goalOpen = (el) => go('profile', 'goals', el.dataset.id);
-ACT.todayGoal = (el) => openGenerator({ mode: 'goal', goalId: el.dataset.id, autoPlan: true });
+ACT.todayGoal = (el) => { const g = item('goal', el.dataset.id); openWizard({ goalIds: [el.dataset.id], sport: g?.activityId || SKILLS[g?.skillId]?.activity || '' }); };
 ACT.todayDo = (el) => {
   const o = todayOptions(ctx(), { todayEvents: eventsOn(ymd(new Date())) }).options.find((x) => x.id === el.dataset.id);
   if (!o) return;
-  openGenerator({ mode: o.mode || 'weaknesses', goalId: o.goalId || '', capId: o.capId || '', minutes: o.minutes || S.settings.defaultMinutes || 30, light: !!o.light, autoPlan: true });
+  const g = o.goalId && item('goal', o.goalId);
+  openWizard({ goalIds: o.goalId ? [o.goalId] : [], sport: g?.activityId || SKILLS[g?.skillId]?.activity || '', minutes: o.minutes || S.settings.defaultMinutes || 30, forme: o.light ? 'tired' : '' });
 };
 ACT.habitYes = (el) => {
   const hb = habits(ctx()).find((x) => x.key === el.dataset.k); if (!hb) return;
@@ -225,7 +228,7 @@ export async function runCommand(c, raw) {
       const pr = {}; for (const f of c.focuses || []) for (const [k, v] of Object.entries(BODY_WORDS[f] || {})) pr[k] = Math.max(pr[k] || 0, v);
       const act = c.activity || (Object.keys(pr).length && !Object.keys(pr).some((k) => ['technique_escalade', 'technique_pieds'].includes(k)) ? (Object.keys(ctx().activities).find((a) => ['conditioning', 'strength'].includes(a)) || Object.keys(ctx().activities)[0] || 'conditioning') : Object.keys(ctx().activities)[0] || 'conditioning');
       toast(`Compris : ${c.summary}`, 3500);
-      openGenerator({ activityId: act, minutes: c.minutes || S.settings.defaultMinutes || 30, light: !!c.light, mode: 'weaknesses', goalId: '', priorities: pr, autoPlan: true });
+      openWizard({ sport: act, minutes: c.minutes || S.settings.defaultMinutes || 30, forme: c.light ? 'tired' : '', focus: Object.keys(pr).length ? { label: (c.focuses || []).join(', ') || c.summary, caps: pr } : null });
       break;
     }
     case 'adaptDuration': {
@@ -295,7 +298,7 @@ function vCalendar() {
   const acts = {}; for (const x of inMonth) { const a = entryActivity(x, c); acts[a] = (acts[a] || 0) + 1; }
   const reg = regularity(c);
   return h`<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
-    <button class="btn" data-act="icsExport">📅 Ajouter mes séances à l’agenda du téléphone</button>
+    ${menuList([['icsExport', '', '📲', 'Ajouter mes séances à l’agenda du téléphone', 'Programme et séances prévues, sur 90 jours'], ['allGo', '', '⏰', 'Rappels d’entraînement', 'Quels jours, à quelle heure (dans Notifications)', 'settings/notifs']])}
     ${activeProgram() ? programCard() : h`<section class="card prog"><b>📆 Un objectif sur plusieurs semaines ?</b><p class="small muted">4 questions, et ton calendrier se remplit tout seul.</p><button class="btn pri" data-act="progNew">Créer un programme</button></section>`}
     <div class="card"><h3>Ce mois-ci</h3><p class="small">${inMonth.length} séance(s) réalisée(s)${Object.keys(acts).length ? ' · ' + Object.entries(acts).map(([a, n]) => `${activityLabel(a, c)} ×${n}`).join(', ') : ''}.</p><p class="small muted">${reg.text}</p>
       ${activeGoals(c).length ? h`<p class="tiny muted">Objectifs suivis : ${activeGoals(c).map(goalLabel).join(', ')}.</p>` : ''}</div>`;

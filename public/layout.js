@@ -9,14 +9,14 @@ import { chooseScope, saveLayoutGlobal, isAdmin as isAdminUser } from './content
 
 /** Icônes possibles en haut à droite : [emoji, nom, action]. */
 export const ICONS = {
-  cal: ['📅', 'Calendrier', 'topCal'], notif: ['🔔', 'Notifications', 'notifOpen'], timer: ['⏱', 'Minuteur', 'timerOpen'], carnet: ['🧗', 'Carnet', 'goCarnet'],
-  coach: ['💬', 'Coach', 'coachOpen'], all: ['☰', 'Menu : toutes les fonctions', 'allOpen'], recap: ['📸', 'Bilan du mois', 'recapOpen'], gen: ['🎯', 'Séance du jour', 'genOpen'],
-  seances: ['📚', 'Mes séances', 'goLib'], progress: ['📈', 'Mes progrès', 'goProgressTop'], program: ['📆', 'Programme', 'topProgram'], streak: ['🔥', 'Ma série', 'goProgressTop'],
+  cal: ['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], notif: ['🔔', 'Notifications', 'notifOpen'], timer: ['⏱', 'Minuteur', 'timerOpen'], carnet: ['🧗', 'Carnet', 'goCarnet'],
+  coach: ['💬', 'Assistant', 'coachOpen'], all: ['☰', 'Menu : toutes les fonctions', 'allOpen'], recap: ['📸', 'Bilan du mois', 'recapOpen'], gen: ['🎯', 'Séance du jour', 'genOpen'],
+  seances: ['📚', 'Mes séances', 'goLib'], progress: ['📈', 'Mes progrès', 'goProgressTop'], program: ['📆', 'Planning', 'topCal'], streak: ['🔥', 'Ma série', 'goProgressTop'],
   badges: ['🏅', 'Badges', 'goProgressTop'], search: ['🔍', 'Rechercher dans l’app', 'findOpen'],
 };
 // Symboles compris de tous : icône seule. Les autres ont leur mot dessous.
 const CLEAR = new Set(['search', 'notif', 'cal', 'all', 'timer']);
-const SHORT = { coach: 'Coach', recap: 'Bilan', carnet: 'Carnet', gen: 'Séance', seances: 'Séances', progress: 'Progrès', program: 'Plan', streak: 'Série', badges: 'Badges' };
+const SHORT = { coach: 'Assistant', recap: 'Bilan', carnet: 'Carnet', gen: 'Séance', seances: 'Séances', progress: 'Progrès', program: 'Planning', streak: 'Série', badges: 'Badges' };
 // Fonctions de chaque page. k = formes possibles, tile = s'affiche en tuile dans la grille de raccourcis.
 const F = (l, k, extra = {}) => ({ l, k, ...extra });
 export const FEATURES = {
@@ -165,10 +165,10 @@ ACT.layReset = async (el) => {
 
 /* ───────── Toutes les fonctions, triées ───────── */
 const ALL = [
-  ['S’entraîner', [['🎯', 'Séance du jour', 'genOpen'], ['✨', 'Créer une séance', 'cpNew'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['📆', 'Programme', 'topProgram'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Coach', 'coachOpen']]],
+  ['S’entraîner', [['✨', 'Créer une séance (ou séance du jour)', 'cpNew'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Assistant (questions, exercices avec tes mots)', 'coachOpen']]],
   ['Escalade', [['🧗', 'Carnet (blocs, voies)', 'goCarnet'], ['📌', 'Projets (dans Objectifs)', 'goProjects'], ['✋', 'Test de doigts (Mesures)', 'allGo', 'profile/perfs']]],
   ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📝', 'Journal (séances, blocs, notes)', 'allGo', 'progress/journal'], ['🏆', 'Records et mesures', 'allGo', 'profile/perfs'], ['🔎', 'Mon analyse', 'allGo', 'profile/analyse']]],
-  ['Planifier', [['📅', 'Calendrier', 'topCal'], ['⏰', 'Rappels', 'allGo', 'settings/notifs'], ['🔔', 'Notifications', 'notifOpen']]],
+  ['Planifier', [['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], ['🔔', 'Notifications', 'notifOpen']]],
   ['Moi', [['👤', 'Mon profil', 'allGo', 'profile/home'], ['🎯', 'Objectifs', 'allGo', 'profile/goals'], ['🧰', 'Matériel et lieux', 'allGo', 'profile/equipment']]],
   ['Aider l’app', [['💡', 'Proposer une amélioration', 'ideaNew']]],
   ['Réglages', [['🎨', 'Affichage et ambiance', 'allGo', 'settings/display'], ['▶️', 'Pendant la séance', 'allGo', 'settings/session'], ['✏️', 'Mise en page', 'layEditHome'], ['❓', 'Aide et visite', 'allGo', 'settings/help'], ['💾', 'Mes données', 'allGo', 'settings/data']]],

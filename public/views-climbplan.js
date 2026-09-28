@@ -86,6 +86,7 @@ function vWhy() {
       ${goals.length ? h`<div class="chips">${goals.map((g) => chip((c.goalIds || []).includes(g.id), goalLabel(g), `data-act="cpGoal" data-id="${g.id}"`))}</div>` : h`<p class="small muted">Aucun objectif en cours.</p>`}
       <button class="btn sm" data-act="cpAddGoals">＋ Ajouter des objectifs ici</button>
       <span class="kicker">Ce que je veux travailler <span class="tiny muted">(facultatif)</span></span>
+      ${c.focus ? h`<div class="chips"><button type="button" class="chip on" data-act="cpFocusOff">🎯 ${c.focus.label} ✕</button></div>` : ''}
       <div class="chips">${ints.map((it) => chip((c.intents || []).includes(it.id), `${it.emoji} ${it.label}`, `data-act="cpIntent" data-id="${it.id}"`))}<button type="button" class="chip add" data-act="cpIntentWrite">✍️ Autre, avec mes mots</button></div>
       <span class="kicker">Zones à ménager <span class="tiny muted">(facultatif)</span></span>
       <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div></div>`;
@@ -144,7 +145,7 @@ function proposeParts() {
 }
 const FORME_MAP = { exhausted: 'low', tired: 'low', ok: 'normal', fresh: 'normal', top: 'top' };
 function buildOpts() {
-  const c = CP(), env = envOf(), x = ctx(), ints = intentsFor(c.sport, extraIntents()).filter((it) => (c.intents || []).includes(it.id)).map((it) => ({ label: it.label, caps: it.caps }));
+  const c = CP(), env = envOf(), x = ctx(), ints = [...intentsFor(c.sport, extraIntents()).filter((it) => (c.intents || []).includes(it.id)).map((it) => ({ label: it.label, caps: it.caps })), ...(c.focus ? [c.focus] : [])];
   const names = (c.goalIds || []).map((id) => x.goals.find((g) => g.id === id)).filter(Boolean).map(goalLabel);
   const levels = levelsOf(kindOf(c.sport)), t = c.targetShown ?? c.target;
   const tgt = c.aim === 'target' && c.tMetric && Number.isFinite(c.tValue) ? targetLabel(c.tMetric, c.tValue) : '';
@@ -178,6 +179,7 @@ ACT.cpAim = (el) => { CP().aim = el.dataset.id; keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };
 ACT.cpIntentWrite = () => { S.gen.activityId = CP().sport; ACT.gWrite?.({ dataset: { k: 'intent' } }); };
+ACT.cpFocusOff = () => { CP().focus = null; keep(); render(); };
 ACT.cpGoal = tog('goalIds'); ACT.cpIntent = tog('intents'); ACT.cpZone = tog('zones');
 // Aller ajouter des objectifs, puis revenir à la séance (le brouillon est gardé).
 ACT.cpAddGoals = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'goals'); };
@@ -293,6 +295,19 @@ function vResult() {
 ACT.cpSurprise = () => { closeSheet(); const c = CP(); c.aim = 'surprise'; c.result = null; c.step = Math.max(2, c.step || 1); keep(); go('library', 'climbplan'); };
 ACT.cpNew = () => { closeSheet(); const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; go('library', 'climbplan'); };
 ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
+/**
+ * Une seule façon de créer une séance : « Séance du jour », « Que faire aujourd'hui ? », une séance pour un objectif,
+ * une commande au coach… ouvrent toutes l'assistant, déjà rempli. auto : séance prête tout de suite (étape 5), modifiable
+ * en revenant aux étapes d'avant.
+ */
+export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true } = {}) {
+  closeSheet();
+  const help = CP().help || 'auto'; S.cp = null; ls.set(KEY, {}); const c = CP(), x = ctx();
+  c.help = help; c.sport = sport || Object.keys(x.activities)[0] || 'conditioning'; c.minutes = Math.max(10, Math.min(240, minutes || S.settings.defaultMinutes || 45));
+  c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = c.goalIds.length || intents.length || c.focus ? 'goals' : 'none'; if (forme) c.forme = forme;
+  if (auto) { c.parts = proposeParts(); c.partsFor = partsKey(); c.partsTouched = false; c.step = 5; c.result = null; } else c.step = 2;
+  keep(); go('library', 'climbplan'); window.scrollTo(0, 0);
+}
 ACT.cpAgain = () => { const c = CP(); c.seed = (c.seed || 1) + 1; if (isClimb(c.sport)) { c.parts = proposeParts(); c.partsFor = partsKey(); } c.result = null; buildNow(); keep(); render(); };
 CHG.cpEnv = (el) => { if (el.value === '__new') { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); return; } CP().envId = el.value; CP().sys = {}; keep(); render(); };
 CHG.cpSys = (el) => { CP().sys = { ...CP().sys, [el.dataset.k]: el.value }; CP().target = null; keep(); render(); };

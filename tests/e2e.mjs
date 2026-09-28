@@ -687,18 +687,18 @@ await step('admin : modifier un exercice « pour tout le monde » (au choix), un
   await B.waitForSelector(`#main :text-is("${old}")`, { timeout: 10000 });
 });
 await step('idée d’un utilisateur (système de cotation) → notification de l’admin → ouverte au bon endroit → ajoutée pour tout le monde', async () => {
-  cur = B; await b.tab('profile'); await B.evaluate(() => { location.hash = '#/profile/climbing'; }); await B.waitForTimeout(300);
-  await B.evaluate(() => { const d = document.querySelector('#main details.card.how'); if (d && !d.open) d.querySelector('summary').click(); });
+  cur = B; await b.tab('profile'); await B.evaluate(() => { location.hash = '#/profile/activities'; }); await B.waitForTimeout(300);
+  await B.evaluate(() => { for (const d of document.querySelectorAll('#main details')) if (d.querySelector('[data-act=sysNew]')) d.open = true; }); await B.waitForTimeout(400);
   await B.waitForSelector('[data-act=sysNew]'); await b.click('[data-act=sysNew]'); await b.click('#sheet [data-act=sysFromTpl][data-id=u8]'); await B.keyboard.press('Escape');
-  await B.evaluate(() => { const d = document.querySelector('#main details.card.how'); if (d && !d.open) d.querySelector('summary').click(); });
+  await B.evaluate(() => { for (const d of document.querySelectorAll('#main details')) if (d.querySelector('[data-act=sysNew]')) d.open = true; }); await B.waitForTimeout(400);
   await b.click('[data-act=propose][data-k=grading]'); await B.fill('#sheet textarea[name=detail]', 'Ma salle'); await b.click('#sheet form[data-submit=proposeGo] button.pri');
   await B.waitForSelector('#toast.show:has-text("proposition")');
   cur = C; await c.tab('home'); await c.click('.topicons [data-act=notifOpen]'); await C.waitForSelector('#sheet [data-act=propOpen]', { timeout: 10000 });
   assert.match(await c.text('#sheet'), /Bob propose/);
-  await c.click('#sheet [data-act=propOpen]'); await C.waitForFunction(() => location.hash.startsWith('#/profile/climbing'));
+  await c.click('#sheet [data-act=propOpen]'); await C.waitForFunction(() => location.hash.startsWith('#/profile/activities'));
   await C.waitForSelector('#sheet button[value=accept]'); await c.click('#sheet button[value=accept]'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
-  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('profile'); await B.evaluate(() => { location.hash = '#/profile/climbing'; }); await B.waitForTimeout(300);
-  await B.evaluate(() => { const d = document.querySelector('#main details.card.how'); if (d && !d.open) d.querySelector('summary').click(); });
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('profile'); await B.evaluate(() => { location.hash = '#/profile/activities'; }); await B.waitForTimeout(300);
+  await B.evaluate(() => { for (const d of document.querySelectorAll('#main details')) if (d.querySelector('[data-act=sysNew]')) d.open = true; }); await B.waitForTimeout(400);
   await B.waitForSelector('#main .tag:has-text("pour tous")', { timeout: 10000 });
   await b.click('[data-act=ascNew]').catch(() => {});
   cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset][data-k=grading]'); await c.click('[data-act=glReset][data-k=grading]'); await c.confirm();
@@ -860,12 +860,16 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
 });
 await step('après une mise à jour : visite des nouveautés, seulement ce qui a changé', async () => {
   await G.evaluate(() => localStorage.setItem('sea:news-toured', JSON.stringify('8.3.0'))); await G.reload(); await G.waitForSelector('nav.tabs');
-  await G.waitForSelector('#updbar [data-act=newsTour]', { timeout: 10000 }); await g.click('#updbar [data-act=newsTour]');
-  await G.waitForSelector('#tour .tour-bubble'); assert.match(await g.text('#tour .tour-bubble'), /Consignes à chaque série/);
-  assert.match(await g.text('#tour .tour-step'), new RegExp('^1 / ' + (await G.evaluate(async () => { const m = await import('/news.js'); const num = (v) => v.split('.').reduce((t, x) => t * 1000 + Number(x), 0); return m.NEWS.filter((n) => num(n.v) > num('8.3.0')).reduce((t, n) => t + n.steps.length, 0); })) + '$'), 'seulement les nouveautés des versions pas encore vues');
-  await g.click('#tour [data-act=tourNext]'); await g.click('#tour [data-act=tourNext]');
-  await G.waitForFunction(() => location.hash.startsWith('#/settings/help'), null, { timeout: 5000 });
-  await G.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
+  await G.waitForSelector('#updbar [data-act=newsTour]', { timeout: 10000 }); assert.match(await g.text('#updbar'), /mises à jour depuis ta dernière visite/);
+  const expected = await G.evaluate(async () => { const n = await import('/news.js'), cu = await import('/catchup.js'), st = await import('/state.js'); return cu.catchUpSteps(n.NEWS, '8.3.0', st.APP_VERSION).length; });
+  await g.click('#updbar [data-act=newsTour]');
+  await G.waitForSelector('#tour .tour-bubble'); assert.match(await g.text('#tour .tour-bubble'), /mises à jour à rattraper/, 'rattrapage : un résumé d’abord');
+  assert.match(await g.text('#tour .tour-step'), new RegExp('^1 / ' + expected + '$'), 'toutes les versions pas encore vues, en une visite');
+  // On avance jusqu'à une étape qui change de page : la visite y mène et pointe l'élément.
+  const titles = new Set();
+  for (let k = 0; k < 8; k++) { await g.click('#tour [data-act=tourNext]'); await G.waitForTimeout(250); titles.add(await g.text('#tour .tour-bubble h3')); if (await g.count('#tour .tour-arrow.up, #tour .tour-arrow.down') && titles.size >= 3) break; }
+  assert.ok(titles.size >= 3 && ![...titles].some((t) => /à rattraper/.test(t)), 'les étapes des versions ratées suivent le résumé');
+  await G.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down', { timeout: 5000 });
   await g.click('#tour [data-act=tourEnd]'); await G.waitForSelector('#tour', { state: 'detached' });
   assert.equal(await G.evaluate(() => JSON.parse(localStorage.getItem('sea:news-toured'))), await G.evaluate(() => window.__seaVersion));
   await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
@@ -880,10 +884,9 @@ await step('minuteur d’intervalles : préréglage, préparation puis effort, p
   await g.click('#itimer [data-act=timerStop]'); await G.waitForSelector('#itimer', { state: 'detached' });
 });
 await step('séance : grand affichage (toucher l’écran valide), coach vocal activable', async () => {
-  await g.click('[data-act=genOpen]'); await G.waitForSelector('[data-act=genPlan]'); await g.click('[data-act=genPlan]');
-  await G.waitForSelector('#genresult [data-act=play]', { timeout: 8000 }).catch(() => {});
-  if (await g.count('[data-act=genDo]')) await g.click('[data-act=genDo]');
-  await g.click('#genresult [data-act=play]'); await G.waitForSelector('#player.open');
+  // « Séance du jour » : l'assistant « Créer une séance », déjà rempli, séance prête (étape 5).
+  await g.click('[data-act=genOpen]'); await G.waitForSelector('#cpresult [data-act=cpPlay]', { timeout: 8000 }); assert.match(await g.text('.steps'), /Étape 5\/5/);
+  await g.click('#cpresult [data-act=cpPlay]'); await G.waitForSelector('#player.open');
   await g.click('#player [data-act=pVoice]'); await G.waitForSelector('#player [data-act=pVoice][aria-pressed=true]');
   await g.click('#player [data-act=pBig]'); await G.waitForSelector('#player .pl.big');
   assert.equal(await G.locator('#player .figbox svg').count(), 1, 'figure animée');
