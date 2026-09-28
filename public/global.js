@@ -7,9 +7,11 @@ import { LIBRARY, LIB_BY_ID } from './library.js';
 import { CATALOG } from './catalog.js';
 import { SPORT_INTENTS } from './intentions.js';
 import { PRESETS, totalMinutes } from './format.js';
+import { BUILTIN_SYSTEMS } from './grading.js';
+import { BUILTIN_STYLES } from './model.js';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
-const ORIG = { lib: clone(LIBRARY), cat: clone(CATALOG), intents: clone(SPORT_INTENTS), presets: clone(PRESETS) };
+const ORIG = { lib: clone(LIBRARY), cat: clone(CATALOG), intents: clone(SPORT_INTENTS), presets: clone(PRESETS), systems: clone(BUILTIN_SYSTEMS), styles: clone(BUILTIN_STYLES) };
 export const isBuiltin = { exercise: (id) => ORIG.lib.some((x) => x.id === id), catalog: (id) => ORIG.cat.some((x) => x.id === id), format: (id) => ORIG.presets.some((x) => x[0] === id) };
 export const original = { exercise: (id) => ORIG.lib.find((x) => x.id === id) || null, catalog: (id) => ORIG.cat.find((x) => x.id === id) || null };
 const EX_FIELDS = ['name', 'emoji', 'mode', 'sets', 'repsMin', 'repsMax', 'secMin', 'secMax', 'rest', 'perSide', 'unit', 'cues', 'bad', 'why', 'group', 'intensity'];
@@ -56,6 +58,12 @@ export function applyLayers(global = GLOBAL, mine = MINE) {
     const e = { id: iid, emoji: g.data.emoji, label: g.data.label, caps: Object.keys(g.data.caps || {}).length ? clone(g.data.caps) : list[i]?.caps || {}, globalEdit: true };
     if (i >= 0) list[i] = e; else list.push(e);
   }
+  // Systèmes de cotation et styles pour tout le monde (ils s'ajoutent aux systèmes intégrés)
+  for (const k of Object.keys(BUILTIN_SYSTEMS)) delete BUILTIN_SYSTEMS[k];
+  Object.assign(BUILTIN_SYSTEMS, clone(ORIG.systems));
+  for (const g of by('grading')) { if (g.hidden) { delete BUILTIN_SYSTEMS[g.id]; continue; } BUILTIN_SYSTEMS[g.id] = { id: g.id, ...clone(g.data), builtin: true, global: true }; }
+  BUILTIN_STYLES.length = 0; for (const s of ORIG.styles) BUILTIN_STYLES.push(clone(s));
+  for (const g of by('style')) { const i = BUILTIN_STYLES.findIndex((s) => s.id === g.id); if (g.hidden) { if (i >= 0) BUILTIN_STYLES.splice(i, 1); continue; } const s = { id: g.id, ...clone(g.data), builtin: true, global: true }; if (i >= 0) BUILTIN_STYLES[i] = s; else BUILTIN_STYLES.push(s); }
   // Formats de séance tout prêts
   PRESETS.length = 0; for (const p of ORIG.presets) PRESETS.push(clone(p));
   for (const g of by('format')) {

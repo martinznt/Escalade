@@ -4,7 +4,7 @@
 import { normalizeEx } from '../public/shared.js';
 import { cleanParts } from '../public/format.js';
 
-export const KINDS = ['exercise', 'catalog', 'intent', 'format'];
+export const KINDS = ['exercise', 'catalog', 'intent', 'format', 'grading', 'style'];
 export const ID_OK = /^[\w-]{1,64}$/;
 const str = (v, n) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n);
 const strs = (a, n, len) => (Array.isArray(a) ? a.map((x) => str(x, len)).filter(Boolean).slice(0, n) : []);
@@ -31,6 +31,18 @@ export function cleanGlobal(kind, d) {
   if (kind === 'intent') {
     const label = str(d.label, 60); if (!label) return null;
     return { label, emoji: str(d.emoji, 8) || '🧭', activityId: str(d.activityId, 40), caps: caps(d.caps) };
+  }
+  if (kind === 'grading') {
+    const name = str(d.name, 60); if (!name) return null;
+    const levels = (Array.isArray(d.levels) ? d.levels : []).slice(0, 60).map((l, i) => ({ id: /^[\w-]{1,40}$/.test(String(l?.id || '')) ? String(l.id) : 'l' + i, label: str(l?.label, 30), color: /^#[0-9a-f]{6}$/i.test(String(l?.color || '')) ? l.color : '', order: int(l?.order ?? i, 0, 999, i) })).filter((l) => l.label);
+    if (!levels.length) return null;
+    const lvIds = new Set(levels.map((l) => l.id));
+    const maps = (Array.isArray(d.maps) ? d.maps : []).slice(0, 150).map((m) => ({ levelId: String(m?.levelId || ''), ref: str(m?.ref, 40), refLevel: str(m?.refLevel, 40) })).filter((m) => lvIds.has(m.levelId) && /^[\w-]{1,40}$/.test(m.ref) && m.refLevel);
+    return { name, activity: ['bloc', 'voie', 'autre'].includes(d.activity) ? d.activity : 'bloc', kind: ['ordered', 'colors', 'numeric'].includes(d.kind) ? d.kind : 'ordered', levels, maps };
+  }
+  if (kind === 'style') {
+    const label = str(d.label, 40); if (!label) return null;
+    return { label, activity: str(d.activity, 40) };
   }
   if (kind === 'format') {
     const name = str(d.name, 40), parts = cleanParts(d.parts); if (!name || !parts.length) return null;

@@ -4,6 +4,20 @@
 import { APP_VERSION, ls } from './state.js';
 
 export const NEWS = [
+  // Les premières versions (avant la visite des nouveautés) : leur visite montre ce qu'elles ont apporté, qui existe toujours.
+  { v: '8.0.0', date: '2026-09-20', title: 'La première version', why: 'Tes séances, un générateur qui explique ses choix, le suivi de tes progrès, et tout qui marche même sans internet.', steps: [
+    ['home', 'dash', '.quick .qa.pri', '🎯 Une séance pour toi', 'Le générateur prépare une séance selon ton niveau, ton temps et ton matériel, et explique pourquoi.'],
+    ['library', 'home', '[data-act=newChoose]', '📚 Tes séances', 'Crée, modifie et range tes séances. Elles sont enregistrées sur ton compte.'],
+    ['progress', 'summary', 'h1', '📈 Tes progrès', 'Historique, records et régularité, calculés seulement à partir de ce que tu fais.'],
+  ] },
+  { v: '8.1.0', date: '2026-09-22', title: 'Prise en main pour tous', why: 'Un questionnaire pour que l’app s’adapte à toi, un mode invité sans compte, et l’installation comme une vraie application.', steps: [
+    ['settings', 'main', '[data-act=setupAgain]', '🧩 Ton profil sportif', 'Réponds à quelques questions (ou « plus tard ») : sports, niveau, temps, matériel.'],
+    ['settings', 'main', '[data-act=installNow]', '📲 Installer l’app', 'Elle s’ouvre en plein écran, depuis l’écran d’accueil de ton téléphone.'],
+  ] },
+  { v: '8.2.0', date: '2026-09-24', title: 'Plus joli, et un assistant', why: 'Un nouveau look plus léger, et un assistant qui crée la fiche d’un exercice à partir de son nom.', steps: [
+    ['library', 'exercises', '[data-act=aiOpen]', '🤖 L’assistant', 'Écris le nom d’un exercice : il prépare la fiche (consignes, muscles, ce qu’il travaille). Tu vérifies avant d’enregistrer.'],
+    ['settings', 'display', '.vibes', '🎨 Ton style', 'Choisis ton thème et tes couleurs.'],
+  ] },
   { v: '8.3.0', date: '2026-09-27', title: 'Visite guidée immersive', why: 'Comprendre l’app en 30 secondes : elle va seule sur chaque page et montre les boutons.', steps: [
     ['settings', 'help', '[data-act=helpTour]', '🧭 Visite guidée', 'La visite va maintenant elle-même sur chaque page et te montre les boutons avec une flèche.'],
   ] },
@@ -57,6 +71,10 @@ export const NEWS = [
   { v: '8.12.0', date: '2026-09-29', title: 'Tout se modifie, pour toi ou pour tout le monde', why: 'Exercices et séances prêtes ont un bouton « ✏️ Modifier ». Les administrateurs choisissent à chaque fois : pour eux, ou pour tous les comptes.', steps: [
     ['library', 'exercises', '#main [data-act=libInfo]', '✏️ Modifier', 'Ouvre un exercice ou une séance prête : « ✏️ Modifier » change le nom, les séries, le repos, les consignes… pour toi.'],
     ['', '', '', '🌍 Pour tout le monde', 'Si tu es administrateur, l’app te demande à chaque changement : pour toi seulement, ou pour tout le monde. Et tout s’annule en un toucher.'],
+  ] },
+  { v: '8.13.0', date: '2026-09-30', title: 'Tes idées pour tout le monde', why: 'Propose tes systèmes de cotation, styles, exercices, séances et formats : les administrateurs les ajoutent pour tous. Et toutes les mises à jour ont leur visite.', steps: [
+    ['profile', 'climbing', '[data-act=carnetAdv]', '💡 Proposer', 'Crée ton système de cotation ou ton style, puis « 💡 Proposer à tout le monde ». Pareil pour tes exercices, tes séances et tes formats.'],
+    ['settings', 'updates', '.upd', '🆕 Toutes les mises à jour', 'L’évolution de l’app depuis le début, avec une visite pour chaque mise à jour.'],
   ] },
 ];
 

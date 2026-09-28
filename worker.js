@@ -14,7 +14,7 @@ import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.12.0';
+const APP_VERSION = '8.13.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -1021,11 +1021,14 @@ async function globalPut(request, env, u, kind, id) {
 }
 
 async function proposalCreate(request, env, u) {
-  const b = await readJson(request, 6000);
-  const kind = ['intent', 'category', 'idea'].includes(b?.kind) ? b.kind : 'idea', label = str(b?.label, 80), detail = str(b?.detail, 1000);
+  const b = await readJson(request, 60000);
+  const kind = ['intent', 'category', 'idea', ...GLOBAL_KINDS].includes(b?.kind) ? b.kind : 'idea', label = str(b?.label, 80), detail = str(b?.detail, 1000);
   if (label.length < 2) return fail('Donne au moins un nom à ta proposition.');
+  // Proposition d'un élément complet (système de cotation, style, exercice, séance, format) : validé comme s'il était publié.
+  const data = GLOBAL_KINDS.includes(kind) && kind !== 'intent' ? cleanGlobal(kind, b?.data) : null;
+  if (GLOBAL_KINDS.includes(kind) && kind !== 'intent' && !data) return fail('Proposition incomplète : il manque des informations.');
   if (await limited(env, 'prop:' + u.id, 10, DAY)) return fail('Tu as déjà fait beaucoup de propositions aujourd’hui : merci ! Réessaie demain.', 429);
-  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps) };
+  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps), ...(data ? { data } : {}), from: str(b?.from, 40) };
   const id = 'pr-' + uid().slice(0, 12), activity = /^[\w:.-]{0,60}$/.test(String(b?.activityId || '')) ? String(b?.activityId || '') : '';
   await db(env, 'INSERT INTO proposals(id,user_id,kind,activity,label,detail,payload_json,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)', id, u.id, kind, activity, label, detail, JSON.stringify(payload), 'open', Date.now()).run();
   // Prévenir les administrateurs (notification sur leurs appareils abonnés ; best effort)
@@ -1041,6 +1044,14 @@ async function proposalReview(request, env, u, id) {
   const p = await db(env, 'SELECT id,kind,activity,label,payload_json,status FROM proposals WHERE id=?', id).first();
   if (!p) return fail('Proposition introuvable.', 404);
   if (p.status !== 'open') return fail('Déjà traitée.', 409);
+  let added = '';
+  if (decision === 'accept' && GLOBAL_KINDS.includes(p.kind) && p.kind !== 'intent') {
+    // L'administrateur peut ajuster la proposition avant de l'ajouter (b.data), sinon elle est ajoutée telle quelle.
+    const pl = safeParse(p.payload_json) || {}, data = cleanGlobal(p.kind, b?.data || pl.data);
+    if (!data) return fail('Proposition incomplète : impossible de l’ajouter.');
+    added = 'g-' + uid().slice(0, 12);
+    await db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,0,?,?)', p.kind, added, JSON.stringify(data), Date.now(), u.id).run();
+  }
   if (decision === 'accept' && p.kind === 'intent') {
     const pl = safeParse(p.payload_json) || {}, r = await intentCreate(env, u, { label: p.label, emoji: pl.emoji, caps: Object.entries(pl.caps || {}).map(([cid, w]) => ({ id: cid, w })), activityId: p.activity });
     if (r.error) return fail('Impossible d’ajouter cette intention : ' + r.error);
@@ -1048,7 +1059,7 @@ async function proposalReview(request, env, u, id) {
   await db(env, 'UPDATE proposals SET status=?,reply=?,reviewed_by=?,reviewed_at=? WHERE id=?', 'done', (decision === 'accept' ? '✓ Acceptée. ' : '✗ Refusée. ') + str(b?.reply, 300), u.id, Date.now(), id).run();
   const author = await db(env, 'SELECT user_id FROM proposals WHERE id=?', id).first();
   if (author?.user_id) try { await notifyType(env, 'reply', { userIds: [author.user_id] }); } catch (e) { console.error('notif réponse', e?.message); }
-  return json({ ok: true });
+  return json({ ok: true, added });
 }
 async function aiChatRoute(request, env, u) {
   const b = await readJson(request, 12000);

@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.12.0
+# FINAL_AUDIT — Séances entraînement v8.13.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -606,3 +606,28 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
   - Les notifications sont envoyées en priorité haute (`Urgency: high`).
   - Le changement de version est enregistré en « compare puis remplace » : même avec plusieurs requêtes simultanées, une seule annonce part.
 - **Tests** : `push-ics.test.mjs`, avec une seule annonce pour 3 requêtes simultanées, la priorité haute, et l'annonce dès la première requête.
+
+## Évolution 8.13.0 : les idées de chacun pour tout le monde, et toutes les mises à jour
+
+**Systèmes de cotation et styles pour tout le monde**
+- Un administrateur publie un système (par exemple « Cotations unibloc ») ou un style pour tous les comptes : types `grading` et `style` de `global_content`, validés côté serveur.
+- Quand on ajoute un bloc, on choisit parmi tous les systèmes : intégrés, pour tous, et les siens. Une salle peut aussi utiliser un système publié pour tous.
+
+**Proposer à tout le monde**, partout où l'on crée quelque chose : système de cotation, style, exercice personnel, séance (comme séance prête), format de séance, intention.
+- Un compte normal voit « 💡 Proposer à tout le monde ». Un administrateur voit « 🌍 Pour tout le monde », qui publie directement.
+- Le serveur valide la proposition comme une publication. Une proposition incomplète est refusée, et il y a au plus 10 propositions par jour.
+
+**Administrateurs**
+- Une notification par idée (« Bob propose : … »), en tête de la boîte 🔔. La boîte se met à jour à chaque ouverture.
+- « Voir et décider » mène à l'endroit d'où vient l'idée (Carnet pour une cotation, Exercices, Séances prêtes, Sur mesure…) et montre ce qui est proposé. Deux choix : « ✓ Ajouter pour tout le monde », ou « ✗ Refuser », avec une réponse envoyée à l'auteur.
+- La notification sur le téléphone ouvre la boîte 🔔.
+
+**Mises à jour**
+- Chaque notification de mise à jour a son bouton « 🧭 Lancer la visite », bien visible.
+- Nouvelle rubrique Paramètres › Toutes les mises à jour : de la première version à la dernière, chacune avec sa visite et le détail de ce qui a changé.
+
+**Correctifs**
+- Une idée ou une réponse arrivée après le repère « tout lu » de l'appareil reste bien nouvelle. Ce repère ne sert plus que pour les mises à jour, et il ne peut plus être dans le futur.
+- Une visite longue affiche une barre de progression. Avant, les points poussaient le bouton « Suivant » hors de l'écran.
+
+**Tests** : `global.test.mjs` passe à 11 tests (proposition, validation, acceptation, refus). E2E à 62 étapes : un utilisateur propose un système, l'administrateur est notifié, l'ouvre au bon endroit et l'accepte, et l'utilisateur le voit « pour tous ».
