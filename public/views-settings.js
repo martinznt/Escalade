@@ -317,7 +317,7 @@ ACT.propDo = async (el) => {
 ACT.cintentDel = async (el) => { if (!(await ask('Retirer cette intention pour tout le monde ?', { danger: true, ok: 'Retirer' }))) return; try { await api('DELETE', '/api/admin/intents/' + el.dataset.id); } catch (e) { toast(e.message, 4000, 'bad'); } ACT.propsReload(); };
 
 /* Comptes existants (admin) : identité et activité uniquement, jamais les données d'entraînement. */
-async function loadUsers() { try { S.admin.users = await api('GET', '/api/admin/users'); S.admin.usersErr = ''; } catch (e) { S.admin.usersErr = e.offline ? 'Connexion requise.' : e.message; } render(); }
+async function loadUsers() { try { const r = await api('GET', '/api/admin/users'); if (!Array.isArray(r?.users)) throw new Error('Liste des comptes indisponible, réessaie.'); S.admin.users = r; S.admin.usersErr = ''; } catch (e) { S.admin.usersErr = e.offline ? 'Connexion requise.' : e.message; } render(); }
 function vAdminUsers() {
   const u = S.admin.users, q = (S.admin.userQ || '').toLowerCase();
   if (!u && !S.admin.usersErr) setTimeout(loadUsers, 0);
