@@ -513,8 +513,10 @@ await step('trois niveaux d’aide : l’app choisit (puis on ajuste), l’app g
   await a.click('[data-act=cpExample]'); await a.click('[data-act=cpAdd][data-id=fingers]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
   const before = await A.locator('#cpresult .rpart').last().innerText();
   await A.locator('#cpresult [data-act=cpOpts]').last().click(); await A.waitForSelector('#sheet .optrow');
-  assert.match(await a.text('#sheet'), /Travaille :/); await A.locator('#sheet .optrow:not(.on) [data-act=cpPick].ck').first().click();
-  await A.waitForSelector('#sheet .optrow.on'); await a.click('#sheet [data-act=cpOptsDone]');
+  assert.match(await a.text('#sheet'), /Travaille :/); assert.ok(await a.count('#sheet .optrow') >= 1);
+  const wasOn = await A.locator('#sheet .optrow').first().evaluate((x) => x.classList.contains('on'));
+  await A.locator('#sheet .optrow [data-act=cpPick].ck').first().click();
+  await A.waitForFunction((w) => document.querySelector('#sheet .optrow')?.classList.contains('on') !== w, wasOn); await a.click('#sheet [data-act=cpOptsDone]');
   assert.notEqual(await A.locator('#cpresult .rpart').last().innerText(), before, 'les exercices de la partie ont changé');
   await A.locator('#cpresult input[data-change=cpBMin]').first().fill('25'); await A.locator('#cpresult input[data-change=cpBMin]').first().press('Tab');
   await a.click('[data-act=cpHelp][data-id=guide]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult details.guide[open] .optrow');
