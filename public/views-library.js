@@ -57,9 +57,9 @@ export function vLibrary() {
   return h`${subHead('libSub', 'home', 'Bibliothèque', `${ic} ${t}`)}${views[cur]()}`;
 }
 const LIB_INFO = {
+  generate: ['🎯', 'Séance sur mesure', () => ''],
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
-  generate: ['🎯', 'Sur mesure', () => 'L’app prépare une séance pour toi, au format que tu veux'],
-  climbplan: ['🧗', 'Structurer ma séance', () => 'Escalade : ton objectif ou tes parties (cotations, styles). Ou 🎲 Surprends-moi, tous sports'],
+  climbplan: ['✨', 'Créer une séance', () => draftText() || 'Tous sports : l’app choisit, te guide, ou tu composes'],
   catalog: ['🗂', 'Séances prêtes', () => `${CATALOG.length} séances expliquées et sourcées`],
   exercises: ['💪', 'Exercices', () => `${LIBRARY.length} exercices, et le top pour toi`],
   common: ['🌍', 'Partagées', () => 'Les séances publiées par la communauté'],
@@ -68,7 +68,7 @@ const LIB_INFO = {
 /** Bibliothèque : créer une séance, puis la liste des rubriques (même format que les paramètres). */
 function vLibHome() {
   return h`<h1>📚 Bibliothèque</h1><button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
-    ${menuList(Object.entries(LIB_INFO).map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
+    ${draftBanner()}${menuList(Object.entries(LIB_INFO).filter(([k]) => k !== 'generate').map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
 }
 ACT.libSub = (el) => { closeSheet(); S.sel = null; window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
@@ -183,11 +183,14 @@ let sfT = null;
 INPUT.sfQ = (el) => { sf().q = el.value; clearTimeout(sfT); sfT = setTimeout(() => { const pos = el.selectionStart; render(); const i = $('.sfbar input'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch { /* rien */ } } }, 250); };
 /** Nouvelle séance : les façons de la créer, expliquées en une ligne. */
 ACT.exMore = () => { S.exMore = true; render(); };
-ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>
-  ${[['libSub', 'generate', '🎯', 'Sur mesure', 'L’app la prépare selon ton sport, ton temps et ce que tu veux travailler.'], ['cpSurprise', '', '🎲', 'Surprends-moi', 'Dis juste ce que tu veux (ou rien) : une séance nouvelle pour toi, ou pour progresser.'], ['libSub', 'climbplan', '🧗', 'Escalade structurée', 'Ton objectif (ex. réussir un U8 en dévers) ou tes parties : cotations, styles, structure.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
-    ['newSeance', '', '✍️', 'À la main', 'Tu choisis chaque exercice toi-même.'], ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
+ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>${draftBanner()}
+  ${[['cpNew', '', '✨', 'Créer une séance', 'Tous sports. L’app choisit tout, te guide, ou tu composes toi-même.'], ['libSub', 'seances', '📂', 'Reprendre une de mes séances', 'La relancer, la modifier ou la dupliquer.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
+    ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
     ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
+/** Séance en cours de création (brouillon gardé) : on peut la reprendre où on en était. */
+function draftText() { const d = S.cp || ls.get('sea:climbplan', null); return d && (d.step || 1) > 1 ? `En cours : étape ${d.step}/5` : ''; }
+function draftBanner() { const t = draftText(); return t ? h`<button class="card flat acc-b row" data-act="cpResume"><span class="grow small">📝 <b>Reprendre ma séance en cours</b> · ${t.replace('En cours : ', '')}</span><span class="chev">›</span></button>` : ''; }
 /* Fusionner des séances : on en choisit 2 à 4, l'app conseille (note, ordre) et crée une NOUVELLE séance ; les originales ne changent pas. */
 const mergeable = () => S.seances.items.filter((s) => !s.archived && s.exercises.length);
 function mergeSheet() {

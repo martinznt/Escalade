@@ -586,3 +586,4 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 .optrow .tag{justify-self:start}
 .setsec>summary{list-style:none}.setsec>summary::-webkit-details-marker{display:none}.setsec[open]>summary .chev{transform:rotate(90deg)}.setsec .secbody{padding:4px 12px 12px}.setsec .secbody:empty{display:none}
 .setmenu.secs{margin-top:12px}
+.retbar{display:flex;gap:6px;align-items:center;margin:0 0 10px}

@@ -6,6 +6,7 @@ import { sortedLevels, bestReferenceLevel, fromReference, REFERENCE } from './gr
 import { normalizeEx, normalizeSession, uid } from './shared.js';
 import { sessionMinutes } from './engine.js';
 import * as G from './generator.js';
+import { ACTIVITIES } from './model.js';
 import { partOptions, buildPicked, GUIDE_PARTS } from './guide.js';
 import { availableEquipment } from './brain.js';
 
@@ -156,15 +157,17 @@ export function buildClimbPart(p, { levels, max = null, styles = {}, load = null
 }
 
 /** Parties « corps » (échauffement, renfo, étirements…) : construites par le générateur habituel. */
-function bodyPart(p, ctx, act, label, seed) {
-  const type = { warmup: 'warmup', strength: 'strength', core: 'core', mobility: 'mobility', stretch: 'stretch', cool: 'cool' }[p.type] || 'stretch';
+function bodyPart(p, ctx, act, label, seed, o = {}) {
+  const type = { warmup: 'warmup', main: 'main', technique: 'technique', cardio: 'cardio', strength: 'strength', core: 'core', mobility: 'mobility', stretch: 'stretch', cool: 'cool' }[p.type] || 'stretch';
   try {
-    const plan = G.planSession({ activityId: act, parts: [{ type, minutes: p.minutes }], seed }, ctx);
+    // Le lieu choisi décide du matériel ; les objectifs, intentions et zones à ménager orientent le choix des exercices.
+    const plan = G.planSession({ activityId: p.activity || act, parts: [{ type, minutes: p.minutes }], seed, envId: o.envId, goalIds: o.goalIds, intents: o.intents, avoidZones: o.avoidZones, light: o.light }, ctx);
     return G.generateFromPlan(plan, ctx).session.exercises.map((e) => normalizeEx({ ...e, id: uid(), part: label }));
   } catch { return []; }
 }
 export const partLabel = (p, i, parts) => {
   if (p.label) return p.label;
+  if (p.type === 'main') return `💪 ${ACTIVITIES[p.activity]?.label || 'Corps de séance'}`;
   if (p.type !== 'climb') return `${CLIMB_PARTS[p.type]?.[0] || '•'} ${CLIMB_PARTS[p.type]?.[1] || p.type}`;
   const base = `${p.kind === 'voie' ? '🧗 Voie' : '🪨 Bloc'} ${INTENSITY[p.intensity]?.[1].toLowerCase() || ''}`.trim();
   const same = parts.filter((x) => x.type === 'climb' && x.kind === p.kind && x.intensity === p.intensity);
@@ -184,11 +187,12 @@ export function buildFromParts(parts, ctx, opts = {}) {
       if (Array.isArray(p.pick)) { out.push(...buildPicked(p, p.pick, label)); return; } // choix de l'utilisateur, même vide
       if (opts.free) return; // mode libre : rien d'imposé, l'utilisateur choisit
       if (GUIDE_PARTS[p.type]) { const eq = availableEquipment(ctx, opts.envId), rec = partOptions(p, { eq, fingersTired: priorLoad(parts, i).fingers >= 40 }).filter((x) => x.recommended).map((x) => x.id); out.push(...buildPicked(p, rec, label)); return; }
-      out.push(...bodyPart(p, ctx, 'climbing_boulder', label, seed + i)); return;
+      out.push(...bodyPart(p, ctx, opts.sport || 'climbing_boulder', label, seed + i, opts)); return;
     }
     const sys = opts.systems?.[p.kind] || pickSystem(ctx, p.kind, opts.envId), levels = sortedLevels(sys);
     if (!levels.length) return;
     if (Array.isArray(p.pick) && !p.pick.length) return; // tout décoché : partie vide, comme demandé
+    if (opts.envId && !availableEquipment(ctx, opts.envId).has('wall')) why.push(`⚠️ ${opts.envName || 'Ce lieu'} n’a pas de mur d’escalade dans son matériel : ajoute-le dans Profil › Matériel et lieux, ou choisis un autre lieu pour « ${label} ».`);
     const structs = p.pick?.length ? p.pick.filter((id) => STRUCTURES[p.kind === 'voie' ? 'voie' : 'bloc'][id]) : [p.structure || null];
     const each = Math.max(5, Math.round(p.minutes / Math.max(1, structs.length)));
     structs.forEach((st, k) => {
@@ -196,11 +200,11 @@ export function buildFromParts(parts, ctx, opts = {}) {
       if (!k) why.push(...r.notes); out.push(...r.exercises);
     });
   });
-  const acts = [...new Set(parts.filter((p) => p.type === 'climb').map((p) => (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder')))];
+  const acts = [...new Set([...parts.filter((p) => p.type === 'climb').map((p) => (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder')), ...parts.map((p) => p.activity).filter(Boolean), ...(opts.sport && !parts.some((p) => p.type === 'climb') ? [opts.sport] : [])])];
   const now = Date.now();
   return normalizeSession({
-    id: uid(), name: opts.name || 'Ma séance d’escalade', emoji: '🧗', source: 'generated', activity: acts[0] || 'climbing_boulder', sports: acts.slice(1),
-    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: opts.envId || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0) },
+    id: uid(), name: opts.name || 'Ma séance', emoji: opts.emoji || (acts[0]?.startsWith('climbing') ? '🧗' : '🏋️'), source: 'generated', activity: acts[0] || opts.sport || 'climbing_boulder', sports: acts.slice(1),
+    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: opts.envId || '', envName: opts.envName || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0) },
     objectives: opts.goal ? [opts.goal] : [],
     notes: [{ title: 'Pourquoi cette séance', text: [opts.goal || 'Séance structurée par toi, partie par partie.', ...why].join('\n') }],
     createdAt: now, updatedAt: now,

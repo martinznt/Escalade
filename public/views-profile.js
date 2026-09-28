@@ -398,7 +398,12 @@ ACT.goalTab = (el) => { S.goalTab = el.dataset.id; render(); };
 document.addEventListener('toggle', (e) => { const d = e.target; if (!d.matches?.('details.setsec')) return; if (!d.open) { if (S.goalTab === d.dataset.id) S.goalTab = ''; return; } if (S.goalTab !== d.dataset.id) { S.goalTab = d.dataset.id; render(); } }, true);
 ACT.goalOpen = (el) => { closeSheet(); S.goalTab = 'overview'; go('profile', 'goals', el.dataset.id); };
 ACT.goalEdit = (el) => { S.goalType = null; openSheet(goalForm(item('goal', el.dataset.id)), { wide: true }); };
-ACT.goalTrain = (el) => openGenerator({ mode: 'goal', goalId: el.dataset.id, activityId: SKILLS[item('goal', el.dataset.id)?.skillId]?.activity || '', autoPlan: true });
+// Séance pour cet objectif : l'assistant s'ouvre avec l'objectif déjà coché (et son sport).
+ACT.goalTrain = (el) => {
+  const g = item('goal', el.dataset.id); if (!g) return; const sport = g.activityId || SKILLS[g.skillId]?.activity || '';
+  const prev = S.cp || {}; S.cp = { ...prev, step: 2, aim: 'goals', goalIds: [g.id], ...(sport ? { sport } : {}), result: null, built: null, partsTouched: false };
+  go('library', 'climbplan');
+};
 /* Objectif réussi : daté, dans la progression, performance ajoutée au profil (si on veut), et objectif suivant proposé. */
 ACT.goalDone = (el) => {
   const g = item('goal', el.dataset.id); if (!g) return; const perf = donePerf(g);

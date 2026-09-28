@@ -4,6 +4,7 @@ import * as C from '../public/climbplan.js';
 import { systemFromTemplate, sortedLevels, BUILTIN_SYSTEMS } from '../public/grading.js';
 import { exMinutes, sessionMinutes } from '../public/engine.js';
 import { it, env, act, perf, ctxOf } from './fixtures.mjs';
+import { byId as byIdLib } from '../public/library.js';
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓', name); };
 const u8 = systemFromTemplate('u8'), levels = sortedLevels({ levels: u8.levels });
 const base = [act('climbing_boulder'), it('gradesys', u8, 'u8sys'), env('Salle', ['wall', 'hangboard'], { type: 'salle', gradeSys: 'u8sys' })];
@@ -75,5 +76,18 @@ ok('choix de l’utilisateur respecté : exercices choisis, ou partie vide si to
   const s = C.buildFromParts(parts, ctx);
   assert.deepEqual([...new Set(s.exercises.map((e) => e.libId))], ['finger-extensions']);
   const free = C.buildFromParts([{ type: 'core', minutes: 10 }], ctx, { free: true }); assert.equal(free.exercises.length, 0, 'mode libre : rien d’imposé');
+});
+ok('autre sport : le corps de séance suit le sport choisi, le matériel du lieu et les objectifs', () => {
+  const c = ctxOf({ items: [act('conditioning'), act('climbing_boulder'), env('Maison', ['mat'], { isDefault: false }), env('Salle', ['bar', 'mat', 'band'], { isDefault: true })] });
+  const envs = c.envs, maison = envs.find((e) => e.name === 'Maison'), salle = envs.find((e) => e.name === 'Salle');
+  const parts = [{ type: 'warmup', minutes: 8 }, { type: 'main', minutes: 30, activity: 'conditioning' }, { type: 'cool', minutes: 6 }];
+  const atHome = C.buildFromParts(parts, c, { sport: 'conditioning', envId: maison.id, envName: 'Maison' });
+  assert.equal(atHome.activity, 'conditioning'); assert.equal(atHome.context.env, maison.id);
+  assert.ok(atHome.exercises.filter((e) => e.block === 'main').length >= 2);
+  for (const e of atHome.exercises) assert.ok((byIdLib(e.libId)?.needs || []).every((n) => n === 'mat'), `${e.name} demande du matériel absent à la maison`);
+  const gym = C.buildFromParts(parts, c, { sport: 'conditioning', envId: salle.id });
+  assert.ok(gym.exercises.some((e) => (byIdLib(e.libId)?.needs || []).includes('bar')), 'à la salle, la barre peut servir');
+  const noWall = C.buildFromParts([{ type: 'climb', kind: 'bloc', intensity: 'mod', minutes: 20 }], c, { envId: maison.id, envName: 'Maison' });
+  assert.match(noWall.notes[0].text, /Maison n’a pas de mur/);
 });
 console.log(`\n${n} tests d’escalade structurée OK`);
