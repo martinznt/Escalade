@@ -105,12 +105,12 @@ export function buildClimbPart(p, { levels, max = null, styles = {}, load = null
   if (p.adapt && load) { const a = adaptPart(p, load, styles); st = a.styles; notes.push(...a.notes); lo = Math.max(0, lo - a.drop); hi = Math.max(lo, hi - a.drop); }
   const stTxt = st.length ? ` · ${joinFr(styleNames(st, styles))}` : '', unit = kind === 'voie' ? 'voies' : 'blocs';
   const per = kind === 'voie' ? 5 : 1; // minutes d'effort par essai
+  const s = p.structure || proposals(kind, p.intensity)[0].id;
   const mk = (name, sets, rest, o = {}) => normalizeEx({ id: uid(), emoji: kind === 'voie' ? '🧗' : '🪨', mode: 'reps', unit, repsMin: 1, repsMax: 1, sets, rest, block: 'main', part: label, repSec: per * 60,
     intensity: o.intensity || (p.intensity === 'easy' ? 'low' : p.intensity === 'mod' ? 'mod' : 'high'), risk: st.some((s) => FINGER.has(s)) && p.intensity !== 'easy' ? 'finger' : '',
     caps: { technique_escalade: 0.6, ...(st.some((s) => FINGER.has(s)) ? { force_doigts: 0.7 } : {}), ...(st.some((s) => POWER.has(s)) ? { puissance_haut: 0.6 } : {}), ...(kind === 'voie' || o.endu ? { endurance_doigts: 0.6 } : {}) },
-    name, note: o.note || '', why: o.why || '' });
-  const T = p.minutes, fit = (rest) => Math.max(1, Math.floor((T * 60) / (per * 60 + rest)));
-  const s = p.structure || proposals(kind, p.intensity)[0].id, out = [];
+    name, note: o.note || '', why: o.why || '', group: 'cp-' + s });
+  const T = p.minutes, fit = (rest) => Math.max(1, Math.floor((T * 60) / (per * 60 + rest))), out = [];
   const lvl = (i) => labelOf(levels, i);
   if (kind === 'bloc') {
     if (s === 'pyramid') {
@@ -187,19 +187,22 @@ export function buildFromParts(parts, ctx, opts = {}) {
  * Mode objectif : « à la fin je veux avoir réussi {niveau} en {styles} ». Construit toute la séance dans le temps donné :
  * échauffement général, échauffement en grimpant (loin sous l'objectif), montée, spécifique, essais sur l'objectif, retour au calme.
  */
-export function goalParts({ kind = 'bloc', target, levels, styles = [], minutes = 120 }) {
+export function goalParts({ kind = 'bloc', target, levels, styles = [], minutes = 120, warm = null, stretch = 0 }) {
   const n = levels.length, T = clampI(target, n), step = n > 10 ? 2 : 1, M = Math.max(40, Math.min(240, minutes));
-  const warm = Math.min(15, Math.round(M * 0.12)), cool = Math.min(10, Math.max(5, Math.round(M * 0.07))), climb = M - warm - cool;
+  // Échauffement général et étirements : au choix (0 = sans), sinon automatiques pour l'échauffement.
+  const W = warm == null ? Math.min(15, Math.round(M * 0.12)) : Math.max(0, Math.min(45, warm)), X = Math.max(0, Math.min(45, stretch || 0));
+  const cool = Math.min(10, Math.max(5, Math.round(M * 0.07))), climb = Math.max(20, M - W - cool - X);
   const lvl = (d) => clampI(T - d * step, n);
   const plan = [
-    { type: 'warmup', minutes: warm },
+    ...(W ? [{ type: 'warmup', minutes: W }] : []),
     { type: 'climb', kind, intensity: 'easy', minutes: Math.round(climb * 0.2), from: lvl(5), to: lvl(4), styles, structure: kind === 'voie' ? 'volume' : 'volume', label: `🔥 Échauffement en grimpant (${range(levels, lvl(5), lvl(4))})` },
     { type: 'climb', kind, intensity: 'mod', minutes: Math.round(climb * 0.22), from: lvl(3), to: lvl(2), styles, structure: 'pyramid', label: `📈 Montée (${range(levels, lvl(3), lvl(2))})` },
   ];
   if (M >= 75) plan.push({ type: 'climb', kind, intensity: 'hard', minutes: Math.round(climb * 0.2), from: lvl(1), to: lvl(1), styles, structure: kind === 'voie' ? 'max' : 'styles', label: `🎨 Spécifique (${labelOf(levels, lvl(1))})` });
   const used = plan.reduce((t, p) => t + p.minutes, 0);
-  plan.push({ type: 'climb', kind, intensity: 'max', minutes: Math.max(10, M - cool - used), from: T, to: T, styles, structure: kind === 'voie' ? 'max' : 'limit', label: `🎯 Objectif ${labelOf(levels, T)}` });
+  plan.push({ type: 'climb', kind, intensity: 'max', minutes: Math.max(10, M - cool - X - used), from: T, to: T, styles, structure: kind === 'voie' ? 'max' : 'limit', label: `🎯 Objectif ${labelOf(levels, T)}` });
   plan.push({ type: 'cool', minutes: cool });
+  if (X) plan.push({ type: 'stretch', minutes: X });
   return plan;
 }
 /** Conseil honnête sur l'objectif, si le maximum connu le permet (sinon rien : on n'invente pas). */
