@@ -993,3 +993,13 @@ Détail complet, architecture du Studio et limites : `CHANGELOG.md`. Audit préa
 - **Reproductibilité** : `package-lock.json` versionné, versions épinglées, `npm ci` vérifié.
 
 ### Vérification 8.26.0 (commandes réellement lancées)
+
+| Commande | Résultat |
+|---|---|
+| `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci` | 3 paquets installés depuis `package-lock.json` (jsqr 1.4.0, playwright 1.63.0), 0 vulnérabilité |
+| `npm run check` | OK (syntaxe de tous les fichiers + JSON) |
+| `npm test` | 47 fichiers, tous OK — dont `studio.test.mjs` (14), `sessionmeta.test.mjs` (4), `migration.test.mjs` (10, tables Studio sur une ancienne base, sans perte) |
+| `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` | **73 étapes OK**, aucune erreur JavaScript — dont le Studio (brouillon, vérifications, publication, journal, retour arrière, Laboratoire, refus à un membre) et le brouillon de structure du créateur conservé hors ligne après rechargement |
+| Script Playwright de mise en page (pages admin, Studio, Lot, Journal, Laboratoire, Bibliothèque commune) | aucun débordement à 320 / 390 / 768 / 1280 px après correction |
+
+Non vérifiable ici : la qualité des réponses de Workers AI en production (tests avec un modèle simulé), le rendu sur de vrais téléphones. Voir les limites dans `CHANGELOG.md`.
