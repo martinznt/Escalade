@@ -58,7 +58,7 @@ export function vLibrary() {
 const LIB_INFO = {
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
   generate: ['🎯', 'Sur mesure', () => 'L’app prépare une séance pour toi, au format que tu veux'],
-  climbplan: ['🧗', 'Structurer ma séance d’escalade', () => 'Objectif de fin de séance, ou partie par partie : cotations, styles, structure'],
+  climbplan: ['🧗', 'Structurer ma séance', () => 'Escalade : ton objectif ou tes parties (cotations, styles). Ou 🎲 Surprends-moi, tous sports'],
   catalog: ['🗂', 'Séances prêtes', () => `${CATALOG.length} séances expliquées et sourcées`],
   exercises: ['💪', 'Exercices', () => `${LIBRARY.length} exercices, et le top pour toi`],
   common: ['🌍', 'Partagées', () => 'Les séances publiées par la communauté'],
@@ -183,7 +183,7 @@ INPUT.sfQ = (el) => { sf().q = el.value; clearTimeout(sfT); sfT = setTimeout(() 
 /** Nouvelle séance : les façons de la créer, expliquées en une ligne. */
 ACT.exMore = () => { S.exMore = true; render(); };
 ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>
-  ${[['libSub', 'generate', '🎯', 'Sur mesure', 'L’app la prépare selon ton sport, ton temps et ce que tu veux travailler.'], ['libSub', 'climbplan', '🧗', 'Escalade structurée', 'Ton objectif (ex. réussir un U8 en dévers) ou tes parties : cotations, styles, structure.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
+  ${[['libSub', 'generate', '🎯', 'Sur mesure', 'L’app la prépare selon ton sport, ton temps et ce que tu veux travailler.'], ['cpSurprise', '', '🎲', 'Surprends-moi', 'Dis juste ce que tu veux (ou rien) : une séance nouvelle pour toi, ou pour progresser.'], ['libSub', 'climbplan', '🧗', 'Escalade structurée', 'Ton objectif (ex. réussir un U8 en dévers) ou tes parties : cotations, styles, structure.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
     ['newSeance', '', '✍️', 'À la main', 'Tu choisis chaque exercice toi-même.'], ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
     ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);

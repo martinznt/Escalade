@@ -101,6 +101,9 @@ export const NEWS = [
     ['library', 'climbplan', '[data-act=cpMode][data-id=goal]', '🎯 Ton objectif', 'Choisis la cotation à réussir, les styles et ton temps : échauffement sur des niveaux bien plus faciles, montée, puis essais.'],
     ['library', 'climbplan', '[data-act=cpMode][data-id=parts]', '🧩 À ta façon', 'Tes parties (ex. 1 h 30 bloc intense, 30 min tranquille, voie max), une structure au choix pour chacune, et « adapter à ce que j’ai fait avant ».'],
   ] },
+  { v: '8.20.0', date: '2026-10-07', title: 'Surprends-moi', why: 'Dis seulement ce que tu veux (sport, temps, forme… ou rien) : l’app te prépare une séance différente de d’habitude, ou qui te fait progresser, et t’explique pourquoi. Échauffement et étirements réglables partout.', steps: [
+    ['library', 'climbplan', '[data-act=cpMode][data-id=surprise]', '🎲 Surprends-moi', 'Nouveau pour toi (styles, structures, exercices jamais faits) ou pour progresser (tes styles faibles, ton objectif).'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

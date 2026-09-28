@@ -498,6 +498,13 @@ await step('escalade structurée : objectif « réussir le plus dur » et partie
   assert.match(await a.text('#cpresult'), /Essais sur blocs/);
   await a.click('[data-act=cpSave]'); await A.waitForSelector('input[data-change=sName]');
   assert.match(await a.text('#main .brief'), /Bloc|voie/i);
+  await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpMode][data-id=goal]');
+  await A.selectOption('select[data-change=cpWarm]', '0'); await A.selectOption('select[data-change=cpStretch]', '15'); await a.click('[data-act=cpGoalGo]');
+  await A.waitForSelector('#cpresult'); const g2 = await a.text('#cpresult'); assert.ok(!/Montée en température/.test(g2), 'sans échauffement général'); assert.match(g2, /Étirements/);
+  await a.click('[data-act=cpMode][data-id=surprise]'); await a.click('[data-act=spSet][data-k=sport][data-v=bloc]'); await a.click('[data-act=spSet][data-k=aim][data-v=new]');
+  await a.click('[data-act=spGo]'); await A.waitForSelector('#cpresult:has-text("Pourquoi cette surprise")'); assert.match(await a.text('#cpresult'), /jamais|peu/);
+  await a.click('[data-act=spGo][data-again]'); await A.waitForSelector('#cpresult');
+  await a.click('[data-act=cpMode][data-id=parts]');
 });
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');

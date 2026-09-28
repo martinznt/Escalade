@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.19.0
+# FINAL_AUDIT — Séances entraînement v8.20.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -810,3 +810,34 @@ Nouvelle page : Bibliothèque › « 🧗 Structurer ma séance d'escalade ». E
 **Tests**
 - Nouveau fichier `climbplan.test.mjs` (7 tests) : systèmes, objectif U8, peu de temps, parties au choix, structures, cotations, adaptation.
 - E2E : les deux modes, choix d'une structure et d'un style, enregistrement.
+
+## Évolution 8.20.0 : « Surprends-moi », échauffement et étirements réglables
+
+**🎲 Surprends-moi** (`public/surprise.js`, sans DOM, testé)
+- On ne précise que ce qu'on veut : sport, temps, forme… ou rien. L'orientation est au choix :
+  - **🆕 Nouveau pour moi** ;
+  - **📈 Pour progresser** ;
+  - **🎲 Au hasard** entre les deux.
+- **Escalade**
+  - Les habitudes viennent de l'historique réel : styles reconnus dans les noms d'exercices, structures notées `cp-…` sur chaque étape de grimpe. On sait combien de fois et quand chacun a été fait.
+  - « Nouveau » : les styles et structures les moins faits, avec le nombre de fois et la date (« jamais », « 3 fois, la dernière il y a 12 j »).
+  - « Progresser » :
+    - si un **objectif de cotation** est actif, la séance est construite en mode objectif ;
+    - sinon, les **styles faibles** d'après les maxima notés par style (ex. « Dalle : max U5 contre U7 au mieux »), avec des cotations calées sur le max de ce style (pas sur le max global) ;
+    - sans maxima par style, les styles les moins travaillés, en le disant.
+  - Fatigué : pas de blocs max ni de 4×4.
+- **Autres sports**
+  - « Nouveau » : jusqu'à 3 exercices jamais faits (`neverTried` : compatibles avec le matériel, utiles, pas d'intensité maximale), marqués 🆕 et nommés dans le pourquoi.
+  - « Progresser » : les axes de progrès du profil, ou l'objectif en cours.
+- Le **pourquoi de la surprise** est affiché et enregistré avec la séance. « 🔁 Une autre surprise » change la graine ; une même graine donne la même séance.
+- Durée si « peu importe » : 1 h 30 pour l'escalade, la durée habituelle pour le reste.
+
+**Échauffement et étirements**
+- Mode objectif : échauffement général Auto, sans, ou 5 à 30 min ; étirements à la fin sans, ou 5 à 30 min. Le temps de grimpe s'ajuste.
+- Mode parties : la durée de chaque partie se règle directement dans la liste. On peut toujours ajouter des parties échauffement ou étirements.
+
+**Accès** : Bibliothèque › Structurer ma séance, « Nouvelle séance › 🎲 Surprends-moi », et la recherche.
+
+**Tests**
+- Nouveau fichier `surprise.test.mjs` (6 tests) : habitudes, styles faibles, nouveau, progresser (style faible et objectif), fatigue et graine, autre sport.
+- E2E : mode objectif sans échauffement et avec étirements, surprise « nouveau », « une autre surprise ».
