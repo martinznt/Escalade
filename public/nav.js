@@ -26,7 +26,7 @@ let shown = [];
 export function hintsBar() {
   if (!S.user || S.lay || S.player) return '';
   const route = here(); let list = [];
-  try { list = hintsFor(route, hintState(ctx(), { cp: S.sub?.library === 'climbplan' ? S.cp : null, seances: S.seances?.items?.filter((s) => !s.archived).length || 0 }), { off: ls.get(OFF, []) || [], extra: globalHints() }); } catch { list = []; }
+  try { list = hintsFor(route, hintState(ctx(), { cp: S.sub?.library === 'climbplan' ? S.cp : null, seances: S.seances?.items?.filter((s) => !s.archived).length || 0, draft: ((S.cp || ls.get('sea:climbplan', null))?.step || 1) > 1 }), { off: ls.get(OFF, []) || [], extra: globalHints() }); } catch { list = []; }
   shown = list; if (!list.length) return '';
   return h`<div class="hints">${list.map((x, i) => h`<div class="hint"><button class="linkish grow" data-act="hintGo" data-i="${i}"><span>${x.icon}</span> ${x.text} <b class="acc-t">›</b></button><button class="btn sm ic ghost" data-act="hintOff" data-id="${x.id}" aria-label="Ne plus afficher ce conseil">✕</button></div>`)}</div>`;
 }

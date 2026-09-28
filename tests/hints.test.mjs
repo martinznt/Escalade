@@ -9,6 +9,7 @@ const full = hintState({ activities: { climbing_boulder: {} }, goals: [{ id: 'g'
 ok('accueil : lieu, objectif, niveau max proposés seulement s’ils manquent (2 au plus)', () => {
   assert.deepEqual(hintsFor('home/dash', empty).map((x) => x.id), ['home-place', 'home-goal']);
   assert.deepEqual(hintsFor('home/dash', full), []);
+  assert.deepEqual(hintsFor('home/dash', { ...full, draft: true }).map((x) => x.id), ['home-draft']);
 });
 ok('création de séance : « ajoute tes objectifs ici » à l’étape 3 s’il n’y en a pas ; « Exercices » à l’étape 5', () => {
   assert.deepEqual(hintsFor('library/climbplan', { ...empty, cp: { step: 3 } }).map((x) => x.id), ['cp-goals']);

@@ -789,7 +789,7 @@ export function understandProfile(ctx) {
   const inferred = states.filter((s) => s.level != null).map((s) => `${s.label} : ${STATUS_WORD[s.status]} (niveau ≈ ${round(s.level, 1)} / 2, confiance ${confWord(s.confidence)})`);
   const recommended = [...testReminders(ctx).map((t) => t.text), ...undertrained(ctx).items.map((u) => `Travailler davantage : ${u.label}`)];
   const missing = [...new Set(states.flatMap((s) => s.missing))].slice(0, 12);
-  if (!ctx.envs.length) missing.push('Aucun environnement / matériel décrit : le générateur reste prudent.');
+  if (!ctx.envs.length) missing.push('Aucun lieu ni matériel décrit : le générateur reste prudent.');
   if (!Object.keys(ctx.activities).length) missing.push('Aucune activité choisie dans ton profil.');
   return {
     measured, declared, calculated, inferred, recommended, missing,

@@ -97,7 +97,7 @@ function vSeances() {
       : list.length ? h`<button class="btn sm ghost" data-act="selStart">☑ Sélectionner plusieurs séances</button>` : ''}
     ${list.length ? groupSessions(list, f.group).map((g) => h`${g.key ? h`<div class="blockhead">${groupName(f.group, g.key)} · ${g.items.length}</div>` : ''}${g.items.map(seanceCard)}`)
       : nf ? h`<div class="card flat"><p class="muted">Aucune séance avec ces filtres.</p><button class="btn" data-act="sfClear">Effacer les filtres</button></div>`
-      : empty(st === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
+      : empty(st === 'active' ? 'Aucune séance pour l’instant.' : 'Rien ici.', st === 'active' ? h`<button class="btn pri" data-act="cpNew">✨ Créer une séance</button>` : '')}`;
 }
 function seanceCard(s) {
   const sel = S.sel?.includes(s.id); const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card ${sel ? 'on-b' : ''}"><div class="row">${S.sel ? h`<button class="selbox ${sel ? 'on' : ''}" data-act="selTog" data-id="${s.id}" aria-pressed="${!!sel}" aria-label="Sélectionner">${sel ? '✓' : ''}</button>` : ''}<div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>

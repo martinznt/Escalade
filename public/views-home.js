@@ -84,7 +84,7 @@ function vDash() {
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
     <div class="${S.lay?.page === 'home' ? '' : 'home-grid'}">${composePage('home', {
       hero,
-      gen: () => tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true),
+      gen: () => h`${tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true)}${whereAmI()}`,
       seances: () => tile('goLib', '📚', 'Mes séances', 'Lancer, créer, modifier'),
       timer: () => tile('timerOpen', '⏱', 'Minuteur', 'Suspensions, Tabata…'),
       carnet: () => tile('goCarnet', '🧗', 'Carnet', 'Blocs, voies et projets'),
@@ -100,6 +100,11 @@ ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
 ACT.topCal = () => { go('home', 'cal'); window.scrollTo(0, 0); };
 ACT.goProgressTop = () => { go('progress', 'summary'); window.scrollTo(0, 0); };
 ACT.topProgram = () => { const p = activeProgram(); if (p) ACT.progOpen({ dataset: { id: p.id } }); else ACT.progNew(); };
+/** « Je suis à : … » : changer de lieu d'un toucher (la séance du jour s'adapte à son matériel). */
+function whereAmI() {
+  const c = ctx(), envs = c.envs.filter((e) => !e.archived); if (envs.length < 2) return '';
+  return h`<div class="chips whereami"><span class="tiny muted">📍 Je suis à :</span>${envs.slice(0, 6).map((e) => chip(c.defEnv?.id === e.id, e.name, `data-act="envDefault" data-id="${e.id}"`))}</div>`;
+}
 ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); closeSheet(); go(t, sub); window.scrollTo(0, 0); };
 ACT.layEditHome = () => { closeSheet(); go('home', 'dash'); setTimeout(() => ACT.layEdit(), 150); };
 ACT.loopClose = () => { S.lastLoop = null; render(); };

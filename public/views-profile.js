@@ -33,6 +33,20 @@ export function vProfile() {
   return h`${subHead('profSub', 'home', 'Profil', `${ic} ${title}`)}${views[sub]()}`;
 }
 /* ═════════ Accueil du profil : l'essentiel en un coup d'œil, puis des tuiles ═════════ */
+/** Profil à compléter : ce qui rend les séances plus justes, chaque ligne mène à l'endroit où le faire. Disparaît une fois complet. */
+function completeCard(c, acts, goals, climbing) {
+  const items = [
+    [!acts.length, '🏅', 'Tes sports', 'profile/activities'],
+    [!c.envs.length, '📍', 'Ton lieu (salle, falaise, maison…)', 'profile/equipment'],
+    [c.envs.length && !c.envs.some((e) => e.equipment?.length), '🧰', 'Le matériel de ton lieu', 'profile/equipment'],
+    [climbing && !c.perfs.some((p) => ['max_bloc', 'max_voie'].includes(p.metricId) && !p.unknown), '📏', 'Ton niveau max en escalade', 'profile/perfs'],
+    [!goals.length, '🎯', 'Un objectif', 'profile/goals'],
+    [!item('config', 'body')?.age && !item('config', 'body')?.weight, '🫀', 'Ton corps (âge, forme)', 'profile/body'],
+  ], left = items.filter((x) => x[0]), done = items.length - left.length;
+  if (!left.length) return '';
+  return h`<section class="card"><div class="row between"><h3>🧩 Pour des séances plus justes</h3><span class="tiny muted">${done}/${items.length}</span></div>${meter((done / items.length) * 100)}
+    <div class="setmenu">${left.map(([, ic, t, to]) => h`<button class="setrow" data-act="allGo" data-to="${to}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b></span><span class="chev">›</span></button>`)}</div></section>`;
+}
 function vHub() {
   const c = ctx(), acts = Object.values(c.activities), st = profileCapacities(c), sw = strengthsWeaknesses(st), goals = activeGoals(c);
   const known = st.filter((x) => x.level != null).length;
@@ -47,6 +61,7 @@ function vHub() {
       <section class="card ok-b"><span class="kicker ok-t">💪 Tes points forts</span><div class="chips">${sw.strengths.length ? sw.strengths.slice(0, 3).map((x) => pill(x, 'okc')) : h`<span class="small muted">Bientôt…</span>`}</div></section>
       <section class="card warn-b"><span class="kicker warn-t">🌱 À travailler</span><div class="chips">${sw.weaknesses.length ? sw.weaknesses.slice(0, 3).map((x) => pill(x, 'warnc')) : h`<span class="small muted">Rien de flagrant</span>`}</div></section></div>`
       : h`<section class="card flat row"><span class="grow small">🧩 Ajoute une ou deux mesures pour voir tes points forts.</span><button class="btn sm pri" data-act="profSub" data-id="perfs">Ajouter</button></section>`}
+    ${completeCard(c, acts, goals, climbing)}
     ${GROUPS.map(([title, ids]) => { const list = tiles.filter(([k]) => ids.includes(k)); return list.length ? h`<span class="kicker">${title}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; })}`;
 }
 ACT.profSub = (el) => { go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
@@ -162,7 +177,7 @@ function vPerfs() {
     ${groups.size ? [...groups.entries()].map(([mid, list]) => { const m = c.metrics[mid] || { label: mid, unit: '' }; const t = metricTrend(mid, c); const pts = list.filter((p) => !p.unknown && p.value != null).sort((a, b) => a.date - b.date).map((p) => ({ v: p.value })); return h`<div class="card"><div class="row between"><h3>${m.label}</h3><button class="btn sm" data-act="perfAdd" data-id="${mid}">＋</button></div>
       ${m.tiers ? h`<p class="tiny muted">${metricTierText(m)}</p>` : ''}${t ? h`<p class="small">${t.dir > 0 ? '📈' : t.dir < 0 ? '📉' : '➖'} ${t.text}</p>` : ''}${pts.length >= 2 ? lineChart(pts, m.unit) : ''}
       ${list.slice(0, 8).map((p) => h`<div class="item"><div class="grow"><b>${perfText(p, c)}</b> ${tag(({ measured: 'mesuré', declared: 'déclaré', imported: 'importé', session: 'relevé en séance' })[p.source] || p.source, SOURCE_TAG[({ measured: 'mesuré', declared: 'déclaré' })[p.source]] || '')}${p.styles?.length ? h`<div class="tiny muted">${p.styles.map((s) => c.styles[s]?.label || s).join(', ')}</div>` : ''}<div class="tiny muted">${fmtDay(p.date)}${p.note ? ' · ' + p.note : ''}</div></div><button class="btn sm ic" data-act="perfEdit" data-id="${p.id}" aria-label="Modifier">✎</button><button class="btn danger sm ic" data-act="perfDel" data-id="${p.id}" aria-label="Supprimer">✕</button></div>`)}</div>`; })
-      : empty('Aucune performance. Saisis un test (tractions max, 5 km, suspension…) ou indique « je ne sais pas » : l’application te proposera un test.')}`;
+      : empty('Aucune performance. Saisis un test (tractions max, 5 km, suspension…) ou indique « je ne sais pas » : l’application te proposera un test.', h`<button class="btn pri" data-act="perfAdd">＋ Saisir une performance</button>`)}`;
 }
 function perfForm(p, metricId) {
   const c = ctx(), mid = p?.metricId || metricId || '', m = c.metrics[mid];
@@ -269,7 +284,7 @@ function vGoals() {
   const list = c.goals.filter((g) => (S.filters.goals || 'active') === 'all' || (g.status || 'active') === (S.filters.goals || 'active'));
   return h`${goalsPicker()}<div class="row wrapf"><button class="btn pri" data-act="goalNew">＋ Objectif précis</button></div>
     <div class="chips">${[['active', 'Actifs'], ['done', '🏆 Réussis'], ['archived', 'Archivés'], ['all', 'Tous']].map(([k, l]) => chip((S.filters.goals || 'active') === k, l, `data-act="goalFilter" data-id="${k}"`))}</div>
-    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…')}
+    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}
     ${(S.filters.goals || 'active') === 'active' && doneGoals(c.goals).length ? doneList(c.goals, 5) : ''}
     <div class="card flat"><h3>Figures proposées</h3><div class="chips">${Object.entries(SKILLS).map(([id, s]) => chip(false, `${s.emoji} ${s.label}`, `data-act="goalNewSkill" data-id="${id}"`))}</div></div>`;
 }
@@ -583,7 +598,7 @@ SUBMIT.envSave = (f) => {
   closeSheet(); buzzOk(); toast({ escalade: 'Salle enregistrée', falaise: 'Falaise enregistrée' }[d.type] || 'Lieu enregistré'); render();
 };
 ACT.envDel = async (el) => { const e = item('env', el.dataset.id); if (e && (await ask(`Supprimer « ${e.name} » ?`, { danger: true, ok: 'Supprimer' }))) { delItem('env', e.id); closeSheet(); render(); } };
-ACT.envDefault = (el) => { putItem('config', 'main', { ...(item('config', 'main') || {}), envId: el.dataset.id }); toast('Environnement par défaut modifié'); render(); };
+ACT.envDefault = (el) => { putItem('config', 'main', { ...(item('config', 'main') || {}), envId: el.dataset.id }); toast(`📍 ${item('env', el.dataset.id)?.name || 'Lieu'} : c’est ton lieu par défaut`); render(); };
 ACT.eqToggle = (el) => { const conf = item('config', 'equipment') || {}, un = new Set(conf.unavailable || []); un.has(el.dataset.id) ? un.delete(el.dataset.id) : un.add(el.dataset.id); putItem('config', 'equipment', { ...conf, unavailable: [...un] }); render(); };
 ACT.eqReset = () => { putItem('config', 'equipment', { unavailable: [] }); render(); };
 

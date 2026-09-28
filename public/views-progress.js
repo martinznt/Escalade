@@ -73,7 +73,7 @@ function vHistory() {
   if (S.param) { const e = S.history.find((x) => x.id === S.param); if (e) return vEntry(e); }
   const list = c.history;
   return h`${c.future.length ? h`<div class="card flat warn-b small">${c.future.length} séance(s) datée(s) dans le futur ne sont pas comptées comme réalisées (horloge ou import erroné).</div>` : ''}
-    ${list.length ? list.slice(0, 80).map((x) => h`<button class="card pick hist" data-act="histOpen" data-id="${x.id}"><div class="row"><div class="grow"><b>${x.sessionName}</b> ${x._failed ? tag('non synchronisée', 'bad') : ''}${x.data?.aborted ? tag('interrompue', 'warn') : ''}<div class="muted small">${fmtDateTime(x.startedAt)} · ${Math.round((x.durationSeconds || 0) / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''} · ${activityLabel(entryActivity(x, c), c)}</div></div><span class="muted">›</span></div></button>`) : empty('Aucune séance réalisée pour l’instant.')}`;
+    ${list.length ? list.slice(0, 80).map((x) => h`<button class="card pick hist" data-act="histOpen" data-id="${x.id}"><div class="row"><div class="grow"><b>${x.sessionName}</b> ${x._failed ? tag('non synchronisée', 'bad') : ''}${x.data?.aborted ? tag('interrompue', 'warn') : ''}<div class="muted small">${fmtDateTime(x.startedAt)} · ${Math.round((x.durationSeconds || 0) / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''} · ${activityLabel(entryActivity(x, c), c)}</div></div><span class="muted">›</span></div></button>`) : empty('Aucune séance réalisée pour l’instant.', h`<button class="btn pri" data-act="genOpen">▶ Faire la séance du jour</button> <button class="btn" data-act="cpNew">✨ Créer une séance</button>`)}`;
 }
 ACT.histOpen = (el) => go('progress', 'history', el.dataset.id);
 function vEntry(e) {
