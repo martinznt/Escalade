@@ -26,7 +26,7 @@ export const FEATURES = {
     records: F('Records', ['big']), regularity: F('Régularité', ['big']), capacities: F('Capacités', ['big']), load: F('Charge récente', ['big']), summary: F('Résumé de la semaine', ['big']),
   },
   progress: {
-    search: F('Recherche', ['icon']), streak: F('Ma série', ['big']), kpis: F('Chiffres clés', ['big']), wins: F('Bonnes nouvelles', ['big']), work: F('Ce que tu as travaillé', ['big']),
+    search: F('Recherche', ['icon']), streak: F('Ma série', ['big']), kpis: F('Chiffres clés', ['big']), wins: F('Bonnes nouvelles', ['big']), goalsdone: F('Objectifs réussis', ['big']), work: F('Ce que tu as travaillé', ['big']),
     regularity: F('Régularité', ['big']), load: F('Charge', ['big']), muscles: F('Muscles travaillés', ['big']), badges: F('Badges', ['big']), weeksum: F('Résumé de la période', ['big']),
     recap: F('Bilan du mois', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']),
   },
@@ -37,7 +37,7 @@ export const FEATURES = {
 // Mise en page de base : simple au départ.
 export const DEFAULTS = {
   home: [['search', 'icon'], ['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['question', 'big'], ['streak', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['recap', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['goalsdone', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['recap', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   library: [['search', 'icon'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   profile: [['search', 'icon'], ['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   settings: [['search', 'icon'], ['notif', 'icon'], ['all', 'icon']],

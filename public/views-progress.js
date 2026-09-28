@@ -1,5 +1,7 @@
 // views-progress.js — Progrès : comparaisons personnelles, résumés, régularité, charge, historique, records,
 // timeline, journal, analyses descriptives et mode Lab. Toujours par rapport à soi-même, jamais aux autres.
+import { doneGoals } from './goaldone.js';
+import { doneList } from './views-profile.js';
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, subHead, tag, empty, howBox, meter, bars, lineChart, fmtDay, fmtDate, fmtDateTime, relDate, numberField, buzzOk, fmtDur } from './ui.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, deleteHistory, updateHistory, putItem, delItem, item, itemsOf } from './state.js';
 import { uid, exKey } from './shared.js';
@@ -52,6 +54,7 @@ function vSummary() {
     streak: () => streakCard(),
     kpis: kpisView,
     wins: () => (wins.length ? h`<section class="card ok-b"><span class="kicker ok-t">Tes bonnes nouvelles</span>${wins.map(([ic, t]) => h`<div class="win"><span>${ic}</span>${t}</div>`)}</section>` : ''),
+    goalsdone: () => (doneGoals(ctx().goals).length ? doneList(ctx().goals, 3) : ''),
     work: () => (b.capDiff.length ? WORK() : ''),
     regularity: () => REG(),
     load: () => LOAD(),

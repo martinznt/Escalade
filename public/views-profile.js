@@ -16,6 +16,8 @@ import { sourcesLine } from './srcui.js';
 import { GOALS, INTENT_OF } from './views-setup.js';
 import { profileSummary } from './views-coach.js';
 import { byId } from './library.js';
+import { donePerf, nextGoals, doneGoals } from './goaldone.js';
+import { celebrate } from './fx.js';
 
 const SUBS = [['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
 const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
@@ -33,7 +35,7 @@ export function vProfile() {
 function vHub() {
   const c = ctx(), acts = Object.values(c.activities), st = profileCapacities(c), sw = strengthsWeaknesses(st), goals = activeGoals(c);
   const known = st.filter((x) => x.level != null).length;
-  const counts = { understand: known ? `${known} capacité${known > 1 ? 's' : ''}` : '', activities: acts.length || '', perfs: c.perfs.filter((p) => !p.unknown).length || '', goals: goals.length || '', equipment: c.envs.length || '' };
+  const counts = { understand: known ? `${known} capacité${known > 1 ? 's' : ''}` : '', activities: acts.length || '', perfs: c.perfs.filter((p) => !p.unknown).length || '', goals: `${goals.length || 0} en cours${doneGoals(c.goals).length ? ` · 🏆 ${doneGoals(c.goals).length}` : ''}`, equipment: c.envs.length || '' };
   const climbing = acts.some((a) => a.id.startsWith('climbing'));
   const tiles = Object.entries(TILES).filter(([k]) => k !== 'climbing' || climbing);
   const pill = (x, cls) => h`<button class="chip ${cls}" data-act="capOpen" data-id="${x.capId}">${x.label}</button>`;
@@ -262,10 +264,19 @@ function vGoals() {
   if (S.param) { const g = c.goals.find((x) => x.id === S.param); if (g) return vGoalDetail(g); }
   const list = c.goals.filter((g) => (S.filters.goals || 'active') === 'all' || (g.status || 'active') === (S.filters.goals || 'active'));
   return h`${goalsPicker()}<div class="row wrapf"><button class="btn pri" data-act="goalNew">＋ Objectif précis</button></div>
-    <div class="chips">${[['active', 'Actifs'], ['done', 'Atteints'], ['archived', 'Archivés'], ['all', 'Tous']].map(([k, l]) => chip((S.filters.goals || 'active') === k, l, `data-act="goalFilter" data-id="${k}"`))}</div>
+    <div class="chips">${[['active', 'Actifs'], ['done', '🏆 Réussis'], ['archived', 'Archivés'], ['all', 'Tous']].map(([k, l]) => chip((S.filters.goals || 'active') === k, l, `data-act="goalFilter" data-id="${k}"`))}</div>
     ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…')}
+    ${(S.filters.goals || 'active') === 'active' && doneGoals(c.goals).length ? doneList(c.goals, 5) : ''}
     <div class="card flat"><h3>Figures proposées</h3><div class="chips">${Object.entries(SKILLS).map(([id, s]) => chip(false, `${s.emoji} ${s.label}`, `data-act="goalNewSkill" data-id="${id}"`))}</div></div>`;
 }
+/** Objectifs réussis, datés (aussi affichés dans Progrès). */
+export function doneList(goals, max = 0) {
+  const d = doneGoals(goals), shown = max ? d.slice(0, max) : d;
+  return h`<section class="card"><h3>🏆 Objectifs réussis <span class="tiny muted">${d.length}</span></h3>
+    ${shown.map((g) => h`<button class="setrow" data-act="goalOpen" data-id="${g.id}"><span class="sic">🏆</span><span class="grow"><b>${goalLabel(g)}</b><small>${g.doneAt ? 'le ' + new Date(g.doneAt).toLocaleDateString('fr-FR') : ''}</small></span><span class="chev">›</span></button>`)}
+    ${max && d.length > max ? h`<button class="btn sm ghost" data-act="goalsDoneAll">Voir les ${d.length}</button>` : ''}</section>`;
+}
+ACT.goalsDoneAll = () => { S.filters.goals = 'done'; go('profile', 'goals'); };
 /* ═════════ Mon corps ═════════ */
 function vBody() {
   const b = item('config', 'body') || {}, c = ctx(), goals = item('config', 'main')?.goals || [];
@@ -374,8 +385,10 @@ function vGoalDetail(g) {
   return h`<div class="row"><button class="btn sm" data-act="goalBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2></div>
     <div class="card hero ghero"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
       ${sk ? h`<details class="how mini"><summary>C’est quoi, ${sk.label} ?</summary><p class="small">${sk.desc}</p></details>` : ''}
-      <div class="row"><button class="btn pri grow" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button>
-      <details class="menu"><summary class="btn ic" aria-label="Plus d’actions">⋯</summary><div class="menu-list"><button class="btn" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="done">✅ Atteint</button><button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div></details></div></div>
+      ${g.status === 'done' ? h`<p class="small ok-t">🏆 Réussi le ${g.doneAt ? new Date(g.doneAt).toLocaleDateString('fr-FR') : '—'}</p>`
+        : (pr.pct ?? 0) >= 100 ? h`<div class="card flat ok-b row"><span class="grow small">🎉 Tu es à 100 % : tu l’as réussi ?</span><button class="btn sm pri" data-act="goalDone" data-id="${g.id}">🏆 Oui !</button></div>` : ''}
+      <div class="row">${g.status === 'done' ? h`<button class="btn grow" data-act="goalNext" data-id="${g.id}">➡️ Objectif suivant</button>` : h`<button class="btn pri grow" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button><button class="btn" data-act="goalDone" data-id="${g.id}">🏆 J’ai réussi</button>`}
+      <details class="menu"><summary class="btn ic" aria-label="Plus d’actions">⋯</summary><div class="menu-list"><button class="btn" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div></details></div></div>
     ${goalOverview(g)}
     <div class="setmenu secs">${secs.map(([k, ic, t, d]) => h`<details class="setsec" data-id="${k}" ${tab === k ? 'open' : ''}><summary class="setrow"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></summary><div class="secbody">${tab === k ? ({ blockers: goalBlockers, tree: goalTree, paths: goalPathsV, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[k](g) : ''}</div></details>`)}</div>`;
 }
@@ -386,6 +399,31 @@ document.addEventListener('toggle', (e) => { const d = e.target; if (!d.matches?
 ACT.goalOpen = (el) => { closeSheet(); S.goalTab = 'overview'; go('profile', 'goals', el.dataset.id); };
 ACT.goalEdit = (el) => { S.goalType = null; openSheet(goalForm(item('goal', el.dataset.id)), { wide: true }); };
 ACT.goalTrain = (el) => openGenerator({ mode: 'goal', goalId: el.dataset.id, activityId: SKILLS[item('goal', el.dataset.id)?.skillId]?.activity || '', autoPlan: true });
+/* Objectif réussi : daté, dans la progression, performance ajoutée au profil (si on veut), et objectif suivant proposé. */
+ACT.goalDone = (el) => {
+  const g = item('goal', el.dataset.id); if (!g) return; const perf = donePerf(g);
+  openSheet(h`<form data-submit="goalDoneGo" class="stack"><input type="hidden" name="id" value="${g.id}"><h2 style="margin:0">🏆 ${goalLabel(g)}</h2>
+    <p class="small">Bravo ! Il sera daté et apparaîtra dans ta progression et dans tes objectifs réussis.</p>
+    <label>Réussi le<input type="date" name="day" value="${new Date().toISOString().slice(0, 10)}" max="${new Date().toISOString().slice(0, 10)}"></label>
+    ${perf ? h`<label class="row"><input type="checkbox" name="perf" checked><span class="small">Enregistrer ${perf.grade ? `${perf.grade.label} comme ${perf.metricId === 'max_voie' ? 'ton max en voie' : 'ton max en bloc'}` : `${perf.value} comme ta performance`} dans ton profil</span></label>` : ''}
+    <button class="btn pri big">🏆 C’est réussi</button></form>`);
+};
+SUBMIT.goalDoneGo = (f) => {
+  const d = Object.fromEntries(new FormData(f)), g = item('goal', d.id); if (!g) return;
+  const at = d.day ? Math.min(Date.now(), new Date(d.day + 'T12:00:00').getTime()) : Date.now();
+  putItem('goal', g.id, { ...g, status: 'done', doneAt: at });
+  const perf = d.perf ? donePerf(g, at) : null; if (perf) putItem('perf', 'p-' + uid().slice(0, 12), perf);
+  closeSheet(); celebrate?.(); toast('🏆 Objectif réussi !', 3500); render();
+  setTimeout(() => ACT.goalNext({ dataset: { id: g.id } }), 900);
+};
+ACT.goalNext = (el) => {
+  const g = item('goal', el.dataset.id); if (!g) return; const ideas = nextGoals(g, ctx());
+  openSheet(h`<div class="stack"><h2 style="margin:0">➡️ Et maintenant ?</h2><p class="small muted">Des idées pour continuer, à partir de « ${goalLabel(g)} ».</p>
+    ${ideas.length ? h`<div class="setmenu">${ideas.map((x, i) => h`<button class="setrow" data-act="goalNextAdd" data-id="${g.id}" data-i="${i}"><span class="sic">🎯</span><span class="grow"><b>${x.label}</b><small>${x.why}</small></span><span class="chev">＋</span></button>`)}</div>` : ''}
+    <button class="btn" data-act="goalNewFrom">＋ Un autre objectif</button><button class="btn ghost" data-act="closeSheet">Plus tard</button></div>`);
+};
+ACT.goalNextAdd = (el) => { const g = item('goal', el.dataset.id), x = g && nextGoals(g, ctx())[Number(el.dataset.i)]; if (!x) return; const id = 'g-' + uid().slice(0, 12); putItem('goal', id, x.data); closeSheet(); toast('Nouvel objectif ajouté'); go('profile', 'goals', id); };
+ACT.goalNewFrom = () => { closeSheet(); go('profile', 'goals'); setTimeout(() => ACT.goalNew?.(), 150); };
 ACT.goalStatus = (el) => { const g = item('goal', el.dataset.id); if (!g) return; putItem('goal', g.id, { ...g, status: el.dataset.v, doneAt: el.dataset.v === 'done' ? Date.now() : g.doneAt }); toast(el.dataset.v === 'done' ? 'Bravo ! Objectif atteint 🎉' : 'Objectif mis à jour'); render(); };
 ACT.goalDel = async (el) => { const g = item('goal', el.dataset.id); if (g && (await ask(`Supprimer l’objectif « ${goalLabel(g)} » ?`, { danger: true, ok: 'Supprimer' }))) { delItem('goal', g.id); go('profile', 'goals'); } };
 function goalOverview(g) {
