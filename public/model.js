@@ -84,9 +84,10 @@ export const GYM_AREAS = {
   entrainement: ['🏋️', 'Espace entraînement', ['hangboard', 'campus', 'boardwall', 'spraywall', 'bar', 'rings', 'band']], muscu: ['💪', 'Musculation', ['weights', 'kettlebell', 'barbell', 'bench', 'dips', 'box']],
   etirement: ['🧘', 'Étirements', ['mat', 'band', 'rope']],
 };
-export const ENV_TYPES = { maison: 'Maison', salle: 'Salle de sport', exterieur: 'Extérieur', escalade: 'Salle d’escalade', piscine: 'Piscine', piste: 'Piste / terrain', autre: 'Autre' };
+export const ENV_TYPES = { maison: 'Maison', salle: 'Salle de sport', exterieur: 'Extérieur', escalade: 'Salle d’escalade', falaise: 'Falaise / site d’escalade', piscine: 'Piscine', piste: 'Piste / terrain', autre: 'Autre' };
 // Modèles proposés à la création d'un environnement (l'utilisateur coche ensuite son matériel réel).
 export const ENV_TEMPLATES = {
+  falaise: ['wall'],
   maison: ['mat', 'band'], salle: ['bar', 'dips', 'weights', 'barbell', 'bench', 'kettlebell', 'machine', 'box', 'mat', 'band', 'rope', 'treadmill'],
   exterieur: ['track', 'hill'], escalade: ['wall', 'hangboard', 'bar', 'mat', 'band'], piscine: ['pool', 'pullbuoy'], piste: ['track'], autre: [],
 };

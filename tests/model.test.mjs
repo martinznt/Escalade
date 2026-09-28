@@ -62,7 +62,7 @@ const SAMPLES = {
   ascent: { kind: 'voie', name: 'La voie', grade: { systemId: 'french', systemName: 'Fr', levelId: 'l10', label: '6a+', order: 10, total: 32, color: '' }, gradeText: '', result: 'work', attempts: 3, styles: ['st-devers'], styleText: '', date: 5, context: { env: '', place: '', kind: 'falaise' }, note: '', nuance: 'dur' },
   gradesys: { name: 'U', activity: 'bloc', kind: 'colors', levels: [{ id: 'lv1', label: 'Jaune', color: '#ffee00', order: 0 }], maps: [{ levelId: 'lv1', ref: 'font', refLevel: '4' }], archived: true },
   style: { label: 'Arête', activity: 'climbing', archived: true },
-  env: { name: 'Maison', type: 'maison', equipment: ['bar'], isDefault: true, archived: false , city: 'Montreuil', gradeSys: 'gs-1', areas: [{ id: 'entrainement', items: ['hangboard', 'campus'], note: 'au fond' }]},
+  env: { name: 'Maison', type: 'maison', equipment: ['bar'], isDefault: true, archived: false , sectors: ['Secteur A'], city: 'Montreuil', gradeSys: 'gs-1', areas: [{ id: 'entrainement', items: ['hangboard', 'campus'], note: 'au fond' }]},
   pref: { key: 'tractions', label: 'Tractions', value: 'evite', source: 'habit', reason: 'r' },
   capdecl: { capId: 'force_doigts', level: -1, note: '' },
   lab: { title: 'L', hypothesis: 'h', goalId: 'g', capId: 'c', metricId: 'm', startDate: '2026-01-01', weeks: 4, before: { value: 1, note: '', date: 0 }, after: { value: 2, note: '', date: 0 }, status: 'done', conclusion: 'c' },

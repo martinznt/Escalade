@@ -17,11 +17,12 @@ import { GOALS, INTENT_OF } from './views-setup.js';
 import { profileSummary } from './views-coach.js';
 import { byId } from './library.js';
 import { donePerf, nextGoals, doneGoals } from './goaldone.js';
+import { allPlaces, placeStats, kindOfEnv, placesOf, KIND_LABEL } from './places.js';
 import { celebrate } from './fx.js';
 
 const SUBS = [['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
 const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
-  climbing: ['🧗', 'Carnet', 'blocs, voies, projets'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['🧰', 'Matériel', 'lieux, équipement'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
+  climbing: ['🧗', 'Carnet', 'blocs, voies, projets'], goals: ['🎯', 'Objectifs', 'et figures'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 /** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
 const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment', 'prefs']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['map', 'understand']], ['Partager', ['public']]];
 export function vProfile() {
@@ -175,7 +176,8 @@ function perfForm(p, metricId) {
     ${isGrade ? h`<label>Système de cotation<select name="systemId" data-change="perfSystem">${systems.map((s) => h`<option value="${s.id}" ${(p?.grade?.systemId || S.perfSys) === s.id ? 'selected' : ''}>${s.name}</option>`)}</select></label>
       <label>Niveau<select name="levelId">${sortedLevels(c.systems[p?.grade?.systemId || S.perfSys] || systems[0]).map((l) => h`<option value="${l.id}" ${p?.grade?.levelId === l.id ? 'selected' : ''}>${l.label}</option>`)}</select></label>
       <label>Styles (plusieurs possibles)</label><div class="chips">${styles.map((s) => h`<label class="chip ${(p?.styles || []).includes(s.id) ? 'on' : ''}"><input type="checkbox" class="hidden" name="styles" value="${s.id}" ${(p?.styles || []).includes(s.id) ? 'checked' : ''} data-change="chipToggle">${s.label}</label>`)}</div>
-      <label>Contexte<select name="ctxKind"><option value="">—</option>${[['salle', 'Salle'], ['falaise', 'Falaise / extérieur']].map(([k, l]) => h`<option value="${k}" ${p?.context?.kind === k ? 'selected' : ''}>${l}</option>`)}</select></label>`
+      <label>Où ?<select name="ctxEnv"><option value="">—</option>${[['salle', '🏢 Salles'], ['falaise', '🌄 Falaises']].map(([k, l]) => { const list = placesOf(ctx().envs, k); return list.length ? h`<optgroup label="${l}">${list.map((e) => h`<option value="${e.id}" ${p?.context?.env === e.id ? 'selected' : ''}>${e.name}</option>`)}</optgroup>` : ''; })}<option value="salle" ${!p?.context?.env && p?.context?.kind === 'salle' ? 'selected' : ''}>En salle (autre)</option><option value="falaise" ${!p?.context?.env && p?.context?.kind === 'falaise' ? 'selected' : ''}>En falaise (autre)</option></select></label>
+      <label>Secteur <span class="tiny muted">(falaise, facultatif)</span><input name="ctxSector" maxlength="60" list="sectors-dl" value="${p?.context?.place || ''}"><datalist id="sectors-dl">${[...new Set(placesOf(ctx().envs, 'falaise').flatMap((e) => e.sectors || []))].map((x) => h`<option value="${x}">`)}</datalist></label>`
       : m ? numberField('value', 'Valeur', p?.value ?? '', { unit: m.unit, step: 'any' }) : ''}
     ${m ? h`<label class="chk"><input type="checkbox" name="unknown" ${p?.unknown ? 'checked' : ''}> Je ne sais pas (aucune valeur enregistrée, un test te sera proposé)</label>` : ''}
     <div class="grid2"><label>Date<input type="date" name="date" value="${d.toISOString().slice(0, 10)}" max="${new Date().toISOString().slice(0, 10)}"></label><label>Source<select name="source"><option value="measured" ${p?.source === 'measured' ? 'selected' : ''}>Mesuré (test fait)</option><option value="declared" ${!p || p.source === 'declared' ? 'selected' : ''}>Déclaré (de mémoire)</option></select></label></div>
@@ -195,7 +197,7 @@ SUBMIT.perfSave = (f) => {
   let grade = null, value = null;
   if (!unknown && m.kind === 'grade') { grade = gradeSnapshot(c.systems[d.systemId], d.levelId); if (!grade) { toast('Choisis un niveau.'); return; } }
   if (!unknown && m.kind !== 'grade') { value = d.value === '' ? null : Number(d.value); if (value == null || !Number.isFinite(value)) { toast('Saisis une valeur numérique, ou coche « je ne sais pas ».'); return; } }
-  putItem('perf', d.id || 'p-' + uid().slice(0, 14), { metricId: d.metricId, value, unknown, unit: m.unit, date, source: d.source, grade, styles: fd.getAll('styles'), context: { kind: d.ctxKind || '' }, note: d.note });
+  putItem('perf', d.id || 'p-' + uid().slice(0, 14), { metricId: d.metricId, value, unknown, unit: m.unit, date, source: d.source, grade, styles: fd.getAll('styles'), context: perfContext(d), note: d.note });
   closeSheet(); buzzOk(); toast(unknown ? 'Noté « je ne sais pas » : un test te sera proposé.' : 'Performance enregistrée'); render();
 };
 ACT.perfDel = async (el) => { const p = item('perf', el.dataset.id); if (p && (await ask('Supprimer cette performance ?', { ok: 'Supprimer', danger: true }))) { delItem('perf', p.id); render(); } };
@@ -481,13 +483,42 @@ function goalWhy(g) {
 }
 
 /* ═════════ Matériel et environnements ═════════ */
+/** Contexte d'une mesure : le lieu précis (salle ou falaise) et le secteur. */
+function perfContext(d) {
+  const env = ctx().envs.find((e) => e.id === d.ctxEnv);
+  if (env) return { env: env.id, kind: kindOfEnv(env) === 'falaise' ? 'falaise' : 'salle', place: String(d.ctxSector || '').trim().slice(0, 60) };
+  return { kind: ['salle', 'falaise'].includes(d.ctxEnv) ? d.ctxEnv : '', place: String(d.ctxSector || '').trim().slice(0, 60) };
+}
+/* ═════════ Mes lieux : salles, falaises (et secteurs), maison… et ce que tu y as fait ═════════ */
 function vEquipment() {
-  const c = ctx(), un = new Set(item('config', 'equipment')?.unavailable || []), main = item('config', 'main') || {};
-  return h`<div class="row wrapf"><button class="btn pri" data-act="envNewGym">🧗 ＋ Ma salle d’escalade</button><button class="btn" data-act="envNew">＋ Autre lieu</button></div>
-    ${c.envs.length ? c.envs.map((e) => h`<div class="card"><div class="row between"><div><b>${e.name}</b> ${tag(ENV_TYPES[e.type] || e.type)}${e.city ? h` <span class="tiny muted">📍 ${e.city}</span>` : ''}${e.gradeSys && c.systems[e.gradeSys] ? h` <span class="tiny muted">· ${c.systems[e.gradeSys].name}</span>` : ''}${e.areas?.length ? h`<div class="tiny muted">${e.areas.map((a) => (GYM_AREAS[a.id]?.[0] || '') + ' ' + (GYM_AREAS[a.id]?.[1] || a.id)).join(' · ')}</div>` : ''} ${(main.envId ? main.envId === e.id : e.isDefault) ? tag('par défaut', 'acc') : ''}</div><button class="btn sm" data-act="envEdit" data-id="${e.id}">✎</button></div><p class="small muted">${e.equipment.map((k) => EQUIPMENT[k] || k).join(', ') || 'Aucun matériel'}</p>${(main.envId ? main.envId !== e.id : !e.isDefault) ? h`<button class="btn sm" data-act="envDefault" data-id="${e.id}">Utiliser par défaut</button>` : ''}</div>`) : empty('Aucun environnement. Décris où tu t’entraînes (maison, salle, extérieur, salle d’escalade, piscine, piste…) et ton matériel : le générateur ne proposera que ce qui est possible.')}
+  const c = ctx(), un = new Set(item('config', 'equipment')?.unavailable || []);
+  if (S.param) { const e = c.envs.find((x) => x.id === S.param); if (e) return vPlaceDetail(e); }
+  const groups = allPlaces(c.envs, c);
+  return h`<div class="row wrapf"><button class="btn pri" data-act="envNewGym">🏢 ＋ Salle d’escalade</button><button class="btn" data-act="envNewCrag">🌄 ＋ Falaise</button><button class="btn" data-act="envNew">＋ Autre lieu</button></div>
+    ${groups.length ? groups.map((g) => h`<span class="kicker">${KIND_LABEL[g.kind][0]} ${KIND_LABEL[g.kind][1]}</span><div class="setmenu">${g.places.map(({ env: e, stats: st }) => h`<button class="setrow" data-act="placeOpen" data-id="${e.id}"><span class="sic">${KIND_LABEL[kindOfEnv(e)][0]}</span><span class="grow"><b>${e.name}</b>${c.defEnv?.id === e.id ? h` <span class="tag ok">par défaut</span>` : ''}<small>${placeLine(e, st)}</small></span><span class="chev">›</span></button>`)}</div>`)
+      : empty('Aucun lieu pour l’instant. Ajoute ta salle, ta falaise ou ta maison : l’app adapte les séances à leur matériel et garde ce que tu y fais.')}
     <div class="card"><h3>Indisponible aujourd’hui</h3><p class="tiny muted">Une barre prise, pas de poutre ? Décoche-le : les séances générées s’adaptent et expliquent les remplacements.</p>
       <div class="chips">${[...new Set(c.envs.flatMap((e) => e.equipment))].map((k) => chip(!un.has(k), EQUIPMENT[k] || k, `data-act="eqToggle" data-id="${k}"`))}</div>${un.size ? h`<button class="btn sm" data-act="eqReset">Tout est disponible</button>` : ''}</div>`;
 }
+const placeLine = (e, st) => [e.city, st.sessions.length ? `${st.sessions.length} séance(s)` : '', st.ascents.length ? `${st.sent} bloc(s)/voie(s) réussi(s)` : '', st.bestBloc ? `max bloc ${st.bestBloc}` : '', st.bestVoie ? `max voie ${st.bestVoie}` : '', st.last ? `dernière fois ${relDate(st.last)}` : '', !st.count ? 'rien d’enregistré ici pour l’instant' : ''].filter(Boolean).join(' · ');
+function vPlaceDetail(e) {
+  const c = ctx(), st = placeStats(e.id, c, e.name), sys = e.gradeSys && c.systems[e.gradeSys];
+  const asc = (a) => h`<div class="item"><span class="gpill">${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${fmtDay(a.date)} · ${({ flash: '⚡ flash', send: '✓ réussi', work: '💪 après travail', top: '✓ réussi', attempt: '… essayé', fail: '✗' })[a.result] || ''}</div></div></div>`;
+  return h`<div class="row"><button class="btn sm" data-act="placeBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${KIND_LABEL[kindOfEnv(e)][0]} ${e.name}</h2></div>
+    <div class="card"><p class="small">${ENV_TYPES[e.type] || e.type}${e.city ? ` · ${e.city}` : ''}${sys ? ` · cotation ${sys.name}` : ''}</p>
+      ${e.equipment?.length && e.type !== 'falaise' ? h`<p class="tiny muted">🧰 ${e.equipment.map((k) => EQUIPMENT[k] || k).join(', ')}</p>` : ''}
+      ${e.sectors?.length ? h`<p class="tiny muted">📌 Secteurs : ${e.sectors.join(', ')}</p>` : ''}
+      <div class="row wrapf"><button class="btn pri" data-act="placeTrain" data-id="${e.id}">✨ Créer une séance ici</button>${['escalade', 'falaise'].includes(e.type) ? h`<button class="btn" data-act="placeLog" data-id="${e.id}">🧗 Noter un bloc / une voie ici</button>` : ''}
+        <button class="btn" data-act="envEdit" data-id="${e.id}">✎ Modifier</button>${c.defEnv?.id === e.id ? '' : h`<button class="btn" data-act="envDefault" data-id="${e.id}">Par défaut</button>`}</div></div>
+    <div class="kpis">${[['🏋️', 'Séances', st.sessions.length], ['⏱', 'Minutes', st.minutes], ['🧗', 'Réussis', st.sent], ...(st.bestBloc ? [['🪨', 'Max bloc', st.bestBloc]] : []), ...(st.bestVoie ? [['🧗', 'Max voie', st.bestVoie]] : [])].map(([ic, l, v]) => h`<div class="kpi"><span>${ic}</span><b>${v}</b><small>${l}</small></div>`)}</div>
+    ${st.sectors.length ? st.sectors.map((sec) => h`<section class="card"><h3>${sec.name ? `📌 ${sec.name}` : st.sectors.length > 1 ? 'Sans secteur' : 'Blocs et voies'} <span class="tiny muted">${sec.sent}/${sec.list.length} réussi(s)</span></h3>${sec.list.slice(0, 12).map(asc)}</section>`) : ''}
+    ${st.sessions.length ? h`<section class="card"><h3>Séances faites ici</h3>${st.sessions.slice(0, 15).map((x) => h`<div class="item"><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">${fmtDay(x.startedAt)} · ${Math.round((x.durationSeconds || 0) / 60)} min</div></div></div>`)}</section>` : ''}
+    ${!st.count ? empty('Rien d’enregistré ici pour l’instant. Crée une séance ici, ou note un bloc / une voie : tout apparaîtra sur cette page.') : ''}`;
+}
+ACT.placeOpen = (el) => go('profile', 'equipment', el.dataset.id);
+ACT.placeBack = () => go('profile', 'equipment');
+ACT.placeTrain = (el) => { S.cp = { ...(S.cp || {}), envId: el.dataset.id, step: 2, result: null, built: null, partsTouched: false }; go('library', 'climbplan'); };
+ACT.placeLog = (el) => { S.aqEnvPreset = el.dataset.id; ACT.ascQuick?.(); };
 function envForm(e) {
   const t = e?.type || S.envType || 'maison', eq = new Set(e?.equipment || ENV_TEMPLATES[t] || []);
   const eqChips = (name, keys, sel) => h`<div class="chips">${keys.map((k) => h`<label class="chip ${sel.has(k) ? 'on' : ''}"><input type="checkbox" class="hidden" name="${name}" value="${k}" ${sel.has(k) ? 'checked' : ''} data-change="chipToggle">${EQUIPMENT[k] || k}</label>`)}</div>`;
@@ -501,13 +532,19 @@ function envForm(e) {
       <label>Cotation de la salle</label><div class="row wrapf"><select name="gradeSys" class="grow"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin || x.global).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select><button class="btn sm" type="button" data-act="sysNew">＋ Créer (U1 → U8+, couleurs…)</button></div>
       <label>Les espaces de la salle et leur matériel</label>
       ${Object.entries(GYM_AREAS).map(([id, [ic, label, sugg]]) => { const a = areas.get(id), sel = new Set(a?.items || (e ? [] : sugg.slice(0, 2))); const keys = [...new Set([...sugg, ...sel])]; return h`<div class="card flat garea"><label class="chk"><input type="checkbox" name="areaOn" value="${id}" ${on(id) ? 'checked' : ''}> <b>${ic} ${label}</b></label>${eqChips('ar_' + id, keys, sel)}<input name="arn_${id}" maxlength="120" value="${a?.note || ''}" placeholder="Précision (facultatif) : ex. poutre Beastmaker 2000"></div>`; })}`;
+  } else if (t === 'falaise') {
+    const c = ctx(), systems = Object.values(c.systems).filter((x) => !x.archived);
+    body = h`<label>Région ou ville <span class="tiny muted">(facultatif)</span><input name="city" maxlength="60" value="${e?.city || ''}" placeholder="Ex. Fontainebleau, Céüse"></label>
+      <label>Cotation utilisée<select name="gradeSys"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select></label>
+      <label>Secteurs <span class="tiny muted">(un par ligne : tu les choisiras en notant tes blocs et tes voies)</span><textarea name="sectors" rows="4" placeholder="Ex. Bas Cuvier&#10;Apremont&#10;Secteur des dalles">${(e?.sectors || []).join('\n')}</textarea></label>`;
   } else body = h`<label>Matériel disponible</label>${eqChips('eq', Object.keys(EQUIPMENT), eq)}`;
-  return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle' : 'Nouvel environnement'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
+  return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle d’escalade' : t === 'falaise' ? 'Nouvelle falaise' : 'Nouveau lieu'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
     ${head}${body}
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${e ? h`<button class="btn danger" type="button" data-act="envDel" data-id="${e.id}">Supprimer</button>` : ''}</div></form>`;
 }
 ACT.envNew = () => { S.envType = 'maison'; openSheet(envForm(null), { wide: true }); };
 ACT.envNewGym = () => { S.envType = 'escalade'; openSheet(envForm(null), { wide: true }); };
+ACT.envNewCrag = () => { S.envType = 'falaise'; openSheet(envForm(null), { wide: true }); };
 ACT.envEdit = (el) => { const e = item('env', el.dataset.id); if (e) openSheet(envForm(e), { wide: true }); };
 CHG.envType = (el) => { if (!el.form.id.value) { S.envType = el.value; openSheet(envForm(null), { wide: true }); } };
 SUBMIT.envSave = (f) => {
@@ -516,8 +553,11 @@ SUBMIT.envSave = (f) => {
   if (d.type === 'escalade') {
     const areas = fd.getAll('areaOn').filter((id) => GYM_AREAS[id]).map((id) => ({ id, items: fd.getAll('ar_' + id), note: String(fd.get('arn_' + id) || '') }));
     putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', areas, equipment: [...new Set(areas.flatMap((a) => a.items))] });
+  } else if (d.type === 'falaise') {
+    const sectors = [...new Set(String(d.sectors || '').split('\n').map((x) => x.trim()).filter(Boolean))].slice(0, 30);
+    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', sectors, equipment: ['wall'] });
   } else putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, equipment: fd.getAll('eq') });
-  closeSheet(); buzzOk(); toast(d.type === 'escalade' ? 'Salle enregistrée' : 'Environnement enregistré'); render();
+  closeSheet(); buzzOk(); toast({ escalade: 'Salle enregistrée', falaise: 'Falaise enregistrée' }[d.type] || 'Lieu enregistré'); render();
 };
 ACT.envDel = async (el) => { const e = item('env', el.dataset.id); if (e && (await ask(`Supprimer « ${e.name} » ?`, { danger: true, ok: 'Supprimer' }))) { delItem('env', e.id); closeSheet(); render(); } };
 ACT.envDefault = (el) => { putItem('config', 'main', { ...(item('config', 'main') || {}), envId: el.dataset.id }); toast('Environnement par défaut modifié'); render(); };
