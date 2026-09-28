@@ -251,8 +251,10 @@ await step('mon corps et mes objectifs : profil corporel, objectifs multiples, o
   await a.sub('profSub', 'goals'); await a.click('[data-act=goalsToggle][data-id=poids]'); await a.click('[data-act=goalsToggle][data-id=climb]');
   await A.waitForSelector('[data-act=goalsToggle][data-id=poids].on');
   await a.click('[data-act=goalWrite]'); await A.fill('#sheet textarea[name=text]', 'Courir 10 km sans m’arrêter'); await a.click('#sheet button[type=submit]');
-  await A.waitForSelector('#sheet [data-act=goalAiSave]', { timeout: 15000 }); assert.match(await a.text('#sheet'), /Endurance/i);
-  await a.click('#sheet [data-act=goalAiSave]'); await A.waitForSelector('text=Courir 10 km');
+  await A.waitForSelector('#sheet form[data-submit=goalFicheSave]', { timeout: 15000 }); assert.match(await a.text('#sheet'), /Endurance/i);
+  assert.match(await a.text('#sheet'), /Comment le sais-tu/); assert.equal(await A.inputValue('#sheet input[name=target]'), '', 'aucune cible chiffrée inventée');
+  await A.fill('#sheet input[name=label]', 'Courir 10 km sans m’arrêter (modifié)'); // la fiche se modifie avant l'enregistrement
+  await a.click('#sheet form[data-submit=goalFicheSave] button[type=submit]'); await A.waitForSelector('text=Courir 10 km sans m’arrêter (modifié)');
   await poll(async () => { const it = (await a.api('GET', '/api/items?since=0')).data.items; return it.some((i) => i.c === 'config' && i.id === 'body' && i.d.age === 34 && i.d.breath === 'souvent') && it.some((i) => i.c === 'config' && i.id === 'main' && (i.d.goals || []).includes('poids')); }, 12000, 'profil corporel et objectifs sur le serveur');
   await a.sub('profSub', 'body'); await a.click('[data-act=bodySet][data-k=breath][data-v=souvent]'); // on remet comme avant pour la suite
   await a.sub('profSub', 'goals'); await a.click('[data-act=goalsToggle][data-id=poids]');

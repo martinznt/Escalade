@@ -354,27 +354,46 @@ ACT.goalsToggle = (el) => {
   const goals = [...cur].slice(0, 8);
   putItem('config', 'main', { ...m, goals, goal: goals[0] || '', intent: INTENT_OF[goals[0]] || '' }); render();
 };
-ACT.goalWrite = () => openSheet(h`<form data-submit="goalAi" class="stack"><h2 style="margin:0">✍️ Mon objectif</h2>
-  <p class="small muted">Écris-le comme tu le dirais à un coach. L’assistant le transforme en objectif suivi (capacités à travailler, mesure, étapes), selon ton profil. Tu relis avant d’enregistrer.</p>
-  <textarea name="text" maxlength="300" rows="3" required placeholder="Ex. « Enchaîner le 6c du dévers avant l’été » ou « Courir 10 km sans m’arrêter »"></textarea>
+ACT.goalWrite = (el) => openSheet(h`<form data-submit="goalAi" class="stack"><h2 style="margin:0">✍️ Mon objectif</h2>
+  <p class="small muted">Écris-le comme tu le dirais à un coach. L’assistant en fait une fiche (capacités, mesure, étapes). Tu la relis et la modifies avant de l’enregistrer.</p>
+  <textarea name="text" maxlength="300" rows="3" required placeholder="Ex. « Enchaîner le 6c du dévers avant l’été » ou « Courir 10 km sans m’arrêter »">${el?.dataset?.text || ''}</textarea>
   <button class="btn pri" type="submit">Analyser</button></form>`);
-SUBMIT.goalAi = async (f) => {
-  const text = String(new FormData(f).get('text') || '').trim(); if (text.length < 3) return;
+/** Depuis l'assistant de séance : l'intention du jour devient un objectif SEULEMENT si on le demande (fiche relue avant). */
+ACT.goalFromText = (el) => { S.goalBack = el?.dataset?.back || ''; analyzeGoal(String(el?.dataset?.text || '').trim()); };
+SUBMIT.goalAi = async (f) => { S.goalBack = ''; await analyzeGoal(String(new FormData(f).get('text') || '').trim()); };
+async function analyzeGoal(text) {
+  if (text.length < 3) return;
   openSheet(h`<div class="stack"><h2 style="margin:0">✍️ Mon objectif</h2><p class="small">« ${text} »</p>${skeleton(2)}</div>`);
   let d = null, why = '';
   try { d = (await api('POST', '/api/ai/goal', { text, profile: profileSummary() }, { timeout: 45000 })).goal; }
   catch (e) { why = e.guest ? 'Crée un compte pour utiliser l’assistant.' : e.status === 503 ? 'Assistant indisponible pour le moment.' : e.message; }
   if (!d) d = localGoal(text);
-  S.goalDraft = d;
-  openSheet(h`<div class="stack"><h2 style="margin:0">🎯 ${d.label}</h2>${why ? h`<p class="tiny warn-t">${why} Proposition faite sans l’assistant, à partir des mots de ton objectif.</p>` : ''}
-    ${d.summary ? h`<p class="small">${d.summary}</p>` : ''}
-    ${d.caps.length ? h`<b class="small">À travailler</b><div class="chips">${d.caps.map((c) => h`<span class="chip static">${capL(c.id)}</span>`)}</div>` : ''}
-    ${d.steps?.length ? h`<b class="small">Étapes</b><ol class="small">${d.steps.map((s) => h`<li>${s}</li>`)}</ol>` : ''}
-    ${d.metricId ? h`<p class="small">Mesure suivie : <b>${METRICS[d.metricId]?.label}</b>${d.target != null ? ` · cible ${d.target} ${METRICS[d.metricId]?.unit || ''}` : ''}</p>` : ''}
-    ${d.weeks ? h`<p class="small muted">Durée conseillée : environ ${d.weeks} semaines.</p>` : ''}
-    <div class="row wrapf"><button class="btn pri" data-act="goalAiSave">Ajouter cet objectif</button><button class="btn" data-act="goalWrite">Reformuler</button></div></div>`, { wide: true });
-};
-/** Sans assistant : mots-clés → capacités (aucune valeur inventée). */
+  S.goalDraft = { ...d, text, why };
+  openSheet(goalFiche(S.goalDraft), { wide: true });
+}
+const REASON_IC = { fact: '📊', rule: '📐', inference: '🤔', missing: '❔' };
+/** Fiche d'objectif modifiable : rien n'est enregistré avant « Enregistrer ». */
+function goalFiche(d) {
+  const x = ctx(), mets = Object.entries(x.metrics || {}).filter(([, m]) => m.kind !== 'grade');
+  const capsAll = [...new Set([...d.caps.map((c) => c.id), ...Object.keys(ACTIVITIES[d.activityId]?.caps || {})])];
+  return h`<form data-submit="goalFicheSave" class="stack"><h2 style="margin:0">🎯 Fiche de l’objectif</h2>
+    ${d.why ? h`<p class="tiny warn-t">${d.why} Fiche faite sans l’assistant, à partir des mots de ton objectif.</p>` : ''}
+    <label>Nom court<input name="label" maxlength="80" required value="${d.label}"></label>
+    <label>Description<textarea name="summary" maxlength="300" rows="2">${d.summary || ''}</textarea></label>
+    <label>Sport<select name="activityId"><option value="">— aucun en particulier —</option>${Object.entries(ACTIVITIES).map(([id, a]) => h`<option value="${id}" ${d.activityId === id ? 'selected' : ''}>${a.emoji} ${a.label}</option>`)}</select></label>
+    <span class="kicker">Capacités à travailler <span class="tiny muted">(et leur importance)</span></span>
+    <div class="stack tight">${capsAll.map((id) => { const w = d.caps.find((c) => c.id === id)?.w || 0; return h`<label class="row between"><span class="small">${capL(id)}</span><select name="cap:${id}" aria-label="Importance de ${capL(id)}">${[[0, '—'], [0.4, 'un peu'], [0.6, 'moyen'], [0.8, 'beaucoup'], [1, 'essentiel']].map(([v, l]) => h`<option value="${v}" ${Math.abs(w - v) < 0.11 && (v || !w) ? 'selected' : ''}>${l}</option>`)}</select></label>`; })}</div>
+    <label>Mesure suivie <span class="tiny muted">(facultatif)</span><select name="metricId" data-pick="yes"><option value="">— aucune —</option>${metricOptions(mets, d.metricId)}</select></label>
+    ${numberField('target', 'Cible (seulement si tu en as une)', d.target ?? '', { step: 'any' })}
+    <label>Indicateurs de progrès <span class="tiny muted">(un par ligne)</span><textarea name="indicators" rows="2" maxlength="600">${(d.indicators || []).join('\n')}</textarea></label>
+    <label>Étapes <span class="tiny muted">(une par ligne)</span><textarea name="steps" rows="3" maxlength="800">${(d.steps || []).join('\n')}</textarea></label>
+    ${numberField('weeks', 'Horizon (semaines, facultatif)', d.weeks || '', { min: 0, max: 52, step: 1 })}
+    ${d.confidence ? h`<p class="tiny muted">Confiance de l’assistant : ${d.confidence}.</p>` : ''}
+    ${d.missing?.length ? h`<div class="card flat"><b class="small">❔ Ce qui manque pour être plus précis</b><ul class="clean tight small">${d.missing.map((m) => h`<li>${m}</li>`)}</ul></div>` : ''}
+    <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="clean tight small">${(d.how || []).map((r) => h`<li>${REASON_IC[r.cat] || '•'} ${r.text}</li>`)}</ul></details>
+    <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer l’objectif</button><button class="btn" type="button" data-act="goalWrite" data-text="${d.text || ''}">Reformuler</button></div></form>`;
+}
+/** Sans assistant : mots-clés → capacités (aucune valeur inventée ; les chiffres ne sont repris que s'ils sont écrits). */
 function localGoal(text) {
   const t = text.toLowerCase(), caps = [];
   const add = (id, w) => { if (CAPACITIES[id] && !caps.some((c) => c.id === id)) caps.push({ id, w }); };
@@ -386,13 +405,24 @@ function localGoal(text) {
   if (/souple|grand écart|mobilit|étire/.test(t)) { add('mobilite_hanches', 0.9); add('mobilite_epaules', 0.6); }
   if (/gainage|abdo|planche|front lever/.test(t)) add('gainage_anterieur', 0.9);
   if (/poids|maigr|mincir|kilos/.test(t)) { add('endurance_aerobie', 0.9); add('force_jambes', 0.5); }
-  return { label: text.slice(0, 80), summary: '', caps: caps.slice(0, 5), steps: [], metricId: /poids|kilos|maigr/.test(t) ? 'body_weight' : '', target: null, weeks: 0 };
+  const activityId = /voie|falaise/.test(t) ? 'climbing_route' : /bloc|escalad|grimp/.test(t) ? 'climbing_boulder' : /cour|km|footing|marathon/.test(t) ? 'running' : /nage|natation|piscine/.test(t) ? 'swimming' : '';
+  return { label: text.slice(0, 80), summary: '', activityId, caps: caps.slice(0, 5), indicators: [], steps: [], metricId: /poids|kilos|maigr/.test(t) ? 'body_weight' : '', target: null, weeks: 0, confidence: 'faible',
+    missing: ['Une mesure et une cible, si tu en as', ...(caps.length ? [] : ['Ce qu’il faut travailler : coche les capacités'])],
+    how: [{ cat: 'fact', text: `Ton texte : « ${text.slice(0, 160)} »` }, { cat: 'rule', text: 'Mots-clés de ton texte reliés aux capacités de l’app (sans assistant).' }] };
 }
-ACT.goalAiSave = () => {
+SUBMIT.goalFicheSave = (f) => {
   const d = S.goalDraft; if (!d) return;
-  const id = 'g-' + uid().slice(0, 12);
-  putItem('goal', id, { type: d.metricId ? 'metric' : 'custom', label: d.label, metricId: d.metricId || '', target: d.target ?? null, current: null, unit: d.metricId ? METRICS[d.metricId]?.unit || '' : '', caps: d.caps.map((c) => ({ id: c.id, w: c.w })), status: 'active', startedAt: Date.now(), deadline: d.weeks ? new Date(Date.now() + d.weeks * 7 * 86400000).toISOString().slice(0, 10) : '', note: (d.steps || []).join(' · ').slice(0, 300) });
-  S.goalDraft = null; closeSheet(); toast('Objectif ajouté'); go('profile', 'goals', id);
+  const fd = new FormData(f), num = (v) => { const n = Number(String(v || '').replace(',', '.')); return String(v || '').trim() !== '' && Number.isFinite(n) ? n : null; };
+  const caps = [...fd.entries()].filter(([k, v]) => k.startsWith('cap:') && Number(v) > 0).map(([k, v]) => ({ id: k.slice(4), w: Number(v) })).filter((c) => CAPACITIES[c.id]).slice(0, 6);
+  const metricId = ctx().metrics[fd.get('metricId')] ? String(fd.get('metricId')) : '', target = metricId ? num(fd.get('target')) : null, weeks = Math.max(0, Math.min(52, Math.round(num(fd.get('weeks')) || 0)));
+  const label = String(fd.get('label') || '').trim().slice(0, 80); if (!label) return toast('Donne un nom à ton objectif.');
+  if (!caps.length && !metricId) return toast('Coche au moins une capacité ou choisis une mesure.', 4000);
+  const lines = (k, n, len) => String(fd.get(k) || '').split('\n').map((x) => x.trim().slice(0, len)).filter(Boolean).slice(0, n);
+  const id = 'g-' + uid().slice(0, 12), act = ACTIVITIES[fd.get('activityId')] ? String(fd.get('activityId')) : '';
+  putItem('goal', id, { type: metricId ? 'metric' : 'custom', label, metricId, target, current: null, unit: metricId ? ctx().metrics[metricId]?.unit || '' : '', caps, activityId: act, status: 'active', startedAt: Date.now(),
+    deadline: weeks ? new Date(Date.now() + weeks * 7 * 86400000).toISOString().slice(0, 10) : '', note: [String(fd.get('summary') || '').trim(), ...lines('indicators', 4, 140).map((x) => `📈 ${x}`), ...lines('steps', 5, 160).map((x, k) => `${k + 1}. ${x}`)].join(' · ').slice(0, 300) });
+  const back = S.goalBack; S.goalDraft = null; S.goalBack = ''; closeSheet(); toast('Objectif enregistré');
+  if (back === 'cp' && S.cp) { S.cp.intentGoal = id; S.cp.goalIds = [...new Set([...(S.cp.goalIds || []), id])]; go('library', 'climbplan'); } else go('profile', 'goals', id);
 };
 ACT.goalFilter = (el) => { S.filters.goals = el.dataset.id; render(); window.scrollTo(0, 0); };
 ACT.goalNew = () => openSheet(goalForm(null), { wide: true });

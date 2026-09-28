@@ -1,6 +1,6 @@
 // tests/ai.test.mjs — assistant IA : la réponse du modèle est filtrée, bornée, jamais utilisée telle quelle.
 import assert from 'node:assert/strict';
-import { cleanDraft, extractJson, buildMessages, buildChat, cleanReply } from '../server/ai.js';
+import { cleanDraft, extractJson, buildMessages, buildChat, cleanReply, cleanGoal, numbersIn } from '../server/ai.js';
 import { Client, makeEnv, ok, done } from './helpers.mjs';
 
 console.log('Assistant IA');
@@ -23,6 +23,20 @@ await ok('réponse vide ou inutilisable → null', async () => { assert.equal(cl
 await ok('seul le texte tapé est envoyé (pas de données personnelles), identifiants autorisés listés', async () => {
   const m = buildMessages('capacity', 'clipage en escalade', 'climbing_route');
   assert.equal(m[1].content, 'clipage en escalade'); assert.match(m[0].content, /technique_escalade/); assert.match(m[0].content, /Escalade — voie/);
+});
+
+await ok('fiche d’objectif : champs inconnus ignorés, cible gardée seulement si écrite, informations manquantes, « comment le sais-tu »', async () => {
+  const raw = { label: 'Enchaîner le 7a', description: 'Travailler la résistance.', activityId: 'climbing_route', caps: [{ id: 'endurance_doigts', w: 0.9 }, { id: 'inventee', w: 1 }], indicators: ['Moins de repos sur la voie'], metricId: 'course_10k', target: 45, weeks: 10, missing: ['Ton niveau actuel'], evil: '<script>', password: 'x' };
+  const g = cleanGoal(raw, 'Enchaîner le 7a de la falaise avant l’été');
+  assert.equal(g.target, null, 'cible non écrite par l’utilisateur : jamais ajoutée'); assert.match(g.missing[0], /Cible chiffrée/);
+  assert.deepEqual(g.caps.map((c) => c.id), ['endurance_doigts']); assert.equal(g.activityId, 'climbing_route'); assert.equal(g.indicators.length, 1);
+  assert.ok(!('evil' in g) && !('password' in g), 'champs inconnus ignorés');
+  assert.ok(g.how.some((x) => x.cat === 'fact' && /Ton texte/.test(x.text)) && g.how.some((x) => x.cat === 'inference' && /estimation/.test(x.text)));
+  assert.equal(cleanGoal({ ...raw, target: 45 }, 'courir 10 km en 45 min').target, 45);
+  assert.deepEqual(numbersIn('10 km en 7,5 min'), [10, 7.5]);
+});
+await ok('réponse mal formée → rien d’enregistré (le client passe à la fiche locale, relue avant)', async () => {
+  assert.equal(cleanGoal('pas un objet', 'x'), null); assert.equal(cleanGoal({ label: 'x', caps: 'nope' }, 'x'), null); assert.equal(extractJson('{cassé'), null);
 });
 
 const draftText = JSON.stringify({ type: 'capacity', label: 'Clipage', summary: 'Mousquetonner la corde.', howTo: ['Au sol'], linkedCaps: [{ id: 'technique_escalade', w: 0.8 }], exercises: [] });
