@@ -249,9 +249,9 @@ await step('mon corps et mes objectifs : profil corporel, objectifs multiples, o
 await step('objectif complexe : front lever (arbre, blocages, chemins)', async () => {
   await a.sub('profSub', 'goals'); await a.click('[data-act=goalNewSkill][data-id=front_lever]');
   await A.waitForSelector('text=Capacités requises');
-  await a.click('[data-act=goalTab][data-id=tree]'); await A.waitForSelector('ol.tree');
-  await a.click('[data-act=goalTab][data-id=blockers]'); await A.waitForSelector('text=Qu’est-ce qui me bloque');
-  await a.click('[data-act=goalTab][data-id=paths]'); await A.waitForSelector('text=Plusieurs chemins possibles');
+  await a.click('details.setsec[data-id=tree] > summary'); await A.waitForSelector('ol.tree');
+  await a.click('details.setsec[data-id=blockers] > summary'); await A.waitForSelector('text=Qu’est-ce qui me bloque');
+  await a.click('details.setsec[data-id=paths] > summary'); await A.waitForSelector('text=Plusieurs chemins possibles');
   await a.noOverflow('objectif');
 });
 await step('matériel : ajout d’une barre et d’un élastique à la maison', async () => {

@@ -54,10 +54,10 @@ input[type=checkbox]{width:22px;height:22px;min-height:0;accent-color:var(--acce
 .chip{appearance:none;border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:7px 12px;min-height:36px;font-size:.86rem;cursor:pointer;color:var(--text);display:inline-flex;align-items:center;gap:4px}
 .chip.on{background:color-mix(in srgb,var(--accent) 22%,var(--card2));border-color:var(--accent);color:var(--text)}.chip.static{cursor:default}
 label.chip{display:inline-flex;color:var(--text)}
-.seg{display:flex;gap:4px;background:var(--card2);border-radius:12px;padding:4px;overflow-x:auto;max-width:100%;scrollbar-width:none}.seg::-webkit-scrollbar{display:none}.scrollx .seg{overflow:visible;width:max-content;max-width:none}
+.seg{display:flex;flex-wrap:wrap;gap:4px;background:var(--card2);border-radius:12px;padding:4px;max-width:100%}.seg::-webkit-scrollbar{display:none}.scrollx .seg{overflow:visible;width:max-content;max-width:none}
 .seg button{flex:none;border:0;background:transparent;border-radius:9px;padding:8px 12px;min-height:38px;font-weight:600;cursor:pointer;color:var(--muted);white-space:nowrap}
 .seg button.on{background:var(--card);color:var(--text);box-shadow:0 1px 4px #0003}
-.scrollx{overflow-x:auto;margin:0 -16px;padding:0 16px;scrollbar-width:none}.scrollx::-webkit-scrollbar{display:none}
+.scrollx{overflow:visible}.scrollx::-webkit-scrollbar{display:none}
 .tag{display:inline-block;font-size:.72rem;border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--muted);vertical-align:middle;margin:1px 0}
 .tag.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,var(--line))}.tag.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,var(--line))}.tag.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 50%,var(--line))}.tag.info{color:var(--info);border-color:color-mix(in srgb,var(--info) 50%,var(--line))}.tag.acc{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
 /* Listes */
@@ -584,3 +584,5 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 .optrow .ck{flex:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:none;color:var(--bg);font-weight:800;cursor:pointer;display:grid;place-items:center}.optrow.on .ck{background:var(--accent);border-color:var(--accent)}
 .guide{display:grid;gap:6px}.chips.tight{gap:6px;align-items:center}
 .optrow .tag{justify-self:start}
+.setsec>summary{list-style:none}.setsec>summary::-webkit-details-marker{display:none}.setsec[open]>summary .chev{transform:rotate(90deg)}.setsec .secbody{padding:4px 12px 12px}.setsec .secbody:empty{display:none}
+.setmenu.secs{margin-top:12px}

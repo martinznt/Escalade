@@ -370,16 +370,19 @@ SUBMIT.goalSave = (f) => {
 };
 function vGoalDetail(g) {
   const c = ctx(), pr = goalProgress(g, c), tab = S.goalTab || 'overview', sk = SKILLS[g.skillId];
-  const tabs = [['overview', 'Vue d’ensemble'], ['blockers', 'Ce qui bloque'], ...(sk ? [['tree', 'Progression'], ['paths', 'Chemins']] : []), ['graph', 'Graphe'], ['whatif', 'Et si… ?'], ['why', 'Pourquoi je stagne ?']];
+  const secs = [['blockers', '🧱', 'Ce qui bloque', 'Les capacités qui te freinent le plus'], ...(sk ? [['tree', '🪜', 'Progression', 'Les étapes jusqu’à l’objectif'], ['paths', '🛤️', 'Chemins', 'Les façons d’y arriver']] : []), ['graph', '🕸️', 'Graphe', 'Ce qui compte pour cet objectif, en image'], ['whatif', '🔮', 'Et si… ?', 'Ce que ça change si tu progresses sur un point'], ['why', '🤔', 'Pourquoi je stagne ?', 'Les raisons possibles, d’après tes données']];
   return h`<div class="row"><button class="btn sm" data-act="goalBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2></div>
     <div class="card hero ghero"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
       ${sk ? h`<details class="how mini"><summary>C’est quoi, ${sk.label} ?</summary><p class="small">${sk.desc}</p></details>` : ''}
       <div class="row"><button class="btn pri grow" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button>
       <details class="menu"><summary class="btn ic" aria-label="Plus d’actions">⋯</summary><div class="menu-list"><button class="btn" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="done">✅ Atteint</button><button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div></details></div></div>
-    <div class="scrollx">${seg('goalTab', tab, tabs)}</div>${({ overview: goalOverview, blockers: goalBlockers, tree: goalTree, paths: goalPathsV, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[tab](g)}`;
+    ${goalOverview(g)}
+    <div class="setmenu secs">${secs.map(([k, ic, t, d]) => h`<details class="setsec" data-id="${k}" ${tab === k ? 'open' : ''}><summary class="setrow"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></summary><div class="secbody">${tab === k ? ({ blockers: goalBlockers, tree: goalTree, paths: goalPathsV, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[k](g) : ''}</div></details>`)}</div>`;
 }
 ACT.goalBack = () => { S.goalTab = 'overview'; go('profile', 'goals'); };
 ACT.goalTab = (el) => { S.goalTab = el.dataset.id; render(); };
+// Rubriques de l'objectif : une liste qui s'ouvre sur place (plus de barre d'onglets) ; le contenu est construit à l'ouverture.
+document.addEventListener('toggle', (e) => { const d = e.target; if (!d.matches?.('details.setsec')) return; if (!d.open) { if (S.goalTab === d.dataset.id) S.goalTab = ''; return; } if (S.goalTab !== d.dataset.id) { S.goalTab = d.dataset.id; render(); } }, true);
 ACT.goalOpen = (el) => { closeSheet(); S.goalTab = 'overview'; go('profile', 'goals', el.dataset.id); };
 ACT.goalEdit = (el) => { S.goalType = null; openSheet(goalForm(item('goal', el.dataset.id)), { wide: true }); };
 ACT.goalTrain = (el) => openGenerator({ mode: 'goal', goalId: el.dataset.id, activityId: SKILLS[item('goal', el.dataset.id)?.skillId]?.activity || '', autoPlan: true });
