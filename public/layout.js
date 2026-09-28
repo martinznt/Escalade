@@ -14,6 +14,9 @@ export const ICONS = {
   seances: ['📚', 'Mes séances', 'goLib'], progress: ['📈', 'Mes progrès', 'goProgressTop'], program: ['📆', 'Programme', 'topProgram'], streak: ['🔥', 'Ma série', 'goProgressTop'],
   badges: ['🏅', 'Badges', 'goProgressTop'], search: ['🔍', 'Rechercher dans l’app', 'findOpen'],
 };
+// Symboles compris de tous : icône seule. Les autres ont leur mot dessous.
+const CLEAR = new Set(['search', 'notif', 'cal', 'all', 'timer']);
+const SHORT = { coach: 'Coach', recap: 'Bilan', carnet: 'Carnet', gen: 'Séance', seances: 'Séances', progress: 'Progrès', program: 'Plan', streak: 'Série', badges: 'Badges' };
 // Fonctions de chaque page. k = formes possibles, tile = s'affiche en tuile dans la grille de raccourcis.
 const F = (l, k, extra = {}) => ({ l, k, ...extra });
 export const FEATURES = {
@@ -77,8 +80,8 @@ export function topIcons(page) {
   if (editing(page)) return h`<button class="btn sm" data-act="layQuit">✕ Quitter</button>`;
   const icons = shown(page).filter((e) => e.as === 'icon' && ICONS[e.id]);
   const unread = S.notifUnread || 0;
-  return h`<nav class="topicons" aria-label="Raccourcis">${icons.map((e) => { const [ic, label, act] = ICONS[e.id]; return h`<button class="ti" data-act="${act}" data-id="${e.id}" aria-label="${label}" title="${label}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>${ic}${e.id === 'notif' && unread ? h`<i class="badge-dot">${unread > 9 ? '9+' : unread}</i>` : ''}</button>`; })}
-    ${FEATURES[page] && !S.lay ? h`<button class="ti edit" data-act="layEdit" aria-label="Personnaliser cette page" title="Personnaliser cette page">✏️</button>` : ''}</nav>`;
+  return h`<nav class="topicons" aria-label="Raccourcis">${icons.map((e) => { const [ic, label, act] = ICONS[e.id]; const w = CLEAR.has(e.id) ? '' : SHORT[e.id] || label; return h`<button class="ti ${w ? 'lbl' : ''}" data-act="${act}" data-id="${e.id}" aria-label="${label}" title="${label}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>${w ? h`<span>${ic}</span><small>${w}</small>` : ic}${e.id === 'notif' && unread ? h`<i class="badge-dot">${unread > 9 ? '9+' : unread}</i>` : ''}</button>`; })}
+    ${FEATURES[page] && !S.lay ? h`<button class="ti edit lbl" data-act="layEdit" aria-label="Personnaliser cette page" title="Personnaliser cette page"><span>✏️</span><small>Page</small></button>` : ''}</nav>`;
 }
 
 /**
@@ -111,7 +114,7 @@ function editor(page) {
     <div class="edlist">${list.map((e, i) => { const f = feats[e.id]; return h`<div class="edrow ${e.as}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>
       <div class="row"><span class="edic">${ICONS[e.id]?.[0] || (f.tile ? '▢' : '▭')}</span><b class="grow small">${f.l}${e.forced ? h` <span class="tag warn">🚫 masqué pour tous</span>` : ''}</b>
         <button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descendre">↓</button></div>
-      <div class="row wrapf"><div class="seg sm">${[...f.k, 'off'].map((k) => h`<button type="button" class="${e.as === k ? 'on' : ''}" data-act="layAs" data-id="${e.id}" data-v="${k}">${FORM[k]}</button>`)}</div><span class="grow"></span>
+      <div class="row wrapf"><div class="chips choice sm">${[...f.k, 'off'].map((k) => h`<button type="button" class="chip ${e.as === k ? 'on' : ''}" data-act="layAs" data-id="${e.id}" data-v="${k}">${FORM[k]}</button>`)}</div><span class="grow"></span>
         <button type="button" class="swc cur" data-act="layPick" data-id="${e.id}" aria-label="Couleur" ${raw(e.color ? `style="background:${e.color}"` : '')}>${e.color ? '' : '🎨'}</button></div>
       ${S.lay.pick === e.id ? h`<div class="swatches">${COLORS.map((c) => h`<button type="button" class="swc ${e.color === c ? 'on' : ''}" data-act="layColor" data-id="${e.id}" data-v="${c}" aria-label="${c ? 'Couleur ' + c : 'Sans couleur'}" ${raw(c ? `style="background:${c}"` : '')}>${c ? '' : '∅'}</button>`)}</div>` : ''}</div>`; })}</div>
     <div class="editdock"><button class="btn" data-act="layQuit">✕ Quitter</button><button class="btn" data-act="layPreview">👁 Aperçu</button><button class="btn pri" data-act="laySave">✓ Enregistrer</button></div>`;

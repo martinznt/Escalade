@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.23.0
+# FINAL_AUDIT — Séances entraînement v8.24.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -939,3 +939,19 @@ Le brouillon est gardé (« Reprendre ma séance » sur l'accueil). Les anciens 
 **Sécurité** — inchangée : aucun secret côté client, droits d'administration décidés par le serveur, contenus « hint » globaux réservés aux admins.
 
 **Tests** — nouveaux : `goaldone`, `places`, `hints` ; `climbplan`, `push-ics`, `global`, `model` étendus. E2E réécrits pour l'assistant en 5 étapes.
+
+## Évolution 8.24.0 : tous les sports comme l'escalade, rien de caché sur aucun écran
+
+**Tous les sports** (nouveau module `sportplan.js`, sans DOM, testé)
+- Course, natation, musculation et renforcement ont des parties « travail » avec intensité et structure au choix, comme la grimpe : fractionné long, 30/30, seuil, côtes, allure objectif ; séries de 100 m, pyramide, sprints, éducatifs ; 5×5, force 5×3, volume, pyramide, montée vers le max ; séries faciles, EMOM, pyramide, séries max, circuit.
+- « Atteindre une performance » (étape « Pour quoi ? ») : 10 km en 50 min, 100 kg au squat, 15 tractions… construit toute la séance (échauffement, montée, spécifique, objectif, retour au calme).
+- Allures et charges : calculées depuis la cible et la meilleure perf **notée** (ex. 1 km à 5:00 /km ; 5×5 à 80 % = 80 kg). Sans perf notée : consignes au ressenti et invitation à noter sa perf. L'essai à la charge visée n'est proposé que si elle est à 5 % du max noté. Conseil honnête (« ambitieux », « un cran au-dessus », « déjà atteint »).
+- Tous les sports sont proposés dans l'assistant, même pas encore ajoutés au profil. Chaque exercice affiche sa dose (durée ou répétitions, charge, repos).
+
+**Rien de caché, sur tous les écrans**
+- Vérification automatique de 43 pages, 11 états de l'assistant (escalade, course, muscu, natation, renfo) et 6 fenêtres, à 320, 390, 768 et 1280 px : débordement, texte coupé, défilement de côté, contenu sous la barre du bas. Résultat final : aucun problème.
+- Corrigés : descriptions coupées à 2 lignes (maintenant en entier) ; lignes de boutons qui dépassaient à 320 px (sports, parties de l'assistant) ; actions de l'objectif cachées dans un menu « ⋯ » rogné par la carte (maintenant visibles) ; « Je suis à » coincé dans une demi-case.
+- Plus d'onglets : les filtres Objectifs (Actifs/Réussis/Archivés/Tous) deviennent des rubriques ; les petits sélecteurs (Bloc/Voie, 3 mois/1 an/Tout, 7/30/90 jours…) deviennent des pastilles.
+- Barre du haut : un mot sous les symboles pas évidents (Coach, Bilan, Carnet, Page…) ; le point vert de synchronisation n'apparaît plus (un mot clair seulement s'il y a quelque chose à dire : « 2 à envoyer », « Hors ligne »…).
+
+**Tests** — nouveau `sportplan.test.mjs` (11 tests) ; E2E : 71 étapes, dont « course 10 km en 50 min ».

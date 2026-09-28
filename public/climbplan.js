@@ -9,6 +9,7 @@ import * as G from './generator.js';
 import { ACTIVITIES } from './model.js';
 import { partOptions, buildPicked, GUIDE_PARTS } from './guide.js';
 import { availableEquipment } from './brain.js';
+import { buildWorkPart, workTitle, SPORT_STRUCTS, sportFamily } from './sportplan.js';
 
 export const INTENSITY = { easy: ['🌿', 'Tranquille'], mod: ['🙂', 'Modéré'], hard: ['🔥', 'Intense'], max: ['🚀', 'Max'] };
 /** Types de parties : grimpe (bloc ou voie) ou parties du corps (échauffement, renfo, étirements…) construites par le générateur. */
@@ -168,6 +169,7 @@ function bodyPart(p, ctx, act, label, seed, o = {}) {
 export const partLabel = (p, i, parts) => {
   if (p.label) return p.label;
   if (p.type === 'main') return `💪 ${ACTIVITIES[p.activity]?.label || 'Corps de séance'}`;
+  if (p.type === 'work') { const same = parts.filter((x) => x.type === 'work' && workTitle(x) === workTitle(p)); return same.length > 1 ? `${workTitle(p)} (${same.indexOf(p) + 1})` : workTitle(p); }
   if (p.type !== 'climb') return `${CLIMB_PARTS[p.type]?.[0] || '•'} ${CLIMB_PARTS[p.type]?.[1] || p.type}`;
   const base = `${p.kind === 'voie' ? '🧗 Voie' : '🪨 Bloc'} ${INTENSITY[p.intensity]?.[1].toLowerCase() || ''}`.trim();
   const same = parts.filter((x) => x.type === 'climb' && x.kind === p.kind && x.intensity === p.intensity);
@@ -182,6 +184,14 @@ export function buildFromParts(parts, ctx, opts = {}) {
   const out = [], why = [], seed = opts.seed || 1;
   parts.forEach((p, i) => {
     const label = partLabel(p, i, parts);
+    if (p.type === 'work') {
+      // Partie « travail » d'un sport (course, natation, muscu, poids du corps) : une ou plusieurs structures.
+      if (Array.isArray(p.pick) && !p.pick.length) return;
+      const fam = sportFamily(p.activity), structs = p.pick?.length ? p.pick.filter((id) => SPORT_STRUCTS[fam]?.[id]) : [p.structure || null];
+      const each = Math.max(5, Math.round(p.minutes / Math.max(1, structs.length)));
+      structs.forEach((st, k) => { const r = buildWorkPart({ ...p, minutes: each, structure: st || undefined }, ctx, { label }); if (!k) why.push(...r.notes); out.push(...r.exercises); });
+      return;
+    }
     if (p.type !== 'climb') {
       // Choisis par l'utilisateur (guidé ou libre), sinon par l'app.
       if (Array.isArray(p.pick)) { out.push(...buildPicked(p, p.pick, label)); return; } // choix de l'utilisateur, même vide

@@ -31,11 +31,13 @@ const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['l
 const VIEWS = { home: vHome, progress: vProgress, library: vLibrary, profile: vProfile, settings: vSettings };
 
 /* ═════════ Rendu ═════════ */
+// Tout va bien : rien à montrer (le point vert seul ne voulait rien dire). Sinon, un mot clair.
+const SYNC_WORD = { sync: () => 'Envoi…', pending: (n) => `${n} à envoyer`, offline: () => 'Hors ligne', error: () => 'Synchro ⚠️', auth: () => 'Reconnexion' };
 function syncBadge() {
   const n = pendingCount();
   if (S.user?.guest) return h`<button class="syncbadge guest" data-act="goAccount" aria-label="Mode invité : créer un compte">👀 Invité</button>`;
   const label = { ok: 'Synchronisé', sync: 'Synchronisation…', pending: `${n} modification(s) en attente`, offline: `Hors ligne${n ? ` · ${n} en attente` : ''}`, error: 'Erreur de synchronisation', auth: 'Reconnexion nécessaire', idle: '' }[S.sync] || '';
-  return h`<button class="syncbadge ${S.sync}" data-act="goSync" aria-label="${label}" title="${label}"><span class="dot"></span>${S.sync === 'offline' ? 'Hors ligne' : n ? String(n) : ''}</button>`;
+  return h`<button class="syncbadge ${S.sync}" data-act="goSync" aria-label="${label}" title="${label}"><span class="dot"></span>${SYNC_WORD[S.sync]?.(n) || ''}</button>`;
 }
 function doRender() {
   const app = $('#app');
@@ -211,8 +213,6 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   Promise.resolve().then(() => fn(el, e)).catch((err) => { console.error(err); toast('Action impossible : ' + (err?.message || 'erreur inattendue'), 4500, 'bad'); });
 });
-// Textes d'explication repliés sur 2 lignes : un toucher les déplie (sans déclencher d'action).
-document.addEventListener('click', (e) => { const p = e.target.closest('.card p.tiny.muted, .card p.small.muted'); if (p && !e.target.closest('[data-act], a, button')) p.classList.toggle('x'); });
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-submit]'); if (!f) return;
   e.preventDefault();

@@ -1,6 +1,6 @@
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
-import { h, subHead, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
+import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
 import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
@@ -64,7 +64,7 @@ function vHub() {
     ${completeCard(c, acts, goals, climbing)}
     ${GROUPS.map(([title, ids]) => { const list = tiles.filter(([k]) => ids.includes(k)); return list.length ? h`<span class="kicker">${title}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; })}`;
 }
-ACT.profSub = (el) => { go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
+ACT.profSub = (el) => { if (el.dataset.id === 'goals') S.filters.goals = 'active'; go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
 const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;
 const statusTag = (s) => tag(STATUS_WORD[s.status], s.status === 'fort' ? 'ok' : s.status === 'faible' ? 'warn' : s.status === 'developpement' ? 'info' : '');
 
@@ -129,7 +129,7 @@ function vActivityCard(a) {
   const c = ctx(), native = ACTIVITIES[a.id];
   const cats = [...(native?.categories || []).map(([id, label, caps]) => ({ id: 'native:' + id, label, caps: caps.map((x) => ({ id: x, w: 1 })), native: true })), ...Object.values(c.categories).filter((x) => x.activityId === a.id)];
   const st = profileCapacities(c, a.id), sw = strengthsWeaknesses(st);
-  return h`<div class="card flat"><div class="row between wrapf"><b>${a.emoji} ${a.label}</b><div class="row tight"><button class="btn sm" data-act="aiCap" data-id="${a.id}">🤖 Avec l’assistant</button><button class="btn sm" data-act="catNew" data-id="${a.id}">＋ Catégorie</button></div></div>
+  return h`<div class="card flat"><div class="row between wrapf"><b>${a.emoji} ${a.label}</b><div class="row tight wrapf"><button class="btn sm" data-act="aiCap" data-id="${a.id}">🤖 Avec l’assistant</button><button class="btn sm" data-act="catNew" data-id="${a.id}">＋ Catégorie</button></div></div>
     <div class="chips">${cats.map((x) => x.native ? h`<span class="chip static" title="${x.caps.map((k) => capL(k.id)).join(', ')}">${x.label}</span>` : chip(false, `${x.emoji ? x.emoji + ' ' : ''}${x.label} ✎`, `data-act="catEdit" data-id="${x.id}"`))}</div>
     ${sw.strengths.length || sw.weaknesses.length ? h`<div class="chips">${sw.strengths.slice(0, 3).map((s) => h`<button class="chip okc" data-act="capOpen" data-id="${s.capId}">💪 ${s.label}</button>`)}${sw.weaknesses.slice(0, 3).map((s) => h`<button class="chip warnc" data-act="capOpen" data-id="${s.capId}">🌱 ${s.label}</button>`)}</div>` : ''}</div>`;
 }
@@ -281,11 +281,16 @@ ACT.ascDel = async (el) => { if (await ask('Supprimer cette entrée ?', { danger
 function vGoals() {
   const c = ctx();
   if (S.param) { const g = c.goals.find((x) => x.id === S.param); if (g) return vGoalDetail(g); }
-  const list = c.goals.filter((g) => (S.filters.goals || 'active') === 'all' || (g.status || 'active') === (S.filters.goals || 'active'));
+  const f = ['done', 'archived'].includes(S.filters.goals) ? S.filters.goals : 'active', st = (g) => g.status || 'active';
+  const list = c.goals.filter((g) => st(g) === f), nArch = c.goals.filter((g) => st(g) === 'archived').length;
+  // Réussis ou archivés : une sous-liste avec son retour (jamais une rangée d'onglets).
+  if (f !== 'active') return h`<button class="btn sm ghost" data-act="goalFilter" data-id="active">‹ Objectifs en cours</button><h2>${f === 'done' ? '🏆 Objectifs réussis' : '🗄️ Objectifs archivés'}</h2>
+    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}`;
   return h`${goalsPicker()}<div class="row wrapf"><button class="btn pri" data-act="goalNew">＋ Objectif précis</button></div>
-    <div class="chips">${[['active', 'Actifs'], ['done', '🏆 Réussis'], ['archived', 'Archivés'], ['all', 'Tous']].map(([k, l]) => chip((S.filters.goals || 'active') === k, l, `data-act="goalFilter" data-id="${k}"`))}</div>
+    <span class="kicker">En cours</span>
     ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}
-    ${(S.filters.goals || 'active') === 'active' && doneGoals(c.goals).length ? doneList(c.goals, 5) : ''}
+    ${doneGoals(c.goals).length ? doneList(c.goals, 5) : ''}
+    ${nArch ? menuList([['goalFilter', 'archived', '🗄️', `Objectifs archivés (${nArch})`, 'Mis de côté, gardés dans l’historique']]) : ''}
     <div class="card flat"><h3>Figures proposées</h3><div class="chips">${Object.entries(SKILLS).map(([id, s]) => chip(false, `${s.emoji} ${s.label}`, `data-act="goalNewSkill" data-id="${id}"`))}</div></div>`;
 }
 /** Objectifs réussis, datés (aussi affichés dans Progrès). */
@@ -369,7 +374,7 @@ ACT.goalAiSave = () => {
   putItem('goal', id, { type: d.metricId ? 'metric' : 'custom', label: d.label, metricId: d.metricId || '', target: d.target ?? null, current: null, unit: d.metricId ? METRICS[d.metricId]?.unit || '' : '', caps: d.caps.map((c) => ({ id: c.id, w: c.w })), status: 'active', startedAt: Date.now(), deadline: d.weeks ? new Date(Date.now() + d.weeks * 7 * 86400000).toISOString().slice(0, 10) : '', note: (d.steps || []).join(' · ').slice(0, 300) });
   S.goalDraft = null; closeSheet(); toast('Objectif ajouté'); go('profile', 'goals', id);
 };
-ACT.goalFilter = (el) => { S.filters.goals = el.dataset.id; render(); };
+ACT.goalFilter = (el) => { S.filters.goals = el.dataset.id; render(); window.scrollTo(0, 0); };
 ACT.goalNew = () => openSheet(goalForm(null), { wide: true });
 ACT.goalNewSkill = (el) => { closeSheet(); const s = SKILLS[el.dataset.id]; const ex = ctx().goals.find((g) => g.skillId === el.dataset.id && g.status === 'active'); if (ex) { go('profile', 'goals', ex.id); return; } const id = 'g-' + uid().slice(0, 12); putItem('goal', id, { type: 'skill', skillId: el.dataset.id, label: s.label, status: 'active', startedAt: Date.now() }); toast(`Objectif « ${s.label} » créé`); go('profile', 'goals', id); };
 function goalForm(g) {
@@ -401,13 +406,13 @@ SUBMIT.goalSave = (f) => {
 function vGoalDetail(g) {
   const c = ctx(), pr = goalProgress(g, c), tab = S.goalTab || 'overview', sk = SKILLS[g.skillId];
   const secs = [['blockers', '🧱', 'Ce qui bloque', 'Les capacités qui te freinent le plus'], ...(sk ? [['tree', '🪜', 'Progression', 'Les étapes jusqu’à l’objectif'], ['paths', '🛤️', 'Chemins', 'Les façons d’y arriver']] : []), ['graph', '🕸️', 'Graphe', 'Ce qui compte pour cet objectif, en image'], ['whatif', '🔮', 'Et si… ?', 'Ce que ça change si tu progresses sur un point'], ['why', '🤔', 'Pourquoi je stagne ?', 'Les raisons possibles, d’après tes données']];
-  return h`<div class="row"><button class="btn sm" data-act="goalBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2></div>
-    <div class="card hero ghero"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
+  return h`<button class="btn sm ghost" data-act="goalBack">‹ Objectifs</button><h2 style="margin:.2em 0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2>
+    <div class="card hero ghero stack"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
       ${sk ? h`<details class="how mini"><summary>C’est quoi, ${sk.label} ?</summary><p class="small">${sk.desc}</p></details>` : ''}
       ${g.status === 'done' ? h`<p class="small ok-t">🏆 Réussi le ${g.doneAt ? new Date(g.doneAt).toLocaleDateString('fr-FR') : '—'}</p>`
         : (pr.pct ?? 0) >= 100 ? h`<div class="card flat ok-b row"><span class="grow small">🎉 Tu es à 100 % : tu l’as réussi ?</span><button class="btn sm pri" data-act="goalDone" data-id="${g.id}">🏆 Oui !</button></div>` : ''}
-      <div class="row">${g.status === 'done' ? h`<button class="btn grow" data-act="goalNext" data-id="${g.id}">➡️ Objectif suivant</button>` : h`<button class="btn pri grow" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button><button class="btn" data-act="goalDone" data-id="${g.id}">🏆 J’ai réussi</button>`}
-      <details class="menu"><summary class="btn ic" aria-label="Plus d’actions">⋯</summary><div class="menu-list"><button class="btn" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div></details></div></div>
+      ${g.status === 'done' ? h`<button class="btn pri" data-act="goalNext" data-id="${g.id}">➡️ Objectif suivant</button>` : h`<button class="btn pri" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button><button class="btn" data-act="goalDone" data-id="${g.id}">🏆 J’ai réussi</button>`}</div>
+    <div class="row wrapf"><button class="btn sm" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn sm" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn sm" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn sm danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div>
     ${goalOverview(g)}
     <div class="setmenu secs">${secs.map(([k, ic, t, d]) => h`<details class="setsec" data-id="${k}" ${tab === k ? 'open' : ''}><summary class="setrow"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></summary><div class="secbody">${tab === k ? ({ blockers: goalBlockers, tree: goalTree, paths: goalPathsV, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[k](g) : ''}</div></details>`)}</div>`;
 }
@@ -453,7 +458,7 @@ ACT.goalDel = async (el) => { const g = item('goal', el.dataset.id); if (g && (a
 function goalOverview(g) {
   const c = ctx(), caps = goalCaps(g, c);
   return h`<div class="card"><h3>Capacités requises</h3>${caps.map((x) => { const st = capacityState(x.id, c); return h`<button class="item pick" data-act="capOpen" data-id="${x.id}"><div class="grow"><b>${capL(x.id)}</b> <span class="tiny muted">poids ${x.w}</span><div>${statusTag(st)} ${st.level != null ? h`<span class="tiny muted">confiance ${confWord(st.confidence)}</span>` : ''}</div></div></button>`; })}</div>
-    ${SKILLS[g.skillId] ? h`<div class="card"><h3>📏 Tes repères</h3>${SKILLS[g.skillId].criteria.map((cr) => { const m = c.metrics[cr.metric], p = perfsOf(cr.metric, c).find((x) => !x.unknown); const ratio = p && p.value != null ? Math.min(100, Math.round((m.dir === -1 ? cr.target / p.value : p.value / cr.target) * 100)) : 0; return h`<div class="prow crit"><div class="grow"><div class="row between"><b class="small">${m.label}</b><span class="tiny ${p ? '' : 'muted'}">${p ? perfText(p, c) : '—'} / ${cr.target} ${m.unit}</span></div><div class="track"><i style="width:${ratio}%"></i></div><details class="how mini"><summary>Pourquoi ce repère ?</summary><p class="tiny">${cr.why} Repère indicatif, pas une garantie.</p></details></div><button class="btn sm ${p ? '' : 'pri'}" data-act="perfAdd" data-id="${cr.metric}">${p ? '＋' : 'Saisir'}</button></div>`; })}</div>` : ''}`;
+    ${SKILLS[g.skillId] ? h`<div class="card"><h3>📏 Tes repères</h3>${SKILLS[g.skillId].criteria.map((cr) => { const m = c.metrics[cr.metric], p = perfsOf(cr.metric, c).find((x) => !x.unknown); const ratio = p && p.value != null ? Math.min(100, Math.round((m.dir === -1 ? cr.target / p.value : p.value / cr.target) * 100)) : 0; return h`<div class="prow crit"><div class="grow"><div class="row between wrapf"><b class="small">${m.label}</b><span class="tiny nowrap ${p ? '' : 'muted'}">${p ? perfText(p, c) : 'pas noté'} / ${cr.target} ${m.unit === 'reps' ? 'rép.' : m.unit}</span></div><div class="track"><i style="width:${ratio}%"></i></div><details class="how mini"><summary>Pourquoi ce repère ?</summary><p class="tiny">${cr.why} Repère indicatif, pas une garantie.</p></details></div><button class="btn sm ${p ? '' : 'pri'}" data-act="perfAdd" data-id="${cr.metric}">${p ? '＋ Noter' : 'Saisir'}</button></div>`; })}</div>` : ''}`;
 }
 function goalBlockers(g) {
   const b = blockers(g, ctx());

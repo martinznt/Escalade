@@ -545,6 +545,19 @@ await step('trois niveaux d’aide : l’app choisit (puis on ajuste), l’app g
   await A.keyboard.press('Escape'); assert.equal(await a.count('#main .item.ex'), n0 + 1);
   await cpFresh('auto');
 });
+await step('tous les sports comme l’escalade : course « 10 km en 50 min » → format, allure calculée, enregistrement', async () => {
+  await cpFresh('auto'); await cpTo(2); await a.click('[data-act=cpSport][data-id=running]'); await cpTo(3);
+  await a.click('[data-act=cpAim][data-id=target]'); await pickSel(A, 'select[data-change=cpTMetric]', 'course_10k');
+  await A.fill('input[data-change=cpTValue]', '50'); await A.press('input[data-change=cpTValue]', 'Tab'); await A.waitForSelector('text=Allure visée : 5:00 /km');
+  await cpTo(4); await A.waitForSelector('.cpart'); assert.match(await a.text('#main'), /Échauffement[\s\S]*10 km en 50 min[\s\S]*Retour au calme/);
+  await A.locator('.cpart', { hasText: '10 km en 50 min' }).locator('[data-act=cpEdit]').click(); await A.waitForSelector('#sheet [data-act=cpPart][data-k=structure]');
+  assert.ok(await a.count('#sheet [data-act=cpPart][data-k=structure]') >= 5, 'structures de course proposées'); await A.keyboard.press('Escape');
+  await cpTo(5); await A.waitForSelector('#cpresult'); const r = await a.text('#cpresult');
+  assert.match(r, /🏃 Objectif 10 km en 50 min/); assert.match(r, /1 km à 5:00 \/km/);
+  await a.click('[data-act=cpSave]'); await A.waitForSelector('input[data-change=sName]');
+  assert.equal(await A.inputValue('input[data-change=sName]'), 'Objectif 10 km en 50 min');
+  await cpFresh('auto');
+});
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');

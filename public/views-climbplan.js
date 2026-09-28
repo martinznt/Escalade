@@ -18,6 +18,7 @@ import { setReturn } from './nav.js';
 import { EQUIPMENT } from './model.js';
 import { ACTIVITIES } from './model.js';
 import { sessionMinutes } from './engine.js';
+import { sportFamily, SPORT_STRUCTS, sportProposals, sportTargets, sportMoves, bestPerf, targetAdvice, targetParts, targetLabel, defaultWorkParts, workTitle, moveName, paceOf, fmtPace } from './sportplan.js';
 
 const KEY = 'sea:climbplan';
 const DEFAULT_PARTS = [
@@ -32,7 +33,7 @@ const systemsFor = (kind) => Object.values(ctx().systems || {}).filter((s) => s.
 const sysOf = (kind) => { const c = CP(), all = ctx().systems || {}; return all[c.sys?.[kind]] || pickSystem(ctx(), kind, c.envId); };
 const levelsOf = (kind) => sortedLevels(sysOf(kind));
 const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, '0')}` : ''}` : `${m} min`);
-const partTitle = (p) => (p.type === 'main' ? sportLabel(p.activity || CP().sport) : p.type === 'climb' ? `${p.kind === 'voie' ? '🧗 Voie' : '🪨 Bloc'} ${INTENSITY[p.intensity]?.[1].toLowerCase() || ''}` : `${CLIMB_PARTS[p.type]?.[0]} ${CLIMB_PARTS[p.type]?.[1]}`);
+const partTitle = (p) => (p.type === 'work' ? (p.label || workTitle(p)) : p.type === 'main' ? `${sportLabel(p.activity || CP().sport)} : exercices` : p.type === 'climb' ? `${p.kind === 'voie' ? '🧗 Voie' : '🪨 Bloc'} ${INTENSITY[p.intensity]?.[1].toLowerCase() || ''}` : `${CLIMB_PARTS[p.type]?.[0]} ${CLIMB_PARTS[p.type]?.[1]}`);
 
 function sysSelect(kind) {
   const cur = sysOf(kind);
@@ -63,7 +64,7 @@ function vHow() {
 /* Étape 2 : sport, lieu (avec son matériel et sa cotation), forme, temps. */
 function vWhere() {
   const c = CP(), x = ctx(), env = envOf(), eq = [...availableEquipment(x, c.envId)];
-  const sports = [...new Set([...Object.keys(x.activities), 'climbing_boulder', 'climbing_route'])].filter((id) => x.activities[id] || ACTIVITIES[id]);
+  const sports = [...new Set([...Object.keys(x.activities), ...Object.keys(ACTIVITIES)])].filter((id) => x.activities[id] || ACTIVITIES[id]); // tous les sports, même pas encore dans le profil
   return h`<div class="card stack">
     <span class="kicker">Sport</span><div class="chips">${sports.map((id) => chip(c.sport === id, sportLabel(id), `data-act="cpSport" data-id="${id}"`))}<button type="button" class="chip add" data-act="allGo" data-to="profile/activities">＋ Ajouter un sport</button></div>
     <label>Lieu<select data-change="cpEnv"><option value="">${x.defEnv ? 'Par défaut : ' + x.defEnv.name : 'Aucun lieu décrit'}</option>${x.envs.map((e) => h`<option value="${e.id}" ${c.envId === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label>
@@ -76,7 +77,7 @@ function vWhere() {
 /* Étape 3 : pour quoi — plusieurs objectifs, une cotation à réussir, une surprise, ce qu'on veut travailler. */
 function vWhy() {
   const c = CP(), x = ctx(), goals = activeGoals(x), kind = kindOf(c.sport), climb = isClimb(c.sport);
-  const AIM = [['goals', '🎯', 'Mes objectifs et mes envies', 'Coche un ou plusieurs objectifs, et ce que tu veux travailler.'], ...(climb ? [['grade', '🧗', 'Réussir une cotation à la fin', 'Ex. un U8 en dévers : échauffement, montée, puis essais.']] : []), ['surprise', '🎲', 'Surprends-moi', 'Quelque chose de nouveau, ou qui te fait progresser.'], ['none', '🙂', 'Rien de particulier', 'Une séance équilibrée pour ton sport.']];
+  const AIM = [['goals', '🎯', 'Mes objectifs et mes envies', 'Coche un ou plusieurs objectifs, et ce que tu veux travailler.'], ...(climb ? [['grade', '🧗', 'Réussir une cotation à la fin', 'Ex. un U8 en dévers : échauffement, montée, puis essais.']] : []), ...(sportFamily(c.sport) && sportTargets(c.sport, x).length ? [['target', '🎯', 'Atteindre une performance', TARGET_EX[sportFamily(c.sport)]]] : []), ['surprise', '🎲', 'Surprends-moi', 'Quelque chose de nouveau, ou qui te fait progresser.'], ['none', '🙂', 'Rien de particulier', 'Une séance équilibrée pour ton sport.']];
   const aim = c.aim && AIM.some(([k]) => k === c.aim) ? c.aim : 'goals';
   let detail = '';
   if (aim === 'goals') {
@@ -97,11 +98,21 @@ function vWhy() {
       <span class="kicker">En <span class="tiny muted">(un ou plusieurs styles, ou aucun)</span></span>
       <div class="chips">${climbStyles().sort((a, b) => a.label.localeCompare(b.label, 'fr')).map((st) => chip(c.styles.includes(st.id), st.label, `data-act="cpStyle" data-id="${st.id}"`))}<input class="chipin" data-change="styleQuick" data-target="cp" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
       ${advice ? h`<p class="small ${/ambitieux/.test(advice) ? 'warn-t' : 'muted'}">${advice}</p>` : h`<p class="tiny muted">Note ton maximum dans <button class="linkish acc-t" data-act="allGo" data-to="profile/climbing">Profil › Carnet</button> pour un conseil sur l’objectif.</p>`}</div>`;
+  } else if (aim === 'target') {
+    const ts = sportTargets(c.sport, x), mid = ts.some((t) => t.id === c.tMetric) ? c.tMetric : ts[0].id, t = ts.find((y) => y.id === mid), known = bestPerf(x, mid);
+    const val = Number.isFinite(c.tValue) && c.tMetric === mid ? c.tValue : null, pace = val != null ? paceOf(mid, val) : null;
+    detail = h`<div class="card stack"><label>Ma performance visée<select data-change="cpTMetric" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure">${ts.map((y) => h`<option value="${y.id}" ${y.id === mid ? 'selected' : ''}>${y.label}</option>`)}</select></label>
+      <label>Valeur visée<span class="unitbox"><input type="number" inputmode="decimal" step="any" value="${val ?? ''}" data-change="cpTValue" placeholder="${known ?? ''}" aria-label="Valeur visée"><em>${t.unit === 'reps' ? 'rép.' : t.unit}</em></span></label>
+      <p class="tiny muted">${known != null ? `Ta meilleure perf notée : ${known} ${t.unit === 'reps' ? 'rép.' : t.unit}.` : 'Aucune perf notée pour l’instant.'}${pace ? ` Allure visée : ${fmtPace(pace)}.` : ''}</p>
+      ${val != null ? h`<p class="small ${/ambitieux/.test(targetAdvice(mid, val, known, x)) ? 'warn-t' : 'muted'}">${targetAdvice(mid, val, known, x)}</p>` : h`<p class="tiny muted">Écris ta cible : la séance est construite pour l’atteindre (échauffement, montée, spécifique, objectif).</p>`}</div>`;
   } else if (aim === 'surprise') {
     detail = h`<div class="setmenu">${Object.entries(AIMS).map(([k, [ic, t, d]]) => h`<button class="setrow" data-act="cpSurAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${(c.surAim || 'any') === k ? '✓' : ''}</span></button>`)}</div>`;
   }
   return h`<div class="setmenu">${AIM.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : ''}</span></button>`)}</div>${detail}`;
 }
+const TARGET_EX = { run: 'Ex. 10 km en 50 min : échauffement, montée, blocs à l’allure visée.', swim: 'Ex. 100 m en 1:40 : éducatifs, montée, séries à l’allure visée.', load: 'Ex. 100 kg au squat : montée en charge, paliers, puis volume.', body: 'Ex. 15 tractions : séries faciles, séries max, pyramide.' };
+CHG.cpTMetric = (el) => { const c = CP(); c.tMetric = el.value; c.tValue = null; keep(); render(); };
+CHG.cpTValue = (el) => { const c = CP(), v = Number(String(el.value).replace(',', '.')); c.tMetric ||= sportTargets(c.sport, ctx())[0]?.id; c.tValue = Number.isFinite(v) && el.value !== '' ? v : null; keep(); render(); };
 /* Étape 4 : le format (parties et temps), proposé d'après les étapes d'avant et modifiable. */
 function vFormat() {
   const c = CP();
@@ -122,6 +133,13 @@ function proposeParts() {
     const warm = Math.min(15, Math.round(M * 0.12)), cool = Math.min(10, Math.max(5, Math.round(M * 0.07))), rest = M - warm - cool, low = FORME_MAP[c.forme] === 'low';
     return [{ type: 'warmup', minutes: warm }, { type: 'climb', kind, intensity: low ? 'mod' : 'hard', minutes: Math.round(rest * 0.6), styles: [] }, { type: 'climb', kind, intensity: 'easy', minutes: rest - Math.round(rest * 0.6), styles: [], adapt: true }, { type: 'cool', minutes: cool }];
   }
+  if (sportFamily(c.sport)) {
+    const tm = c.tMetric || sportTargets(c.sport, ctx())[0]?.id;
+    if (c.aim === 'target' && tm && Number.isFinite(c.tValue)) return targetParts({ sport: c.sport, metricId: tm, value: c.tValue, minutes: M });
+    // Mouvement travaillé : celui d'un objectif coché s'il en a un, sinon le premier du sport.
+    const gm = (c.goalIds || []).map((id) => ctx().goals.find((g) => g.id === id)?.metricId).find((id) => id && sportMoves(c.sport, ctx()).some((m) => m.id === id));
+    return defaultWorkParts(c.sport, M, FORME_MAP[c.forme] || 'normal', gm || '');
+  }
   return presetParts('classique', M).map((p) => (p.type === 'main' ? { ...p, activity: c.sport } : p));
 }
 const FORME_MAP = { exhausted: 'low', tired: 'low', ok: 'normal', fresh: 'normal', top: 'top' };
@@ -129,11 +147,13 @@ function buildOpts() {
   const c = CP(), env = envOf(), x = ctx(), ints = intentsFor(c.sport, extraIntents()).filter((it) => (c.intents || []).includes(it.id)).map((it) => ({ label: it.label, caps: it.caps }));
   const names = (c.goalIds || []).map((id) => x.goals.find((g) => g.id === id)).filter(Boolean).map(goalLabel);
   const levels = levelsOf(kindOf(c.sport)), t = c.targetShown ?? c.target;
+  const tgt = c.aim === 'target' && c.tMetric && Number.isFinite(c.tValue) ? targetLabel(c.tMetric, c.tValue) : '';
+  if (tgt) return { sport: c.sport, envId: c.envId || x.defEnv?.id || '', envName: env?.name || '', goalIds: c.goalIds || [], intents: ints, avoidZones: c.zones || [], light: FORME_MAP[c.forme] === 'low', goal: `Objectif : ${tgt}.`, name: `Objectif ${tgt}`, emoji: (x.activities[c.sport] || ACTIVITIES[c.sport])?.emoji, seed: c.seed || 1 };
   const goal = c.aim === 'grade' ? `Réussir ${kindOf(c.sport) === 'voie' ? 'une voie' : 'un bloc'} ${levels[t]?.label || ''}${c.styles.length ? ' en ' + c.styles.map((id) => x.styles[id]?.label?.toLowerCase() || id).join(', ') : ''}.`
     : c.aim === 'surprise' ? c.surGoal || '' : names.length ? `Pour : ${names.join(', ')}.` : '';
   const name = c.aim === 'grade' ? `Objectif ${levels[t]?.label || ''}` : c.aim === 'surprise' ? c.surName || 'Surprise' : names.length ? names.slice(0, 2).join(' + ') : `${sportLabel(c.sport).replace(/^\S+\s/, '')} — ${fmtMin(c.minutes || 60)}`;
   return { sport: c.sport, envId: c.envId || x.defEnv?.id || '', envName: env?.name || '', goalIds: c.goalIds || [], intents: ints, avoidZones: c.zones || [], light: FORME_MAP[c.forme] === 'low',
-    systems: isClimb(c.sport) ? { [kindOf(c.sport)]: (c.surSystem && x.systems[c.surSystem]) || sysOf(kindOf(c.sport)) } : undefined, goal, name, seed: c.seed || 1 };
+    systems: isClimb(c.sport) ? { [kindOf(c.sport)]: (c.surSystem && x.systems[c.surSystem]) || sysOf(kindOf(c.sport)) } : undefined, goal, name, emoji: isClimb(c.sport) ? '' : (x.activities[c.sport] || ACTIVITIES[c.sport])?.emoji, seed: c.seed || 1 };
 }
 function buildNow() {
   const c = CP();
@@ -150,9 +170,9 @@ ACT.cpStep = (el) => {
   if (d > 0 && c.step === 4) { c.result = null; buildNow(); }
   c.step = next; keep(); render(); window.scrollTo(0, 0);
 };
-const partsKey = () => { const c = CP(); return JSON.stringify([c.sport, c.minutes, c.aim, c.aim === 'grade' ? c.targetShown ?? c.target : '', c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme]); };
+const partsKey = () => { const c = CP(); return JSON.stringify([c.sport, c.minutes, c.aim, c.aim === 'grade' ? c.targetShown ?? c.target : c.aim === 'target' ? [c.tMetric, c.tValue] : '', c.goalIds, c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme]); };
 ACT.cpRestart = () => { const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; render(); window.scrollTo(0, 0); };
-ACT.cpSport = (el) => { const c = CP(); c.sport = el.dataset.id; c.result = null; c.target = null; if (!isClimb(c.sport) && c.aim === 'grade') c.aim = 'goals'; keep(); render(); };
+ACT.cpSport = (el) => { const c = CP(); c.sport = el.dataset.id; c.result = null; c.target = null; if ((!isClimb(c.sport) && c.aim === 'grade') || (!sportFamily(c.sport) && c.aim === 'target')) c.aim = 'goals'; keep(); render(); };
 ACT.cpForme = (el) => { CP().forme = el.dataset.id; keep(); render(); };
 ACT.cpAim = (el) => { CP().aim = el.dataset.id; keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
@@ -161,17 +181,19 @@ ACT.cpIntentWrite = () => { S.gen.activityId = CP().sport; ACT.gWrite?.({ datase
 ACT.cpGoal = tog('goalIds'); ACT.cpIntent = tog('intents'); ACT.cpZone = tog('zones');
 // Aller ajouter des objectifs, puis revenir à la séance (le brouillon est gardé).
 ACT.cpAddGoals = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'goals'); };
+const WORK_HINT = { run: 'fractionné, seuil…', swim: 'séries, pyramide…', load: 'force, 5×5…', body: 'EMOM, pyramide…' };
 function vParts() {
   const c = CP(), total = c.parts.reduce((t, p) => t + p.minutes, 0);
   return h`<div class="card stack">
     <div class="row between"><b>Mes parties</b><span class="muted small">Total ${fmtMin(total)}</span></div>
     ${c.parts.map((p, i) => { const L = p.type === 'climb' && p.adapt ? adaptPart(p, priorLoad(c.parts, i), ctx().styles) : null; const st = STRUCTURES[p.kind || 'bloc']?.[p.structure];
       return h`<div class="cpart"><div><b>${partTitle(p)}</b> · ${fmtMin(p.minutes)}
+        ${p.type === 'work' ? h`<div class="tiny muted">${workLine(p)}</div>` : ''}
         ${p.type === 'climb' ? h`<div class="tiny muted">${rangeText(p)}${p.styles?.length ? ' · ' + p.styles.map((id) => ctx().styles[id]?.label || id).join(', ') : ''} · ${st ? `${st.emoji} ${st.name}` : 'structure au choix'}${p.adapt ? ' · adapté à avant' : ''}</div>` : ''}
         ${L?.notes.length ? h`<div class="tiny acc-t">↳ ${L.notes[0]}</div>` : ''}</div>
-        <div class="row tight cpbtns"><label class="row tight grow"><span class="unitbox"><input type="number" min="5" max="180" step="5" value="${p.minutes}" data-change="cpPartMinRow" data-i="${i}" style="width:70px" aria-label="Durée de la partie"><em>min</em></span></label><button class="btn sm ic" data-act="cpUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter">↑</button><button class="btn sm ic" data-act="cpDown" data-i="${i}" ${i < c.parts.length - 1 ? '' : 'disabled'} aria-label="Descendre">↓</button><button class="btn sm" data-act="cpEdit" data-i="${i}">Régler</button><button class="btn sm ic danger" data-act="cpDel" data-i="${i}" aria-label="Retirer">✕</button></div></div>`; })}
+        <div class="row tight wrapf cpbtns"><label class="row tight grow"><span class="unitbox"><input type="number" min="5" max="180" step="5" value="${p.minutes}" data-change="cpPartMinRow" data-i="${i}" style="width:70px" aria-label="Durée de la partie"><em>min</em></span></label><button class="btn sm ic" data-act="cpUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter">↑</button><button class="btn sm ic" data-act="cpDown" data-i="${i}" ${i < c.parts.length - 1 ? '' : 'disabled'} aria-label="Descendre">↓</button><button class="btn sm" data-act="cpEdit" data-i="${i}">Régler</button><button class="btn sm ic danger" data-act="cpDel" data-i="${i}" aria-label="Retirer">✕</button></div></div>`; })}
     <span class="kicker">Ajouter une partie</span>
-    <div class="chips">${chip(false, '🪨 Bloc', 'data-act="cpAdd" data-id="climb" data-k="bloc"')}${chip(false, '🧗 Voie', 'data-act="cpAdd" data-id="climb" data-k="voie"')}${Object.keys(ctx().activities).filter((id) => !isClimb(id)).map((id) => chip(false, sportLabel(id), `data-act="cpAdd" data-id="main" data-k="${id}"`))}${Object.entries(CLIMB_PARTS).filter(([k]) => k !== 'climb').map(([k, [e, l]]) => chip(false, `${e} ${l}`, `data-act="cpAdd" data-id="${k}"`))}</div>
+    <div class="chips">${chip(false, '🪨 Bloc', 'data-act="cpAdd" data-id="climb" data-k="bloc"')}${chip(false, '🧗 Voie', 'data-act="cpAdd" data-id="climb" data-k="voie"')}${Object.keys(ctx().activities).filter((id) => !isClimb(id)).map((id) => h`${sportFamily(id) ? chip(false, `${sportLabel(id)} : ${WORK_HINT[sportFamily(id)]}`, `data-act="cpAdd" data-id="work" data-k="${id}"`) : ''}${chip(false, `${sportLabel(id)} : exercices`, `data-act="cpAdd" data-id="main" data-k="${id}"`)}`)}${Object.entries(CLIMB_PARTS).filter(([k]) => k !== 'climb').map(([k, [e, l]]) => chip(false, `${e} ${l}`, `data-act="cpAdd" data-id="${k}"`))}</div>
     <div class="row wrapf"><label class="row tight">Ajuster à <input type="number" min="20" max="300" step="5" value="${total}" data-change="cpScale" style="width:80px" aria-label="Temps disponible"> min</label><button class="btn sm ghost" data-act="cpExample">↺ Format proposé</button></div>
     </div>`;
 }
@@ -180,10 +202,12 @@ const eqNow = () => availableEquipment(ctx(), CP().envId);
 function currentPick(i) {
   const c = CP(), p = c.built[i]; if (p.pick) return p.pick;
   const label = partLabel(p, i, c.built), ex = (c.result?.exercises || []).filter((e) => e.part === label);
+  if (p.type === 'work') return [...new Set(ex.map((e) => /^sp-(\w+)$/.exec(e.group || '')?.[1]).filter(Boolean))];
   return p.type === 'climb' ? [...new Set(ex.map((e) => /^cp-(\w+)$/.exec(e.group || '')?.[1]).filter(Boolean))] : [...new Set(ex.map((e) => e.libId).filter(Boolean))];
 }
 function optionsFor(i, free) {
   const c = CP(), p = c.built[i];
+  if (p.type === 'work') return sportProposals(sportFamily(p.activity), p.intensity || 'mod').map((x) => ({ id: x.id, name: `${x.emoji} ${x.name}`, works: [], what: x.desc, tips: [x.when, x.fit ? '' : 'Moins adapté à l’intensité choisie.'].filter(Boolean), recommended: x.fit, struct: true }));
   if (p.type === 'climb') return proposals(p.kind === 'voie' ? 'voie' : 'bloc', p.intensity).map((x) => ({ id: x.id, name: `${x.emoji} ${x.name}`, works: STRUCT_TIPS[x.id] || [], what: x.desc, tips: [STRUCT_WHEN[x.id], x.fit ? '' : 'Moins adapté à l’intensité choisie.'].filter(Boolean), recommended: x.fit, struct: true }));
   if (free) {
     const q = String(c.q?.[i] || '').toLowerCase(), all = !!c.freeAll?.[i];
@@ -200,11 +224,11 @@ function optionRows(i, free, max = 0) {
     return h`<div class="optrow ${on ? 'on' : ''}"><button class="ck" data-act="cpPick" data-i="${i}" data-id="${o.id}" aria-pressed="${on}" aria-label="Choisir">${on ? '✓' : ''}</button>
       <button class="linkish grow" data-act="cpPick" data-i="${i}" data-id="${o.id}"><b>${o.name}</b>${o.recommended && !free ? h` <span class="tag ok">conseillé</span>` : ''}${o.works.length ? h`<small>Travaille : ${o.works.join(', ')}</small>` : ''}${o.what && o.struct ? h`<small>${o.what}</small>` : ''}${o.tips.map((t) => h`<small class="tip">💡 ${t}</small>`)}</button>
       ${o.struct ? '' : h`<button class="btn sm ic" data-act="cpOptInfo" data-id="${o.id}" data-i="${i}" aria-label="C’est quoi ?">ⓘ</button>`}</div>`; });
-  const adv = p.type !== 'climb' && pick.length > 1 ? orderAdvice(pick).notes : [];
+  const adv = !['climb', 'work'].includes(p.type) && pick.length > 1 ? orderAdvice(pick).notes : [];
   return h`${adv.map((n) => h`<p class="tiny acc-t">↳ ${n}</p>`)}<div class="optlist">${rows.length ? rows : h`<p class="tiny muted">Aucun exercice avec ce filtre.</p>`}</div>${max && total > rows.length ? h`<button class="btn sm ghost" data-act="cpOpts" data-i="${i}">Voir toutes les options (${total})</button>` : ''}`;
 }
 function wantChips(i) {
-  const c = CP(), p = c.built[i], caps = Object.keys(POOLS[p.type]?.caps || {}); if (p.type === 'climb' || caps.length < 2) return '';
+  const c = CP(), p = c.built[i], caps = Object.keys(POOLS[p.type]?.caps || {}); if (['climb', 'work'].includes(p.type) || caps.length < 2) return '';
   return h`<div class="chips tight"><span class="tiny muted">Je veux plus de :</span>${caps.slice(0, 4).map((k) => chip(c.want?.[i] === k, CAPACITIES[k]?.label || k, `data-act="cpWant" data-i="${i}" data-id="${k}"`))}</div>`;
 }
 function guideList(i) {
@@ -215,7 +239,7 @@ function guideList(i) {
 function optsSheet(i) {
   const c = CP(), p = c.built[i], free = c.help === 'free'; if (!p) return; S.cpSheet = i;
   openSheet(h`<div class="stack"><h2 style="margin:0">${partLabel(p, i, c.built)}</h2>
-    ${free && p.type !== 'climb' ? h`<input type="search" data-input="cpQ" data-i="${i}" value="${c.q?.[i] || ''}" placeholder="🔍 Chercher un exercice" aria-label="Chercher un exercice">
+    ${free && !['climb', 'work'].includes(p.type) ? h`<input type="search" data-input="cpQ" data-i="${i}" value="${c.q?.[i] || ''}" placeholder="🔍 Chercher un exercice" aria-label="Chercher un exercice">
       ${POOLS[p.type] ? h`<label class="row"><input type="checkbox" data-change="cpAll" data-i="${i}" ${c.freeAll?.[i] ? 'checked' : ''}><span class="small">Voir tout le catalogue (pas seulement « ${CLIMB_PARTS[p.type]?.[1] || p.type} »)</span></label>` : ''}`
       : h`${PART_NOTES[p.type] ? h`<p class="tiny muted">ℹ️ ${PART_NOTES[p.type]}</p>` : ''}${wantChips(i)}`}
     ${optionRows(i, free)}<button class="btn pri" data-act="cpOptsDone">OK</button></div>`, { wide: true });
@@ -235,13 +259,24 @@ CHG.cpBMin = (el) => { const c = CP(), p = c.built?.[Number(el.dataset.i)]; if (
 ACT.cpHelp = (el) => { const c = CP(); c.help = el.dataset.id; c.result = null; keep(); render(); };
 ACT.cpExInfo = (el) => { const s = CP().result, e = s?.exercises.find((x) => x.id === el.dataset.id); if (e) openSheet(exerciseSheet(e, '', s)); };
 ACT.cpOptInfo = (el) => { const x = byId(el.dataset.id); if (x) openSheet(exerciseSheet({ ...x, libId: x.id }, h`<button class="btn" data-act="cpOpts" data-i="${el.dataset.i}">‹ Retour aux options</button>`), { wide: true }); };
+/** Résumé d'une partie « travail » : intensité, mouvement, cible. */
+function workLine(p) {
+  const x = ctx(), fam = sportFamily(p.activity), st = SPORT_STRUCTS[fam]?.[p.structure];
+  return [INTENSITY[p.intensity]?.[1], (fam === 'load' || fam === 'body') && (p.move || sportMoves(p.activity, x)[0]) ? moveName(p.move || sportMoves(p.activity, x)[0].id, x) : '', st && p.label ? `${st.emoji} ${st.name}` : '', p.target?.value != null ? `cible ${targetLabel(p.target.metricId, p.target.value)}` : ''].filter(Boolean).join(' · ');
+}
 function rangeText(p) {
   const levels = levelsOf(p.kind), sys = sysOf(p.kind), [lo, hi] = partRange(p, levels, sys ? knownMax(ctx(), sys, p.kind) : null);
   const a = levels[lo]?.label, b = levels[hi]?.label; return a ? (a === b ? a : `${a}–${b}`) + (p.from == null ? ' (auto)' : '') : '';
 }
+/** Ce qu'il faut faire à chaque série : durée ou répétitions, et la charge. */
+const dose = (e) => {
+  const t = (x) => (x >= 60 ? `${Math.round(x / 60)} min` : `${x} s`), u = e.unit ? ` ${e.unit}` : ' rép.';
+  const d = e.mode === 'time' ? (e.secMax > e.secMin ? `${t(e.secMin)}–${t(e.secMax)}` : t(e.secMin)) : e.repsMax > e.repsMin ? `${e.repsMin}–${e.repsMax}${u}` : `${e.repsMin}${u}`;
+  return [e.group?.startsWith('cp-') ? '' : d, e.load, e.rest ? `repos ${t(e.rest)}` : ''].filter(Boolean).join(' · ');
+};
 function vResult() {
   const c = CP(), s = c.result, sp = c.aim === 'surprise' && c.reasons?.length && c.help !== 'free', help = c.help || 'auto';
-  const exLi = (e) => h`<li><button class="linkish" data-act="cpExInfo" data-id="${e.id}"><b>${e.name}</b> <span class="tiny muted">ⓘ</span></button>${e.sets > 1 ? ` × ${e.sets}` : ''}${e.note ? h`<div class="tiny muted">${e.note}</div>` : ''}</li>`;
+  const exLi = (e) => h`<li><button class="linkish" data-act="cpExInfo" data-id="${e.id}"><b>${e.name}</b> <span class="tiny muted">ⓘ</span></button>${e.sets > 1 ? ` × ${e.sets}` : ''}${dose(e) ? h`<div class="tiny acc-t">${dose(e)}</div>` : ''}${e.note ? h`<div class="tiny muted">${e.note}</div>` : ''}</li>`;
   const byPart = c.built ? c.built.map((p, i) => ({ p, i, label: partLabel(p, i, c.built) })) : [...new Set(s.exercises.map((e) => e.part))].map((label) => ({ p: null, i: -1, label }));
   return h`<div class="card stack" id="cpresult"><h2 style="margin:0">${s.emoji} ${s.name}</h2>
     ${sp ? h`<div class="card flat acc-b"><b class="small">${AIMS[c.aimDone]?.[0] || '🎲'} Pourquoi cette surprise</b><ul class="clean tight small">${c.reasons.map((r) => h`<li>${r}</li>`)}</ul></div>` : ''}
@@ -283,8 +318,8 @@ ACT.cpUp = (el) => mv(Number(el.dataset.i), -1);
 ACT.cpDown = (el) => mv(Number(el.dataset.i), 1);
 ACT.cpDel = (el) => { CP().parts.splice(Number(el.dataset.i), 1); CP().result = null; CP().partsTouched = true; keep(); render(); };
 ACT.cpAdd = (el) => {
-  const t = el.dataset.id, p = t === 'climb' ? { type: 'climb', kind: el.dataset.k, intensity: 'mod', minutes: 30, styles: [] } : t === 'main' ? { type: 'main', minutes: 20, activity: el.dataset.k || CP().sport } : { type: t, minutes: t === 'warmup' ? 15 : 10 };
-  CP().parts.push(p); CP().result = null; CP().partsTouched = true; keep(); render(); if (t === 'climb') editPart(CP().parts.length - 1);
+  const t = el.dataset.id, p = t === 'climb' ? { type: 'climb', kind: el.dataset.k, intensity: 'mod', minutes: 30, styles: [] } : t === 'work' ? { type: 'work', activity: el.dataset.k, intensity: 'mod', minutes: 20 } : t === 'main' ? { type: 'main', minutes: 20, activity: el.dataset.k || CP().sport } : { type: t, minutes: t === 'warmup' ? 15 : 10 };
+  CP().parts.push(p); CP().result = null; CP().partsTouched = true; keep(); render(); if (t === 'climb' || t === 'work') editPart(CP().parts.length - 1);
 };
 ACT.cpExample = () => { CP().parts = proposeParts(); CP().partsTouched = false; CP().partsFor = partsKey(); CP().result = null; keep(); render(); };
 CHG.cpScale = (el) => {
@@ -295,6 +330,19 @@ CHG.cpScale = (el) => {
 /* Régler une partie : durée, intensité, cotations, styles, structure (plusieurs propositions), adaptation. */
 function editPart(i) {
   const c = CP(), p = c.parts[i]; if (!p) return;
+  if (p.type === 'work') {
+    const x = ctx(), fam = sportFamily(p.activity), props = sportProposals(fam, p.intensity || 'mod'), cur = p.structure || props[0]?.id, moves = fam === 'load' || fam === 'body' ? sportMoves(p.activity, x) : [];
+    const mv = p.move || moves[0]?.id || '', known = mv ? bestPerf(x, mv) : null, u = moves.find((m) => m.id === mv)?.unit;
+    openSheet(h`<div class="stack"><h2 style="margin:0">${partTitle(p)}</h2>
+      <label>Durée<span class="unitbox"><input type="number" min="5" max="180" step="5" value="${p.minutes}" data-change="cpPartMin" data-i="${i}"><em>min</em></span></label>
+      <span class="kicker">Intensité</span><div class="chips">${Object.entries(INTENSITY).map(([k, [e, l]]) => chip(p.intensity === k, `${e} ${l}`, `data-act="cpPart" data-i="${i}" data-k="intensity" data-v="${k}"`))}</div>
+      ${moves.length ? h`<label>Mouvement<select data-change="cpPartMove" data-i="${i}" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure">${moves.map((m) => h`<option value="${m.id}" ${m.id === mv ? 'selected' : ''}>${moveName(m.id, x)}</option>`)}</select></label>
+        <p class="tiny muted">${known != null ? `Ta meilleure perf notée : ${known} ${u === 'reps' ? 'rép.' : u}. Les ${u === 'kg' ? 'charges' : 'séries'} en découlent.` : `Aucune perf notée : ${u === 'kg' ? 'charges' : 'séries'} au ressenti. <button class="linkish acc-t" data-act="allGo" data-to="profile/perfs">Noter ma perf</button>`}</p>` : ''}
+      <span class="kicker">Comment structurer cette partie ?</span>
+      <div class="setmenu">${props.map((st) => h`<button class="setrow ${st.fit ? '' : 'dim'}" data-act="cpPart" data-i="${i}" data-k="structure" data-v="${st.id}"><span class="sic">${st.emoji}</span><span class="grow"><b>${st.name}</b><small>${st.desc}${st.fit ? '' : ' (moins adapté à cette intensité)'}</small><small class="tip">💡 ${st.when}</small></span><span class="chev">${cur === st.id ? '✓' : ''}</span></button>`)}</div>
+      <button class="btn pri" data-act="closeSheet">OK</button></div>`);
+    return;
+  }
   if (p.type !== 'climb') {
     openSheet(h`<div class="stack"><h2 style="margin:0">${partTitle(p)}</h2><label>Durée<span class="unitbox"><input type="number" min="5" max="120" step="5" value="${p.minutes}" data-change="cpPartMin" data-i="${i}"><em>min</em></span></label><p class="tiny muted">Les exercices sont choisis par l’app selon ton matériel.</p><button class="btn pri" data-act="closeSheet">OK</button></div>`);
     return;
@@ -325,6 +373,7 @@ CHG.cpPartMin = (el) => upd(Number(el.dataset.i), (p) => { p.minutes = Math.max(
 CHG.cpPartLv = (el) => upd(Number(el.dataset.i), (p) => { const levels = levelsOf(p.kind), sys = sysOf(p.kind), [lo, hi] = partRange(p, levels, sys ? knownMax(ctx(), sys, p.kind) : null); p.from ??= lo; p.to ??= hi; p[el.dataset.k] = Number(el.value); });
 ACT.cpPartAuto = (el) => upd(Number(el.dataset.i), (p) => { delete p.from; delete p.to; });
 ACT.cpPartStyle = (el) => upd(Number(el.dataset.i), (p) => { const id = el.dataset.id, s = p.styles || []; p.styles = s.includes(id) ? s.filter((x) => x !== id) : [...s, id]; });
+CHG.cpPartMove = (el) => upd(Number(el.dataset.i), (p) => { p.move = el.value; });
 CHG.cpPartAdapt = (el) => upd(Number(el.dataset.i), (p) => { p.adapt = el.checked; });
 export const climbPlanResult = () => S.cp?.result || null;
 void raw;

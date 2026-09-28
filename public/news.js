@@ -118,6 +118,10 @@ export const NEWS = [
     ['profile', 'goals', '.setsec', '🏆 Objectifs réussis', 'Un bouton « J’ai réussi » enregistre la perf dans ton profil et propose la suite. Tout est rangé par section, sans onglets.'],
     ['settings', 'notifs', '.card', '🔔 Notifications', 'Si tu ne reçois plus les nouveautés : « 🩺 Vérifier cet appareil » répare l’abonnement.'],
   ] },
+  { v: '8.24.0', date: '2026-10-11', title: 'Tous les sports comme l’escalade', why: 'Course, natation, muscu, renfo : choisis ton sport et une performance à atteindre (10 km en 50 min, 100 kg au squat, 15 tractions…). La séance se construit comme pour une cotation : échauffement, montée, travail à l’allure ou à la charge visée, retour au calme. Chaque partie a ses structures au choix (fractionné, seuil, 5×5, EMOM…). Et tout se lit sans rien de caché, même sur un petit téléphone.', steps: [
+    ['library', 'climbplan', '.steps', '🎯 Atteindre une performance', 'À l’étape « Pour quoi ? », choisis « Atteindre une performance » et écris ta cible : allures et charges sont calculées depuis tes perfs notées.'],
+    ['profile', 'goals', '.kicker', '📋 Objectifs en liste', 'Plus de rangée d’onglets : tes objectifs en cours, puis les réussis et les archivés, rangés en rubriques.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

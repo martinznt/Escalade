@@ -162,9 +162,6 @@ html[data-mode=light] .card{box-shadow:0 1px 2px #0000000d,0 6px 20px #0000000a;
 .card.flat{background:var(--card2);animation:none}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .wrap>*:nth-child(2){animation-delay:.03s}.wrap>*:nth-child(3){animation-delay:.06s}.wrap>*:nth-child(4){animation-delay:.09s}.wrap>*:nth-child(5){animation-delay:.12s}
-/* Textes d'explication : 2 lignes, un toucher pour tout lire */
-.card p.tiny.muted,.card p.small.muted{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
-.card p.tiny.muted.x,.card p.small.muted.x{-webkit-line-clamp:unset;display:block}
 .btn{border-radius:999px;padding:10px 18px;font-weight:700;transition:transform .12s,box-shadow .2s,background .2s}
 .btn.pri{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 88%,#fff),var(--accent));box-shadow:0 6px 18px var(--glow)}
 .btn.big{min-height:58px;font-size:1.1rem}
@@ -596,4 +593,12 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 .chipin{min-width:0;width:auto;flex:1 1 140px;max-width:220px;border-radius:999px;padding:8px 12px;min-height:38px;font-size:.9rem}
 .hints{display:grid;gap:6px;margin:0 0 12px}.hint{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;background:var(--card);border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--line));font-size:.88rem}
 .hint .linkish{display:block;line-height:1.35}.hint{padding:6px 8px}
-.whereami{margin:6px 0 10px;align-items:center}
+.whereami{margin:6px 0 10px;align-items:center;grid-column:1/-1}.whereami .chip{max-width:100%;overflow-wrap:anywhere}
+
+/* Barre du haut : un mot sous les symboles pas évidents ; synchro visible seulement quand il y a quelque chose à dire. */
+.topicons .ti.lbl{width:auto;min-width:38px;padding:0 5px;grid-template-rows:auto auto;gap:0;align-content:center}
+.topicons .ti.lbl span{font-size:.95rem;line-height:1}.topicons .ti.lbl small{font-size:.56rem;line-height:1.1;color:var(--muted);font-weight:700;white-space:nowrap}
+.syncbadge.ok,.syncbadge.idle{display:none}
+@media (max-width:360px){.topicons{gap:2px;margin-right:2px}.topicons .ti{width:34px;height:36px}.brand .bt{display:none}}
+.cpart>*{min-width:0}
+.nowrap{white-space:nowrap}
