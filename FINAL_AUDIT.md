@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.21.0
+# FINAL_AUDIT — Séances entraînement v8.22.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -877,3 +877,39 @@ Nouvelle page : Bibliothèque › « 🧗 Structurer ma séance d'escalade ». E
 - E2E :
   - mise en page : Quitter (rien ne change), Aperçu, Enregistrer ;
   - idée avec l'endroit : B change de page, vise un titre et l'envoie ; l'admin y va, modifie le texte pour tout le monde et le valide ; B voit le nouveau texte.
+
+## Évolution 8.22.0 : trois niveaux d'aide pour créer une séance
+
+Dans Bibliothèque › Structurer ma séance, on choisit d'abord **comment** créer la séance. Le point de départ (objectif, parties, surprise) reste au choix. Code : `public/guide.js` (sans DOM, testé), `climbplan.js` et `views-climbplan.js`.
+
+**🤖 L'app choisit tout**
+- La séance complète est proposée.
+- Ensuite, chaque partie a sa **durée réglable** (la séance se reconstruit) et un bouton **« 🧭 Options »** pour changer les exercices, ou la structure pour la grimpe.
+
+**🧭 L'app me guide**
+- Pour chaque partie (repliée, sauf celle en cours), 3 options sont cochées d'office (« conseillé »), avec « Voir toutes les options ».
+- Pour chaque option :
+  - ce qu'elle travaille ;
+  - au plus 2 conseils : « à faire en premier, ça demande d'être frais », « si tu prends aussi X, fais celui-ci avant », « si tu veux plus de force des doigts, prends plutôt Y », « tes doigts ont déjà travaillé : très léger aujourd'hui ».
+- « Je veux plus de… » (force des doigts, résistance…) reclasse les options.
+- Un rappel par partie (ex. doigts : seulement après un échauffement des doigts).
+- L'**ordre conseillé** est appliqué (le plus exigeant d'abord), avec des remarques (deux exercices très durs pour les doigts, tout sur le même travail…).
+- Pour la grimpe, les options sont les structures (blocs max, pyramide, 4×4…), avec ce qu'elles travaillent et où les placer dans la séance.
+
+**✋ Je compose moi-même** : rien n'est imposé. Chaque partie commence vide et on choisit dans la liste de la partie, ou dans tout le catalogue, avec une recherche.
+
+**Nouvelles parties** : 🖐️ Doigts, ⚡ Puissance, 🎯 Technique, 🔋 Endurance, 🛡️ Prévention.
+
+**Assemblage**
+- Le temps de la partie est partagé entre les exercices choisis.
+- Les séries sont calculées avec le repos, et plafonnées pour les exercices intenses (ex. suspensions max : 5 séries au plus).
+- Plusieurs structures de grimpe choisies se partagent le temps de la partie.
+
+**Dans toute séance enregistrée**
+- Chaque partie a « 🧭 Options » : l'ordre conseillé (avec « ↕️ Mettre dans l'ordre conseillé ») et d'autres exercices proches, du même rôle et compatibles avec le matériel, à ajouter d'un toucher.
+
+**Correctif** : la barre « Touche l'endroit à changer » (idées) cachait le haut de la page. Elle est maintenant en bas, au-dessus des onglets.
+
+**Tests**
+- Nouveau fichier `guide.test.mjs` (6 tests) : options et matériel, conseils, « je veux plus de », ordre, assemblage et temps, exercices proches.
+- E2E : les trois niveaux d'aide, la durée d'une partie modifiée, un choix dans les options, et 🧭 dans une séance enregistrée.

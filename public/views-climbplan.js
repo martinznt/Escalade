@@ -1,10 +1,15 @@
 // views-climbplan.js — « Structurer ma séance d'escalade » : par objectif de fin de séance, ou partie par partie.
 import { h, raw, chip, openSheet, closeSheet, toast } from './ui.js';
-import { S, ACT, CHG, ctx, render, go, saveSeance, ls } from './state.js';
+import { S, ACT, CHG, INPUT, ctx, render, go, saveSeance, ls } from './state.js';
 import { sortedLevels } from './grading.js';
-import { INTENSITY, CLIMB_PARTS, STRUCTURES, proposals, partRange, pickSystem, knownMax, priorLoad, adaptPart, buildFromParts, goalParts, goalAdvice } from './climbplan.js';
+import { INTENSITY, CLIMB_PARTS, STRUCTURES, STRUCT_TIPS, STRUCT_WHEN, proposals, partRange, pickSystem, knownMax, priorLoad, adaptPart, buildFromParts, goalParts, goalAdvice, partLabel } from './climbplan.js';
+import { partOptions, orderAdvice, poolFor, PART_NOTES, POOLS } from './guide.js';
+import { availableEquipment } from './brain.js';
+import { CAPACITIES } from './model.js';
+import { exerciseSheet } from './views-library.js';
+import { byId } from './library.js';
 import { startPlayer } from './player.js';
-import { surprise, AIMS } from './surprise.js';
+import { surprise, surpriseClimbParts, AIMS } from './surprise.js';
 import { ACTIVITIES } from './model.js';
 import { sessionMinutes } from './engine.js';
 
@@ -15,7 +20,7 @@ const DEFAULT_PARTS = [
   { type: 'cool', minutes: 10 },
 ];
 const CP = () => (S.cp ||= { mode: 'goal', kind: 'bloc', envId: '', sys: {}, target: null, styles: [], minutes: 120, parts: DEFAULT_PARTS.map((p) => ({ ...p })), result: null, ...(ls.get(KEY, {}) || {}), result: null, reasons: [] });
-const keep = () => { const { result, reasons, aimDone, ...rest } = CP(); ls.set(KEY, rest); };
+const keep = () => { const { result, reasons, aimDone, built, bopts, ...rest } = CP(); ls.set(KEY, rest); };
 const climbStyles = () => Object.values(ctx().styles || {}).filter((s) => !s.archived && (s.activity === 'climbing' || !s.activity));
 const systemsFor = (kind) => Object.values(ctx().systems || {}).filter((s) => s.activity === kind && s.levels?.length);
 const sysOf = (kind) => { const c = CP(), all = ctx().systems || {}; return all[c.sys?.[kind]] || pickSystem(ctx(), kind, c.envId); };
@@ -31,8 +36,11 @@ export function vClimbPlan() {
   const c = CP(), x = ctx();
   const mode = h`<div class="setmenu">${[['goal', '🎯', 'J’ai un objectif de fin de séance', 'Ex. « à la fin, avoir réussi un U8 en dévers-réglettes » : l’app construit tout.'], ['parts', '🧩', 'Je structure moi-même', 'Tes parties, leur durée, bloc ou voie, l’intensité, les cotations et les styles.'], ['surprise', '🎲', 'Surprends-moi', 'Donne juste ce que tu veux (ou rien) : quelque chose de nouveau, ou qui te fait progresser.']]
     .map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpMode" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${c.mode === k ? '✓' : ''}</span></button>`)}</div>`;
+  const HELP = { auto: ['🤖', 'L’app choisit tout', 'Une séance complète ; ensuite tu peux changer le temps et les exercices de chaque partie.'], guide: ['🧭', 'L’app me guide', 'Pour chaque partie, plusieurs exercices expliqués et l’ordre conseillé : tu choisis.'], free: ['✋', 'Je compose moi-même', 'Tes parties, tes exercices, dans tout le catalogue. Rien d’imposé.'] };
+  const help = h`<span class="kicker">Comment veux-tu la créer ?</span><div class="chips">${Object.entries(HELP).map(([k, [e, l]]) => chip((c.help || 'auto') === k, `${e} ${l}`, `data-act="cpHelp" data-id="${k}"`))}</div><p class="tiny muted">${HELP[c.help || 'auto'][2]}</p>`;
   const place = h`<label>Lieu<select data-change="cpEnv"><option value="">${x.defEnv ? 'Par défaut : ' + x.defEnv.name : '—'}</option>${x.envs.map((e) => h`<option value="${e.id}" ${c.envId === e.id ? 'selected' : ''}>${e.name}</option>`)}</select></label>`;
-  return h`${mode}<div class="card">${place}</div>${c.mode === 'goal' ? vGoal() : c.mode === 'surprise' ? vSurprise() : vParts()}${c.result ? vResult() : ''}`;
+  const free = c.help === 'free';
+  return h`<div class="card">${help}</div>${free ? '' : h`<span class="kicker">Point de départ</span>${mode}`}<div class="card">${place}</div>${free ? vParts() : c.mode === 'goal' ? vGoal() : c.mode === 'surprise' ? vSurprise() : vParts()}${c.result ? vResult() : ''}`;
 }
 function vGoal() {
   const c = CP(), levels = levelsOf(c.kind), sys = sysOf(c.kind), max = sys ? knownMax(ctx(), sys, c.kind) : null;
@@ -90,21 +98,89 @@ ACT.spGo = (el) => {
   const sport = o.sport || (Object.keys(ctx().activities).find((id) => id.startsWith('climbing_')) === 'climbing_route' ? 'voie' : Object.keys(ctx().activities).some((id) => id.startsWith('climbing_')) ? 'bloc' : Object.keys(ctx().activities)[0] || 'conditioning');
   const minutes = o.minutes || (sport === 'bloc' || sport === 'voie' ? 90 : ctx().settings?.defaultMinutes || 45);
   const opts = { ...(sport === 'bloc' || sport === 'voie' ? { kind: sport } : { activityId: sport }), minutes, forme: o.forme || 'normal', aim: o.aim || 'any', envId: c.envId, seed: o.seed || 1 };
-  try { const r = surprise(opts, ctx()); c.result = r.session; c.reasons = r.reasons; c.aimDone = r.aim; }
-  catch (e) { toast('Impossible de préparer la surprise : ' + e.message, 4500, 'bad'); return; }
-  keep(); render(); setTimeout(() => document.getElementById('cpresult')?.scrollIntoView({ behavior: 'smooth' }), 50);
+  try {
+    if (opts.kind) { const p = surpriseClimbParts(opts, ctx()); c.reasons = p.reasons; c.aimDone = p.aim; keep(); startBuild(p.parts, { systems: p.system ? { [p.kind]: p.system } : undefined, envId: c.envId, name: p.name, goal: p.goal, seed: opts.seed }); return; }
+    const r = surprise(opts, ctx()); c.built = null; c.result = r.session; c.reasons = r.reasons; c.aimDone = r.aim;
+  } catch (e) { toast('Impossible de préparer la surprise : ' + e.message, 4500, 'bad'); return; }
+  keep(); render(); scrollRes();
 };
+/* ───────── Options d'une partie : guidé (conseillé + expliqué) ou libre (tout le catalogue) ───────── */
+const eqNow = () => availableEquipment(ctx(), CP().envId);
+function currentPick(i) {
+  const c = CP(), p = c.built[i]; if (p.pick) return p.pick;
+  const label = partLabel(p, i, c.built), ex = (c.result?.exercises || []).filter((e) => e.part === label);
+  return p.type === 'climb' ? [...new Set(ex.map((e) => /^cp-(\w+)$/.exec(e.group || '')?.[1]).filter(Boolean))] : [...new Set(ex.map((e) => e.libId).filter(Boolean))];
+}
+function optionsFor(i, free) {
+  const c = CP(), p = c.built[i];
+  if (p.type === 'climb') return proposals(p.kind === 'voie' ? 'voie' : 'bloc', p.intensity).map((x) => ({ id: x.id, name: `${x.emoji} ${x.name}`, works: STRUCT_TIPS[x.id] || [], what: x.desc, tips: [STRUCT_WHEN[x.id], x.fit ? '' : 'Moins adapté à l’intensité choisie.'].filter(Boolean), recommended: x.fit, struct: true }));
+  if (free) {
+    const q = String(c.q?.[i] || '').toLowerCase(), all = !!c.freeAll?.[i];
+    return poolFor(POOLS[p.type] ? p.type : null, { eq: eqNow(), all }).filter((x) => !q || x.name.toLowerCase().includes(q)).slice(0, 40)
+      .map((x) => ({ id: x.id, name: `${x.emoji} ${x.name}`, works: Object.entries(x.caps || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => CAPACITIES[k]?.label?.toLowerCase() || k), what: '', tips: [] }));
+  }
+  return partOptions(p, { eq: eqNow(), fingersTired: priorLoad(c.built, i).fingers >= 40, want: c.want?.[i] }).map((o) => ({ ...o, name: `${o.lib.emoji} ${o.lib.name}` }));
+}
+function optionRows(i, free, max = 0) {
+  const pick = currentPick(i), c = CP(), p = c.built[i];
+  let all = optionsFor(i, free); const total = all.length;
+  if (max) all = [...all.filter((o) => pick.includes(o.id)), ...all.filter((o) => !pick.includes(o.id))].slice(0, Math.max(max, pick.length));
+  const rows = all.map((o) => { const on = pick.includes(o.id);
+    return h`<div class="optrow ${on ? 'on' : ''}"><button class="ck" data-act="cpPick" data-i="${i}" data-id="${o.id}" aria-pressed="${on}" aria-label="Choisir">${on ? '✓' : ''}</button>
+      <button class="linkish grow" data-act="cpPick" data-i="${i}" data-id="${o.id}"><b>${o.name}</b>${o.recommended && !free ? h` <span class="tag ok">conseillé</span>` : ''}${o.works.length ? h`<small>Travaille : ${o.works.join(', ')}</small>` : ''}${o.what && o.struct ? h`<small>${o.what}</small>` : ''}${o.tips.map((t) => h`<small class="tip">💡 ${t}</small>`)}</button>
+      ${o.struct ? '' : h`<button class="btn sm ic" data-act="cpOptInfo" data-id="${o.id}" data-i="${i}" aria-label="C’est quoi ?">ⓘ</button>`}</div>`; });
+  const adv = p.type !== 'climb' && pick.length > 1 ? orderAdvice(pick).notes : [];
+  return h`${adv.map((n) => h`<p class="tiny acc-t">↳ ${n}</p>`)}<div class="optlist">${rows.length ? rows : h`<p class="tiny muted">Aucun exercice avec ce filtre.</p>`}</div>${max && total > rows.length ? h`<button class="btn sm ghost" data-act="cpOpts" data-i="${i}">Voir toutes les options (${total})</button>` : ''}`;
+}
+function wantChips(i) {
+  const c = CP(), p = c.built[i], caps = Object.keys(POOLS[p.type]?.caps || {}); if (p.type === 'climb' || caps.length < 2) return '';
+  return h`<div class="chips tight"><span class="tiny muted">Je veux plus de :</span>${caps.slice(0, 4).map((k) => chip(c.want?.[i] === k, CAPACITIES[k]?.label || k, `data-act="cpWant" data-i="${i}" data-id="${k}"`))}</div>`;
+}
+function guideList(i) {
+  const p = CP().built[i];
+  const open = (CP().gOpen ?? 0) === i;
+  return h`<details class="guide how mini" ${open ? 'open' : ''} data-i="${i}"><summary>🧭 Choisir : options conseillées et pourquoi</summary>${PART_NOTES[p.type] ? h`<p class="tiny muted">ℹ️ ${PART_NOTES[p.type]}</p>` : ''}${optionRows(i, false, 3)}</details>`;
+}
+function optsSheet(i) {
+  const c = CP(), p = c.built[i], free = c.help === 'free'; if (!p) return; S.cpSheet = i;
+  openSheet(h`<div class="stack"><h2 style="margin:0">${partLabel(p, i, c.built)}</h2>
+    ${free && p.type !== 'climb' ? h`<input type="search" data-input="cpQ" data-i="${i}" value="${c.q?.[i] || ''}" placeholder="🔍 Chercher un exercice" aria-label="Chercher un exercice">
+      ${POOLS[p.type] ? h`<label class="row"><input type="checkbox" data-change="cpAll" data-i="${i}" ${c.freeAll?.[i] ? 'checked' : ''}><span class="small">Voir tout le catalogue (pas seulement « ${CLIMB_PARTS[p.type]?.[1] || p.type} »)</span></label>` : ''}`
+      : h`${PART_NOTES[p.type] ? h`<p class="tiny muted">ℹ️ ${PART_NOTES[p.type]}</p>` : ''}${wantChips(i)}`}
+    ${optionRows(i, free)}<button class="btn pri" data-act="cpOptsDone">OK</button></div>`, { wide: true });
+}
+ACT.cpOpts = (el) => optsSheet(Number(el.dataset.i));
+ACT.cpOptsDone = () => { S.cpSheet = null; closeSheet(); };
+const reopen = () => { if (S.cpSheet != null && document.querySelector('#sheet.open, .sheet.open, #sheet')) optsSheet(S.cpSheet); };
+ACT.cpPick = (el) => {
+  const c = CP(), i = Number(el.dataset.i), p = c.built?.[i]; if (!p) return;
+  c.gOpen = i; const cur = currentPick(i), id = el.dataset.id; p.pick = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+  rebuild(); render(); reopen();
+};
+ACT.cpWant = (el) => { const c = CP(), i = Number(el.dataset.i); c.want = { ...(c.want || {}), [i]: c.want?.[i] === el.dataset.id ? '' : el.dataset.id }; render(); reopen(); };
+INPUT.cpQ = (el) => { const c = CP(), i = Number(el.dataset.i); c.q = { ...(c.q || {}), [i]: el.value }; const pos = el.selectionStart; setTimeout(() => { optsSheet(i); const x = document.querySelector('#sheet input[data-input=cpQ]'); if (x) { x.focus(); try { x.setSelectionRange(pos, pos); } catch { /* rien */ } } }, 200); };
+CHG.cpAll = (el) => { const c = CP(), i = Number(el.dataset.i); c.freeAll = { ...(c.freeAll || {}), [i]: el.checked }; optsSheet(i); };
+CHG.cpBMin = (el) => { const c = CP(), p = c.built?.[Number(el.dataset.i)]; if (!p) return; p.minutes = Math.max(5, Math.min(180, Number(el.value) || p.minutes)); rebuild(); render(); };
+ACT.cpHelp = (el) => { const c = CP(); c.help = el.dataset.id; if (c.help === 'free') c.mode = 'parts'; c.result = null; c.built = null; keep(); render(); };
+ACT.cpExInfo = (el) => { const s = CP().result, e = s?.exercises.find((x) => x.id === el.dataset.id); if (e) openSheet(exerciseSheet(e, '', s)); };
+ACT.cpOptInfo = (el) => { const x = byId(el.dataset.id); if (x) openSheet(exerciseSheet({ ...x, libId: x.id }, h`<button class="btn" data-act="cpOpts" data-i="${el.dataset.i}">‹ Retour aux options</button>`), { wide: true }); };
 function rangeText(p) {
   const levels = levelsOf(p.kind), sys = sysOf(p.kind), [lo, hi] = partRange(p, levels, sys ? knownMax(ctx(), sys, p.kind) : null);
   const a = levels[lo]?.label, b = levels[hi]?.label; return a ? (a === b ? a : `${a}–${b}`) + (p.from == null ? ' (auto)' : '') : '';
 }
 function vResult() {
-  const s = CP().result, parts = [...new Set(s.exercises.map((e) => e.part))];
-  const c = CP(), sp = c.mode === 'surprise' && c.reasons?.length;
+  const c = CP(), s = c.result, sp = c.mode === 'surprise' && c.reasons?.length && c.help !== 'free', help = c.help || 'auto';
+  const exLi = (e) => h`<li><button class="linkish" data-act="cpExInfo" data-id="${e.id}"><b>${e.name}</b> <span class="tiny muted">ⓘ</span></button>${e.sets > 1 ? ` × ${e.sets}` : ''}${e.note ? h`<div class="tiny muted">${e.note}</div>` : ''}</li>`;
+  const byPart = c.built ? c.built.map((p, i) => ({ p, i, label: partLabel(p, i, c.built) })) : [...new Set(s.exercises.map((e) => e.part))].map((label) => ({ p: null, i: -1, label }));
   return h`<div class="card stack" id="cpresult"><h2 style="margin:0">${s.emoji} ${s.name}</h2>
-    ${sp ? h`<div class="card flat acc-b"><b class="small">${AIMS[c.aimDone]?.[0] || '🎲'} Pourquoi cette surprise</b><ul class="clean tight small">${c.reasons.map((r) => h`<li>${r}</li>`)}</ul></div>` : ''}<p class="muted small">~${fmtMin(sessionMinutes(s))} · ${parts.length} parties · rien n’est enregistré tant que tu ne le demandes pas</p>
-    ${parts.map((p) => h`<div class="blockhead">${p}</div><ul class="clean tight small">${s.exercises.filter((e) => e.part === p).map((e) => h`<li><b>${e.name}</b>${e.sets > 1 ? ` × ${e.sets}` : ''}${e.note ? h`<div class="tiny muted">${e.note}</div>` : ''}</li>`)}</ul>`)}
-    <div class="grid2"><button class="btn pri big" data-act="cpPlay">▶ Lancer</button><button class="btn big" data-act="cpSave">💾 Enregistrer</button></div>
+    ${sp ? h`<div class="card flat acc-b"><b class="small">${AIMS[c.aimDone]?.[0] || '🎲'} Pourquoi cette surprise</b><ul class="clean tight small">${c.reasons.map((r) => h`<li>${r}</li>`)}</ul></div>` : ''}
+    <p class="muted small">~${fmtMin(sessionMinutes(s))} · ${byPart.length} parties · ${help === 'guide' ? 'coche ce que tu veux dans chaque partie' : help === 'free' ? 'ajoute tes exercices dans chaque partie' : 'change le temps ou les exercices de chaque partie si tu veux'}</p>
+    ${byPart.map(({ p, i, label }) => { const ex = s.exercises.filter((e) => e.part === label);
+      return h`<div class="rpart"><div class="row"><b class="grow">${label}</b>${p ? h`<span class="unitbox"><input type="number" min="5" max="180" step="5" value="${p.minutes}" data-change="cpBMin" data-i="${i}" style="width:64px" aria-label="Durée de la partie"><em>min</em></span>` : ''}</div>
+        ${ex.length ? h`<ul class="clean tight small">${ex.map(exLi)}</ul>` : h`<p class="tiny muted">Rien pour l’instant.</p>`}
+        ${p && help === 'guide' ? guideList(i) : p ? h`<button class="btn sm" data-act="cpOpts" data-i="${i}">${help === 'free' ? '＋ Choisir les exercices' : '🧭 Options'}</button>` : ''}</div>`; })}
+    ${c.built ? '' : h`<p class="tiny muted">Enregistre-la pour changer chaque partie (🧭 dans la séance).</p>`}
+    <div class="grid2"><button class="btn pri big" data-act="cpPlay" ${s.exercises.length ? '' : 'disabled'}>▶ Lancer</button><button class="btn big" data-act="cpSave" ${s.exercises.length ? '' : 'disabled'}>💾 Enregistrer</button></div>
     ${sp ? h`<button class="btn" data-act="spGo" data-again="1">🔁 Une autre surprise</button>` : ''}</div>`;
 }
 
@@ -120,17 +196,25 @@ CHG.cpWarm = (el) => { CP().warm = el.value === '' ? null : Number(el.value); ke
 CHG.cpStretch = (el) => { CP().stretch = Number(el.value) || 0; keep(); render(); };
 ACT.cpMin = (el) => { CP().minutes = Number(el.dataset.id); keep(); render(); };
 CHG.cpMinIn = (el) => { CP().minutes = Math.max(40, Math.min(240, Number(el.value) || 120)); keep(); render(); };
+const scrollRes = () => setTimeout(() => document.getElementById('cpresult')?.scrollIntoView({ behavior: 'smooth' }), 50);
+/** (Re)construit la séance à partir des parties retenues : chaque réglage de partie (temps, exercices) la reconstruit. */
+function rebuild() {
+  const c = CP(); if (!c.built) return;
+  let s = buildFromParts(c.built, ctx(), { ...c.bopts, free: c.help === 'free' });
+  if (c.mode === 'surprise' && c.reasons?.length && c.help !== 'free') s = { ...s, emoji: '🎲', notes: [{ title: 'Pourquoi cette surprise', text: c.reasons.join('\n') }, ...s.notes] };
+  c.result = s;
+}
+function startBuild(parts, bopts) { const c = CP(); c.built = parts.map((p) => ({ ...p, styles: [...(p.styles || [])] })); c.bopts = bopts; rebuild(); render(); scrollRes(); }
 ACT.cpGoalGo = (el) => {
   const c = CP(), levels = levelsOf(c.kind), t = Number(el.dataset.t), names = c.styles.map((id) => ctx().styles[id]?.label?.toLowerCase() || id);
   const goal = `Réussir ${c.kind === 'voie' ? 'une voie' : 'un bloc'} ${levels[t]?.label}${names.length ? ` en ${names.join(', ')}` : ''}.`;
-  const parts = goalParts({ kind: c.kind, target: t, levels, styles: c.styles, minutes: c.minutes, warm: c.warm, stretch: c.stretch || 0 });
-  c.result = buildFromParts(parts, ctx(), { systems: { [c.kind]: sysOf(c.kind) }, envId: c.envId, goal, name: `Objectif ${levels[t]?.label}${names.length ? ' · ' + names.join(', ') : ''}` });
-  render(); setTimeout(() => document.getElementById('cpresult')?.scrollIntoView({ behavior: 'smooth' }), 50);
+  c.reasons = [];
+  startBuild(goalParts({ kind: c.kind, target: t, levels, styles: c.styles, minutes: c.minutes, warm: c.warm, stretch: c.stretch || 0 }), { systems: { [c.kind]: sysOf(c.kind) }, envId: c.envId, goal, name: `Objectif ${levels[t]?.label}${names.length ? ' · ' + names.join(', ') : ''}` });
 };
 ACT.cpPartsGo = () => {
   const c = CP(); if (!c.parts.length) { toast('Ajoute au moins une partie.'); return; }
-  c.result = buildFromParts(c.parts, ctx(), { systems: { bloc: sysOf('bloc'), voie: sysOf('voie') }, envId: c.envId, name: c.parts.filter((p) => p.type === 'climb').map(partTitle).join(' + ').replace(/[🪨🧗] /gu, '') || 'Ma séance d’escalade' });
-  render(); setTimeout(() => document.getElementById('cpresult')?.scrollIntoView({ behavior: 'smooth' }), 50);
+  c.reasons = [];
+  startBuild(c.parts, { systems: { bloc: sysOf('bloc'), voie: sysOf('voie') }, envId: c.envId, name: c.parts.filter((p) => p.type === 'climb').map(partTitle).join(' + ').replace(/[🪨🧗] /gu, '') || 'Ma séance' });
 };
 ACT.cpPlay = () => { const s = CP().result; if (s) startPlayer(s, { fromGenerator: true }); };
 ACT.cpSave = () => { const s = CP().result; if (!s) return; const n = saveSeance(s); CP().result = null; toast('Enregistrée dans Mes séances'); go('library', 'seance', n.id); };

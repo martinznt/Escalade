@@ -575,6 +575,12 @@ body.textedit #main :is(h1,h2,h3,b,p,small,span,summary,button,label,li){cursor:
 .cpart{padding:10px 0;border-bottom:1px solid var(--line);display:grid;gap:6px}.cpart:last-of-type{border-bottom:0}.cpart .cpbtns{justify-content:flex-end}
 .setrow.dim{opacity:.6}
 .editdock.top{position:sticky;top:calc(60px + env(safe-area-inset-top));bottom:auto;margin-bottom:12px;align-items:center}
-#pickbar,#propbar{position:fixed;left:12px;right:12px;top:calc(62px + env(safe-area-inset-top));z-index:25;display:flex;gap:8px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--accent);box-shadow:var(--shadow);max-width:640px;margin:0 auto;font-size:.9rem}
+#pickbar,#propbar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:25;display:flex;gap:8px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--accent);box-shadow:var(--shadow);max-width:640px;margin:0 auto;font-size:.9rem}
 #pickbar .grow,#propbar .grow{min-width:0;overflow:hidden;text-overflow:ellipsis}
 body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)!important;outline-offset:3px;border-radius:10px}
+.rpart{padding:10px 0;border-bottom:1px solid var(--line);display:grid;gap:6px}.rpart:last-of-type{border-bottom:0}
+.optlist{display:grid;gap:6px}.optrow{display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.optrow.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}.optrow .linkish{display:grid;gap:2px;min-width:0}.optrow small{color:var(--muted);font-size:.78rem}.optrow small.tip{color:var(--text)}
+.optrow .ck{flex:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:none;color:var(--bg);font-weight:800;cursor:pointer;display:grid;place-items:center}.optrow.on .ck{background:var(--accent);border-color:var(--accent)}
+.guide{display:grid;gap:6px}.chips.tight{gap:6px;align-items:center}
+.optrow .tag{justify-self:start}

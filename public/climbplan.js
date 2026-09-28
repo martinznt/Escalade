@@ -6,12 +6,25 @@ import { sortedLevels, bestReferenceLevel, fromReference, REFERENCE } from './gr
 import { normalizeEx, normalizeSession, uid } from './shared.js';
 import { sessionMinutes } from './engine.js';
 import * as G from './generator.js';
+import { partOptions, buildPicked, GUIDE_PARTS } from './guide.js';
+import { availableEquipment } from './brain.js';
 
 export const INTENSITY = { easy: ['🌿', 'Tranquille'], mod: ['🙂', 'Modéré'], hard: ['🔥', 'Intense'], max: ['🚀', 'Max'] };
 /** Types de parties : grimpe (bloc ou voie) ou parties du corps (échauffement, renfo, étirements…) construites par le générateur. */
 export const CLIMB_PARTS = {
-  warmup: ['🔥', 'Échauffement'], climb: ['🧗', 'Grimpe'], strength: ['🏋️', 'Renforcement'], core: ['🧱', 'Gainage'],
+  warmup: ['🔥', 'Échauffement'], climb: ['🧗', 'Grimpe'], ...GUIDE_PARTS, strength: ['🏋️', 'Renforcement'], core: ['🧱', 'Gainage'],
   mobility: ['🤸', 'Mobilité'], stretch: ['🧘', 'Étirements'], cool: ['🌬️', 'Retour au calme'],
+};
+/** Conseils de place pour chaque structure de grimpe (mode guidé). */
+export const STRUCT_TIPS = {
+  limit: ['force des doigts', 'puissance'], max: ['force des doigts', 'résistance'], pyramid: ['progression en niveau', 'technique'], styles: ['polyvalence', 'technique'],
+  fourx4: ['endurance de puissance', 'résistance des avant-bras'], enchain: ['résistance', 'endurance'], volume: ['technique', 'endurance'], technique: ['placement', 'pieds'],
+};
+export const STRUCT_WHEN = {
+  limit: 'Tôt dans la séance, frais, juste après l’échauffement en grimpant.', max: 'Tôt dans la séance, frais, avec de longs repos.',
+  pyramid: 'Bien en début de partie : on monte en niveau progressivement.', styles: 'Au milieu de la séance, quand tu es chaud mais pas fatigué.',
+  fourx4: 'Plutôt en fin de séance : l’endurance fatigue tout le reste.', enchain: 'Plutôt en fin de séance : la résistance vient après la force.',
+  volume: 'Parfait pour s’échauffer ou récupérer après l’intense.', technique: 'En début de séance, ou fatigué pour garder la qualité.',
 };
 // Styles qui chargent surtout les doigts, ou la puissance.
 const FINGER = new Set(['st-reglettes', 'st-petites-prises', 'st-trous', 'st-plats', 'st-pinces']);
@@ -150,7 +163,7 @@ function bodyPart(p, ctx, act, label, seed) {
     return G.generateFromPlan(plan, ctx).session.exercises.map((e) => normalizeEx({ ...e, id: uid(), part: label }));
   } catch { return []; }
 }
-const partLabel = (p, i, parts) => {
+export const partLabel = (p, i, parts) => {
   if (p.label) return p.label;
   if (p.type !== 'climb') return `${CLIMB_PARTS[p.type]?.[0] || '•'} ${CLIMB_PARTS[p.type]?.[1] || p.type}`;
   const base = `${p.kind === 'voie' ? '🧗 Voie' : '🪨 Bloc'} ${INTENSITY[p.intensity]?.[1].toLowerCase() || ''}`.trim();
@@ -166,11 +179,21 @@ export function buildFromParts(parts, ctx, opts = {}) {
   const out = [], why = [], seed = opts.seed || 1;
   parts.forEach((p, i) => {
     const label = partLabel(p, i, parts);
-    if (p.type !== 'climb') { out.push(...bodyPart(p, ctx, 'climbing_boulder', label, seed + i)); return; }
+    if (p.type !== 'climb') {
+      // Choisis par l'utilisateur (guidé ou libre), sinon par l'app.
+      if (p.pick?.length) { out.push(...buildPicked(p, p.pick, label)); return; }
+      if (opts.free) return; // mode libre : rien d'imposé, l'utilisateur choisit
+      if (GUIDE_PARTS[p.type]) { const eq = availableEquipment(ctx, opts.envId), rec = partOptions(p, { eq, fingersTired: priorLoad(parts, i).fingers >= 40 }).filter((x) => x.recommended).map((x) => x.id); out.push(...buildPicked(p, rec, label)); return; }
+      out.push(...bodyPart(p, ctx, 'climbing_boulder', label, seed + i)); return;
+    }
     const sys = opts.systems?.[p.kind] || pickSystem(ctx, p.kind, opts.envId), levels = sortedLevels(sys);
     if (!levels.length) return;
-    const r = buildClimbPart(p, { levels, max: knownMax(ctx, sys, p.kind), styles: ctx.styles, load: priorLoad(parts, i), label });
-    why.push(...r.notes); out.push(...r.exercises);
+    const structs = p.pick?.length ? p.pick.filter((id) => STRUCTURES[p.kind === 'voie' ? 'voie' : 'bloc'][id]) : [p.structure || null];
+    const each = Math.max(5, Math.round(p.minutes / Math.max(1, structs.length)));
+    structs.forEach((st, k) => {
+      const r = buildClimbPart({ ...p, minutes: each, structure: st || undefined }, { levels, max: knownMax(ctx, sys, p.kind), styles: ctx.styles, load: priorLoad(parts, i), label });
+      if (!k) why.push(...r.notes); out.push(...r.exercises);
+    });
   });
   const acts = [...new Set(parts.filter((p) => p.type === 'climb').map((p) => (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder')))];
   const now = Date.now();

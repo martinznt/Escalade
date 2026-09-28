@@ -108,6 +108,10 @@ export const NEWS = [
     ['settings', 'main', '[data-act=ideaNew]', '📍 Montre l’endroit', 'Écris ton idée, puis « Choisir l’endroit à changer » et touche l’élément concerné.'],
     ['home', 'dash', '.topicons [data-act=layEdit]', '✏️ Personnaliser la page', 'Choisis ce qui s’affiche et dans quel ordre, regarde l’aperçu, puis enregistre ou quitte.'],
   ] },
+  { v: '8.22.0', date: '2026-10-09', title: 'Choisis combien l’app t’aide', why: 'Trois façons de créer ta séance : l’app choisit tout (et tu ajustes le temps et les exercices de chaque partie), l’app te guide (plusieurs exercices expliqués et l’ordre conseillé), ou tu composes toi-même.', steps: [
+    ['library', 'climbplan', '[data-act=cpHelp][data-id=guide]', '🧭 L’app me guide', 'Pour chaque partie : des exercices expliqués (ce qu’ils travaillent, où les placer, quoi prendre pour travailler plus une chose). Tu coches.'],
+    ['library', 'climbplan', '[data-act=cpHelp][data-id=free]', '✋ Je compose', 'Tes parties et tes exercices, dans tout le catalogue.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

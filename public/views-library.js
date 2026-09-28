@@ -8,6 +8,7 @@ import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, del
 import { cleanParts } from './format.js';
 import { vClimbPlan } from './views-climbplan.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
+import { orderAdvice, similarOptions } from './guide.js';
 import { exWhat, exUse, exWhyHere, sessionWhat, sessionUse, sessionWhy } from './explain.js';
 import { CATS, SORTS, FORMS, GROUPS, groupSessions, filterSessions, activeFilters, categoriesOf, autoCategories, sportsOf, placeOf, intensityOf, INTENSITY_LABEL } from './sfilter.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
@@ -243,7 +244,7 @@ export function blocksOf(s, mode) {
   // Séance au format choisi : les parties dans leur ordre (une même partie peut revenir plus loin).
   if (s.exercises.some((e) => e.part)) {
     let run = [];
-    const flush = () => { if (!run.length) return; const mins = Math.round(run.reduce((t, e) => t + exMinutes(e), 0)); out.push(h`<div class="blockhead">${run[0].part || BLOCKS[run[0].block]} · ~${mins} min</div>${run.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`); run = []; };
+    const flush = () => { if (!run.length) return; const mins = Math.round(run.reduce((t, e) => t + exMinutes(e), 0)); out.push(h`<div class="blockhead row"><span class="grow">${run[0].part || BLOCKS[run[0].block]} · ~${mins} min</span>${mode === 'edit' ? h`<button class="btn sm" data-act="partOpts" data-part="${run[0].part || ''}" data-block="${run[0].block}">🧭 Options</button>` : ''}</div>${run.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`); run = []; };
     for (const e of s.exercises) { if (run.length && (e.part || e.block) !== (run[0].part || run[0].block)) flush(); run.push(e); }
     flush();
     return out;
@@ -252,7 +253,7 @@ export function blocksOf(s, mode) {
     const list = s.exercises.filter((e) => e.block === b);
     if (!list.length) continue;
     const mins = Math.round(list.reduce((t, e) => t + exMinutes(e), 0));
-    out.push(h`<div class="blockhead">${BLOCKS[b]} · ~${mins} min</div>${list.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`);
+    out.push(h`<div class="blockhead row"><span class="grow">${BLOCKS[b]} · ~${mins} min</span>${mode === 'edit' ? h`<button class="btn sm" data-act="partOpts" data-part="" data-block="${b}">🧭 Options</button>` : ''}</div>${list.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`);
   }
   return out;
 }
@@ -312,6 +313,33 @@ SUBMIT.sAdapt = (f) => {
 const moveEx = (id, d) => edit((s) => { const i = s.exercises.findIndex((e) => e.id === id), j = i + d; if (i < 0 || j < 0 || j >= s.exercises.length) return s; const ex = s.exercises.slice(); [ex[i], ex[j]] = [ex[j], ex[i]]; if (ex[i].block !== ex[j].block) { const b = ex[i].block; ex[i] = { ...ex[i], block: ex[j].block }; ex[j] = { ...ex[j], block: b }; } return { ...s, exercises: ex }; });
 ACT.exUp = (el) => moveEx(el.dataset.id, -1); ACT.exDown = (el) => moveEx(el.dataset.id, 1);
 ACT.exDel = async (el) => { const e = editing(); const ex = e?.s.exercises.find((x) => x.id === el.dataset.id); if (!ex || !(await ask(`Retirer « ${ex.name} » de la séance ?`, { ok: 'Retirer', danger: true }))) return; edit((s) => ({ ...s, exercises: s.exercises.filter((x) => x.id !== ex.id) })); };
+/* 🧭 Options d'une partie d'une séance : l'ordre conseillé, et d'autres exercices proches à ajouter. */
+function partExercises(s, part, block) { return s.exercises.filter((e) => (part ? e.part === part : !e.part && e.block === block)); }
+function partOptsSheet(part, block) {
+  const e = editing(); if (!e) return; const list = partExercises(e.s, part, block);
+  const adv = orderAdvice(list.map((x) => x.libId).filter(Boolean)), opts = similarOptions(list, { eq: availableEquipment(ctx(), e.s.context?.env) });
+  openSheet(h`<div class="stack"><h2 style="margin:0">🧭 ${part || BLOCKS[block]}</h2>
+    ${adv.notes.length ? h`${adv.notes.map((n) => h`<p class="small acc-t">↳ ${n}</p>`)}<button class="btn sm" data-act="partReorder" data-part="${part}" data-block="${block}">↕️ Mettre dans l’ordre conseillé</button>` : h`<p class="small muted">L’ordre de cette partie est déjà bon.</p>`}
+    <span class="kicker">D’autres exercices qui vont bien ici</span>
+    <div class="optlist">${opts.length ? opts.map((o) => h`<div class="optrow"><span class="grow"><b>${o.lib.emoji} ${o.lib.name}</b><small>Travaille : ${o.works.join(', ')}</small><small class="tip">💡 ${o.tips[0]}</small></span>
+      <button class="btn sm ic" data-act="libInfoOpt" data-id="${o.id}" aria-label="C’est quoi ?">ⓘ</button><button class="btn sm pri" data-act="partAdd" data-id="${o.id}" data-part="${part}" data-block="${block}">＋</button></div>`) : h`<p class="tiny muted">Rien de plus à proposer avec ton matériel.</p>`}</div>
+    <button class="btn" data-act="closeSheet">Fermer</button></div>`, { wide: true });
+}
+ACT.partOpts = (el) => partOptsSheet(el.dataset.part, el.dataset.block);
+ACT.partAdd = (el) => {
+  const x = byId(el.dataset.id), part = el.dataset.part, block = el.dataset.block; if (!x) return;
+  edit((s) => { const list = partExercises(s, part, block), last = list.at(-1), at = last ? s.exercises.indexOf(last) + 1 : s.exercises.length;
+    const ex = normalizeEx({ ...x, id: uid(), libId: x.id, ok: x.cues, bad: x.bad, block: block || 'main', part }); const arr = [...s.exercises]; arr.splice(at, 0, ex); return { ...s, exercises: arr }; });
+  toast(`« ${x.name} » ajouté`); partOptsSheet(part, block);
+};
+ACT.partReorder = (el) => {
+  const part = el.dataset.part, block = el.dataset.block;
+  edit((s) => { const list = partExercises(s, part, block), order = orderAdvice(list.map((x) => x.libId).filter(Boolean)).order;
+    const sorted = [...list].sort((a, b) => (order.indexOf(a.libId) + 1 || 99) - (order.indexOf(b.libId) + 1 || 99)); let k = 0;
+    return { ...s, exercises: s.exercises.map((x) => (list.includes(x) ? sorted[k++] : x)) }; });
+  toast('Remis dans l’ordre conseillé'); partOptsSheet(part, block);
+};
+ACT.libInfoOpt = (el) => { const x = byId(el.dataset.id); if (x) openSheet(exerciseSheet({ ...x, libId: x.id }, h`<button class="btn" data-act="closeSheet">Fermer</button>`), { wide: true }); };
 ACT.exInfo = (el) => { const e = editing(), sh = S.shared.detail?.session; const ex = e?.s.exercises.find((x) => x.id === el.dataset.id); const ex2 = ex ? null : sh?.exercises?.find((x) => x.id === el.dataset.id); if (ex || ex2) openSheet(exerciseSheet(ex || ex2, '', ex ? e.s : normalizeSession(sh))); };
 ACT.sDup = (el) => { const s = getSeance(el.dataset.id); if (!s) return; const c = saveSeance({ ...s, id: uid(), name: s.name + ' (copie)', createdAt: 0, template: false, archived: false, exercises: s.exercises.map((e) => ({ ...e, id: uid() })) }); toast('Séance dupliquée'); go('library', 'seance', c.id); };
 ACT.sTemplate = (el) => { const s = getSeance(el.dataset.id); if (s) { saveSeance({ ...s, template: !s.template }); toast(s.template ? 'Retirée des modèles' : 'Enregistrée comme modèle'); render(); } };
