@@ -7,6 +7,7 @@ import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
 import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps } from './server/ai.js';
 import { estimateLevel } from './public/estimate.js';
+import { sessionMeta } from './public/sessionmeta.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server/global.js';
@@ -23,7 +24,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -495,7 +496,7 @@ async function routeAuthed(request, env, url, auth, secure) {
       await db(env, 'UPDATE users SET is_admin=? WHERE id=?', make ? 1 : 0, x[1]).run();
       return json({ ok: true, admin: make });
     }
-    if (p === '/api/admin/proposals' && m === 'GET') return json({ ok: true, proposals: ((await db(env, `SELECT p.id,p.kind,p.activity,p.label,p.detail,p.payload_json,p.status,p.reply,p.created_at,u.username FROM proposals p LEFT JOIN users u ON u.id=p.user_id WHERE p.status=? ORDER BY p.created_at DESC LIMIT 100`, url.searchParams.get('status') === 'done' ? 'done' : 'open').all()).results || []).map((r) => ({ ...r, payload: safeParse(r.payload_json) || {}, payload_json: undefined })) });
+    if (p === '/api/admin/proposals' && m === 'GET') return json({ ok: true, proposals: ((await db(env, `SELECT p.id,p.kind,p.activity,p.label,p.detail,p.payload_json,p.status,p.reply,p.created_at,p.reviewed_at,u.username,r.username AS reviewer FROM proposals p LEFT JOIN users u ON u.id=p.user_id LEFT JOIN users r ON r.id=p.reviewed_by WHERE p.status=? ORDER BY COALESCE(p.reviewed_at,p.created_at) DESC LIMIT 100`, url.searchParams.get('status') === 'done' ? 'done' : 'open').all()).results || []).map((r) => ({ ...r, payload: safeParse(r.payload_json) || {}, payload_json: undefined })) });
     if ((x = p.match(/^\/api\/admin\/proposals\/([\w-]{1,64})$/)) && m === 'POST') return proposalReview(request, env, u, x[1]);
     if ((x = p.match(/^\/api\/admin\/global\/(\w{1,20})\/([\w-]{1,64})$/))) {
       if (!GLOBAL_KINDS.includes(x[1])) return fail('Type inconnu.', 400);
@@ -871,6 +872,7 @@ async function personalEdit(request, env, u, id) {
 /* ═════════════ Séances partagées : bibliothèque commune et séances publiques ═════════════ */
 function sharedSummary(r, viewerId) {
   const data = safeParse(r.data_json) || {}, level = safeParse(r.level_json) || {};
+  if (!level.meta && (data.exercises || []).length) try { level.meta = sessionMeta(data); } catch (e) { console.error('métadonnées séance', r.id, e?.message); } // anciennes séances : calculées à la lecture
   const caps = {};
   for (const e of data.exercises || []) for (const [c, w] of Object.entries(e.caps || {})) caps[c] = Math.max(caps[c] || 0, w);
   const needs = [...new Set((data.exercises || []).flatMap((e) => e.needs || []))];
@@ -908,7 +910,7 @@ async function sharedCreate(request, env, u) {
   if (await limited(env, 'share:' + u.id, 30, DAY)) return fail('Trop de publications aujourd’hui. Réessaie demain.', 429);
   const count = await db(env, 'SELECT COUNT(*) c FROM shared_sessions WHERE owner_id=?', u.id).first();
   if (Number(count?.c) >= 300) return fail('Trop de séances publiées sur ce compte.', 413);
-  const level = estimateLevel(s), now = Date.now();
+  const level = { ...estimateLevel(s), meta: sessionMeta(s) }, now = Date.now();
   const r = await db(env, 'INSERT INTO shared_sessions(id,owner_id,scope,title,activity,data_json,level_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',
     id, u.id, scope, title, str(s.activity, 80), data, JSON.stringify(level), now, now).run();
   if (!r.meta?.changes) return fail('Identifiant déjà utilisé.', 409);
@@ -927,7 +929,7 @@ async function sharedEdit(request, env, u, id) {
   if (!s.exercises.length) return fail('Une séance publiée doit contenir au moins un exercice.');
   const title = str(b.title || s.name, 100) || 'Séance', data = JSON.stringify({ ...s, name: title });
   if (data.length > 150000) return fail('Séance trop volumineuse.', 413);
-  const level = estimateLevel(s), now = Math.max(Date.now(), cur.updated_at + 1);
+  const level = { ...estimateLevel(s), meta: sessionMeta(s) }, now = Math.max(Date.now(), cur.updated_at + 1);
   const r = await db(env, 'UPDATE shared_sessions SET title=?,activity=?,data_json=?,level_json=?,updated_at=? WHERE id=? AND updated_at=?', title, str(s.activity, 80), data, JSON.stringify(level), now, id, cur.updated_at).run();
   if (!r.meta?.changes) return fail('Cette séance a été modifiée entre-temps.', 409, { conflict: true });
   return json({ ok: true, level, updatedAt: now });
