@@ -5,17 +5,18 @@ import { SCHEMA, ADD_COLUMNS } from './schema.js';
 import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
-import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps } from './server/ai.js';
+import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, DEFAULT_MODEL as AI_MODEL } from './server/ai.js';
 import { estimateLevel } from './public/estimate.js';
 import { sessionMeta } from './public/sessionmeta.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server/global.js';
+import { cleanChange, diffState, diffChange, afterOf, runChecks, buildAdminDraft, cleanAdminDraft, buildLab, cleanLab, AI_KINDS } from './server/studio.js';
 import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo.js';
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.25.1';
+const APP_VERSION = '8.26.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -24,7 +25,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -493,11 +494,12 @@ async function routeAuthed(request, env, url, auth, secure) {
       const b = await readJson(request, 500), make = !!b?.admin;
       const t = await db(env, 'SELECT id FROM users WHERE id=?', x[1]).first(); if (!t) return fail('Compte introuvable.', 404);
       if (!make) { const n = await db(env, 'SELECT COUNT(*) c FROM users WHERE is_admin=1 AND id<>?', x[1]).first(); if (!Number(n?.c)) return fail('Il faut garder au moins un administrateur.', 409); }
-      await db(env, 'UPDATE users SET is_admin=? WHERE id=?', make ? 1 : 0, x[1]).run();
+      await env.DB.batch([db(env, 'UPDATE users SET is_admin=? WHERE id=?', make ? 1 : 0, x[1]), auditStmt(env, u, 'role', { type: 'user', id: x[1], after: { admin: make } })]);
       return json({ ok: true, admin: make });
     }
     if (p === '/api/admin/proposals' && m === 'GET') return json({ ok: true, proposals: ((await db(env, `SELECT p.id,p.kind,p.activity,p.label,p.detail,p.payload_json,p.status,p.reply,p.created_at,p.reviewed_at,u.username,r.username AS reviewer FROM proposals p LEFT JOIN users u ON u.id=p.user_id LEFT JOIN users r ON r.id=p.reviewed_by WHERE p.status=? ORDER BY COALESCE(p.reviewed_at,p.created_at) DESC LIMIT 100`, url.searchParams.get('status') === 'done' ? 'done' : 'open').all()).results || []).map((r) => ({ ...r, payload: safeParse(r.payload_json) || {}, payload_json: undefined })) });
     if ((x = p.match(/^\/api\/admin\/proposals\/([\w-]{1,64})$/)) && m === 'POST') return proposalReview(request, env, u, x[1]);
+    if (p.startsWith('/api/admin/studio') || p === '/api/admin/audit' || p === '/api/admin/lab' || p.startsWith('/api/admin/versions/')) { const r = await studioRoute(request, env, u, url, p, m); if (r) return r; }
     if ((x = p.match(/^\/api\/admin\/global\/(\w{1,20})\/([\w-]{1,64})$/))) {
       if (!GLOBAL_KINDS.includes(x[1])) return fail('Type inconnu.', 400);
       if (m === 'PUT') {
@@ -506,11 +508,11 @@ async function routeAuthed(request, env, url, auth, secure) {
         if (x[1] === 'announce' && res.status === 200) try { await notifyType(env, 'announce'); } catch (e) { console.error('annonce', e?.message); }
         return res;
       }
-      if (m === 'DELETE') { await db(env, 'DELETE FROM global_content WHERE kind=? AND id=?', x[1], x[2]).run(); return json({ ok: true }); }
+      if (m === 'DELETE') { const r = await directChange(env, u, { kind: x[1], id: x[2], op: 'delete', source: 'direct' }); return r.error ? fail(r.error, r.status || 400) : json({ ok: true, changeSet: r.id }); }
     }
-    if (p === '/api/admin/intents' && m === 'POST') { const b = await readJson(request, 4000); const r = await intentCreate(env, u, b); return r.error ? fail(r.error) : json({ ok: true, id: r.id }); }
-    if ((x = p.match(/^\/api\/admin\/intents\/([\w-]{1,64})$/)) && m === 'DELETE') { await db(env, 'DELETE FROM community_intents WHERE id=?', x[1]).run(); return json({ ok: true }); }
-    if ((x = p.match(/^\/api\/admin\/bugs\/([\w-]{1,64})$/)) && m === 'POST') return adminBugStatus(request, env, x[1]);
+    if (p === '/api/admin/intents' && m === 'POST') { const b = await readJson(request, 4000); const r = await intentCreate(env, u, b); if (r.error) return fail(r.error); await auditStmt(env, u, 'intent_create', { type: 'intent', id: r.id, after: { label: str(b?.label, 60) } }).run(); return json({ ok: true, id: r.id }); }
+    if ((x = p.match(/^\/api\/admin\/intents\/([\w-]{1,64})$/)) && m === 'DELETE') { const old = await db(env, 'SELECT label,activity,caps_json FROM community_intents WHERE id=?', x[1]).first(); await env.DB.batch([db(env, 'DELETE FROM community_intents WHERE id=?', x[1]), auditStmt(env, u, 'intent_delete', { type: 'intent', id: x[1], before: old ? { label: old.label, activity: old.activity, caps: safeParse(old.caps_json) } : null })]); return json({ ok: true }); }
+    if ((x = p.match(/^\/api\/admin\/bugs\/([\w-]{1,64})$/)) && m === 'POST') return adminBugStatus(request, env, u, x[1]);
     return fail('Route inconnue.', 404);
   }
 
@@ -587,6 +589,10 @@ async function deleteAccount(request, env, auth, secure) {
       db(env, "DELETE FROM shared_sessions WHERE owner_id=? AND scope IN ('public','link')", id),
       db(env, 'DELETE FROM duo_rooms WHERE owner_id=?', id),
       db(env, 'UPDATE global_content SET updated_by=NULL WHERE updated_by=?', id),
+      // Studio : l'historique reste, l'auteur devient « compte supprimé ».
+      db(env, 'UPDATE change_sets SET author_id=NULL WHERE author_id=?', id), db(env, 'UPDATE change_sets SET published_by=NULL WHERE published_by=?', id), db(env, 'UPDATE change_sets SET rolled_back_by=NULL WHERE rolled_back_by=?', id),
+      db(env, 'UPDATE audit_events SET actor_id=NULL WHERE actor_id=?', id), db(env, 'UPDATE content_versions SET created_by=NULL WHERE created_by=?', id),
+      db(env, 'UPDATE test_results SET created_by=NULL WHERE created_by=?', id), db(env, 'UPDATE releases SET created_by=NULL WHERE created_by=?', id),
       db(env, "UPDATE shared_sessions SET owner_id=NULL WHERE owner_id=? AND scope='common'", id),
       db(env, 'DELETE FROM users WHERE id=?', id),
     ]));
@@ -1040,16 +1046,199 @@ async function globalList(env) {
 async function globalPut(request, env, u, kind, id) {
   if (!GLOBAL_ID.test(id)) return fail('Identifiant invalide.');
   const b = await readJson(request, 60000);
-  const hidden = !!b?.hidden, data = hidden ? null : cleanGlobal(kind, b?.data);
-  if (!hidden && !data) return fail('Données incomplètes ou invalides.');
-  const json_ = hidden ? '{}' : JSON.stringify(data);
-  if (json_.length > 40000) return fail('Trop volumineux.', 413);
-  const count = await db(env, 'SELECT COUNT(*) c FROM global_content').first();
-  if (Number(count?.c) >= 2000) return fail('Trop d’éléments modifiés.', 413);
-  const now = Date.now();
-  await db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data_json=excluded.data_json,hidden=excluded.hidden,updated_at=excluded.updated_at,updated_by=excluded.updated_by',
-    kind, id, json_, hidden ? 1 : 0, now, u.id).run();
-  return json({ ok: true, updatedAt: now, data });
+  // Modification directe (l'app a déjà demandé « pour tout le monde ? ») : elle passe par un lot publié aussitôt,
+  // donc versionnée, journalisée et annulable depuis le Studio.
+  const r = await directChange(env, u, { kind, id, op: b?.hidden ? 'hide' : 'put', data: b?.data, source: 'direct' });
+  if (r.error) return fail(r.error, r.status || 400, r.checks ? { checks: r.checks } : {});
+  return json({ ok: true, updatedAt: r.at, data: r.data, changeSet: r.id });
+}
+
+/* ═════════════ Studio d'administration : lots, vérifications, publication, versions, retour arrière, journal ═════════════ */
+const auditStmt = (env, u, action, o = {}) => db(env, 'INSERT INTO audit_events(id,at,actor_id,action,target_type,target_id,change_set_id,before_json,after_json,checks_json) VALUES(?,?,?,?,?,?,?,?,?,?)',
+  uid(), Date.now(), u?.id || null, action, String(o.type || ''), String(o.id || ''), o.cs || null, o.before === undefined ? null : JSON.stringify(o.before), o.after === undefined ? null : JSON.stringify(o.after), o.checks ? JSON.stringify(o.checks) : null);
+async function currentOf(env, items) {
+  const cur = {};
+  for (const it of items) {
+    const r = await db(env, 'SELECT data_json,hidden FROM global_content WHERE kind=? AND id=?', it.kind, it.id).first();
+    if (r) cur[it.kind + '/' + it.id] = { data: r.hidden ? null : safeParse(r.data_json), hidden: !!r.hidden };
+  }
+  return cur;
+}
+/** Écrit l'état « after » d'un élément commun (null = retour au contenu d'origine) et ajoute une version. */
+function writeContent(env, u, kind, id, after, cs, now) {
+  const w = after ? db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data_json=excluded.data_json,hidden=excluded.hidden,updated_at=excluded.updated_at,updated_by=excluded.updated_by',
+    kind, id, after.hidden ? '{}' : JSON.stringify(after.data), after.hidden ? 1 : 0, now, u.id) : db(env, 'DELETE FROM global_content WHERE kind=? AND id=?', kind, id);
+  const v = db(env, 'INSERT INTO content_versions(id,kind,item_id,version,data_json,hidden,change_set_id,created_at,created_by) VALUES(?,?,?,(SELECT COALESCE(MAX(version),0)+1 FROM content_versions WHERE kind=? AND item_id=?),?,?,?,?,?)',
+    uid(), kind, id, kind, id, after && !after.hidden ? JSON.stringify(after.data) : null, after?.hidden ? 1 : 0, cs, now, u.id);
+  return [w, v];
+}
+async function csLoad(env, id) {
+  const cs = await db(env, 'SELECT c.*,a.username AS author,p.username AS publisher,r.username AS roller FROM change_sets c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users p ON p.id=c.published_by LEFT JOIN users r ON r.id=c.rolled_back_by WHERE c.id=?', id).first();
+  if (!cs) return null;
+  const items = ((await db(env, 'SELECT kind,item_id,op,data_json,before_json FROM change_items WHERE change_set_id=? ORDER BY position', id).all()).results || [])
+    .map((r) => ({ kind: r.kind, id: r.item_id, op: r.op, data: r.op === 'put' ? safeParse(r.data_json) : null, ...(r.before_json == null ? {} : { before: safeParse(r.before_json) }) }));
+  return { cs, items };
+}
+const csView = (c) => ({ id: c.id, title: c.title, note: c.note, source: c.source, status: c.status, author: c.author || (c.author_id ? '' : 'compte supprimé'), createdAt: c.created_at, updatedAt: c.updated_at,
+  publishedAt: c.published_at || null, publisher: c.publisher || '', rolledBackAt: c.rolled_back_at || null, roller: c.roller || '' });
+async function csCreate(env, u, { title, note = '', source = 'admin', items }) {
+  const id = uid(), now = Date.now();
+  await env.DB.batch([
+    db(env, 'INSERT INTO change_sets(id,title,note,source,status,author_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)', id, str(title, 120) || 'Modification', str(note, 600), source, 'draft', u.id, now, now),
+    ...items.map((it, k) => db(env, 'INSERT INTO change_items(id,change_set_id,kind,item_id,op,data_json,position) VALUES(?,?,?,?,?,?,?)', uid(), id, it.kind, it.id, it.op, JSON.stringify(it.data), k)),
+    auditStmt(env, u, 'draft_create', { type: 'change_set', id, cs: id, after: { title: str(title, 120), source, items: items.map((i) => `${i.op} ${i.kind}/${i.id}`) } }),
+  ]);
+  return id;
+}
+async function csCheck(env, u, id, items, ignore = []) {
+  const cur = await currentOf(env, items);
+  const n = await db(env, 'SELECT COUNT(*) c FROM global_content').first();
+  const r = runChecks(items, { currentCount: Number(n?.c) || 0, current: cur });
+  const checks = r.checks.map((c) => (ignore.includes(c.id) ? { ...c, ok: true, detail: c.detail + (c.ok ? '' : ' (accepté pour une modification directe)') } : c));
+  const ok = checks.every((c) => c.ok);
+  await db(env, 'INSERT INTO test_results(id,change_set_id,ok,checks_json,created_at,created_by) VALUES(?,?,?,?,?,?)', uid(), id, ok ? 1 : 0, JSON.stringify(checks), Date.now(), u.id).run();
+  return { ok, checks, items: r.items, current: cur };
+}
+/** Publication d'un brouillon : vérifications enregistrées, puis tout est écrit d'un seul lot (atomique). */
+async function csPublish(env, u, id, { ignore = [] } = {}) {
+  const L = await csLoad(env, id);
+  if (!L) return { error: 'Lot introuvable.', status: 404 };
+  if (L.cs.status !== 'draft') return { error: 'Seul un brouillon peut être publié.', status: 409 };
+  const chk = await csCheck(env, u, id, L.items, ignore);
+  if (!chk.ok) { await auditStmt(env, u, 'publish_refused', { type: 'change_set', id, cs: id, checks: chk.checks }).run(); return { error: 'Vérifications non passées : rien n’a été publié.', status: 422, checks: chk.checks }; }
+  const now = Date.now(), stmts = [];
+  for (const it of chk.items) {
+    const before = chk.current[it.kind + '/' + it.id] || null, after = afterOf(it);
+    stmts.push(db(env, 'UPDATE change_items SET before_json=? WHERE change_set_id=? AND kind=? AND item_id=?', JSON.stringify(before), id, it.kind, it.id));
+    stmts.push(...writeContent(env, u, it.kind, it.id, after, id, now));
+    stmts.push(auditStmt(env, u, 'publish_item', { type: it.kind, id: it.id, cs: id, before, after }));
+  }
+  stmts.push(db(env, 'UPDATE change_sets SET status=?,published_at=?,published_by=?,updated_at=? WHERE id=?', 'published', now, u.id, now, id));
+  stmts.push(db(env, 'INSERT INTO releases(id,change_set_id,summary,created_at,created_by) VALUES(?,?,?,?,?)', uid(), id, `${L.cs.title} — ${chk.items.length} modification(s)`, now, u.id));
+  stmts.push(auditStmt(env, u, 'publish', { type: 'change_set', id, cs: id, checks: chk.checks }));
+  await env.DB.batch(stmts);
+  return { ok: true, at: now, checks: chk.checks, items: chk.items };
+}
+/** Retour arrière d'un lot publié : chaque élément reprend son état d'avant. Refusé si l'élément a changé depuis (sauf force). */
+async function csRollback(env, u, id, { force = false } = {}) {
+  const L = await csLoad(env, id);
+  if (!L) return { error: 'Lot introuvable.', status: 404 };
+  if (L.cs.status !== 'published') return { error: 'Seul un lot publié peut être annulé.', status: 409 };
+  const cur = await currentOf(env, L.items);
+  const conflicts = L.items.filter((it) => JSON.stringify(cur[it.kind + '/' + it.id] || null) !== JSON.stringify(afterOf(it))).map((it) => `${it.kind}/${it.id}`);
+  if (conflicts.length && !force) return { error: `Modifié depuis la publication : ${conflicts.join(', ')}. Vérifie avant de forcer le retour arrière.`, status: 409, conflicts };
+  const now = Date.now(), stmts = [];
+  for (const it of [...L.items].reverse()) {
+    const before = it.before ?? null;
+    stmts.push(...writeContent(env, u, it.kind, it.id, before, id, now));
+    stmts.push(auditStmt(env, u, 'rollback_item', { type: it.kind, id: it.id, cs: id, before: cur[it.kind + '/' + it.id] || null, after: before }));
+  }
+  stmts.push(db(env, 'UPDATE change_sets SET status=?,rolled_back_at=?,rolled_back_by=?,updated_at=? WHERE id=?', 'rolled_back', now, u.id, now, id));
+  stmts.push(auditStmt(env, u, 'rollback', { type: 'change_set', id, cs: id, after: { forced: !!(force && conflicts.length), conflicts } }));
+  await env.DB.batch(stmts);
+  return { ok: true, at: now };
+}
+/** Modification directe = un lot d'une seule opération, publié aussitôt (versionné, journalisé, annulable). */
+async function directChange(env, u, { kind, id, op, data, source, title }) {
+  const { items, errors } = cleanChange([{ kind, id, op, data }]);
+  if (errors.length) return { error: errors[0].replace(/^Modification 1( \([^)]*\))? : /, ''), status: 400 };
+  const csId = await csCreate(env, u, { title: title || `${OPS_FR[op] || op} ${kind}/${id}`, source, items });
+  const r = await csPublish(env, u, csId, { ignore: ['effect'] });
+  return r.error ? r : { id: csId, at: r.at, data: items[0].data };
+}
+const OPS_FR = { put: 'Modifier', hide: 'Masquer', delete: 'Rétablir' };
+async function studioRoute(request, env, u, url, p, m) {
+  let x;
+  if (p === '/api/admin/studio' && m === 'GET') {
+    const st = ['draft', 'published', 'rolled_back', 'discarded'].includes(url.searchParams.get('status')) ? url.searchParams.get('status') : '';
+    const r = (await db(env, `SELECT c.*,a.username AS author,p.username AS publisher,r.username AS roller,(SELECT COUNT(*) FROM change_items i WHERE i.change_set_id=c.id) AS n,
+      (SELECT t.ok FROM test_results t WHERE t.change_set_id=c.id ORDER BY t.created_at DESC LIMIT 1) AS last_ok
+      FROM change_sets c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users p ON p.id=c.published_by LEFT JOIN users r ON r.id=c.rolled_back_by ${st ? 'WHERE c.status=?' : ''} ORDER BY c.updated_at DESC LIMIT 100`, ...(st ? [st] : [])).all()).results || [];
+    return json({ ok: true, sets: r.map((c) => ({ ...csView(c), count: Number(c.n) || 0, lastCheck: c.last_ok == null ? null : !!c.last_ok })) });
+  }
+  if (p === '/api/admin/studio' && m === 'POST') {
+    const b = await readJson(request, 200000);
+    const { items, errors } = cleanChange(b?.items);
+    if (errors.length) return fail(errors.join(' '));
+    if (!items.length) return fail('Ajoute au moins une modification.');
+    const n = await db(env, "SELECT COUNT(*) c FROM change_sets WHERE status='draft'").first();
+    if (Number(n?.c) >= 200) return fail('Trop de brouillons ouverts : publie ou abandonne-en quelques-uns.', 413);
+    return json({ ok: true, id: await csCreate(env, u, { title: b?.title, note: b?.note, source: ['admin', 'ai', 'lab'].includes(b?.source) ? b.source : 'admin', items }) });
+  }
+  if (p === '/api/admin/audit' && m === 'GET') {
+    const r = (await db(env, 'SELECT e.*,us.username FROM audit_events e LEFT JOIN users us ON us.id=e.actor_id ORDER BY e.at DESC LIMIT ?', Math.min(500, Math.max(1, Number(url.searchParams.get('limit')) || 200))).all()).results || [];
+    return json({ ok: true, events: r.map((e) => ({ id: e.id, at: e.at, actor: e.username || (e.actor_id ? '' : 'compte supprimé'), action: e.action, type: e.target_type, target: e.target_id, changeSet: e.change_set_id, before: e.before_json == null ? undefined : safeParse(e.before_json), after: e.after_json == null ? undefined : safeParse(e.after_json), checks: e.checks_json ? safeParse(e.checks_json) : undefined })) });
+  }
+  if ((x = p.match(/^\/api\/admin\/versions\/(\w{1,20})\/([\w-]{1,64})$/)) && m === 'GET') {
+    const r = (await db(env, 'SELECT v.version,v.data_json,v.hidden,v.change_set_id,v.created_at,us.username FROM content_versions v LEFT JOIN users us ON us.id=v.created_by WHERE v.kind=? AND v.item_id=? ORDER BY v.version DESC LIMIT 50', x[1], x[2]).all()).results || [];
+    return json({ ok: true, versions: r.map((v) => ({ version: v.version, data: v.data_json == null ? null : safeParse(v.data_json), hidden: !!v.hidden, changeSet: v.change_set_id, at: v.created_at, by: v.username || '' })) });
+  }
+  if (p === '/api/admin/studio/ai' && m === 'POST') {
+    const b = await readJson(request, 6000), text = str(b?.text, 1500), kind = String(b?.kind || '');
+    if (!AI_KINDS.includes(kind)) return fail('Type non pris en charge par l’assistant.');
+    if (text.length < 5) return fail('Décris ce que tu veux en quelques mots.');
+    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (await limited(env, 'ai-s:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
+    let data;
+    try { data = cleanAdminDraft(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildAdminDraft(kind, text), max_tokens: 900, temperature: 0.3 }), kind); }
+    catch (e) { console.error('ai-studio', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+    if (!data) return fail('La proposition de l’assistant est inutilisable : rien n’a été créé.', 422);
+    const itemId = GLOBAL_ID.test(String(b?.target || '')) ? b.target : 'g-' + uid().slice(0, 12);
+    const id = await csCreate(env, u, { title: 'IA : ' + text.slice(0, 80), note: 'Brouillon rédigé par l’assistant à partir de : « ' + text.slice(0, 400) + ' ». À relire avant toute publication.', source: 'ai', items: [{ kind, id: itemId, op: 'put', data }] });
+    return json({ ok: true, id, data });
+  }
+  if (p === '/api/admin/lab' && m === 'POST') {
+    const b = await readJson(request, 6000), text = str(b?.text, 2000);
+    if (text.length < 10) return fail('Décris le problème ou l’idée en une ou deux phrases.');
+    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (await limited(env, 'ai-l:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
+    let lab;
+    try { lab = cleanLab(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildLab(text), max_tokens: 1400, temperature: 0.3 })); }
+    catch (e) { console.error('ai-lab', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+    if (!lab) return fail('Réponse de l’assistant inutilisable. Reformule et réessaie.', 422);
+    return json({ ok: true, lab });
+  }
+  if ((x = p.match(/^\/api\/admin\/studio\/([\w-]{1,64})(?:\/(publish|rollback|discard|check))?$/))) {
+    const [, id, action] = x;
+    if (!action && m === 'GET') {
+      const L = await csLoad(env, id); if (!L) return fail('Lot introuvable.', 404);
+      const cur = L.cs.status === 'draft' ? await currentOf(env, L.items) : null;
+      const diff = L.cs.status === 'draft' ? diffChange(L.items, cur) : L.items.map((it) => ({ kind: it.kind, id: it.id, op: it.op, isNew: !it.before, changes: diffState(it.before ?? null, afterOf(it)) }));
+      const tests = ((await db(env, 'SELECT t.ok,t.checks_json,t.created_at,us.username FROM test_results t LEFT JOIN users us ON us.id=t.created_by WHERE t.change_set_id=? ORDER BY t.created_at DESC LIMIT 5', id).all()).results || []).map((t) => ({ ok: !!t.ok, checks: safeParse(t.checks_json) || [], at: t.created_at, by: t.username || '' }));
+      return json({ ok: true, set: csView(L.cs), items: L.items.map(({ before, ...it }) => it), diff, tests });
+    }
+    if (!action && m === 'PUT') {
+      const b = await readJson(request, 200000);
+      const L = await csLoad(env, id); if (!L) return fail('Lot introuvable.', 404);
+      if (L.cs.status !== 'draft') return fail('Seul un brouillon peut être modifié.', 409);
+      const { items, errors } = cleanChange(b?.items); if (errors.length) return fail(errors.join(' '));
+      if (!items.length) return fail('Ajoute au moins une modification.');
+      const now = Date.now();
+      await env.DB.batch([
+        db(env, 'DELETE FROM change_items WHERE change_set_id=?', id),
+        ...items.map((it, k) => db(env, 'INSERT INTO change_items(id,change_set_id,kind,item_id,op,data_json,position) VALUES(?,?,?,?,?,?,?)', uid(), id, it.kind, it.id, it.op, JSON.stringify(it.data), k)),
+        db(env, 'UPDATE change_sets SET title=?,note=?,updated_at=? WHERE id=?', str(b?.title, 120) || L.cs.title, str(b?.note ?? L.cs.note, 600), now, id),
+        auditStmt(env, u, 'draft_edit', { type: 'change_set', id, cs: id, before: L.items.map((i) => ({ op: i.op, kind: i.kind, id: i.id, data: i.data })), after: items }),
+      ]);
+      return json({ ok: true, updatedAt: now });
+    }
+    if (m !== 'POST') return fail('Méthode non autorisée.', 405);
+    const b = await readJson(request, 2000);
+    if (action === 'check') { const L = await csLoad(env, id); if (!L) return fail('Lot introuvable.', 404); const r = await csCheck(env, u, id, L.items); return json({ ok: true, passed: r.ok, checks: r.checks }); }
+    if (action === 'discard') {
+      const r = await db(env, "UPDATE change_sets SET status='discarded',updated_at=? WHERE id=? AND status='draft'", Date.now(), id).run();
+      if (!r.meta?.changes) return fail('Seul un brouillon peut être abandonné.', 409);
+      await auditStmt(env, u, 'discard', { type: 'change_set', id, cs: id }).run();
+      return json({ ok: true });
+    }
+    // Publication et retour arrière : jamais sans confirmation explicite de l'administrateur.
+    if (b?.confirm !== true) return fail('Confirmation explicite requise.', 400);
+    const r = action === 'publish' ? await csPublish(env, u, id) : await csRollback(env, u, id, { force: b?.force === true });
+    if (r.error) return fail(r.error, r.status || 400, { ...(r.checks ? { checks: r.checks } : {}), ...(r.conflicts ? { conflicts: r.conflicts } : {}) });
+    if (action === 'publish' && r.items.some((it) => it.kind === 'announce' && it.op === 'put')) try { await notifyType(env, 'announce'); } catch (e) { console.error('annonce', e?.message); }
+    return json({ ok: true, at: r.at, checks: r.checks });
+  }
+  return null;
 }
 
 async function proposalCreate(request, env, u) {
@@ -1087,13 +1276,16 @@ async function proposalReview(request, env, u, id) {
     const pl = safeParse(p.payload_json) || {}, data = cleanGlobal(p.kind, b?.data || pl.data);
     if (!data) return fail('Proposition incomplète : impossible de l’ajouter.');
     added = pl.target && GLOBAL_ID.test(pl.target) ? pl.target : 'g-' + uid().slice(0, 12); // demande de modification : on modifie l'élément visé
-    await db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,0,?,?) ON CONFLICT(kind,id) DO UPDATE SET data_json=excluded.data_json,hidden=0,updated_at=excluded.updated_at,updated_by=excluded.updated_by', p.kind, added, JSON.stringify(data), Date.now(), u.id).run();
+    const r = await directChange(env, u, { kind: p.kind, id: added, op: 'put', data, source: 'proposal', title: 'Proposition acceptée : ' + p.label });
+    if (r.error) return fail('Impossible d’ajouter cette proposition : ' + r.error, r.status || 400);
   }
   if (decision === 'accept' && p.kind === 'intent') {
     const pl = safeParse(p.payload_json) || {}, r = await intentCreate(env, u, { label: p.label, emoji: pl.emoji, caps: Object.entries(pl.caps || {}).map(([cid, w]) => ({ id: cid, w })), activityId: p.activity });
     if (r.error) return fail('Impossible d’ajouter cette intention : ' + r.error);
   }
-  await db(env, 'UPDATE proposals SET status=?,reply=?,reviewed_by=?,reviewed_at=? WHERE id=?', 'done', (decision === 'accept' ? '✓ Acceptée. ' : '✗ Refusée. ') + str(b?.reply, 300), u.id, Date.now(), id).run();
+  const reply = (decision === 'accept' ? '✓ Acceptée. ' : '✗ Refusée. ') + str(b?.reply, 300);
+  await env.DB.batch([db(env, 'UPDATE proposals SET status=?,reply=?,reviewed_by=?,reviewed_at=? WHERE id=?', 'done', reply, u.id, Date.now(), id),
+    auditStmt(env, u, 'proposal_' + decision, { type: 'proposal', id, after: { label: p.label, kind: p.kind, reply, added } })]);
   const author = await db(env, 'SELECT user_id FROM proposals WHERE id=?', id).first();
   if (author?.user_id) try { await notifyType(env, 'reply', { userIds: [author.user_id] }); } catch (e) { console.error('notif réponse', e?.message); }
   return json({ ok: true, added });
@@ -1159,11 +1351,12 @@ async function adminBugs(url, env) {
     ${st ? 'WHERE b.status=?' : ''} ORDER BY b.created_at DESC LIMIT 500`, ...(st ? [st] : [])).all();
   return json({ ok: true, reports: r.results.map((x) => ({ id: x.id, title: x.title, description: x.description, page: x.page, appVersion: x.app_version, userAgent: x.user_agent, status: x.status, createdAt: x.created_at, updatedAt: x.updated_at, author: x.username || 'compte supprimé' })) });
 }
-async function adminBugStatus(request, env, id) {
+async function adminBugStatus(request, env, u, id) {
   const b = await readJson(request, 2000);
   if (!b || !['open', 'done'].includes(b.status)) return fail('Statut invalide.');
   const r = await db(env, 'UPDATE bug_reports SET status=?,updated_at=? WHERE id=?', b.status, Date.now(), id).run();
   if (!r.meta?.changes) return fail('Signalement introuvable.', 404);
+  await auditStmt(env, u, 'bug_status', { type: 'bug', id, after: { status: b.status } }).run();
   return json({ ok: true });
 }
 

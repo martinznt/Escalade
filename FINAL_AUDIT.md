@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.25.1
+# FINAL_AUDIT — Séances entraînement v8.26.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -981,3 +981,15 @@ Le brouillon est gardé (« Reprendre ma séance » sur l'accueil). Les anciens 
 - Admin › Comptes : combien de membres sont venus aujourd'hui, sur 7 jours et sur 30 jours ; « 🕑 Dernières connexions » (les 10 plus récentes, date et heure) ; tous les comptes triés par dernière visite ou par inscription.
 - Confidentialité inchangée : l'admin voit l'identité du compte et son activité (date de visite, nombre de séances), jamais les séances, performances ou profils. Réservé aux administrateurs (vérifié par le serveur).
 - Test D1 : la dernière visite est connue pour chaque compte, et aucun champ en trop n'est renvoyé.
+
+## Évolution 8.26.0 : V1 — séances structurées, explications, administration outillée
+
+Détail complet, architecture du Studio et limites : `CHANGELOG.md`. Audit préalable : `docs/V1_AUDIT.md`.
+
+- **Créateur** : 7 étapes, niveau de structure (Libre → Très précis), phases multi-activités avec pause, rôle, but ponctuel (jamais un objectif sans action explicite), priorités, limites, fatigue, verrous 🔒 / ✏️ / 🤖, paramètres escalade structurés. Propositions classées par phase avec raisons catégorisées ; analyse globale avec suggestions à appliquer / modifier / ignorer / annuler ; génération seulement après validation.
+- **Objectif avec l'IA** : fiche modifiable, « Comment le sais-tu ? », aucune cible inventée, champs inconnus ignorés.
+- **Admin** : signalements (recherche, récents, détail), propositions (réponse, historique), bibliothèque commune distincte du catalogue officiel avec métadonnées explicables, **Studio** (brouillon → vérifications → publication confirmée → retour arrière, versions, diff, journal), IA admin limitée aux brouillons, **Laboratoire**.
+- **Mise en page** : liste des comptes (admin) et chiffres clés corrigés à 320 px (débordement horizontal). Pages admin, Studio, Lot, Journal, Laboratoire et Bibliothèque commune vérifiées sans débordement à 320 / 390 / 768 / 1280 px (script Playwright, Chromium).
+- **Reproductibilité** : `package-lock.json` versionné, versions épinglées, `npm ci` vérifié.
+
+### Vérification 8.26.0 (commandes réellement lancées)

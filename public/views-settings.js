@@ -1,6 +1,6 @@
 // views-settings.js — Paramètres : séance, apparence, compte, données (export / import JSON, import CSV),
 // synchronisation et diagnostic, administration (EDIT_PASSWORD vérifié par le serveur), signalement de bug.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead } from './ui.js';
+import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead, menuList } from './ui.js';
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, ctx, go, render, api, queue, saveSettings, syncAll, retryFailed, discardFailed, restoreConflict, pendingCount, persistNow, clearLocal, DEFAULT_SETTINGS, putItem, itemsOf, addHistory, saveEvent, ls, writePending, persist, bump, syncSoon } from './state.js';
 import { uid, mergeSeances, readStored, normalizeSession } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
@@ -11,6 +11,7 @@ import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
 import { NEWS } from './news.js';
 import { filterBugs } from './adminlist.js';
+import { vStudio, vStudioSet, vAudit, vLab } from './views-studio.js';
 import { FAQ } from './help.js';
 import { faqAdminButtons, announcements } from './content.js';
 import { vAdminContent } from './content.js';
@@ -20,7 +21,7 @@ import { CAPACITIES, ACTIVITIES } from './model.js';
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
 export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
-const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin']];
+const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire']];
 /** Rubriques des paramètres : une ligne claire par rubrique, comme les réglages d'un téléphone. */
 const MENU = [
   ['display', '🎨', 'Affichage', 'Thème, ambiance, couleur, taille, langue, mise en page'],
@@ -36,11 +37,12 @@ const MENU = [
 ];
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
 export function vSettings() {
-  const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin'].includes(k)) : SUBS;
+  const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin', 'studio', 'studioSet', 'audit', 'lab'].includes(k)) : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   if (sub === 'main') return h`<h1>Paramètres</h1>${views.main()}`;
   const ic = MENU.find(([k]) => k === sub)?.[1];
+  if (['studio', 'studioSet', 'audit', 'lab'].includes(sub)) return h`${subHead('setSub', sub === 'studio' ? 'admin' : 'studio', sub === 'studio' ? 'Admin' : 'Studio', { studio: '🧪 Studio', studioSet: '🧪 Lot', audit: '📜 Journal', lab: '🧠 Laboratoire' }[sub])}${views[sub]()}`;
   return h`${subHead('setSub', 'main', 'Paramètres', `${ic ? ic + ' ' : ''}${subs.find(([k]) => k === sub)[1]}`)}${views[sub]()}`;
 }
 ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug' && !S.user?.guest) loadMyBugs(); };
@@ -293,7 +295,13 @@ function vAdmin() {
   if (!bugs && !S.admin.error) setTimeout(loadBugs, 0);
   if (S.admin.push === undefined) { S.admin.push = null; api('GET', '/api/admin/push-status').then((r) => { S.admin.push = r; render(); }).catch(() => {}); }
   return h`${pushStatusCard()}<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier presque tout pour tous les comptes : exercices, séances prêtes, intentions par sport, formats de séance et bibliothèque commune. À chaque changement, l’app te demande si c’est pour toi ou pour tout le monde. Tu n’as pas accès aux données privées des autres comptes.</p>
-      <div class="row wrapf"><button class="btn" data-act="libSub" data-id="common">📚 Bibliothèque commune</button><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
+      ${menuList([
+        ['setSub', 'studio', '🧪', 'Studio', 'Brouillons, vérifications, publication, retour arrière'],
+        ['setSub', 'lab', '🧠', 'Laboratoire', 'Analyser un problème, simuler les règles sur des exemples'],
+        ['setSub', 'audit', '📜', 'Journal des changements', 'Qui a fait quoi, quand, avant / après'],
+        ['libSub', 'common', '🌍', 'Bibliothèque commune', 'Séances partagées par les membres'],
+      ])}
+      <div class="row wrapf"><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
     ${vAdminContent()}
     ${vAdminProposals()}${vAdminUsers()}
     <div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload" aria-label="Actualiser">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['done', 'Traités'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>

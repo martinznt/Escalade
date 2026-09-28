@@ -702,6 +702,24 @@ await step('l’admin voit la liste de tous les comptes (sans leurs données pri
   const txt = await c.text('.ulist'); for (const name of ['Alice', 'Bob']) assert.match(txt, new RegExp(name));
   assert.ok(await c.count('.ulist .urow') >= 3);
 });
+await step('Studio : brouillon invisible, vérifications, publication confirmée, journal, retour arrière ; Laboratoire', async () => {
+  await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=studio]'); await C.waitForSelector('text=Nouveau brouillon');
+  await c.click('[data-act=studioNew]'); await C.waitForSelector('#sheet form[data-submit=studioDraftGo]');
+  await C.fill('#sheet input[name=title]', 'Aide E2E'); await C.fill('#sheet input[name=q]', 'Question E2E ?'); await C.fill('#sheet textarea[name=a]', 'Réponse <b>E2E</b>.');
+  await c.click('#sheet form[data-submit=studioDraftGo] button.pri'); await C.waitForSelector('[data-act=studioPublish]');
+  assert.match(await c.text('main'), /Question E2E/); assert.equal(await c.count('main b:text-is("E2E")'), 0, 'texte échappé');
+  assert.ok(!(await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'brouillon invisible pour les membres');
+  await c.click('[data-act=studioCheck]'); await C.waitForSelector('.checks li');
+  await c.click('[data-act=studioPublish]'); await c.confirm(); await C.waitForSelector('[data-act=studioRollback]');
+  assert.ok((await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'publié pour tous');
+  await c.click('[data-act=studioRollback]'); await c.confirm(); await C.waitForSelector('main .tag:has-text("Annulé")');
+  assert.ok(!(await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'retour arrière');
+  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=audit]'); await C.waitForSelector('text=Lot publié');
+  assert.match(await c.text('main'), /Retour arrière/); assert.ok(!(await c.text('main')).includes('secret-admin-de-test'));
+  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=lab]'); await C.waitForSelector('[data-act=labEx]');
+  await c.click('[data-act=labEx][data-i="1"]'); await C.waitForSelector('main summary:has-text("échauffement")');
+  assert.equal(await (await b.api('GET', '/api/admin/studio')).status, 403, 'un membre n’a pas accès au Studio');
+});
 await step('l’admin modifie puis supprime la contribution ; pas d’accès aux données privées', async () => {
   const d = (await c.api('GET', '/api/shared/' + commonId)).data.item; assert.equal(d.canEdit, true);
   await c.tab('library'); await c.sub('libSub', 'common'); await C.locator('[data-act=commonOpen]').first().click(); await C.waitForSelector('[data-act=commonEdit]');
@@ -812,6 +830,12 @@ await step('modifications hors ligne (séance, performance, note), fermeture pui
   await pickSel(A, '#sheet select[name=metricId]', 'max_pompes'); await A.waitForSelector('#sheet input[name=value]'); await A.fill('#sheet input[name=value]', '25'); await a.click('#sheet button[type=submit]');
   await a.tab('progress'); await a.sub('progSub', 'journal'); await A.fill('form[data-submit=jnote] textarea', 'Note écrite hors ligne'); await a.click('form[data-submit=jnote] button');
   await A.waitForSelector('.syncbadge.offline');
+  // Brouillon de structure (créateur, étape 4) : gardé hors ligne, même après rechargement.
+  await cpFresh(); await cpTo(4); await A.waitForSelector('.cpart'); const nPh = await a.count('.cpart');
+  await a.click('[data-act=cpAdd][data-id=pause]'); await A.waitForSelector('#sheet'); await A.keyboard.press('Escape'); await A.waitForTimeout(200);
+  assert.equal(await a.count('.cpart'), nPh + 1);
+  await A.reload(); await A.waitForSelector('nav.tabs', { timeout: 10000 }); await a.tab('library'); await a.sub('libSub', 'climbplan'); await A.waitForSelector('.steps');
+  assert.match(await a.text('.steps b'), /Étape 4/); assert.equal(await a.count('.cpart'), nPh + 1, 'phases gardées hors ligne'); assert.match(await a.text('#main'), /Pause/);
   await A.close(); // fermeture de l'onglet avant toute synchronisation
 });
 let A2;

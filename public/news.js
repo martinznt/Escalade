@@ -131,6 +131,12 @@ export const NEWS = [
     ['home', 'cal', '#main h1', '📅 Planning', 'Calendrier, programme et rappels au même endroit.'],
     ['library', 'climbplan', '.steps', '✨ Une seule façon de créer une séance', '« Séance du jour », « Que faire aujourd’hui » et l’Assistant ouvrent tous cet assistant, déjà rempli.'],
   ] },
+  { v: '8.26.0', date: '2026-10-13', title: 'Séances structurées et explications', why: 'Tu décides du niveau de détail de ta séance, phase par phase (bloc, pause, voie…), et chaque proposition dit pourquoi. Rien n’est appliqué sans toi.', steps: [
+    ['library', 'climbplan', '.steps', '🧱 Ta structure', 'Choisis le niveau de détail (libre → très précis), découpe la séance en phases (bloc, pause, voie…) et verrouille 🔒 ce que tu imposes.'],
+    ['', '', '', '💡 Pourquoi ?', 'Chaque proposition dit d’où elle vient : donnée connue, règle, déduction, ou information manquante. Les améliorations ne s’appliquent que si tu les choisis, et s’annulent.'],
+    ['profile', 'goals', '#main h1', '🎯 Objectif avec l’IA', 'Une fiche à relire et corriger avant d’enregistrer. Aucune cible n’est inventée ; « Comment le sais-tu ? » explique chaque point.'],
+    ['library', 'common', '#main h1', '🌍 Bibliothèque commune', 'Les séances des membres sont classées automatiquement, avec « Classée ainsi parce que… ». Le catalogue officiel reste dans 🗂 Séances prêtes.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

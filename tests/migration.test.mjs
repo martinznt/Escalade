@@ -44,10 +44,16 @@ await ok('mise à niveau du schéma au premier appel (colonnes et tables ajouté
   assert.equal(env.DB.raw.prepare("SELECT visibility FROM profiles WHERE user_id='old'").get().visibility, 'public');
   assert.equal(env.DB.raw.prepare("SELECT status FROM follows WHERE follower_id='old'").get().status, 'accepted');
   assert.equal(env.DB.raw.prepare("SELECT COUNT(*) c FROM history").get().c, 1);
+  // V1 Studio : tables ajoutées sur une ancienne base, vides, avec leurs valeurs par défaut.
+  for (const t of ['change_sets', 'change_items', 'content_versions', 'test_results', 'releases', 'audit_events']) assert.ok(cols(t).size, t);
+  assert.ok(cols('users').has('last_seen'));
+  env.DB.raw.prepare("INSERT INTO change_sets(id,title,created_at,updated_at) VALUES('cs-old','Test',1,1)").run();
+  assert.deepEqual({ ...env.DB.raw.prepare("SELECT status,source,note FROM change_sets WHERE id='cs-old'").get() }, { status: 'draft', source: 'admin', note: '' });
 });
 await ok('la mise à niveau est idempotente (deuxième appel sans erreur)', async () => {
   const env2 = { ...env }; // même base, nouvelle vérification
   assert.equal((await worker.fetch(new Request('https://site.test/api/health'), env2)).status, 200);
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) c FROM change_sets WHERE id='cs-old'").get().c, 1, 'aucune perte de données');
 });
 const old = new Client(env);
 await ok('ancien compte : connexion, séances et historique intacts', async () => {

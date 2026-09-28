@@ -8,7 +8,10 @@
     "test:e2e": "node --no-warnings tests/e2e.mjs"
   },
   "devDependencies": {
-    "jsqr": "^1.4.0",
-    "playwright": "^1.55.0"
+    "jsqr": "1.4.0",
+    "playwright": "1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

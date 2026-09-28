@@ -1,7 +1,7 @@
 // schema.js — tables D1. Le worker les crée / complète tout seul au premier appel (CREATE TABLE IF NOT EXISTS
 // + migrations idempotentes de worker.js upgradeSchema) : aucune commande à lancer, compatible avec la base existante.
 // Aucune table existante n'est supprimée ; les colonnes ajoutées ont des valeurs par défaut.
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 export const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, email TEXT UNIQUE, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
@@ -41,6 +41,18 @@ export const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS idx_bugs_status ON bug_reports(status,created_at)",
   // Idempotence : une opération (en-tête X-Op-Id) rejouée renvoie la réponse déjà produite, sans doublon.
   "CREATE TABLE IF NOT EXISTS op_log (user_id TEXT NOT NULL, op_id TEXT NOT NULL, status INTEGER NOT NULL DEFAULT 0, response_json TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, PRIMARY KEY(user_id,op_id), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+  // ── V1 Studio d'administration ── contenu commun modifié par lots : brouillon → vérifications → publication → retour
+  // arrière possible. Chaque élément garde ses versions ; chaque action est journalisée (qui, quoi, quand, avant/après).
+  // Rien de personnel ni de secret n'y est écrit : seulement le contenu commun (exercices, séances prêtes, textes…).
+  "CREATE TABLE IF NOT EXISTS change_sets (id TEXT PRIMARY KEY, title TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT 'admin', status TEXT NOT NULL DEFAULT 'draft', author_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, published_at INTEGER, published_by TEXT, rolled_back_at INTEGER, rolled_back_by TEXT)",
+  "CREATE INDEX IF NOT EXISTS idx_change_sets_status ON change_sets(status,updated_at)",
+  "CREATE TABLE IF NOT EXISTS change_items (id TEXT PRIMARY KEY, change_set_id TEXT NOT NULL, kind TEXT NOT NULL, item_id TEXT NOT NULL, op TEXT NOT NULL DEFAULT 'put', data_json TEXT NOT NULL DEFAULT '{}', before_json TEXT, position INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(change_set_id) REFERENCES change_sets(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_change_items_set ON change_items(change_set_id,position)",
+  "CREATE TABLE IF NOT EXISTS content_versions (id TEXT PRIMARY KEY, kind TEXT NOT NULL, item_id TEXT NOT NULL, version INTEGER NOT NULL, data_json TEXT, hidden INTEGER NOT NULL DEFAULT 0, change_set_id TEXT, created_at INTEGER NOT NULL, created_by TEXT, UNIQUE(kind,item_id,version))",
+  "CREATE TABLE IF NOT EXISTS test_results (id TEXT PRIMARY KEY, change_set_id TEXT NOT NULL, ok INTEGER NOT NULL, checks_json TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL, created_by TEXT)",
+  "CREATE TABLE IF NOT EXISTS releases (id TEXT PRIMARY KEY, change_set_id TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, created_by TEXT)",
+  "CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, at INTEGER NOT NULL, actor_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL DEFAULT '', target_id TEXT NOT NULL DEFAULT '', change_set_id TEXT, before_json TEXT, after_json TEXT, checks_json TEXT)",
+  "CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_events(at)",
 ];
 // Colonnes ajoutées aux tables existantes (migration idempotente : ajoutées seulement si absentes).
 export const ADD_COLUMNS = [
