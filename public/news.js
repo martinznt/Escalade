@@ -76,6 +76,42 @@ export const NEWS = [
     ['profile', 'climbing', '[data-act=carnetAdv]', '💡 Proposer', 'Crée ton système de cotation ou ton style, puis « 💡 Proposer à tout le monde ». Pareil pour tes exercices, tes séances et tes formats.'],
     ['settings', 'updates', '.upd', '🆕 Toutes les mises à jour', 'L’évolution de l’app depuis le début, avec une visite pour chaque mise à jour.'],
   ] },
+  { v: '8.14.0', date: '2026-10-01', title: 'L’app se modifie sans code', why: 'Les administrateurs changent les textes, envoient des annonces, choisissent la mise en page pour tous, gèrent les questions, les sources et les autres administrateurs.', steps: [
+    ['settings', 'admin', '.setmenu', '🛠 Modifier l’app sans code', 'Textes, annonces, mise en page pour tous, questions fréquentes et sources : tout se fait ici, sans toucher au code.'],
+    ['home', 'dash', '[data-act=notifOpen]', '📣 Annonces', 'Les annonces de l’équipe arrivent dans tes notifications.'],
+  ] },
+  { v: '8.15.0', date: '2026-10-02', title: 'Séances multi-sports et fusion', why: 'Une séance peut mélanger plusieurs sports (renfo puis bloc…), deux séances se fusionnent en une nouvelle avec des conseils, et chacun peut demander une modification aux administrateurs.', steps: [
+    ['library', 'generate', '.partrow .partact', '🧗 Un sport par partie', 'Dans le format de séance, choisis le sport de chaque partie : renfo, puis bloc, puis étirements…'],
+    ['library', 'seances', '[data-act=mergeOpen]', '🔀 Fusionner des séances', 'Choisis 2 à 4 séances : l’app note le mélange, conseille l’ordre et crée une nouvelle séance. Tes séances d’origine ne changent pas.'],
+    ['settings', 'main', '[data-act=ideaNew]', '💡 Proposer une amélioration', 'Une idée ou une modification ? Envoie-la : les administrateurs l’acceptent ou non, et tu reçois la réponse.'],
+  ] },
+  { v: '8.16.0', date: '2026-10-03', title: 'Ranger ses séances', why: 'Chaque séance a ses sports (plusieurs), son lieu et ses catégories ; « Mes séances » se filtre et se trie comme tu veux, même selon ta forme du jour.', steps: [
+    ['library', 'seances', '[data-act=sfOpen]', '⇅ Trier et filtrer', 'Lieu, un ou plusieurs sports, catégories, et 10 façons de trier : selon ta forme, pas faites depuis longtemps, les plus courtes…'],
+    ['library', 'seances', '.sfbar input', '🔍 Chercher', 'Tape un nom de séance ou d’exercice.'],
+  ] },
+  { v: '8.17.0', date: '2026-10-04', title: 'Regrouper et modifier plusieurs séances', why: 'Mes séances se regroupent par lieu, sport ou catégorie, et on peut en sélectionner plusieurs pour leur donner un lieu, une catégorie, un sport, les fusionner ou les archiver d’un coup.', steps: [
+    ['library', 'seances', '[data-act=sfOpen]', '▤ Regrouper', 'Dans « ⇅ Trier », choisis « Regrouper par » : lieu, sport ou catégorie.'],
+    ['library', 'seances', '[data-act=selStart]', '☑ Plusieurs à la fois', 'Coche des séances puis choisis : lieu, catégorie, sport, fusionner ou archiver.'],
+  ] },
+  { v: '8.18.0', date: '2026-10-05', title: 'C’est quoi, à quoi ça sert, pourquoi', why: 'Chaque séance et chaque exercice répond maintenant à trois questions simples, et tu peux écrire ton propre pourquoi.', steps: [
+    ['library', 'seances', '#main .card [data-act=openSeance]', '🧐 En bref', 'Ouvre une séance : en haut, c’est quoi, à quoi elle sert et pourquoi. ✎ pour écrire ton pourquoi.'],
+    ['library', 'exercises', '#main [data-act=libInfo]', '🎯 Chaque exercice', 'Touche un exercice (ou son nom dans une séance) : c’est quoi, à quoi ça sert, et pourquoi il est là.'],
+  ] },
+  { v: '8.19.0', date: '2026-10-06', title: 'Structurer ta séance d’escalade', why: 'Dis ce que tu veux réussir à la fin (ex. un U8 en dévers) et le temps que tu as : l’app construit toute la séance. Ou structure-la toi-même : parties, bloc ou voie, intensité, cotations, styles, et plusieurs propositions de structure.', steps: [
+    ['library', 'climbplan', '[data-act=cpMode][data-id=goal]', '🎯 Ton objectif', 'Choisis la cotation à réussir, les styles et ton temps : échauffement sur des niveaux bien plus faciles, montée, puis essais.'],
+    ['library', 'climbplan', '[data-act=cpMode][data-id=parts]', '🧩 À ta façon', 'Tes parties (ex. 1 h 30 bloc intense, 30 min tranquille, voie max), une structure au choix pour chacune, et « adapter à ce que j’ai fait avant ».'],
+  ] },
+  { v: '8.20.0', date: '2026-10-07', title: 'Surprends-moi', why: 'Dis seulement ce que tu veux (sport, temps, forme… ou rien) : l’app te prépare une séance différente de d’habitude, ou qui te fait progresser, et t’explique pourquoi. Échauffement et étirements réglables partout.', steps: [
+    ['library', 'climbplan', '[data-act=cpMode][data-id=surprise]', '🎲 Surprends-moi', 'Nouveau pour toi (styles, structures, exercices jamais faits) ou pour progresser (tes styles faibles, ton objectif).'],
+  ] },
+  { v: '8.21.0', date: '2026-10-08', title: 'Idées avec l’endroit, mise en page plus claire', why: 'Quand tu proposes une idée, tu peux montrer l’endroit exact à changer ; l’administrateur y va en un clic et le modifie pour tout le monde. Le mode ✏️ de mise en page explique ce qu’il fait, a un aperçu et un bouton Quitter.', steps: [
+    ['settings', 'main', '[data-act=ideaNew]', '📍 Montre l’endroit', 'Écris ton idée, puis « Choisir l’endroit à changer » et touche l’élément concerné.'],
+    ['home', 'dash', '.topicons [data-act=layEdit]', '✏️ Personnaliser la page', 'Choisis ce qui s’affiche et dans quel ordre, regarde l’aperçu, puis enregistre ou quitte.'],
+  ] },
+  { v: '8.22.0', date: '2026-10-09', title: 'Choisis combien l’app t’aide', why: 'Trois façons de créer ta séance : l’app choisit tout (et tu ajustes le temps et les exercices de chaque partie), l’app te guide (plusieurs exercices expliqués et l’ordre conseillé), ou tu composes toi-même.', steps: [
+    ['library', 'climbplan', '[data-act=cpHelp][data-id=guide]', '🧭 L’app me guide', 'Pour chaque partie : des exercices expliqués (ce qu’ils travaillent, où les placer, quoi prendre pour travailler plus une chose). Tu coches.'],
+    ['library', 'climbplan', '[data-act=cpHelp][data-id=free]', '✋ Je compose', 'Tes parties et tes exercices, dans tout le catalogue.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

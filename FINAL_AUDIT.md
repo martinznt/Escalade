@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.13.0
+# FINAL_AUDIT — Séances entraînement v8.22.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -631,3 +631,285 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
 - Une visite longue affiche une barre de progression. Avant, les points poussaient le bouton « Suivant » hors de l'écran.
 
 **Tests** : `global.test.mjs` passe à 11 tests (proposition, validation, acceptation, refus). E2E à 62 étapes : un utilisateur propose un système, l'administrateur est notifié, l'ouvre au bon endroit et l'accepte, et l'utilisateur le voit « pour tous ».
+
+## Évolution 8.14.0 : l'app se modifie sans code
+
+Tout se fait depuis Paramètres › Admin › « 🛠 Modifier l'app sans code ».
+
+**Modifier les textes**
+- En mode textes, l'administrateur touche n'importe quel texte de l'app et le réécrit pour tout le monde (type `text` : texte d'origine → nouveau texte).
+- Le remplacement s'applique partout où ce texte apparaît exactement pareil, par la même couche d'affichage que la traduction (`i18n.js`). « ↺ Remettre l'original » revient en arrière.
+
+**Annonces** (type `announce`)
+- Un titre, un message, et en option « note de mise à jour ».
+- L'annonce arrive dans la boîte 🔔 de tout le monde, en notification sur les téléphones abonnés aux nouveautés, et dans « Toutes les mises à jour » si c'est une note de mise à jour.
+
+**Mise en page pour tous** (type `layout`)
+- En enregistrant une mise en page, l'administrateur choisit « Pour tout le monde ». Elle devient alors la mise en page de base de tous les comptes qui n'ont pas la leur.
+- Ce qu'il a masqué est masqué pour tous. L'éditeur l'indique : « 🚫 masqué pour tous ».
+
+**Questions fréquentes et sources** (types `faq` et `source`) : modifier, ajouter ou retirer. Une source doit avoir un lien https.
+
+**Administrateurs**
+- Un administrateur peut nommer ou retirer un administrateur depuis la liste des comptes (`POST /api/admin/users/:id/role`). Le serveur refuse de retirer le dernier administrateur.
+- Tous ces changements apparaissent dans « Changements pour tout le monde », chacun avec « ↺ Annuler ».
+
+**Tests** : `global.test.mjs` passe à 15 tests (validation des nouveaux types, rôles, annonces, application puis retrait). E2E à 63 étapes : un texte réécrit et une annonce vus par un autre compte, puis annulés.
+
+**Ce qui demande encore du code** : une fonctionnalité vraiment nouvelle (un nouvel écran, un nouveau calcul), la correction d'un bug, la sécurité et l'hébergement.
+
+## Évolution 8.15.0 : séances multi-sports, fusion, demandes de modification
+
+**Un sport par partie**
+- Dans le format de séance, chaque partie peut avoir son sport (par exemple renfo, puis bloc, puis étirements).
+- `cleanParts` garde `activity`, validée par `/^[\w-]{1,40}$/`.
+- Le générateur prend, pour chaque partie, les exercices de son sport. Le titre de la partie indique le sport quand il diffère du sport principal.
+- Une partie d'escalade dans une séance multi-sports grimpe vraiment : un thème au mur (dalle, dévers, réglettes, résistance) quand le mur est disponible.
+
+**Fusionner des séances** (`public/merge.js`, sans DOM, testé)
+- On choisit 2 à 4 séances dans Bibliothèque › Mes séances › « 🔀 Fusionner ». Une **nouvelle** séance est créée : `source: 'merge'`, nouveaux identifiants. Les séances d'origine ne sont jamais modifiées.
+- La nouvelle séance a un seul échauffement et un seul retour au calme (les plus longs). Les exercices en double ne sont gardés qu'une fois, et une note l'explique.
+- Le conseil est noté sur 100, avec des règles simples et affichées :
+  - complémentarité (recouvrement des capacités travaillées) ;
+  - plusieurs sports ;
+  - durée totale ;
+  - doigts sollicités fort deux fois (Schöffl 2006) ;
+  - ordre conseillé : le plus technique et le plus intense d'abord (ACSM 2009).
+- « 💡 Quelles séances fusionner ? » classe les paires de ses séances actives. « 💬 Demander au coach » prépare la question pour le coach.
+
+**Demandes de modification**
+- Quand quelqu'un qui n'est pas administrateur modifie un exercice ou une séance prête, il choisit entre « Pour moi seulement » et « 💡 Proposer pour tout le monde ».
+- La demande part aux administrateurs avec l'élément visé (`target`, validé) et la page d'origine (`from`).
+- Si l'admin accepte, l'élément visé est mis à jour pour tous (`ON CONFLICT(kind,id) DO UPDATE`, sans doublon).
+- « 💡 Proposer une amélioration » (Paramètres, menu ☰, recherche) envoie une idée libre avec la page où l'on était.
+
+**Tests**
+- Nouveau fichier `merge.test.mjs` (5 tests).
+- `format.test.mjs` : multi-sports.
+- `global.test.mjs` passe à 17 tests : demande ciblée acceptée, idée.
+- E2E : fusion, et demande d'un non-admin appliquée par l'admin.
+
+## Évolution 8.16.0 : ranger ses séances
+
+**Chaque séance a**
+- **plusieurs sports** : le sport principal, plus d'autres (`sports`, identifiants validés, 8 au plus). Le générateur multi-sports et la fusion les remplissent tout seuls.
+- **un lieu** (`context.env`), avec « ＋ Ajouter un lieu » qui mène à Profil › Matériel et lieux.
+- **des catégories** : Force, Doigts, Technique, Gainage, Puissance, Endurance, Mobilité, plus les siennes (`tags`, 8 au plus).
+  - Sans choix, elles sont **reconnues d'après ce que travaillent les exercices** (au moins un quart du travail).
+  - Toucher une catégorie fixe la liste à la main.
+
+**Mes séances** (`public/sfilter.js`, sans DOM, testé)
+- Une recherche (nom de séance ou d'exercice) et un bouton « ⇅ Trier » qui ouvre une liste claire.
+- Filtres :
+  - lieux ;
+  - un ou plusieurs sports (la séance en contient au moins un) ;
+  - catégories.
+- Dix tris :
+  - récentes ;
+  - **selon ma forme du jour** (fatigué / normal / en forme : l'intensité la plus proche d'abord, et les plus courtes si fatigué) ;
+  - pas faites depuis longtemps ;
+  - les plus faites ;
+  - les plus courtes ou les plus longues ;
+  - les plus douces ou les plus intenses ;
+  - par nom ;
+  - par sport.
+- Les filtres actifs sont affichés en puces qu'on retire d'un toucher. Le choix est gardé sur l'appareil (préférence d'affichage, pas une donnée).
+- L'app ne mesure pas la forme du jour : c'est l'utilisateur qui la choisit.
+
+**Tests**
+- Nouveau fichier `sfilter.test.mjs` (4 tests).
+- E2E : sports et catégories ajoutés dans l'éditeur, filtre par sport, tri « selon ma forme », puce retirée, recherche sans résultat, puis « Effacer ».
+
+## Évolution 8.17.0 : regrouper et modifier plusieurs séances
+
+**Regrouper par** lieu, sport ou catégorie (dans « ⇅ Trier »)
+- La liste garde son tri à l'intérieur de chaque groupe. `groupSessions` est pur et testé.
+- Une séance à plusieurs sports ou catégories apparaît dans chacun de ses groupes. Les groupes « sans » sont à la fin.
+
+**Sélection de plusieurs séances** (« ☑ Sélectionner plusieurs séances »)
+- Actions possibles : tout cocher, donner un lieu, ajouter une catégorie, ajouter un sport, fusionner (2 à 4), archiver ou désarchiver (avec confirmation).
+- Chaque séance est enregistrée normalement (synchronisation, dernière modification gagnante).
+- Pendant la sélection, les boutons Lancer, Ouvrir et Planifier sont cachés. La sélection s'efface en changeant de page ou de filtre.
+
+**Tests** : `sfilter.test.mjs` passe à 5 tests. E2E : groupes par catégorie, puis sélection de 2 séances et catégorie ajoutée aux deux.
+
+## Évolution 8.18.0 : c'est quoi, à quoi ça sert, pourquoi
+
+Chaque séance et chaque exercice répond à trois questions (`public/explain.js`, sans DOM, testé). Tout est construit à partir des vraies données, rien n'est inventé.
+
+**Exercice**
+- **C'est quoi ?**
+  - Le type d'exercice (21 types), à tenir combien de temps ou combien de répétitions, le matériel et les muscles.
+  - Un administrateur peut écrire son propre texte (« C'est quoi ? » dans la fiche de modification, champ `what`, validé côté serveur).
+- **À quoi ça sert ?** Le bénéfice de la bibliothèque, plus les capacités développées.
+- **Pourquoi ici ?** (dans une séance)
+  - La raison donnée par le générateur.
+  - Sinon la place de l'exercice (échauffement, retour au calme).
+  - Sinon le lien avec les catégories de la séance.
+
+**Séance**
+- **C'est quoi ?** Les sports, le nombre d'exercices, la durée, les parties et l'intensité.
+- **À quoi ça sert ?** Les catégories et les capacités les plus travaillées.
+- **Pourquoi ?**
+  - Le pourquoi écrit par l'utilisateur (« ✎ Mon pourquoi », enregistré dans les notes de la séance).
+  - Sinon celui de la séance générée, prête ou fusionnée, ses objectifs ou ses intentions.
+
+**Où c'est affiché**
+- En haut de chaque séance : éditeur, générateur, séance partagée, séance prête.
+- Dans la fiche de chaque exercice : le nom d'un exercice dans une séance s'ouvre d'un toucher, même en mode modification.
+- Dans les exercices d'une séance prête.
+- Pendant la séance, dans un encadré repliable.
+
+**Correctif** : le « pourquoi » des séances prêtes était perdu quand on les gardait (texte au lieu d'une liste de notes). Il est maintenant enregistré.
+
+**Tests**
+- Nouveau fichier `explain.test.mjs` (5 tests) :
+  - les 143 exercices ont un « c'est quoi » et un « à quoi ça sert » sans trou ;
+  - les séances prêtes gardent leur pourquoi.
+- E2E : bloc « en bref », mon pourquoi, fiche d'exercice avec « Pourquoi ici ? », séance prête.
+
+## Évolution 8.19.0 : structurer sa séance d'escalade
+
+Nouvelle page : Bibliothèque › « 🧗 Structurer ma séance d'escalade ». Elle est aussi dans « Nouvelle séance » et dans la recherche. Code : `public/climbplan.js` (sans DOM, testé) et `public/views-climbplan.js`.
+
+**Cotations**
+- Le système utilisé est celui de la salle choisie, sinon un système personnel de l'activité, sinon la référence (Fontainebleau pour le bloc, cotation française pour la voie). On peut le changer.
+- Le maximum n'est utilisé que s'il est noté (performances max_bloc / max_voie, dans le même système ou par correspondance). Sinon on ne l'invente pas : les plages par défaut sont modestes et affichées « (auto) ».
+
+**Mode « objectif de fin de séance »** (ex. réussir un U8 en dévers et réglettes, en 2 h)
+- Déroulé :
+  1. échauffement général ;
+  2. échauffement en grimpant 4 à 5 crans sous l'objectif (U3–U4 pour U8), dans les styles choisis ;
+  3. montée (U5–U6) en pyramide ;
+  4. spécifique un cran sous l'objectif, style par style (si au moins 75 min) ;
+  5. essais sur l'objectif, avec des repos de 3 min ;
+  6. retour au calme.
+- Le temps disponible est réparti entre les parties.
+- Un conseil honnête est affiché si le maximum est connu : ambitieux, un cran au-dessus, ou dans tes cordes.
+
+**Mode « je structure moi-même »**
+- Des parties (bloc, voie, échauffement, renfo, gainage, mobilité, étirements, retour au calme), chacune avec sa durée. On peut les réordonner et ajuster le total au temps disponible.
+- Pour chaque partie de grimpe :
+  - bloc ou voie ;
+  - intensité (tranquille / modéré / intense / max) ;
+  - cotations de… à… (ou automatiques) ;
+  - un ou plusieurs styles.
+- **Plusieurs structures proposées**, les plus adaptées à l'intensité d'abord :
+  - bloc : pyramide, blocs max, tour des styles, 4×4, volume facile, technique par style ;
+  - voie : voies max, pyramide, voies enchaînées, continuité.
+- **« Adapter à ce que j'ai fait avant »** : un choix de l'utilisateur, jamais automatique.
+  - La charge des parties précédentes est estimée (doigts, puissance, endurance) d'après la durée, l'intensité et les styles.
+  - Au-delà d'un seuil, la partie garde moins de styles à doigts (réglettes, petites prises…) et descend d'un ou deux crans.
+  - L'explication est affichée.
+- Les parties « corps » sont construites par le générateur habituel, selon le matériel.
+
+**Résultat** : un aperçu. Rien n'est enregistré tant que l'utilisateur ne choisit pas ▶ Lancer ou 💾 Enregistrer. La séance a ses sports (bloc et/ou voie), son objectif et son pourquoi.
+
+**Affichage** : une étape de grimpe s'écrit « 15 blocs · repos 2 min » (et non plus « 15 × 1 blocs »).
+
+**Tests**
+- Nouveau fichier `climbplan.test.mjs` (7 tests) : systèmes, objectif U8, peu de temps, parties au choix, structures, cotations, adaptation.
+- E2E : les deux modes, choix d'une structure et d'un style, enregistrement.
+
+## Évolution 8.20.0 : « Surprends-moi », échauffement et étirements réglables
+
+**🎲 Surprends-moi** (`public/surprise.js`, sans DOM, testé)
+- On ne précise que ce qu'on veut : sport, temps, forme… ou rien. L'orientation est au choix :
+  - **🆕 Nouveau pour moi** ;
+  - **📈 Pour progresser** ;
+  - **🎲 Au hasard** entre les deux.
+- **Escalade**
+  - Les habitudes viennent de l'historique réel : styles reconnus dans les noms d'exercices, structures notées `cp-…` sur chaque étape de grimpe. On sait combien de fois et quand chacun a été fait.
+  - « Nouveau » : les styles et structures les moins faits, avec le nombre de fois et la date (« jamais », « 3 fois, la dernière il y a 12 j »).
+  - « Progresser » :
+    - si un **objectif de cotation** est actif, la séance est construite en mode objectif ;
+    - sinon, les **styles faibles** d'après les maxima notés par style (ex. « Dalle : max U5 contre U7 au mieux »), avec des cotations calées sur le max de ce style (pas sur le max global) ;
+    - sans maxima par style, les styles les moins travaillés, en le disant.
+  - Fatigué : pas de blocs max ni de 4×4.
+- **Autres sports**
+  - « Nouveau » : jusqu'à 3 exercices jamais faits (`neverTried` : compatibles avec le matériel, utiles, pas d'intensité maximale), marqués 🆕 et nommés dans le pourquoi.
+  - « Progresser » : les axes de progrès du profil, ou l'objectif en cours.
+- Le **pourquoi de la surprise** est affiché et enregistré avec la séance. « 🔁 Une autre surprise » change la graine ; une même graine donne la même séance.
+- Durée si « peu importe » : 1 h 30 pour l'escalade, la durée habituelle pour le reste.
+
+**Échauffement et étirements**
+- Mode objectif : échauffement général Auto, sans, ou 5 à 30 min ; étirements à la fin sans, ou 5 à 30 min. Le temps de grimpe s'ajuste.
+- Mode parties : la durée de chaque partie se règle directement dans la liste. On peut toujours ajouter des parties échauffement ou étirements.
+
+**Accès** : Bibliothèque › Structurer ma séance, « Nouvelle séance › 🎲 Surprends-moi », et la recherche.
+
+**Tests**
+- Nouveau fichier `surprise.test.mjs` (6 tests) : habitudes, styles faibles, nouveau, progresser (style faible et objectif), fatigue et graine, autre sport.
+- E2E : mode objectif sans échauffement et avec étirements, surprise « nouveau », « une autre surprise ».
+
+## Évolution 8.21.0 : idées avec l'endroit à changer, mode ✏️ plus clair
+
+**Idée avec l'endroit** (pour tous les comptes)
+- Après avoir écrit son idée, on peut toucher « 📍 Choisir l'endroit à changer ». Une barre en haut dit quoi faire :
+  - « Touche l'endroit à changer » ;
+  - ou « Changer de page » pour naviguer d'abord, puis « 🎯 Viser ».
+- L'élément touché est entouré ; on confirme (« ✓ Joindre ») ou on en choisit un autre.
+- L'idée part avec la page, un sélecteur simple (`data-act`/`data-id` quand c'est unique, sinon un chemin court) et le texte visible.
+- Le serveur ne garde un sélecteur que s'il ne contient que des caractères sûrs (pas de `<`, pas de script). Le texte est borné à 120 caractères et toujours affiché échappé.
+
+**Côté administrateur**
+- En ouvrant l'idée, l'app va sur la bonne page et fait clignoter l'élément.
+- **« ✏️ Modifier pour tout le monde »** ouvre directement la bonne fiche :
+  - un exercice : sa fiche de modification ;
+  - une séance prête : sa fiche ;
+  - sinon : le texte, à réécrire pour tout le monde.
+- **« 👁 Voir l'endroit »** ferme la fiche et laisse une barre « Revenir à l'idée / ✏️ Modifier ».
+- On termine par « ✓ C'est noté » ou « ✗ Refuser » (la personne reçoit la réponse).
+- Si l'endroit n'existe plus, l'app le dit.
+
+**Mode ✏️ (mise en page)**
+- Titre « Personnaliser l'Accueil » et une explication en quatre lignes :
+  - Grand = un bloc sur la page ;
+  - Icône = un petit bouton en haut ;
+  - Masqué = n'apparaît plus ;
+  - ↑ ↓ pour l'ordre, 🎨 pour la couleur.
+- **« ✕ Quitter »** en haut (au lieu d'un simple « Édition ») et en bas. S'il y a des changements, l'app demande « Quitter sans enregistrer ? ».
+- **« 👁 Aperçu »** montre la vraie page avec les changements, avec une barre « ✏️ Continuer / ✓ Enregistrer ».
+- Une seule confirmation pour enregistrer, au lieu de deux (pour un administrateur, c'est le choix « pour moi / pour tout le monde » qui sert de confirmation).
+
+**Tests**
+- `global.test.mjs` passe à 18 tests : endroit gardé, sélecteur dangereux ignoré.
+- E2E :
+  - mise en page : Quitter (rien ne change), Aperçu, Enregistrer ;
+  - idée avec l'endroit : B change de page, vise un titre et l'envoie ; l'admin y va, modifie le texte pour tout le monde et le valide ; B voit le nouveau texte.
+
+## Évolution 8.22.0 : trois niveaux d'aide pour créer une séance
+
+Dans Bibliothèque › Structurer ma séance, on choisit d'abord **comment** créer la séance. Le point de départ (objectif, parties, surprise) reste au choix. Code : `public/guide.js` (sans DOM, testé), `climbplan.js` et `views-climbplan.js`.
+
+**🤖 L'app choisit tout**
+- La séance complète est proposée.
+- Ensuite, chaque partie a sa **durée réglable** (la séance se reconstruit) et un bouton **« 🧭 Options »** pour changer les exercices, ou la structure pour la grimpe.
+
+**🧭 L'app me guide**
+- Pour chaque partie (repliée, sauf celle en cours), 3 options sont cochées d'office (« conseillé »), avec « Voir toutes les options ».
+- Pour chaque option :
+  - ce qu'elle travaille ;
+  - au plus 2 conseils : « à faire en premier, ça demande d'être frais », « si tu prends aussi X, fais celui-ci avant », « si tu veux plus de force des doigts, prends plutôt Y », « tes doigts ont déjà travaillé : très léger aujourd'hui ».
+- « Je veux plus de… » (force des doigts, résistance…) reclasse les options.
+- Un rappel par partie (ex. doigts : seulement après un échauffement des doigts).
+- L'**ordre conseillé** est appliqué (le plus exigeant d'abord), avec des remarques (deux exercices très durs pour les doigts, tout sur le même travail…).
+- Pour la grimpe, les options sont les structures (blocs max, pyramide, 4×4…), avec ce qu'elles travaillent et où les placer dans la séance.
+
+**✋ Je compose moi-même** : rien n'est imposé. Chaque partie commence vide et on choisit dans la liste de la partie, ou dans tout le catalogue, avec une recherche.
+
+**Nouvelles parties** : 🖐️ Doigts, ⚡ Puissance, 🎯 Technique, 🔋 Endurance, 🛡️ Prévention.
+
+**Assemblage**
+- Le temps de la partie est partagé entre les exercices choisis.
+- Les séries sont calculées avec le repos, et plafonnées pour les exercices intenses (ex. suspensions max : 5 séries au plus).
+- Plusieurs structures de grimpe choisies se partagent le temps de la partie.
+
+**Dans toute séance enregistrée**
+- Chaque partie a « 🧭 Options » : l'ordre conseillé (avec « ↕️ Mettre dans l'ordre conseillé ») et d'autres exercices proches, du même rôle et compatibles avec le matériel, à ajouter d'un toucher.
+
+**Correctif** : la barre « Touche l'endroit à changer » (idées) cachait le haut de la page. Elle est maintenant en bas, au-dessus des onglets.
+
+**Tests**
+- Nouveau fichier `guide.test.mjs` (6 tests) : options et matériel, conseils, « je veux plus de », ordre, assemblage et temps, exercices proches.
+- E2E : les trois niveaux d'aide, la durée d'une partie modifiée, un choix dans les options, et 🧭 dans une séance enregistrée.

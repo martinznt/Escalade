@@ -18,6 +18,7 @@ import { hrSupported, hrConnect, hrConnected, hrNow, onHr } from './hr.js';
 import { celebrate } from './fx.js';
 import { figure } from './anim.js';
 import { beep } from './sound.js';
+import { exWhat, exUse, exWhyHere } from './explain.js';
 
 let wakeLock = null, timer = null;
 const buzz = (p) => { if (S.settings.vibration && navigator.vibrate) try { navigator.vibrate(p); } catch { /* rien */ } };
@@ -156,9 +157,11 @@ function draw(anim = false) {
 }
 function stepper(k, value, unit, label) { return h`<div class="center"><div class="muted small">${label}</div><div class="stepper"><button data-act="pAdj" data-k="${k}" data-d="-1" aria-label="Moins">−</button><b>${value}<span class="small muted"> ${unit}</span></b><button data-act="pAdj" data-k="${k}" data-d="1" aria-label="Plus">+</button></div></div>`; }
 /** Consignes de l'exercice, affichées à chaque série (et pendant le repos, pour la série qui suit). */
-function cues(ex) {
-  if (!ex.ok.length && !ex.bad.length) return '';
-  return h`<div class="card cues">${ex.ok.length ? h`<b>📋 Consignes</b><ul>${ex.ok.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${ex.bad.length ? h`<b class="small">⚠️ À éviter</b><ul class="bad">${ex.bad.map((c) => h`<li>${c}</li>`)}</ul>` : ''}</div>`;
+function cues(ex, sess) {
+  const use = exUse(ex), here = sess ? exWhyHere(ex, sess) : '';
+  const brief = h`<details class="how mini"><summary>🧐 C’est quoi ? À quoi ça sert ?</summary><p class="small"><b>C’est quoi ?</b> ${exWhat(ex)}</p>${use ? h`<p class="small"><b>À quoi ça sert ?</b> ${use}</p>` : ''}${here ? h`<p class="small"><b>Pourquoi ici ?</b> ${here}</p>` : ''}</details>`;
+  if (!ex.ok.length && !ex.bad.length) return h`<div class="card cues">${brief}</div>`;
+  return h`<div class="card cues">${ex.ok.length ? h`<b>📋 Consignes</b><ul>${ex.ok.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${ex.bad.length ? h`<b class="small">⚠️ À éviter</b><ul class="bad">${ex.bad.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${brief}</div>`;
 }
 function vSet(p) {
   const ex = cur(), t = ex.mode === 'time', working = p.phase === 'work';
@@ -169,7 +172,7 @@ function vSet(p) {
     ${working ? h`<div class="timer" id="ptimer">${mmss(Math.max(0, Math.ceil(((p.paused ? p.remaining : p.end - Date.now())) / 1000)))}</div><div class="bar"><i id="pbar2" style="width:0%"></i></div><button class="btn big pri" data-act="pWorkDone">✓ Terminer la série</button>`
       : h`${t ? stepper('secs', p.secs, 's', 'Durée') : stepper('reps', p.reps, ex.unit || 'rép.', 'Répétitions faites')}${!t && usesLoad ? stepper('load', p.load, 'kg', 'Charge') : ''}
         <button class="btn pri big" data-act="pGo" ${p.paused ? 'disabled' : ''}>${t ? `▶ Démarrer (${mmss(p.secs)})` : '✓ Série faite'}</button>`}
-    ${cues(ex)}
+    ${cues(ex, p.s)}
     ${next ? h`<p class="tiny muted center">Ensuite : ${next.name}${partLeft(p)}</p>` : ''}`;
 }
 /** Séance au format choisi : temps restant de la partie en cours, et la partie suivante. */
@@ -185,7 +188,7 @@ function vRest(p) {
   return h`<div class="center"><div class="muted">Repos</div></div><div class="timer rest" id="ptimer">${mmss(Math.max(0, Math.ceil((p.paused ? p.remaining : p.end - Date.now()) / 1000)))}</div><div class="bar"><i id="pbar2" style="width:0%"></i></div>
     <div class="center muted">Ensuite : <b>${ex.name} — série ${p.set + 1}/${ex.sets}</b></div>
     <div class="grid2"><button class="btn big" data-act="pRestAdd">+ 30 s</button><button class="btn pri big" data-act="pRestSkip">Passer le repos</button></div>
-    ${cues(ex)}`;
+    ${cues(ex, p.s)}`;
 }
 /* ───────── Questionnaire adaptatif post-séance ───────── */
 function doneExercises(p) { return p.log.map((l, i) => ({ ...l, ex: p.s.exercises[i] })).filter((l) => l.sets.length); }

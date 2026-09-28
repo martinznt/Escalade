@@ -4,6 +4,7 @@ import * as G from '../public/generator.js';
 import { exMinutes, sessionMinutes } from '../public/engine.js';
 import { PART_TYPES, cleanParts, presetParts, scaleParts, splitMinutes, totalMinutes, formatAdvice, parseFormats, stretchBeforeEffort } from '../public/format.js';
 import { act, env, ctxOf } from './fixtures.mjs';
+import { byId } from '../public/library.js';
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓', name); };
 const home = (eq = ['mat', 'bar', 'band']) => ctxOf({ items: [act('conditioning'), act('strength'), act('running'), act('climbing_boulder'), env('Maison', eq)] });
 const partMinutes = (s) => { const m = new Map(); for (const e of s.exercises) m.set(e.part, (m.get(e.part) || 0) + exMinutes(e)); return m; };
@@ -64,5 +65,17 @@ ok('escalade au format choisi : échauffement, grimpe, renfo, étirements', () =
 ok('durée longue sans format (2 h 30) : la séance est vraiment longue', () => {
   const s = G.generateFromPlan(G.planSession({ activityId: 'conditioning', minutes: 150, seed: 1 }, home()), home()).session;
   assert.ok(sessionMinutes(s) >= 100, `${sessionMinutes(s)} min`);
+});
+ok('séance multi-sports : chaque partie garde son sport (renfo puis bloc), le sport est dans le titre de la partie', () => {
+  const c = ctxOf({ items: [act('conditioning'), act('climbing_boulder'), env('Salle', ['mat', 'bar', 'band', 'wall', 'hangboard'])] });
+  assert.deepEqual(cleanParts([{ type: 'main', minutes: 20, activity: 'climbing_boulder' }, { type: 'main', minutes: 20, activity: '<bad>' }]), [{ type: 'main', minutes: 20, activity: 'climbing_boulder' }, { type: 'main', minutes: 20 }]);
+  assert.equal(scaleParts([{ type: 'main', minutes: 30, activity: 'climbing_boulder' }], 60)[0].activity, 'climbing_boulder');
+  for (const seed of [1, 2, 3, 4]) {
+    const plan = G.planSession({ activityId: 'conditioning', parts: [{ type: 'warmup', minutes: 10 }, { type: 'strength', minutes: 25 }, { type: 'main', minutes: 30, activity: 'climbing_boulder' }, { type: 'stretch', minutes: 10 }], seed }, c);
+    const s = G.generateFromPlan(plan, c).session, climb = s.exercises.filter((e) => /Escalade — bloc/.test(e.part));
+    assert.ok(climb.length, `seed ${seed} : partie bloc présente`);
+    assert.ok(climb.some((e) => byId(e.libId)?.needs?.includes('wall')), `seed ${seed} : on grimpe vraiment dans la partie bloc`);
+    assert.ok(!s.exercises.filter((e) => e.part === '🏋️ Renforcement').some((e) => byId(e.libId)?.needs?.includes('wall')), 'renfo sans mur');
+  }
 });
 console.log(`\n${n} tests du format de séance OK`);

@@ -185,7 +185,7 @@ export function planSession(opts = {}, ctx) {
   let rest = B.main;
   distribution.slice(0, Math.min(3, B.maxN)).forEach((d, i, arr) => { const mm = i === arr.length - 1 ? rest : Math.round((B.main * d.pct) / 100); rest -= mm; blocks.push({ kind: 'main', label: d.label, minutes: mm, capId: d.capId, reason: d.reasons[0] }); });
   if (B.cool) blocks.push({ kind: 'cool', label: 'Retour au calme', minutes: B.cool, reason: 'Redescendre en douceur.' });
-  if (parts.length) blocks.splice(0, blocks.length, ...parts.map((p, i) => ({ kind: PART_TYPES[p.type].block, label: partLabel(p.type), minutes: p.minutes, reason: p.type === 'stretch' && stretchBeforeEffort(parts, i) ? 'Placée avant l’effort : mouvements dynamiques plutôt qu’étirements tenus.' : 'Partie choisie dans ton format.' })));
+  if (parts.length) blocks.splice(0, blocks.length, ...parts.map((p, i) => ({ kind: PART_TYPES[p.type].block, label: partLabel(p.type) + (p.activity && p.activity !== activityId ? ` · ${ACTIVITIES[p.activity]?.emoji || ''}` : ''), minutes: p.minutes, reason: p.type === 'stretch' && stretchBeforeEffort(parts, i) ? 'Placée avant l’effort : mouvements dynamiques plutôt qu’étirements tenus.' : 'Partie choisie dans ton format.' })));
   const intensityWord = light ? 'légère' : level >= 2 ? 'soutenue' : level >= 1 ? 'modérée' : 'progressive';
   const est = Math.max(1, Math.min(5, (light ? 1 : 2) + level + ((opts.intentions || []).some((i) => ['force', 'puissance'].includes(i.id)) ? 1 : 0) + (minutes >= 75 ? 1 : 0) - (minutes <= 12 ? 1 : 0)));
   const constraints = excluded.filter((e) => e.why.some((w) => /doigts|jambes|ménager/.test(w))).slice(0, 4).map((e) => `${e.x.name} : ${e.why.join(', ')}`);
@@ -305,29 +305,32 @@ const MOBILITY = ['mob-hips', 'mob-thoracic', 'mob-shoulders', 'mob-ankles', 'mo
 /** Séance au format choisi : chaque partie est construite pour son temps, dans l'ordre voulu. */
 function generateParts(plan, ctx, eq) {
   const why = [], excluded = [], out = [], used = new Set();
-  const climbing = isClimbing(plan.activityId);
-  const pool = (act) => candidates(act, ctx, { eq, level: plan.level, light: plan.light, noPlyo: plan.noPlyo, zones: plan.avoidZones || [] });
-  const own = pool(plan.activityId), gym = climbing ? pool('conditioning') : own;
+  const pools = {}, pool = (act) => (pools[act] ||= candidates(act, ctx, { eq, level: plan.level, light: plan.light, noPlyo: plan.noPlyo, zones: plan.avoidZones || [] }));
   const planTargets = Object.fromEntries(plan.distribution.map((d) => [d.capId, d.weight]));
   const has = (id) => byId(id) && byId(id).needs.every((n) => eq.has(n));
   // Évite de refaire les mêmes exercices d'une partie à l'autre (sauf s'il n'y a rien d'autre).
   const fresh = (ids) => { const f = ids.filter((id) => !used.has(id)); return f.length ? f : ids; };
   plan.parts.forEach((p, i) => {
-    const T = PART_TYPES[p.type], label = partLabel(p.type), tag = (list) => list.map((e) => { used.add(e.libId); return normalizeEx({ ...e, part: label, block: T.block }); });
+    // Séance multi-sports : chaque partie peut avoir son sport (ex. renfo puis bloc).
+    const act = p.activity && (ACTIVITIES[p.activity] || ctx.activities[p.activity]) ? p.activity : plan.activityId, climbing = isClimbing(act);
+    const own = pool(act), gym = climbing ? pool('conditioning') : own;
+    const T = PART_TYPES[p.type], label = partLabel(p.type) + (act !== plan.activityId ? ` · ${ACTIVITIES[act]?.emoji || ctx.activities[act]?.emoji || ''} ${ACTIVITIES[act]?.label || ctx.activities[act]?.label || act}` : ''), tag = (list) => list.map((e) => { used.add(e.libId); return normalizeEx({ ...e, part: label, block: T.block }); });
     if (p.type === 'warmup') {
-      const ids = [...(WARM[plan.activityId] || (climbing ? ['wu-pulse', 'wu-mob-upper', 'wu-wrists', 'wu-scap-floor', 'wu-climb', 'wu-hang'] : WARM.custom))].filter(has);
+      const ids = [...(WARM[act] || (climbing ? ['wu-pulse', 'wu-mob-upper', 'wu-wrists', 'wu-scap-floor', 'wu-climb', 'wu-hang'] : WARM.custom))].filter(has);
       out.push(...tag(fillBlock(buildBlock(fresh(ids), 'warmup', p.minutes, {}), p.minutes))); return;
     }
     if (p.type === 'stretch' || p.type === 'cool') {
       const dyn = p.type === 'stretch' && stretchBeforeEffort(plan.parts, i);
-      const ids = (p.type === 'cool' ? ['cd-breath', ...(COOL[plan.activityId] || COOL.custom)] : dyn ? STRETCH_DYNAMIC : STRETCH_STATIC).filter(has);
+      const ids = (p.type === 'cool' ? ['cd-breath', ...(COOL[act] || COOL.custom)] : dyn ? STRETCH_DYNAMIC : STRETCH_STATIC).filter(has);
       if (dyn) why.push('Étirements placés avant l’effort : mouvements dynamiques (les étirements tenus longtemps juste avant baissent un peu la performance).');
       out.push(...tag(fillBlock(buildBlock(fresh([...new Set(ids)]), 'cool', p.minutes, {}), p.minutes))); return;
     }
     if (p.type === 'mobility') { out.push(...tag(fillBlock(buildBlock(fresh(MOBILITY.filter(has)), 'main', p.minutes, {}), p.minutes))); return; }
     if (p.type === 'main' && climbing) {
       const settings = climbSettings(ctx, eq);
-      const r = climbGenerate({ size: p.minutes <= 38 ? 'petite' : p.minutes <= 62 ? 'moyenne' : 'grosse', focus: plan.light ? 'dalle' : 'surprise', feeling: plan.light ? 'fatigue' : 'normal', equipment: settings.equipment, seed: plan.seed + i }, { settings, history: ctx.history, now: ctx.now });
+      // Partie d'escalade dans une séance multi-sports : on grimpe vraiment (sur le mur), le renfo est dans les autres parties.
+      const onWall = act !== plan.activityId && eq.has('wall') ? ['dalle', 'devers', 'reglette', 'resistance'][(plan.seed + i) % 4] : 'surprise';
+      const r = climbGenerate({ size: p.minutes <= 38 ? 'petite' : p.minutes <= 62 ? 'moyenne' : 'grosse', focus: plan.light ? 'dalle' : onWall, feeling: plan.light ? 'fatigue' : 'normal', equipment: settings.equipment, seed: plan.seed + i }, { settings, history: ctx.history, now: ctx.now });
       const items = r.session.exercises.filter((e) => e.block === 'main').map((ex) => ({ ex: normalizeEx(ex), lib: byId(ex.libId) || {} }));
       fitTime(items, p.minutes); while (items.length > 1 && items.reduce((t, x) => t + exMinutes(x.ex), 0) > p.minutes * 1.15) items.pop();
       for (const it of items) used.add(it.ex.libId);
@@ -418,7 +421,7 @@ export function generateFromPlan(plan, ctx) {
   const name = plan.goalLabel ? `${plan.goalLabel} — ${plan.minutes} min` : `${plan.activityLabel} — ${plan.light ? 'séance légère' : plan.mode === 'strengths' ? 'points forts' : 'axes de progrès'} ${plan.minutes} min`;
   const session = normalizeSession({
     id: uid(), name, emoji: ACTIVITIES[plan.activityId]?.emoji || ctx.activities[plan.activityId]?.emoji || '🎯', goal: plan.goalId ? 'goal' : plan.mode, source: 'generated',
-    durationMin: sessionMinutes({ exercises }), objectives: [plan.intentionText], activity: plan.activityId, intentions: plan.intentions,
+    durationMin: sessionMinutes({ exercises }), objectives: [plan.intentionText], activity: plan.activityId, sports: (plan.parts || []).map((p) => p.activity).filter((a) => a && a !== plan.activityId), intentions: plan.intentions,
     context: { env: plan.envId, envName: plan.envName, equipment: plan.equipment, plannedMin: plan.minutes, goalId: plan.goalId },
     notes: [
       { title: 'Pourquoi cette séance', text: [plan.intentionText + '.', ...why].join('\n') },

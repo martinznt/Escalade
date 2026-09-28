@@ -6,6 +6,11 @@ import './duo.js';
 import './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon, ls } from './state.js';
 import { cleanParts } from './format.js';
+import { vClimbPlan } from './views-climbplan.js';
+import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
+import { orderAdvice, similarOptions } from './guide.js';
+import { exWhat, exUse, exWhyHere, sessionWhat, sessionUse, sessionWhy } from './explain.js';
+import { CATS, SORTS, FORMS, GROUPS, groupSessions, filterSessions, activeFilters, categoriesOf, autoCategories, sportsOf, placeOf, intensityOf, INTENSITY_LABEL } from './sfilter.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
@@ -44,9 +49,9 @@ export function vLibrary() {
   if (sub === 'shared-edit' && S.sharedDraft) return vEditor(S.sharedDraft.session, 'shared');
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
-  const cur = ['seances', 'generate', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'home';
+  const cur = ['seances', 'climbplan', 'generate', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'home';
   if (cur === 'home') return vLibHome();
-  const views = { seances: vSeances, generate: vGenerate, catalog: vCatalog, best: vBest, exercises: vExercises, common: vCommon, search: vSearch };
+  const views = { seances: vSeances, climbplan: vClimbPlan, generate: vGenerate, catalog: vCatalog, best: vBest, exercises: vExercises, common: vCommon, search: vSearch };
   if (cur === 'best') return views.best(); // a son propre retour vers Exercices
   const [ic, t] = LIB_INFO[cur];
   return h`${subHead('libSub', 'home', 'Bibliothèque', `${ic} ${t}`)}${views[cur]()}`;
@@ -54,6 +59,7 @@ export function vLibrary() {
 const LIB_INFO = {
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
   generate: ['🎯', 'Sur mesure', () => 'L’app prépare une séance pour toi, au format que tu veux'],
+  climbplan: ['🧗', 'Structurer ma séance', () => 'Escalade : ton objectif ou tes parties (cotations, styles). Ou 🎲 Surprends-moi, tous sports'],
   catalog: ['🗂', 'Séances prêtes', () => `${CATALOG.length} séances expliquées et sourcées`],
   exercises: ['💪', 'Exercices', () => `${LIBRARY.length} exercices, et le top pour toi`],
   common: ['🌍', 'Partagées', () => 'Les séances publiées par la communauté'],
@@ -64,26 +70,163 @@ function vLibHome() {
   return h`<h1>📚 Bibliothèque</h1><button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
     ${menuList(Object.entries(LIB_INFO).map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
 }
-ACT.libSub = (el) => { closeSheet(); window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
+ACT.libSub = (el) => { closeSheet(); S.sel = null; window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
 /* ═════════ Mes séances ═════════ */
+const SF_KEY = 'sea:seances-filter';
+const sf = () => (S.sfilter ||= { sort: 'recent', form: 'normal', places: [], sports: [], cats: [], q: '', ...(ls.get(SF_KEY, {}) || {}) });
+const sfSave = () => { const { q, ...keep } = sf(); ls.set(SF_KEY, keep); };
+const sportName = (id) => { const c = ctx(), a = c.activities[id] || ACTIVITIES[id]; return a ? `${a.emoji || '🏅'} ${a.label}` : id; };
+const catName = (k) => (CATS[k] ? `${CATS[k].emoji} ${CATS[k].label}` : `🏷 ${k}`);
+const placeName = (id) => (id === 'none' ? '📍 Sans lieu' : `📍 ${ctx().envs.find((e) => e.id === id)?.name || S.seances.items.find((s) => s.context?.env === id)?.context?.envName || 'Lieu'}`);
 function vSeances() {
-  const f = S.filters.seances || 'active';
-  const list = S.seances.items.filter((s) => (f === 'archived' ? s.archived : f === 'templates' ? s.template && !s.archived : !s.archived));
+  const st = S.filters.seances || 'active', f = sf();
+  const list = filterSessions(S.seances.items, { ...f, status: st }, S.history);
+  const nf = activeFilters(f), total = S.seances.items.filter((s) => (st === 'archived' ? s.archived : st === 'templates' ? s.template && !s.archived : !s.archived)).length;
+  const on = [...f.places.map((x) => ['places', x, placeName(x)]), ...f.sports.map((x) => ['sports', x, sportName(x)]), ...f.cats.map((x) => ['cats', x, catName(x)])];
   return h`<button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
-    <div class="chips">${[['active', 'Actives'], ['templates', 'Modèles'], ['archived', 'Archivées']].map(([k, l]) => chip(f === k, l, `data-act="seanceFilter" data-id="${k}"`))}</div>
-    ${list.length ? list.map((s) => h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : ''}</div></div></div>
-      <div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div></div>`)
-      : empty(f === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
+    ${S.seances.items.filter((s) => !s.archived && s.exercises.length).length >= 2 ? h`<button class="btn" data-act="mergeOpen">🔀 Fusionner des séances</button>` : ''}
+    <div class="chips">${[['active', 'Actives'], ['templates', 'Modèles'], ['archived', 'Archivées']].map(([k, l]) => chip(st === k, l, `data-act="seanceFilter" data-id="${k}"`))}</div>
+    <div class="row sfbar"><input type="search" class="grow" data-input="sfQ" value="${f.q}" placeholder="🔍 Chercher une séance ou un exercice" aria-label="Chercher dans mes séances">
+      <button class="btn ${nf ? 'pri' : ''}" data-act="sfOpen">⇅ Trier${nf ? ` · ${nf}` : ''}</button></div>
+    <div class="muted small">${SORTS[f.sort]?.[0] || ''} ${SORTS[f.sort]?.[1] || ''}${f.sort === 'form' ? ` : ${FORMS[f.form]?.[1] || ''}` : ''} · ${list.length}${list.length !== total ? ` sur ${total}` : ''} séance(s)</div>
+    ${on.length ? h`<div class="chips">${on.map(([k, v, l]) => h`<button type="button" class="chip on" data-act="sfDrop" data-k="${k}" data-v="${v}" aria-label="Retirer le filtre">${l} ✕</button>`)}</div>` : ''}
+    ${S.sel ? h`<div class="card acc-b selbar"><div class="row between"><b>☑ ${S.sel.length} sélectionnée(s)</b><button class="btn sm ghost" data-act="selEnd">Terminer</button></div>
+      <div class="row wrapf"><button class="btn sm" data-act="selAll">Tout</button><button class="btn sm" data-act="selBulk" data-id="place" ${S.sel.length ? '' : 'disabled'}>📍 Lieu</button><button class="btn sm" data-act="selBulk" data-id="cat" ${S.sel.length ? '' : 'disabled'}>🗂 Catégorie</button><button class="btn sm" data-act="selBulk" data-id="sport" ${S.sel.length ? '' : 'disabled'}>🏷 Sport</button><button class="btn sm" data-act="selMerge" ${S.sel.length >= 2 && S.sel.length <= 4 ? '' : 'disabled'}>🔀 Fusionner</button><button class="btn sm" data-act="selArchive" ${S.sel.length ? '' : 'disabled'}>${st === 'archived' ? '↩ Désarchiver' : '🗄 Archiver'}</button></div></div>`
+      : list.length ? h`<button class="btn sm ghost" data-act="selStart">☑ Sélectionner plusieurs séances</button>` : ''}
+    ${list.length ? groupSessions(list, f.group).map((g) => h`${g.key ? h`<div class="blockhead">${groupName(f.group, g.key)} · ${g.items.length}</div>` : ''}${g.items.map(seanceCard)}`)
+      : nf ? h`<div class="card flat"><p class="muted">Aucune séance avec ces filtres.</p><button class="btn" data-act="sfClear">Effacer les filtres</button></div>`
+      : empty(st === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
 }
+function seanceCard(s) {
+  const sel = S.sel?.includes(s.id); const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card ${sel ? 'on-b' : ''}"><div class="row">${S.sel ? h`<button class="selbox ${sel ? 'on' : ''}" data-act="selTog" data-id="${s.id}" aria-pressed="${!!sel}" aria-label="Sélectionner">${sel ? '✓' : ''}</button>` : ''}<div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
+      <div class="tiny muted">${s.context?.env ? placeName(s.context.env) + ' · ' : ''}${cats.map(catName).join(' · ')}</div></div></div>
+      ${S.sel ? '' : h`<div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div>`}</div>`;
+}
+const groupName = (by, k) => (by === 'place' ? placeName(k) : by === 'sport' ? (k === 'none' ? '🏷 Sans sport' : sportName(k)) : k === 'none' ? '🗂 Sans catégorie' : catName(k));
+/** « C'est quoi ? · À quoi ça sert ? · Pourquoi ? » d'une séance, en trois lignes courtes. */
+export function sessionBrief(s, { edit = false, minutes = 0 } = {}) {
+  const why = sessionWhy(s, (id) => INTENTIONS[id]?.label || id), use = sessionUse(s);
+  const row = (ic, q, t, extra = '') => h`<div class="w3"><span class="w3i">${ic}</span><div class="grow"><b>${q}</b><p>${t}</p></div>${extra}</div>`;
+  return h`<div class="card brief">${row('🧐', 'C’est quoi ?', sessionWhat(s, (id) => sportName(id).replace(/^\S+\s/, ''), minutes))}${use ? row('🎯', 'À quoi ça sert ?', use) : ''}
+    ${why.text || edit ? row('💡', why.mine ? 'Mon pourquoi' : 'Pourquoi ?', why.text || h`<span class="muted">Écris pourquoi tu fais cette séance : ça aide à rester motivé.</span>`, edit ? h`<button class="btn sm ic" data-act="sWhy" aria-label="Écrire mon pourquoi">✎</button>` : '') : ''}</div>`;
+}
+/** Les trois questions pour un exercice (dans une séance, « Pourquoi ici ? » en plus). */
+export function exerciseBrief(e, s) {
+  const use = exUse(e), here = s ? exWhyHere(e, s) : '';
+  const row = (ic, q, t) => h`<div class="w3"><span class="w3i">${ic}</span><div class="grow"><b>${q}</b><p>${t}</p></div></div>`;
+  return h`<div class="card flat brief">${row('🧐', 'C’est quoi ?', exWhat(e))}${use ? row('🎯', 'À quoi ça sert ?', use) : ''}${here ? row('💡', 'Pourquoi ici ?', here) : ''}</div>`;
+}
+ACT.sWhy = () => {
+  const e = editing(); if (!e) return; const cur = e.s.notes.find((n) => n.title === 'Pourquoi')?.text || '';
+  openSheet(h`<form data-submit="sWhyGo" class="stack"><h2 style="margin:0">💡 Mon pourquoi</h2><p class="small muted">Pourquoi tu fais cette séance ? Une phrase suffit.</p>
+    <textarea name="why" rows="3" maxlength="400" placeholder="Ex. Tenir 10 s de plus sur les réglettes pour mon projet au Bloc Club">${cur}</textarea><button class="btn pri big">Enregistrer</button></form>`);
+};
+SUBMIT.sWhyGo = (f) => { const t = String(new FormData(f).get('why') || '').trim().slice(0, 400); closeSheet(); edit((s) => ({ ...s, notes: [...s.notes.filter((n) => n.title !== 'Pourquoi'), ...(t ? [{ title: 'Pourquoi', text: t }] : [])] })); };
+/* Trier et filtrer : une liste claire, comme les Paramètres. Plusieurs sports, lieux ou catégories à la fois. */
+function sfSheet() {
+  const f = sf(), all = S.seances.items.filter((s) => !s.archived);
+  const places = [...new Set([...ctx().envs.map((e) => e.id), ...all.map(placeOf)])];
+  const sports = [...new Set([...all.flatMap(sportsOf), ...Object.keys(ctx().activities)])];
+  const cats = [...new Set([...Object.keys(CATS).filter((k) => all.some((s) => categoriesOf(s).includes(k))), ...all.flatMap((s) => s.tags || [])])];
+  const count = filterSessions(S.seances.items, { ...f, status: S.filters.seances || 'active' }, S.history).length;
+  const group = (k, ids, name) => h`<div class="chips">${ids.map((x) => chip(f[k].includes(x), name(x), `data-act="sfTog" data-k="${k}" data-v="${x}"`))}</div>`;
+  openSheet(h`<div class="stack"><h2 style="margin:0">⇅ Trier et filtrer</h2>
+    <span class="kicker">Lieu</span>${places.length ? group('places', places, placeName) : h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>`}
+    <span class="kicker">Sports (un ou plusieurs)</span>${group('sports', sports, sportName)}
+    <span class="kicker">Catégories</span>${cats.length ? group('cats', cats, catName) : h`<p class="tiny muted">Aucune catégorie pour l’instant.</p>`}
+    <span class="kicker">Regrouper par</span><div class="chips">${Object.entries(GROUPS).map(([k, [e, l]]) => chip((f.group || 'none') === k, `${e} ${l}`, `data-act="sfGroup" data-id="${k}"`))}</div>
+    <span class="kicker">Trier par</span>
+    <div class="setmenu">${Object.entries(SORTS).map(([k, [ic, l]]) => h`<button class="setrow" data-act="sfSort" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${l}</b>${k === 'form' ? h`<small>Les séances les plus adaptées à ton énergie d’aujourd’hui d’abord</small>` : ''}</span><span class="chev">${f.sort === k ? '✓' : ''}</span></button>${k === 'form' && f.sort === 'form' ? h`<div class="chips" style="padding:0 14px 12px">${Object.entries(FORMS).map(([fk, [e, l]]) => chip(f.form === fk, `${e} ${l}`, `data-act="sfForm" data-id="${fk}"`))}</div>` : ''}`)}</div>
+    <div class="grid2"><button class="btn" data-act="sfClear">Effacer</button><button class="btn pri" data-act="sfDone">Voir ${count} séance(s)</button></div></div>`);
+}
+ACT.sfOpen = () => sfSheet();
+ACT.sfGroup = (el) => { sf().group = el.dataset.id; sfSave(); render(); sfSheet(); };
+/* Sélection de plusieurs séances : lieu, catégorie, sport, fusion ou archivage d'un coup. */
+const selected = () => (S.sel || []).map(getSeance).filter(Boolean);
+ACT.selStart = () => { S.sel = []; render(); };
+ACT.selEnd = () => { S.sel = null; render(); };
+ACT.selTog = (el) => { const id = el.dataset.id; S.sel = S.sel.includes(id) ? S.sel.filter((x) => x !== id) : [...S.sel, id]; render(); };
+ACT.selAll = () => { const st = S.filters.seances || 'active'; const all = filterSessions(S.seances.items, { ...sf(), status: st }, S.history).map((s) => s.id); S.sel = S.sel.length === all.length ? [] : all; render(); };
+ACT.selMerge = () => { const ids = S.sel.slice(); S.sel = null; render(); S.merge = { ids, name: '' }; mergeSheet(); };
+ACT.selArchive = async () => {
+  const list = selected(), arch = (S.filters.seances || 'active') !== 'archived';
+  if (arch && !(await ask(`Archiver ${list.length} séance(s) ?`, { ok: 'Archiver', detail: 'Elles restent dans « Archivées » et se désarchivent quand tu veux.' }))) return;
+  for (const s of list) saveSeance({ ...s, archived: arch });
+  S.sel = null; render(); toast(arch ? `${list.length} séance(s) archivée(s)` : `${list.length} séance(s) désarchivée(s)`);
+};
+ACT.selBulk = (el) => {
+  const what = el.dataset.id, c = ctx(), n = S.sel.length;
+  const rows = what === 'place' ? [...c.envs.map((e) => [e.id, `📍 ${e.name}`]), ['none', '📍 Sans lieu']]
+    : what === 'sport' ? activityOptions().map(([id, e, l]) => [id, `${e} ${l}`])
+    : [...new Set([...Object.keys(CATS), ...S.seances.items.flatMap((s) => s.tags || [])])].map((k) => [k, catName(k)]);
+  openSheet(h`<div class="stack"><h2 style="margin:0">${what === 'place' ? '📍 Lieu' : what === 'sport' ? '🏷 Ajouter un sport' : '🗂 Ajouter une catégorie'}</h2><p class="small muted">Pour les ${n} séance(s) sélectionnée(s).</p>
+    <div class="setmenu">${rows.map(([id, l]) => h`<button class="setrow" data-act="selApply" data-k="${what}" data-id="${id}"><span class="grow"><b>${l}</b></span><span class="chev">›</span></button>`)}</div>
+    ${what === 'place' && !c.envs.length ? h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>` : ''}</div>`);
+};
+ACT.selApply = (el) => {
+  const k = el.dataset.k, id = el.dataset.id, env = ctx().envs.find((e) => e.id === id), list = selected();
+  for (const s of list) {
+    if (k === 'place') saveSeance({ ...s, context: { ...s.context, env: id === 'none' ? '' : id, envName: env?.name || '', equipment: env?.equipment || s.context.equipment } });
+    else if (k === 'sport') { if (s.activity !== id) saveSeance({ ...s, activity: s.activity || id, sports: s.activity ? [...new Set([...(s.sports || []), id])] : s.sports }); }
+    else saveSeance({ ...s, tags: [...new Set([...(s.tags?.length ? s.tags : autoCategories(s)), id])].slice(0, 8) });
+  }
+  closeSheet(); S.sel = null; render(); toast(`${list.length} séance(s) modifiée(s)`);
+};
+ACT.sfSort = (el) => { sf().sort = el.dataset.id; sfSave(); render(); sfSheet(); };
+ACT.sfForm = (el) => { sf().form = el.dataset.id; sfSave(); render(); sfSheet(); };
+ACT.sfTog = (el) => { const f = sf(), k = el.dataset.k, v = el.dataset.v; f[k] = f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v]; sfSave(); render(); sfSheet(); };
+ACT.sfDrop = (el) => { const f = sf(); f[el.dataset.k] = f[el.dataset.k].filter((x) => x !== el.dataset.v); sfSave(); render(); };
+ACT.sfClear = () => { Object.assign(sf(), { places: [], sports: [], cats: [], q: '' }); sfSave(); closeSheet(); render(); };
+ACT.sfDone = () => closeSheet();
+let sfT = null;
+INPUT.sfQ = (el) => { sf().q = el.value; clearTimeout(sfT); sfT = setTimeout(() => { const pos = el.selectionStart; render(); const i = $('.sfbar input'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch { /* rien */ } } }, 250); };
 /** Nouvelle séance : les façons de la créer, expliquées en une ligne. */
 ACT.exMore = () => { S.exMore = true; render(); };
 ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>
-  ${[['libSub', 'generate', '🎯', 'Sur mesure', 'L’app la prépare selon ton sport, ton temps et ce que tu veux travailler.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
+  ${[['libSub', 'generate', '🎯', 'Sur mesure', 'L’app la prépare selon ton sport, ton temps et ce que tu veux travailler.'], ['cpSurprise', '', '🎲', 'Surprends-moi', 'Dis juste ce que tu veux (ou rien) : une séance nouvelle pour toi, ou pour progresser.'], ['libSub', 'climbplan', '🧗', 'Escalade structurée', 'Ton objectif (ex. réussir un U8 en dévers) ou tes parties : cotations, styles, structure.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
     ['newSeance', '', '✍️', 'À la main', 'Tu choisis chaque exercice toi-même.'], ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
     ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
-ACT.seanceFilter = (el) => { S.filters.seances = el.dataset.id; render(); };
+/* Fusionner des séances : on en choisit 2 à 4, l'app conseille (note, ordre) et crée une NOUVELLE séance ; les originales ne changent pas. */
+const mergeable = () => S.seances.items.filter((s) => !s.archived && s.exercises.length);
+function mergeSheet() {
+  const m = S.merge ||= { ids: [], name: '' };
+  const chosen = m.ids.map(getSeance).filter(Boolean), a = chosen.length >= 2 ? mergeAdvice(chosen) : null;
+  const tone = a ? (a.score >= 80 ? 'ok' : a.score >= 55 ? 'acc' : 'warn') : '';
+  openSheet(h`<div class="stack"><h2 style="margin:0">🔀 Fusionner des séances</h2>
+    <p class="small muted">Choisis 2 à 4 séances. Une nouvelle séance est créée : tes séances d’origine ne changent pas.</p>
+    <button class="setrow" data-act="mergeBest"><span class="sic">💡</span><span class="grow"><b>Quelles séances fusionner ?</b><small>L’app te propose les meilleures paires.</small></span><span class="chev">›</span></button>
+    <div class="card flat" style="padding:0">${mergeable().map((s) => { const i = m.ids.indexOf(s.id); return h`<button class="setrow" data-act="mergePick" data-id="${s.id}"><span class="sic">${i >= 0 ? String(i + 1) : s.emoji}</span><span class="grow"><b>${s.name}</b><small>${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}~${sessionMinutes(s)} min</small></span><span class="chev">${i >= 0 ? '✓' : '＋'}</span></button>`; })}</div>
+    ${a ? h`<div class="card ${tone}-b"><div class="row between"><b>Conseil</b>${tag(`${a.score}/100`, tone)}</div>
+      ${a.pros.map((t) => h`<div class="small">✓ ${t}</div>`)}${a.cons.map((t) => h`<div class="small">⚠️ ${t}</div>`)}
+      ${a.order.some((s, i) => s.id !== chosen[i]?.id) ? h`<button class="btn sm" data-act="mergeOrder">↕️ Mettre dans l’ordre conseillé</button>` : ''}
+      ${sourcesLine(a.sources)}</div>
+      <label>Nom de la nouvelle séance<input type="text" data-change="mergeName" maxlength="100" value="${m.name}" placeholder="${chosen.map((s) => s.name).join(' + ').slice(0, 100)}"></label>
+      <button class="btn pri big" data-act="mergeGo">Créer la séance fusionnée (~${a.minutes} min)</button>` : h`<p class="tiny muted">${chosen.length ? 'Encore une séance à choisir.' : 'Touche les séances à fusionner, dans l’ordre voulu.'}</p>`}</div>`);
+}
+ACT.mergeOpen = (el) => { S.merge = { ids: el?.dataset?.ids ? el.dataset.ids.split(',') : [], name: '' }; if (S.sub.library !== 'seances') go('library', 'seances'); mergeSheet(); };
+ACT.mergePick = (el) => { const m = S.merge, id = el.dataset.id; m.ids = m.ids.includes(id) ? m.ids.filter((x) => x !== id) : m.ids.length >= 4 ? (toast('4 séances au maximum.'), m.ids) : [...m.ids, id]; mergeSheet(); };
+ACT.mergeOrder = () => { S.merge.ids = orderForMerge(S.merge.ids.map(getSeance).filter(Boolean)).map((s) => s.id); mergeSheet(); };
+CHG.mergeName = (el) => { S.merge.name = el.value.trim(); };
+ACT.mergeGo = () => {
+  const chosen = S.merge.ids.map(getSeance).filter(Boolean); if (chosen.length < 2) return;
+  const s = saveSeance(mergeSessions(chosen, { name: S.merge.name })); S.merge = null; closeSheet();
+  toast('Séance fusionnée créée. Tes séances d’origine n’ont pas changé.', 4000); go('library', 'seance', s.id);
+};
+ACT.mergeBest = () => {
+  const best = bestMerges(mergeable(), 5);
+  openSheet(h`<div class="stack"><div class="row"><button class="btn sm" data-act="mergeBack" aria-label="Retour">‹</button><h2 style="margin:0">💡 Quelles séances fusionner ?</h2></div>
+    ${best.length ? h`<div class="card flat" style="padding:0">${best.map((b) => h`<button class="setrow" data-act="mergeOpen" data-ids="${b.ids.join(',')}"><span class="sic">${b.score}</span><span class="grow"><b>${b.names.join(' + ')}</b><small>${b.pros[0] || b.cons[0] || ''}</small></span><span class="chev">›</span></button>`)}</div>
+      <p class="tiny muted">Note sur 100 : complémentaires, durée raisonnable, doigts ménagés, bon ordre. Touche une paire pour voir le détail.</p>` : empty('Il faut au moins deux séances avec des exercices.')}
+    <button class="btn" data-act="mergeCoach">💬 Demander au coach</button></div>`);
+};
+ACT.mergeBack = () => mergeSheet();
+ACT.mergeCoach = () => {
+  const names = mergeable().slice(0, 12).map((s) => `« ${s.name} »`).join(', ');
+  closeSheet(); ACT.coachOpen?.(); const inp = $('.chat-in input'); if (inp) inp.value = `Parmi mes séances ${names}, lesquelles je peux fusionner en une seule, et dans quel ordre ?`.slice(0, 500);
+};
+ACT.seanceFilter = (el) => { S.filters.seances = el.dataset.id; S.sel = null; render(); };
 ACT.newSeance = () => { closeSheet(); const s = saveSeance({ id: uid(), name: 'Nouvelle séance', emoji: '🏋️', exercises: [], source: 'manual', activity: Object.keys(ctx().activities)[0] || '' }); go('library', 'seance', s.id); };
 ACT.openSeance = (el) => go('library', 'seance', el.dataset.id);
 ACT.play = (el) => {
@@ -93,7 +236,7 @@ ACT.play = (el) => {
 
 /* ═════════ Éditeur de séance (séance personnelle ou contribution commune) ═════════ */
 function exRow(e, i, n, mode) {
-  return h`<div class="item ex ${mode === 'edit' ? 'editable' : ''}"><div class="ico">${e.emoji}</div><div class="grow"><b>${e.name}</b> ${e.isNew ? tag('🆕 découverte', 'acc') : ''}<div class="muted small">${exLine(e)}</div>${e.why ? h`<div class="tiny why">💡 ${e.why}</div>` : ''}${e.note ? h`<div class="tiny acc-t">${e.note}</div>` : ''}</div>
+  return h`<div class="item ex ${mode === 'edit' ? 'editable' : ''}"><div class="ico">${e.emoji}</div><div class="grow"><button class="linkish" data-act="exInfo" data-id="${e.id}" title="C’est quoi ? À quoi ça sert ?"><b>${e.name}</b> <span class="tiny muted">ⓘ</span></button> ${e.isNew ? tag('🆕 découverte', 'acc') : ''}<div class="muted small">${exLine(e)}</div>${e.why ? h`<div class="tiny why">💡 ${e.why}</div>` : ''}${e.note ? h`<div class="tiny acc-t">${e.note}</div>` : ''}</div>
     <div class="row tight ${mode === 'edit' ? 'acts' : ''}">${mode === 'edit' ? h`<button class="btn sm ic" data-act="exUp" data-id="${e.id}" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button class="btn sm ic" data-act="exDown" data-id="${e.id}" ${i === n - 1 ? 'disabled' : ''} aria-label="Descendre">↓</button><button class="btn sm ic" data-act="exSwap" data-id="${e.id}" aria-label="Remplacer">🔄</button><button class="btn sm ic" data-act="exEdit" data-id="${e.id}" aria-label="Modifier">✎</button><button class="btn danger sm ic" data-act="exDel" data-id="${e.id}" aria-label="Retirer">✕</button>` : h`<button class="btn sm ic" data-act="exInfo" data-id="${e.id}" aria-label="Détails">ⓘ</button>${mode === 'gen' ? h`<button class="btn sm ic" data-act="exSwap" data-id="${e.id}" aria-label="Remplacer">🔄</button>` : ''}`}</div></div>`;
 }
 export function blocksOf(s, mode) {
@@ -101,7 +244,7 @@ export function blocksOf(s, mode) {
   // Séance au format choisi : les parties dans leur ordre (une même partie peut revenir plus loin).
   if (s.exercises.some((e) => e.part)) {
     let run = [];
-    const flush = () => { if (!run.length) return; const mins = Math.round(run.reduce((t, e) => t + exMinutes(e), 0)); out.push(h`<div class="blockhead">${run[0].part || BLOCKS[run[0].block]} · ~${mins} min</div>${run.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`); run = []; };
+    const flush = () => { if (!run.length) return; const mins = Math.round(run.reduce((t, e) => t + exMinutes(e), 0)); out.push(h`<div class="blockhead row"><span class="grow">${run[0].part || BLOCKS[run[0].block]} · ~${mins} min</span>${mode === 'edit' ? h`<button class="btn sm" data-act="partOpts" data-part="${run[0].part || ''}" data-block="${run[0].block}">🧭 Options</button>` : ''}</div>${run.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`); run = []; };
     for (const e of s.exercises) { if (run.length && (e.part || e.block) !== (run[0].part || run[0].block)) flush(); run.push(e); }
     flush();
     return out;
@@ -110,7 +253,7 @@ export function blocksOf(s, mode) {
     const list = s.exercises.filter((e) => e.block === b);
     if (!list.length) continue;
     const mins = Math.round(list.reduce((t, e) => t + exMinutes(e), 0));
-    out.push(h`<div class="blockhead">${BLOCKS[b]} · ~${mins} min</div>${list.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`);
+    out.push(h`<div class="blockhead row"><span class="grow">${BLOCKS[b]} · ~${mins} min</span>${mode === 'edit' ? h`<button class="btn sm" data-act="partOpts" data-part="" data-block="${b}">🧭 Options</button>` : ''}</div>${list.map((e) => exRow(e, s.exercises.indexOf(e), s.exercises.length, mode))}`);
   }
   return out;
 }
@@ -126,9 +269,13 @@ function vEditor(s, mode) {
   return h`<div class="row"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
     ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
+    ${sessionBrief(s, { edit: !shared })}
     <div class="card"><div class="row"><input type="text" data-change="sEmoji" value="${s.emoji}" maxlength="4" class="emoji-in" aria-label="Emoji"><input type="text" data-change="sName" value="${s.name}" maxlength="100" aria-label="Nom de la séance"></div>
-      <div class="grid2"><label>Activité<select data-change="sActivity"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
-      <label>Environnement<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}</select></label></div>
+      <div class="grid2"><label>Sport principal<select data-change="sActivity"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
+      <label>Lieu<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label></div>
+      <b class="small">Autres sports dans cette séance</b><div class="chips">${activityOptions().filter(([id]) => id !== s.activity).map(([id, e, l]) => chip((s.sports || []).includes(id), `${e} ${l}`, `data-act="sSport" data-id="${id}"`))}</div>
+      <b class="small">Catégories ${s.tags?.length ? '' : h`<span class="tiny muted">(reconnues automatiquement, touche pour choisir)</span>`}</b>
+      <div class="chips">${[...new Set([...Object.keys(CATS), ...(s.tags || [])])].map((k) => chip((s.tags?.length ? s.tags : autoCategories(s)).includes(k), catName(k), `data-act="sTag" data-id="${k}"`))}<button type="button" class="chip" data-act="sTagNew">＋ Autre</button></div>
       <div class="muted small">~${sessionMinutes(s)} min · ${s.exercises.length} exercice(s) ${levelTag(lv)}</div>
       <b class="small">Intentions</b><div class="chips">${Object.entries(INTENTIONS).map(([id, I]) => chip(intents.has(id), `${I.emoji} ${I.label}${intents.has(id) ? ' ×' + intents.get(id) : ''}`, `data-act="sIntent" data-id="${id}" title="Touche pour changer la priorité"`))}</div>
       <form data-submit="sAdapt" class="row"><label class="grow">Adapter la durée à<span class="unitbox"><input type="number" inputmode="numeric" name="minutes" min="5" max="240" value="${s.context.plannedMin || sessionMinutes(s)}"><em>min</em></span></label><button class="btn" type="submit">⏱ Reconstruire</button></form>
@@ -144,8 +291,13 @@ ACT.backSeances = () => go('library', 'seances');
 const edit = (fn) => { const e = editing(); if (!e) return; e.save(fn(e.s)); };
 CHG.sName = (el) => edit((s) => ({ ...s, name: el.value.trim() || 'Séance' }));
 CHG.sEmoji = (el) => edit((s) => ({ ...s, emoji: el.value.trim() || '🏋️' }));
-CHG.sActivity = (el) => edit((s) => ({ ...s, activity: el.value }));
-CHG.sEnv = (el) => edit((s) => { const env = ctx().envs.find((e) => e.id === el.value); return { ...s, context: { ...s.context, env: el.value, envName: env?.name || '', equipment: env?.equipment || s.context.equipment } }; });
+CHG.sActivity = (el) => edit((s) => ({ ...s, activity: el.value, sports: (s.sports || []).filter((x) => x !== el.value) }));
+CHG.sEnv = (el) => { if (el.value === '__new') { go('profile', 'equipment'); return; } edit((s) => { const env = ctx().envs.find((e) => e.id === el.value); return { ...s, context: { ...s.context, env: el.value, envName: env?.name || '', equipment: env?.equipment || s.context.equipment } }; }); };
+ACT.sSport = (el) => edit((s) => { const l = s.sports || [], id = el.dataset.id; return { ...s, sports: l.includes(id) ? l.filter((x) => x !== id) : [...l, id] }; });
+// Toucher une catégorie reconnue automatiquement fixe la liste à la main (les autres reconnues restent cochées).
+ACT.sTag = (el) => edit((s) => { const l = s.tags?.length ? s.tags : autoCategories(s), id = el.dataset.id; const n = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; return { ...s, tags: n.length ? n : [] }; });
+ACT.sTagNew = () => openSheet(h`<form data-submit="sTagGo" class="stack"><h2 style="margin:0">🏷 Nouvelle catégorie</h2><label>Nom<input name="tag" maxlength="30" required placeholder="Ex. Compétition, Vacances, Avec Léa"></label><button class="btn pri big">Ajouter</button></form>`);
+SUBMIT.sTagGo = (f) => { const t = String(new FormData(f).get('tag') || '').trim().slice(0, 30); if (!t) return; closeSheet(); edit((s) => { const l = s.tags?.length ? s.tags : autoCategories(s); return { ...s, tags: [...new Set([...l, t])].slice(0, 8) }; }); };
 CHG.sNotes = (el) => edit((s) => ({ ...s, notes: [...s.notes.filter((n) => n.title !== 'Notes'), ...(el.value.trim() ? [{ title: 'Notes', text: el.value.trim() }] : [])] }));
 ACT.sIntent = (el) => edit((s) => {
   const list = [...(s.intentions || [])], i = list.findIndex((x) => x.id === el.dataset.id);
@@ -161,7 +313,34 @@ SUBMIT.sAdapt = (f) => {
 const moveEx = (id, d) => edit((s) => { const i = s.exercises.findIndex((e) => e.id === id), j = i + d; if (i < 0 || j < 0 || j >= s.exercises.length) return s; const ex = s.exercises.slice(); [ex[i], ex[j]] = [ex[j], ex[i]]; if (ex[i].block !== ex[j].block) { const b = ex[i].block; ex[i] = { ...ex[i], block: ex[j].block }; ex[j] = { ...ex[j], block: b }; } return { ...s, exercises: ex }; });
 ACT.exUp = (el) => moveEx(el.dataset.id, -1); ACT.exDown = (el) => moveEx(el.dataset.id, 1);
 ACT.exDel = async (el) => { const e = editing(); const ex = e?.s.exercises.find((x) => x.id === el.dataset.id); if (!ex || !(await ask(`Retirer « ${ex.name} » de la séance ?`, { ok: 'Retirer', danger: true }))) return; edit((s) => ({ ...s, exercises: s.exercises.filter((x) => x.id !== ex.id) })); };
-ACT.exInfo = (el) => { const e = editing(); const ex = e?.s.exercises.find((x) => x.id === el.dataset.id) || S.shared.detail?.session?.exercises?.find((x) => x.id === el.dataset.id); if (ex) openSheet(exerciseSheet(ex)); };
+/* 🧭 Options d'une partie d'une séance : l'ordre conseillé, et d'autres exercices proches à ajouter. */
+function partExercises(s, part, block) { return s.exercises.filter((e) => (part ? e.part === part : !e.part && e.block === block)); }
+function partOptsSheet(part, block) {
+  const e = editing(); if (!e) return; const list = partExercises(e.s, part, block);
+  const adv = orderAdvice(list.map((x) => x.libId).filter(Boolean)), opts = similarOptions(list, { eq: availableEquipment(ctx(), e.s.context?.env) });
+  openSheet(h`<div class="stack"><h2 style="margin:0">🧭 ${part || BLOCKS[block]}</h2>
+    ${adv.notes.length ? h`${adv.notes.map((n) => h`<p class="small acc-t">↳ ${n}</p>`)}<button class="btn sm" data-act="partReorder" data-part="${part}" data-block="${block}">↕️ Mettre dans l’ordre conseillé</button>` : h`<p class="small muted">L’ordre de cette partie est déjà bon.</p>`}
+    <span class="kicker">D’autres exercices qui vont bien ici</span>
+    <div class="optlist">${opts.length ? opts.map((o) => h`<div class="optrow"><span class="grow"><b>${o.lib.emoji} ${o.lib.name}</b><small>Travaille : ${o.works.join(', ')}</small><small class="tip">💡 ${o.tips[0]}</small></span>
+      <button class="btn sm ic" data-act="libInfoOpt" data-id="${o.id}" aria-label="C’est quoi ?">ⓘ</button><button class="btn sm pri" data-act="partAdd" data-id="${o.id}" data-part="${part}" data-block="${block}">＋</button></div>`) : h`<p class="tiny muted">Rien de plus à proposer avec ton matériel.</p>`}</div>
+    <button class="btn" data-act="closeSheet">Fermer</button></div>`, { wide: true });
+}
+ACT.partOpts = (el) => partOptsSheet(el.dataset.part, el.dataset.block);
+ACT.partAdd = (el) => {
+  const x = byId(el.dataset.id), part = el.dataset.part, block = el.dataset.block; if (!x) return;
+  edit((s) => { const list = partExercises(s, part, block), last = list.at(-1), at = last ? s.exercises.indexOf(last) + 1 : s.exercises.length;
+    const ex = normalizeEx({ ...x, id: uid(), libId: x.id, ok: x.cues, bad: x.bad, block: block || 'main', part }); const arr = [...s.exercises]; arr.splice(at, 0, ex); return { ...s, exercises: arr }; });
+  toast(`« ${x.name} » ajouté`); partOptsSheet(part, block);
+};
+ACT.partReorder = (el) => {
+  const part = el.dataset.part, block = el.dataset.block;
+  edit((s) => { const list = partExercises(s, part, block), order = orderAdvice(list.map((x) => x.libId).filter(Boolean)).order;
+    const sorted = [...list].sort((a, b) => (order.indexOf(a.libId) + 1 || 99) - (order.indexOf(b.libId) + 1 || 99)); let k = 0;
+    return { ...s, exercises: s.exercises.map((x) => (list.includes(x) ? sorted[k++] : x)) }; });
+  toast('Remis dans l’ordre conseillé'); partOptsSheet(part, block);
+};
+ACT.libInfoOpt = (el) => { const x = byId(el.dataset.id); if (x) openSheet(exerciseSheet({ ...x, libId: x.id }, h`<button class="btn" data-act="closeSheet">Fermer</button>`), { wide: true }); };
+ACT.exInfo = (el) => { const e = editing(), sh = S.shared.detail?.session; const ex = e?.s.exercises.find((x) => x.id === el.dataset.id); const ex2 = ex ? null : sh?.exercises?.find((x) => x.id === el.dataset.id); if (ex || ex2) openSheet(exerciseSheet(ex || ex2, '', ex ? e.s : normalizeSession(sh))); };
 ACT.sDup = (el) => { const s = getSeance(el.dataset.id); if (!s) return; const c = saveSeance({ ...s, id: uid(), name: s.name + ' (copie)', createdAt: 0, template: false, archived: false, exercises: s.exercises.map((e) => ({ ...e, id: uid() })) }); toast('Séance dupliquée'); go('library', 'seance', c.id); };
 ACT.sTemplate = (el) => { const s = getSeance(el.dataset.id); if (s) { saveSeance({ ...s, template: !s.template }); toast(s.template ? 'Retirée des modèles' : 'Enregistrée comme modèle'); render(); } };
 ACT.sArchive = (el) => { const s = getSeance(el.dataset.id); if (s) { saveSeance({ ...s, archived: !s.archived }); toast(s.archived ? 'Séance désarchivée' : 'Séance archivée'); render(); } };
@@ -372,6 +551,7 @@ ACT.genDo = () => { const g = S.gen; if (!g.plan) return; g.result = generateFro
 function vGenResult(r) {
   const s = r.session;
   return h`<div id="genresult" class="card"><div class="row"><div class="ico acc">${s.emoji}</div><div class="grow"><h3>${s.name}</h3><div class="muted small">~${sessionMinutes(s)} min ${levelTag(r.meta.level)}</div></div></div>
+    ${sessionBrief(s)}
     ${howBox({ ...s.explain, note: 'Faits = données de ton profil et de ton historique ; estimations = ce que l’application en déduit. Aucune performance n’est inventée.' }, { open: false, title: 'Pourquoi cette séance ?' })}
     ${blocksOf(s, 'gen')}
     <div class="row wrapf"><button class="btn pri" data-act="play" data-gen="1">▶ Lancer</button><button class="btn" data-act="genSave" ${S.gen.saved ? 'disabled' : ''}>${S.gen.saved ? '✓ Enregistrée' : '💾 Enregistrer'}</button><button class="btn" data-act="genAgain">🔁 Autre proposition</button></div></div>`;
@@ -400,19 +580,20 @@ function vExercises() {
 INPUT.exQ = (el) => { S.filters.exq = el.value; clearTimeout(INPUT.exQ.t); INPUT.exQ.t = setTimeout(() => { render(); const i = $('[data-input=exQ]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
 CHG.exAct = (el) => { S.filters.exAct = el.value; render(); };
 CHG.exCap = (el) => { S.filters.exCap = el.value; render(); };
-export function exerciseSheet(ex, actions = '') {
+export function exerciseSheet(ex, actions = '', session = null) {
   const lib = byId(ex.libId || ex.id) || null;
   const e = lib ? { ...lib, ...ex, caps: Object.keys(ex.caps || {}).length ? ex.caps : lib.caps, prim: ex.prim?.length ? ex.prim : lib.prim, sec: ex.sec?.length ? ex.sec : lib.sec } : ex;
   const g = graphFromExercise({ caps: e.caps || {}, prim: e.prim || [], sec: e.sec || [] }, ctx());
   const cues = e.ok?.length ? e.ok : e.cues || [];
   return h`<div class="row"><div class="ico">${e.emoji}</div><div class="grow"><h2 style="margin:0">${e.name}</h2>${e.sets ? h`<div class="muted small">${exLine(normalizeEx(e))}</div>` : ''}</div></div>
+    ${exerciseBrief({ ...ex, libId: ex.libId || (lib ? lib.id : '') }, session)}
     ${raw(anatomySvg({ primary: e.prim || [], secondary: e.sec || [] }))}
     <div class="chips">${g.muscles.prim.map((m) => h`<span class="chip static"><i class="lg p"></i>${m}</span>`)}${g.muscles.sec.map((m) => h`<span class="chip static"><i class="lg s"></i>${m}</span>`)}</div>
     <div class="chips">${e.needs?.length ? e.needs.map((k) => h`<span class="chip static">🧰 ${EQUIPMENT[k] || k}</span>`) : h`<span class="chip static">🙌 Sans matériel</span>`}${e.diff ? h`<span class="chip static">📶 ${'●'.repeat(e.diff)}${'○'.repeat(5 - e.diff)}</span>` : ''}${e.minLevel ? h`<span class="chip static">⭐ niveau ${['débutant', 'intermédiaire', 'avancé'][e.minLevel]}</span>` : ''}</div>
     ${cues.length ? h`<section class="card flat"><b class="small ok-t">✅ À faire</b><ul class="clean tight">${cues.map((c) => h`<li>${c}</li>`)}</ul></section>` : ''}
     ${e.bad?.length ? h`<details class="how mini"><summary>⚠️ Erreurs à éviter (${e.bad.length})</summary><ul class="small">${e.bad.map((c) => h`<li>${c}</li>`)}</ul></details>` : ''}
     ${g.caps.length ? h`<details class="how mini"><summary>💪 Ce que ça travaille (${g.caps.length})</summary>${g.caps.map((c) => h`<div class="cbar"><span>${c.label}</span><div class="track"><i class="cur" style="width:${Math.round(c.w * 100)}%"></i></div><b></b></div>${c.goals.length ? h`<p class="tiny muted">→ utile pour ${c.goals.map((x) => x.label).join(', ')}</p>` : ''}`)}</details>` : ''}
-    ${e.why && lib ? h`<p class="small muted">${lib.why}</p>` : ''}${actions}<button class="btn" data-act="closeSheet">Fermer</button>`;
+    ${actions}<button class="btn" data-act="closeSheet">Fermer</button>`;
 }
 ACT.libInfo = (el) => { const x = byId(el.dataset.id); if (!x) return; S.pickSrc = { kind: 'lib', id: x.id }; openSheet(exerciseSheet(x, h`<div class="row wrapf">${S.seances.items.length ? h`<select id="addTarget" aria-label="Séance cible">${S.seances.items.filter((s) => !s.archived).map((s) => h`<option value="${s.id}">${s.emoji} ${s.name}</option>`)}</select><button class="btn pri sm" data-act="addToSeance">＋ Ajouter</button>` : ''}<button class="btn sm" data-act="libKeep" data-id="${x.id}">Copier dans mes exercices</button></div>${exerciseEditButtons(x)}`), { wide: true }); };
 ACT.addToSeance = () => {
@@ -483,6 +664,7 @@ function vCommonDetail() {
     <div class="card"><h2 style="margin:0">${s.emoji} ${d.title}</h2><p class="muted small">par ${d.author || 'compte supprimé'}${d.mine ? ' (toi)' : ''} · créée le ${fmtDay(d.createdAt)} · modifiée ${relDate(d.updatedAt)}</p>
       <div class="row wrapf tight">${levelTag(d.level)}${d.gradeHint ? tag('🧗 ' + gradeHintText(d.gradeHint), 'info') : ''}</div>${levelDetails(d.level)}
       ${s.intentions.length ? h`<p class="small">Intentions : ${s.intentions.map((i) => INTENTIONS[i.id]?.label || i.id).join(', ')}</p>` : ''}${s.notes.map((n) => h`<details class="how"><summary>${n.title}</summary><pre class="txt">${n.text}</pre></details>`)}</div>
+    ${sessionBrief(s)}
     <div class="card">${blocksOf(s, 'view')}</div>
     <div class="row wrapf"><button class="btn pri" data-act="commonCopy" data-id="${d.id}">📥 Enregistrer dans mes séances</button>${d.canEdit ? h`<button class="btn" data-act="commonEdit">✎ Modifier l’original</button>` : ''}${d.canDelete ? h`<button class="btn danger" data-act="commonDelete">🗑 Supprimer</button>` : ''}</div>
     ${!d.canEdit ? h`<p class="tiny muted">Seul le créateur (ou un administrateur) peut modifier l’original. Enregistre-la pour la modifier librement.</p>` : ''}`;

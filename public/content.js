@@ -2,10 +2,13 @@
 // Tout le monde peut modifier « pour moi » (lié à son compte). Un administrateur choisit à chaque fois :
 // « pour moi » ou « pour tout le monde » (enregistré sur le serveur, appliqué à tous les comptes).
 import { h, raw, openSheet, closeSheet, toast, ask, menuList, relDate } from './ui.js';
-import { S, ACT, SUBMIT, api, ls, render, itemsOf, putItem, delItem, item, go } from './state.js';
+import { S, ACT, SUBMIT, INPUT, api, ls, render, itemsOf, putItem, delItem, item, go } from './state.js';
 import { uid, normalizeEx } from './shared.js';
 import { parseFormats, PART_TYPES } from './format.js';
-import { applyLayers, isBuiltin } from './global.js';
+import { applyLayers, isBuiltin, textOverrides, announcements } from './global.js';
+import { setOverrides, originalText } from './i18n.js';
+import { FAQ } from './help.js';
+import { SOURCES } from './sources.js';
 import { byId } from './library.js';
 import { CATALOG } from './catalog.js';
 import { SPORT_INTENTS, keywordCaps } from './intentions.js';
@@ -25,6 +28,7 @@ export function syncContent() {
   const m = mine(), s = `${GL.ver}|${S.user?.id || ''}|${m.ex.map((x) => x.id + x._u).join(',')}|${m.cat.map((x) => x.id + x._u).join(',')}`;
   if (s === sig) return; sig = s;
   applyLayers(GL.items, m);
+  setOverrides(textOverrides());
 }
 export async function loadGlobal() {
   try {
@@ -38,12 +42,15 @@ const globalOf = (kind, id) => GL.items.find((g) => g.kind === kind && g.id === 
 /* ───────── « Pour qui ? » ───────── */
 let pending = null;
 /** Un administrateur choisit à chaque changement ; les autres modifient pour eux. */
-export function chooseScope(what) {
-  if (!isAdmin()) return Promise.resolve('me');
+export function chooseScope(what, { propose = false } = {}) {
+  // Sans droit administrateur : pour soi, ou (si c'est possible ici) une demande envoyée aux administrateurs.
+  if (!isAdmin() && (!propose || !S.user || S.user.guest)) return Promise.resolve('me');
+  const all = isAdmin() ? ['scopePick', 'all', '🌍', 'Pour tout le monde', 'Tous les comptes le voient, dès leur prochaine ouverture de l’app.']
+    : ['scopePick', 'propose', '💡', 'Proposer pour tout le monde', 'Ta demande part aux administrateurs ; s’ils acceptent, tout le monde aura ce changement.'];
   return new Promise((res) => {
     pending = res;
     openSheet(h`<div class="stack"><h2 style="margin:0">Pour qui ?</h2><p class="small muted">${what}</p>
-      ${menuList([['scopePick', 'me', '👤', 'Pour moi seulement', 'Seul ton compte voit ce changement.'], ['scopePick', 'all', '🌍', 'Pour tout le monde', 'Tous les comptes le voient, dès leur prochaine ouverture de l’app.']])}
+      ${menuList([['scopePick', 'me', '👤', 'Pour moi seulement', 'Seul ton compte voit ce changement.'], all])}
       <button class="btn ghost" data-act="scopePick" data-id="">Annuler</button></div>`);
   });
 }
@@ -79,14 +86,15 @@ function exForm(x, isNew = false) {
     <label>Repos (s)<input type="number" name="rest" min="0" max="3600" value="${x.rest ?? 60}"></label>
     <label>Consignes (une par ligne)<textarea name="cues" rows="3">${(x.cues || []).join('\n')}</textarea></label>
     <label>À éviter (une par ligne)<textarea name="bad" rows="2">${(x.bad || []).join('\n')}</textarea></label>
-    <label>Pourquoi cet exercice<textarea name="why" rows="2" maxlength="240">${x.why || ''}</textarea></label>
+    <label>C’est quoi ? <small class="muted">(vide = phrase automatique)</small><textarea name="what" rows="2" maxlength="240" placeholder="Ex. Se suspendre à une réglette de 20 mm, bras tendus, 10 secondes.">${x.what || ''}</textarea></label>
+    <label>À quoi ça sert ?<textarea name="why" rows="2" maxlength="240">${x.why || ''}</textarea></label>
     <button class="btn pri big">Enregistrer</button></form>`;
 }
 ACT.gxEdit = (el) => { const x = byId(el.dataset.id); if (x) openSheet(exForm(x), { wide: true }); };
 ACT.exNewGlobal = () => { if (isAdmin()) openSheet(exForm({ mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, secMin: 30, secMax: 30, rest: 60 }, true), { wide: true }); };
 SUBMIT.exEditGo = async (f) => {
   const d = Object.fromEntries(new FormData(f)), t = d.mode === 'time';
-  const data = { name: d.name.trim(), emoji: d.emoji.trim(), sets: num(d.sets, 3), rest: num(d.rest, 60), cues: lines(d.cues), bad: lines(d.bad), why: d.why.trim(),
+  const data = { name: d.name.trim(), emoji: d.emoji.trim(), sets: num(d.sets, 3), rest: num(d.rest, 60), cues: lines(d.cues), bad: lines(d.bad), why: d.why.trim(), what: String(d.what || '').trim(),
     ...(t ? { secMin: num(d.min, 30), secMax: Math.max(num(d.min, 30), num(d.max, 30)) } : { repsMin: num(d.min, 8), repsMax: Math.max(num(d.min, 8), num(d.max, 8)) }) };
   if (d.isNew) {
     if (!isAdmin()) return;
@@ -95,8 +103,9 @@ SUBMIT.exEditGo = async (f) => {
     catch (e) { toast(e.message, 4500, 'bad'); }
     return;
   }
-  const scope = await chooseScope(`Modifier « ${data.name} »`); if (!scope) return;
+  const scope = await chooseScope(`Modifier « ${data.name} »`, { propose: true }); if (!scope) return;
   if (scope === 'me') { putItem('exedit', d.id, data); sig = ''; closeSheet(); render(); toast('Modifié pour toi'); return; }
+  if (scope === 'propose') { const x = byId(d.id) || {}; await sendRequest('exercise', d.id, x.name || data.name, { acts: x.acts, caps: x.caps, needs: x.needs, group: x.group, ...data, mode: d.mode }); return; }
   try { await putGlobal('exercise', d.id, { data: { ...data, mode: d.mode } }); closeSheet(); toast('Modifié pour tout le monde'); } catch (e) { toast(e.message, 4500, 'bad'); }
 };
 ACT.exMineReset = (el) => { delItem('exedit', el.dataset.id); sig = ''; closeSheet(); render(); toast('Ta modification est retirée'); };
@@ -134,9 +143,10 @@ SUBMIT.catEditGo = async (f) => {
   const ex = e.ex.map((x, i) => (d[`del${i}`] ? null : { ...x, sets: num(d[`sets${i}`], x.sets), amount: num(d[`amount${i}`], x.amount), rest: num(d[`rest${i}`], x.rest) })).filter(Boolean);
   if (!ex.length) { toast('Garde au moins un exercice.'); return; }
   const data = { name: d.name.trim(), emoji: d.emoji.trim(), minutes: num(d.minutes, e.minutes), why: d.why.trim(), tips: lines(d.tips) };
-  const scope = await chooseScope(`Modifier « ${data.name} »`); if (!scope) return;
+  const scope = await chooseScope(`Modifier « ${data.name} »`, { propose: true }); if (!scope) return;
   if (scope === 'me') { putItem('catedit', e.id, { ...data, exjson: JSON.stringify(ex) }); sig = ''; render(); toast('Modifiée pour toi'); return; }
   const { globalEdit: _g, global: _n, myEdit: _m, ...base } = e;
+  if (scope === 'propose') { await sendRequest('catalog', e.id, e.name || data.name, { ...base, ...data, ex }); return; }
   try { await putGlobal('catalog', e.id, { data: { ...base, ...data, ex } }); toast('Modifiée pour tout le monde'); } catch (err) { toast(err.message, 4500, 'bad'); }
 };
 ACT.catMineReset = (el) => { delItem('catedit', el.dataset.id); sig = ''; closeSheet(); render(); toast('Ta modification est retirée'); };
@@ -172,10 +182,16 @@ export function vAdminContent() {
   const act = (S.admAct ||= Object.keys(SPORT_INTENTS)[0]);
   const list = SPORT_INTENTS[act] || [];
   const changes = GL.items.slice().sort((a, b) => b.updatedAt - a.updatedAt);
-  const title = (g) => g.hidden ? `Masqué : ${g.id}` : g.data?.name || g.data?.label || g.id;
-  const KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format' };
+  const title = (g) => g.hidden ? `Masqué : ${g.id}` : g.data?.name || g.data?.label || g.data?.title || g.data?.q || (g.data?.to ? `« ${g.data.from} » → « ${g.data.to} »` : '') || (g.kind === 'layout' ? 'Mise en page de base' : g.id);
+  const KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
   return h`<div class="card"><h3>🌍 Contenu pour tout le monde</h3><p class="small muted">Sur chaque exercice ou séance prête, « ✏️ Modifier » te demande si c’est pour toi ou pour tout le monde. Ici : les intentions par sport, et tout ce qui a été changé.</p>
       <div class="row wrapf"><button class="btn sm" data-act="exNewGlobal">＋ Exercice pour tout le monde</button><button class="btn sm" data-act="allGo" data-to="library/catalog">🗂 Séances prêtes</button></div></div>
+    <div class="card"><h3>🛠 Modifier l’app sans code</h3>${menuList([
+      ['textModeOn', '', '✏️', 'Modifier les textes', 'Touche n’importe quel texte de l’app et réécris-le pour tout le monde.'],
+      ['announceNew', '', '📣', 'Écrire une annonce', 'Un message ou une note de mise à jour, envoyé en notification à tout le monde.'],
+      ['layEditAt', '', '🧩', 'Mise en page pour tous', 'Sur chaque page, ✏️ en haut puis « Pour tout le monde ». Ce que tu masques est masqué pour tous.', 'home/dash'],
+      ['allGo', '', '❓', 'Questions fréquentes et sources', 'Dans Aide : ✏️ sur chaque question et chaque source, ou ＋ pour en ajouter.', 'settings/help'],
+    ])}</div>
     <div class="card"><h3>🧭 Intentions par sport</h3><div class="chips">${Object.keys(SPORT_INTENTS).map((k) => h`<button type="button" class="chip ${k === act ? 'on' : ''}" data-act="admAct" data-v="${k}">${ACTIVITIES[k]?.emoji || ''} ${ACTIVITIES[k]?.label || k}</button>`)}</div>
       ${list.map((x) => h`<div class="item"><div class="grow"><b>${x.emoji} ${x.label}</b>${x.globalEdit ? h` <span class="tag">🌍 modifiée</span>` : ''}</div><button class="btn sm ic" data-act="intEdit" data-id="${x.id}" aria-label="Modifier">✏️</button><button class="btn sm ic danger" data-act="intHide" data-id="${x.id}" aria-label="Masquer">🙈</button></div>`)}
       <button class="btn sm" data-act="intEdit" data-id="">＋ Ajouter une intention</button></div>
@@ -204,6 +220,7 @@ ACT.intHide = async (el) => {
 };
 ACT.glReset = async (el) => { if (!(await ask('Annuler ce changement pour tout le monde ?', { ok: 'Oui, annuler' }))) return; try { await resetGlobal(el.dataset.k, el.dataset.id); toast('Changement annulé'); } catch (e) { toast(e.message, 4500, 'bad'); } };
 /** Formats : un administrateur peut garder un format pour tout le monde (nouveau ou à la place d'un format tout prêt). */
+export async function saveLayoutGlobal(data) { await putGlobal('layout', 'default', { data }); }
 export async function saveFormatGlobal(id, name, parts) { await putGlobal('format', id, { data: { name, parts } }); }
 export { isAdmin };
 
@@ -266,20 +283,214 @@ ACT.propOpen = async (el) => {
   if (!p) { toast('Proposition introuvable (déjà traitée ?)'); return; }
   if (typeof p.payload_json === 'string' && !p.payload) try { p.payload = JSON.parse(p.payload_json); } catch { p.payload = {}; }
   closeSheet();
-  const [t, sub] = (TARGET[p.kind] || 'settings/admin').split('/'); go(t, sub);
-  setTimeout(() => openSheet(h`<div class="stack"><span class="kicker">💡 Proposition · ${WHAT[p.kind] || 'idée'}</span><h2 style="margin:0">${p.label}</h2>
-    <p class="tiny muted">De ${p.username || 'un compte supprimé'} · ${relDate(p.created_at)}</p>${p.detail ? h`<p class="small">« ${p.detail} »</p>` : ''}${preview(p)}
+  const from = String(p.payload?.from || '');
+  if (from.startsWith('#/') && (p.kind === 'idea' || p.payload?.target)) location.hash = from; // là où la personne était
+  else { const [t, sub] = (TARGET[p.kind] || 'settings/admin').split('/'); go(t, sub); }
+  S.propCur = p;
+  const place = p.payload?.sel ? h`<div class="card flat acc-b stack"><span class="small">📍 <b>Endroit à changer</b> : « ${p.payload.snippet || 'élément'} »</span>
+    <div class="grid2"><button type="button" class="btn" data-act="propSee">👁 Voir l’endroit</button><button type="button" class="btn pri" data-act="propEditPlace">✏️ Modifier pour tout le monde</button></div></div>` : '';
+  if (p.payload?.sel) setTimeout(() => placeEl(p.payload.sel, true), 400);
+  setTimeout(() => openSheet(h`<div class="stack"><span class="kicker">💡 ${p.payload?.target ? 'Demande de modification' : 'Proposition'} · ${WHAT[p.kind] || 'idée'}</span><h2 style="margin:0">${p.label}</h2>
+    <p class="tiny muted">De ${p.username || 'un compte supprimé'} · ${relDate(p.created_at)}</p>${p.detail ? h`<p class="small">« ${p.detail} »</p>` : ''}${place}${preview(p)}
     <form data-submit="propDecide" class="stack"><input type="hidden" name="id" value="${p.id}"><label>Réponse à ${p.username || 'la personne'} (facultatif)<input name="reply" maxlength="300" placeholder="Merci !"></label>
-    <div class="grid2"><button class="btn pri" name="decision" value="accept">✓ Ajouter pour tout le monde</button><button class="btn danger" name="decision" value="refuse">✗ Refuser</button></div></form>
+    <div class="grid2"><button class="btn pri" name="decision" value="accept">${p.kind === 'idea' ? '✓ C’est noté' : p.payload?.target ? '✓ Appliquer pour tout le monde' : '✓ Ajouter pour tout le monde'}</button><button class="btn danger" name="decision" value="refuse">✗ Refuser</button></div></form>
     <p class="tiny muted">Une fois ajouté, tu peux encore le modifier ici avec ✏️, ou l’annuler dans Paramètres › Admin.</p></div>`, { wide: true }), 180);
+};
+/** L'élément joint à une idée, sur la page courante (null s'il a disparu depuis). */
+function placeEl(sel, flash = false) {
+  let el = null; try { el = document.querySelector(`#main ${sel}`); } catch { el = null; }
+  if (el && flash) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.remove('found'); void el.offsetWidth; el.classList.add('found'); setTimeout(() => el.classList.remove('found'), 3000); }
+  return el;
+}
+function propBar(on) {
+  document.getElementById('propbar')?.remove(); if (!on || !S.propCur) return;
+  const b = document.createElement('div'); b.id = 'propbar';
+  b.innerHTML = h`<span class="grow">💡 ${S.propCur.label}</span><button class="btn sm" data-act="propBack">Revenir à l’idée</button><button class="btn sm pri" data-act="propEditPlace">✏️ Modifier</button>`.s;
+  document.body.appendChild(b);
+}
+ACT.propSee = () => { closeSheet(); const el = placeEl(S.propCur?.payload?.sel || '', true); if (!el) toast('Cet endroit n’existe plus tel quel (la page a peut-être changé).', 4000); propBar(true); };
+ACT.propBack = () => { propBar(false); if (S.propCur) ACT.propOpen({ dataset: { id: S.propCur.id } }); };
+/** Modifier l'endroit joint : la fiche de l'exercice ou de la séance prête s'il s'agit de l'une d'elles, sinon le texte. */
+ACT.propEditPlace = () => {
+  const el = placeEl(S.propCur?.payload?.sel || ''); propBar(false);
+  if (!el) { toast('Endroit introuvable sur cette page : va le chercher, puis utilise Paramètres › Admin › Modifier les textes.', 5000); return; }
+  const ex = el.closest('[data-act=libInfo][data-id], [data-act=gxEdit][data-id]'), cat = el.closest('[data-act=catOpen][data-id]');
+  if (ex && byId(ex.dataset.id)) { closeSheet(); ACT.gxEdit({ dataset: { id: ex.dataset.id } }); return; }
+  if (cat) { closeSheet(); ACT.gcEdit?.({ dataset: { id: cat.dataset.id } }); return; }
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) }), node = w.nextNode();
+  if (!node) { toast('Pas de texte à cet endroit.'); return; }
+  closeSheet(); openTextEdit(node);
 };
 SUBMIT.propDecide = async (f, e) => {
   const d = Object.fromEntries(new FormData(f)), decision = (e?.submitter || document.activeElement)?.value || 'accept';
   try {
     await api('POST', `/api/admin/proposals/${encodeURIComponent(d.id)}`, { decision, reply: d.reply || '' });
-    closeSheet(); toast(decision === 'accept' ? 'Ajouté pour tout le monde ✓' : 'Proposition refusée');
+    closeSheet(); propBar(false); S.propCur = null; toast(decision === 'accept' ? 'Ajouté pour tout le monde ✓' : 'Proposition refusée');
     if (S.inbox?.adminList) S.inbox.adminList = S.inbox.adminList.filter((x) => x.id !== d.id);
     if (S.admin) S.admin.props = null;
     await loadGlobal(); sig = ''; render();
   } catch (err) { toast(err.message, 4500, 'bad'); }
 };
+
+/* ───────── Modifier les textes de l'app (administrateur) ───────── */
+const textId = (s) => { let x = 5381; for (let i = 0; i < s.length; i++) x = ((x << 5) + x + s.charCodeAt(i)) >>> 0; return 't-' + x.toString(36) + s.length.toString(36); };
+/** Premier texte visible sous l'élément touché. */
+function textNodeIn(el) {
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) });
+  return w.nextNode();
+}
+function textBar(on) {
+  document.getElementById('textbar')?.remove(); document.body.classList.toggle('textedit', on);
+  if (!on) return;
+  const b = document.createElement('div'); b.id = 'textbar';
+  b.innerHTML = h`<span>✏️ <b>Mode textes</b> : touche un texte pour le réécrire pour tout le monde.</span><button class="btn sm pri" data-act="textModeOff">Terminer</button>`.s;
+  document.body.appendChild(b);
+}
+ACT.textModeOn = () => { if (!isAdmin()) return; S.textMode = true; closeSheet(); go('home', 'dash'); textBar(true); toast('Touche un texte, n’importe où dans l’app'); };
+ACT.textModeOff = () => { S.textMode = false; textBar(false); toast('Mode textes terminé'); };
+document.addEventListener('click', (e) => {
+  if (!S.textMode || e.target.closest('#textbar, #sheet, #dialog, nav.tabs')) return;
+  const node = textNodeIn(e.target.closest('button, a, label, h1, h2, h3, p, b, span, small, li, summary, div') || e.target); if (!node) return;
+  e.preventDefault(); e.stopPropagation(); openTextEdit(node);
+}, true);
+/** Réécrire un texte de l'app pour tout le monde (mode textes, ou depuis l'endroit joint à une idée). */
+function openTextEdit(node) {
+  const from = originalText(node), now = node.nodeValue.trim(), g = globalOf('text', textId(from));
+  S.textDraft = { from };
+  openSheet(h`<form data-submit="textSave" class="stack"><h2 style="margin:0">✏️ Réécrire ce texte</h2>
+    <p class="tiny muted">Texte d’origine : « ${from} »</p>
+    <label>Nouveau texte (pour tout le monde)<textarea name="to" rows="3" maxlength="300" required>${now}</textarea></label>
+    <p class="tiny muted">Il remplace ce texte partout où il apparaît exactement pareil.</p>
+    <div class="grid2"><button class="btn pri">Enregistrer pour tout le monde</button>${g ? h`<button type="button" class="btn" data-act="textReset">↺ Remettre l’original</button>` : h`<button type="button" class="btn" data-act="closeSheet">Annuler</button>`}</div></form>`);
+}
+SUBMIT.textSave = async (f) => {
+  const from = S.textDraft?.from, to = String(new FormData(f).get('to') || '').trim(); if (!from || !to) return;
+  try { if (to === from) await resetGlobal('text', textId(from)); else await putGlobal('text', textId(from), { data: { from, to } }); closeSheet(); toast('Texte modifié pour tout le monde'); }
+  catch (e) { toast(e.message, 4500, 'bad'); }
+};
+ACT.textReset = async () => { const from = S.textDraft?.from; if (!from) return; try { await resetGlobal('text', textId(from)); closeSheet(); toast('Texte d’origine remis'); } catch (e) { toast(e.message, 4500, 'bad'); } };
+
+/* ───────── Annonces et notes de mise à jour ───────── */
+ACT.announceNew = () => {
+  if (!isAdmin()) return;
+  openSheet(h`<form data-submit="announceGo" class="stack"><h2 style="margin:0">📣 Écrire une annonce</h2>
+    <label>Titre<input name="title" maxlength="100" required placeholder="Ex. Nouvelle salle ajoutée"></label>
+    <label>Message<textarea name="body" rows="4" maxlength="1200" placeholder="Ce qui change, et à quoi ça sert"></textarea></label>
+    <label class="chk"><input type="checkbox" name="update"> C’est une note de mise à jour (elle apparaît aussi dans « Toutes les mises à jour »)</label>
+    <p class="tiny muted">Tout le monde la reçoit dans ses notifications 🔔, et sur son téléphone s’il a activé les nouveautés.</p>
+    <button class="btn pri big">Envoyer à tout le monde</button></form>`);
+};
+SUBMIT.announceGo = async (f) => {
+  const d = Object.fromEntries(new FormData(f));
+  if (!(await ask('Envoyer cette annonce à tout le monde ?', { ok: 'Envoyer' }))) return;
+  try { await putGlobal('announce', 'g-' + uid().slice(0, 12), { data: { title: d.title.trim(), body: (d.body || '').trim(), update: !!d.update } }); closeSheet(); toast('Annonce envoyée à tout le monde'); }
+  catch (e) { toast(e.message, 4500, 'bad'); }
+};
+export { announcements };
+
+/* ───────── Questions fréquentes et sources (administrateur) ───────── */
+export const faqAdminButtons = (id) => (isAdmin() ? h`<span class="row tight"><button class="btn sm ic" data-act="faqEdit" data-id="${id}" aria-label="Modifier">✏️</button><button class="btn sm ic danger" data-act="faqHide" data-id="${id}" aria-label="Supprimer">🗑</button></span>` : '');
+ACT.faqEdit = (el) => {
+  const f = FAQ.find((x) => x[2] === el.dataset.id) || ['', '', ''];
+  openSheet(h`<form data-submit="faqSave" class="stack"><input type="hidden" name="id" value="${f[2]}"><h2 style="margin:0">${f[2] ? '✏️ Modifier la question' : '＋ Nouvelle question'}</h2>
+    <label>Question<input name="q" maxlength="200" required value="${f[0]}"></label><label>Réponse<textarea name="a" rows="5" maxlength="1500" required>${f[1]}</textarea></label>
+    <button class="btn pri big">Enregistrer pour tout le monde</button></form>`);
+};
+SUBMIT.faqSave = async (f) => {
+  const d = Object.fromEntries(new FormData(f));
+  try { await putGlobal('faq', d.id || 'g-' + uid().slice(0, 12), { data: { q: d.q.trim(), a: d.a.trim() } }); closeSheet(); toast('Question enregistrée pour tout le monde'); } catch (e) { toast(e.message, 4500, 'bad'); }
+};
+ACT.faqHide = async (el) => {
+  if (!(await ask('Supprimer cette question pour tout le monde ?', { ok: 'Supprimer', danger: true }))) return;
+  try { if (el.dataset.id.startsWith('g-')) await resetGlobal('faq', el.dataset.id); else await putGlobal('faq', el.dataset.id, { hidden: true }); toast('Question supprimée'); } catch (e) { toast(e.message, 4500, 'bad'); }
+};
+export const sourceAdminButtons = (id) => (isAdmin() ? h`<button class="btn sm ic" data-act="srcEdit" data-id="${id}" aria-label="Modifier la source">✏️</button>` : '');
+ACT.srcEdit = (el) => {
+  const id = el.dataset.id || '', s = SOURCES[id] || {};
+  openSheet(h`<form data-submit="srcSave" class="stack"><input type="hidden" name="id" value="${id}"><h2 style="margin:0">${id ? '✏️ Modifier la source' : '＋ Nouvelle source'}</h2>
+    <label>Titre de l’étude ou du document<input name="title" maxlength="300" required value="${s.title || ''}"></label>
+    <div class="grid2"><label>Auteurs<input name="authors" maxlength="200" value="${s.authors || ''}"></label><label>Année<input type="number" name="year" min="1900" max="2100" value="${s.year || ''}"></label></div>
+    <label>Revue ou éditeur<input name="journal" maxlength="200" value="${s.journal || ''}"></label>
+    <label>Lien (https://…)<input name="url" type="url" required pattern="https://.+" value="${s.url || ''}"></label>
+    <label>Ce qu’elle montre (en une ou deux phrases)<textarea name="key" rows="3" maxlength="600">${s.key || ''}</textarea></label>
+    <div class="grid2"><button class="btn pri">Enregistrer pour tout le monde</button>${id ? h`<button type="button" class="btn danger" data-act="srcHide" data-id="${id}">Retirer</button>` : ''}</div></form>`, { wide: true });
+};
+SUBMIT.srcSave = async (f) => {
+  const d = Object.fromEntries(new FormData(f));
+  try { await putGlobal('source', d.id || 'g-' + uid().slice(0, 12), { data: { title: d.title.trim(), authors: d.authors, year: Number(d.year) || new Date().getFullYear(), journal: d.journal, url: d.url.trim(), key: d.key } }); closeSheet(); toast('Source enregistrée pour tout le monde'); }
+  catch (e) { toast(e.message, 4500, 'bad'); }
+};
+ACT.srcHide = async (el) => {
+  if (!(await ask('Retirer cette source pour tout le monde ?', { ok: 'Retirer', danger: true, detail: 'Les conseils qui la citent ne l’afficheront plus.' }))) return;
+  try { if (el.dataset.id.startsWith('g-')) await resetGlobal('source', el.dataset.id); else await putGlobal('source', el.dataset.id, { hidden: true }); closeSheet(); toast('Source retirée'); } catch (e) { toast(e.message, 4500, 'bad'); }
+};
+
+/* ───────── Demandes de modification (comptes sans droit administrateur) ───────── */
+/** Envoie aux administrateurs une demande de modification d'un élément existant (ils l'acceptent ou la refusent). */
+async function sendRequest(kind, target, label, data) {
+  try { await api('POST', '/api/proposals', { kind, target, label: `Modifier « ${label} »`, data, from: location.hash.slice(0, 80) }); closeSheet(); toast('Demande envoyée aux administrateurs, merci !'); }
+  catch (e) { toast(e.offline ? 'Connexion requise pour envoyer la demande.' : e.message, 4500, 'bad'); }
+}
+/** « Proposer une amélioration » : n'importe quelle idée, rattachée à la page où l'on se trouve. */
+/* ───────── Proposer une idée, avec l'endroit à changer ───────── */
+// L'utilisateur écrit son idée, puis peut « viser » l'élément de l'app concerné : l'admin y sera emmené en un clic.
+function ideaSheet() {
+  const d = S.ideaDraft ||= { detail: '', from: location.hash || '#/home/dash', place: null };
+  openSheet(h`<form data-submit="ideaGo" class="stack"><h2 style="margin:0">💡 Proposer une amélioration</h2>
+    <p class="small muted">Une idée, un texte à corriger, un exercice à ajouter… Les administrateurs la reçoivent.</p>
+    <label>Ton idée<textarea name="detail" rows="4" maxlength="1000" required data-input="ideaText" placeholder="Ex. ce texte n’est pas clair, ajouter un exercice pour les pinces…">${d.detail}</textarea></label>
+    ${d.place ? h`<div class="card flat acc-b row"><span class="grow small">📍 <b>Endroit joint</b> : « ${d.place.snippet || 'élément'} »</span><button type="button" class="btn sm ic" data-act="ideaPlaceDel" aria-label="Retirer l’endroit">✕</button></div>`
+      : h`<button type="button" class="btn" data-act="ideaPick">📍 Choisir l’endroit à changer <span class="tiny muted">(facultatif)</span></button>`}
+    <button class="btn pri big">Envoyer</button></form>`);
+}
+ACT.ideaNew = () => {
+  if (!S.user || S.user.guest) { toast('Crée un compte (gratuit) pour proposer une amélioration.'); return; }
+  S.ideaDraft = null; closeSheet(); ideaSheet();
+};
+INPUT.ideaText = (el) => { if (S.ideaDraft) S.ideaDraft.detail = el.value; };
+ACT.ideaPlaceDel = () => { S.ideaDraft.place = null; ideaSheet(); };
+SUBMIT.ideaGo = async (f) => {
+  const d = S.ideaDraft || {}, text = String(new FormData(f).get('detail') || '').trim(); if (text.length < 3) return;
+  const pl = d.place || {};
+  try {
+    await api('POST', '/api/proposals', { kind: 'idea', label: text.slice(0, 70), detail: text, from: (pl.from || d.from || '').slice(0, 80), ...(pl.sel ? { sel: pl.sel, snippet: pl.snippet } : {}) });
+    S.ideaDraft = null; closeSheet(); toast('Merci ! Ton idée est envoyée aux administrateurs');
+  } catch (e) { toast(e.offline ? 'Connexion requise pour envoyer.' : e.message, 4500, 'bad'); }
+};
+/** Sélecteur court et stable pour un élément de la page (d'abord ses attributs data-act / data-id, sinon son chemin). */
+export function selectorFor(el) {
+  const main = document.getElementById('main'); if (!el || !main?.contains(el)) return '';
+  const q = (v) => String(v).replace(/["\\]/g, '');
+  const act = el.closest('[data-act]');
+  if (act && main.contains(act)) { const s = `[data-act="${q(act.dataset.act)}"]${act.dataset.id ? `[data-id="${q(act.dataset.id)}"]` : ''}`; try { if (main.querySelectorAll(s).length === 1) return s; } catch { /* sélecteur invalide */ } }
+  const path = []; let n = el;
+  while (n && n !== main && path.length < 8) { const p = n.parentElement; if (!p) break; const i = [...p.children].filter((c) => c.tagName === n.tagName).indexOf(n) + 1; path.unshift(`${n.tagName.toLowerCase()}:nth-of-type(${i})`); n = p; }
+  return path.join(' > ').slice(0, 200);
+}
+const snippetOf = (el) => String(el?.innerText || el?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+function pickBar() {
+  document.getElementById('pickbar')?.remove();
+  if (!S.pick) { document.body.classList.remove('picking'); return; }
+  document.body.classList.toggle('picking', S.pick.mode === 'aim');
+  const b = document.createElement('div'); b.id = 'pickbar';
+  b.innerHTML = (S.pick.cand
+    ? h`<span class="grow">📍 « ${S.pick.cand.snippet || 'cet élément'} »</span><button class="btn sm" data-act="pickOther">Autre</button><button class="btn sm pri" data-act="pickOk">✓ Joindre</button>`
+    : S.pick.mode === 'nav'
+      ? h`<span class="grow">🧭 Va sur la bonne page, puis touche <b>Viser</b>.</span><button class="btn sm" data-act="pickCancel">Annuler</button><button class="btn sm pri" data-act="pickAim">🎯 Viser</button>`
+      : h`<span class="grow">📍 Touche l’endroit à changer.</span><button class="btn sm" data-act="pickNav">Changer de page</button><button class="btn sm" data-act="pickCancel">Annuler</button>`).s;
+  document.body.appendChild(b);
+}
+ACT.ideaPick = () => { S.ideaDraft.detail = document.querySelector('#sheet textarea[name=detail]')?.value || S.ideaDraft.detail; closeSheet(); S.pick = { mode: 'aim', cand: null }; pickBar(); };
+ACT.pickNav = () => { S.pick.mode = 'nav'; pickBar(); };
+ACT.pickAim = () => { S.pick.mode = 'aim'; pickBar(); };
+ACT.pickOther = () => { document.querySelector('.pickfound')?.classList.remove('pickfound'); S.pick.cand = null; S.pick.mode = 'aim'; pickBar(); };
+ACT.pickCancel = () => { document.querySelector('.pickfound')?.classList.remove('pickfound'); S.pick = null; pickBar(); ideaSheet(); };
+ACT.pickOk = () => { document.querySelector('.pickfound')?.classList.remove('pickfound'); S.ideaDraft.place = { ...S.pick.cand, from: location.hash }; S.pick = null; pickBar(); ideaSheet(); };
+document.addEventListener('click', (e) => {
+  if (S.pick?.mode !== 'aim' || S.pick.cand || e.target.closest('#pickbar, #sheet, #dialog, nav.tabs')) return;
+  const el = e.target.closest('#main *'); if (!el) return;
+  e.preventDefault(); e.stopPropagation();
+  const target = el.closest('button, a, label, h1, h2, h3, li, .card, .setrow, .chip') || el;
+  document.querySelector('.pickfound')?.classList.remove('pickfound'); target.classList.add('pickfound');
+  S.pick.cand = { sel: selectorFor(target), snippet: snippetOf(target) }; pickBar();
+}, true);

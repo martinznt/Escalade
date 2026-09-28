@@ -98,7 +98,7 @@ export function buildSession(entry) {
     const time = lib.mode === 'time', block = x.block || (lib.role === 'warmup' ? 'warmup' : lib.role === 'cool' ? 'cool' : 'main');
     return normalizeEx({ ...lib, id: uid(), libId: lib.id, block, ok: lib.cues, bad: lib.bad, sets: x.sets, rest: x.rest, ...(time ? { secMin: x.amount, secMax: x.amount } : { repsMin: x.amount, repsMax: x.amount }), note: i === 0 && entry.tips?.[0] ? entry.tips[0] : '' });
   }).filter(Boolean);
-  return normalizeSession({ id: 'cat-' + entry.id, name: entry.name, emoji: entry.emoji, activity: entry.activity, goal: entry.goals[0] || '', exercises, notes: entry.why });
+  return normalizeSession({ id: 'cat-' + entry.id, name: entry.name, emoji: entry.emoji, activity: entry.activity, goal: entry.goals[0] || '', exercises, notes: [{ title: 'Pourquoi cette séance', text: [entry.why, ...(entry.tips || []).map((t) => '• ' + t)].filter(Boolean).join('\n') }] });
 }
 /** Matériel nécessaire à une séance du catalogue. */
 export const needsOf = (entry) => [...new Set(entry.ex.flatMap((x) => byId(x.libId)?.needs || []))];

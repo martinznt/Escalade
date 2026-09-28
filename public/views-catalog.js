@@ -10,7 +10,8 @@ import { startPlayer } from './player.js';
 import { CATALOG, buildSession, rankCatalog, needsOf, rankExercises, EX_CATEGORIES } from './catalog.js';
 import { SOURCES } from './sources.js';
 import { sourcesLine } from './srcui.js';
-import { catalogEditButtons } from './content.js';
+import { catalogEditButtons, sourceAdminButtons } from './content.js';
+import { sessionBrief, exerciseSheet } from './views-library.js';
 export { sourcesLine };
 
 const GOAL_L = { endurance: 'Endurance', force: 'Force', poids: 'Perte de poids', forme: 'Forme', sante: 'Santé', climb: 'Escalade', mobilite: 'Mobilité' };
@@ -48,13 +49,14 @@ ACT.catOpen = (el) => {
   const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return;
   const s = buildSession(e), p = profileNeeds(), miss = needsOf(e).filter((n) => !p.equipment.has(n));
   openSheet(h`<div class="catd"><div class="row"><span class="catemoji">${e.emoji}</span><div class="grow"><h2>${e.name}</h2><div class="tiny muted">${ACTIVITIES[e.activity]?.label || ''} · ${e.minutes} min · ${['débutant', 'intermédiaire', 'avancé'][e.level]}</div></div></div>
-    <p>${e.why}</p>${sourcesLine(e.sources)}
+    ${sessionBrief(s, { minutes: e.minutes })}${sourcesLine(e.sources)}
     <b class="small">Ça travaille</b><div class="chips">${e.works.map((c) => h`<span class="chip static">${CAPACITIES[c]?.label || c}</span>`)}</div>
     ${e.tips?.length ? h`<b class="small">Conseils</b><ul class="small">${e.tips.map((t) => h`<li>${t}</li>`)}</ul>` : ''}
-    <b class="small">Déroulé</b><ol class="small catex">${s.exercises.map((x) => h`<li><b>${x.emoji} ${x.name}</b> — ${x.sets > 1 ? `${x.sets} × ` : ''}${x.mode === 'time' ? fmtDur(x.secMax) : `${x.repsMax} rép.`}${x.rest ? ` · repos ${fmtDur(x.rest)}` : ''}</li>`)}</ol>
+    <b class="small">Déroulé</b><ol class="small catex">${s.exercises.map((x, i) => h`<li><button class="linkish" data-act="catExInfo" data-id="${e.id}" data-i="${i}"><b>${x.emoji} ${x.name}</b> ⓘ</button> — ${x.sets > 1 ? `${x.sets} × ` : ''}${x.mode === 'time' ? fmtDur(x.secMax) : `${x.repsMax} rép.`}${x.rest ? ` · repos ${fmtDur(x.rest)}` : ''}</li>`)}</ol>
     ${miss.length ? h`<p class="small warn-t">Matériel à prévoir : ${miss.map((n) => EQUIPMENT[n] || n).join(', ')}</p>` : ''}
     <div class="grid2"><button class="btn pri big" data-act="catPlay" data-id="${e.id}">▶ Lancer</button><button class="btn big" data-act="catSave" data-id="${e.id}">💾 Garder</button></div>${catalogEditButtons(e)}</div>`, { wide: true });
 };
+ACT.catExInfo = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; const s = buildSession(e), x = s.exercises[+el.dataset.i]; if (x) openSheet(h`${exerciseSheet(x, h`<button class="btn" data-act="catOpen" data-id="${e.id}">‹ Retour à la séance</button>`, s)}`, { wide: true }); };
 ACT.catPlay = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; closeSheet(); startPlayer(buildSession(e), { fromGenerator: true }); };
 ACT.catSave = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; saveSeance({ ...buildSession(e), id: uid() }); closeSheet(); toast('Ajoutée à Mes séances'); };
 
@@ -71,6 +73,6 @@ ACT.bestCat = (el) => { S.bestCat = el.dataset.v; render(); };
 
 /* ───────── Toutes les sources ───────── */
 export function vSources() {
-  return h`<div class="card"><h3>📚 Sources citées</h3><p class="small muted">Les conseils de l’app s’appuient sur ces études et recommandations officielles. Touche une source pour voir ce qu’elle montre.</p>
-    ${Object.entries(SOURCES).sort((a, b) => b[1].year - a[1].year).map(([id, s]) => h`<button class="item pick" data-act="srcOpen" data-id="${id}"><div class="grow"><b class="small">${s.title}</b><div class="tiny muted">${s.authors} · ${s.year} · ${s.journal}</div></div></button>`)}</div>`;
+  return h`<div class="card"><div class="row between"><h3>📚 Sources citées</h3>${S.user?.isAdmin ? h`<button class="btn sm" data-act="srcEdit" data-id="">＋ Ajouter</button>` : ''}</div><p class="small muted">Les conseils de l’app s’appuient sur ces études et recommandations officielles. Touche une source pour voir ce qu’elle montre.</p>
+    ${Object.entries(SOURCES).sort((a, b) => b[1].year - a[1].year).map(([id, s]) => h`<div class="row"><button class="item pick grow" data-act="srcOpen" data-id="${id}"><div class="grow"><b class="small">${s.title}</b><div class="tiny muted">${s.authors} · ${s.year} · ${s.journal}</div></div></button>${sourceAdminButtons(id)}</div>`)}</div>`;
 }

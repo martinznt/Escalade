@@ -91,13 +91,16 @@ export function normalizeSession(s = {}) {
     durationMin: clamp(s.durationMin, 0, 600, 0),
     objectives: strList(s.objectives, 8, 120),
     notes,
-    source: ['manual', 'text', 'generated', 'import', 'copy'].includes(s.source) ? s.source : 'manual',
+    source: ['manual', 'text', 'generated', 'import', 'copy', 'merge'].includes(s.source) ? s.source : 'manual',
     exercises: Array.isArray(s.exercises) ? s.exercises.slice(0, 60).map(normalizeEx) : [],
     createdAt: clamp(s.createdAt, 0, 9e15, 0),
     updatedAt: clamp(s.updatedAt, 0, 9e15, 0),
     // V2 : activité, intentions structurées (priorité 1 à 3), contexte (environnement, matériel, durée prévue,
     // objectif), modèle / archivage, origine d'une copie et explication de la génération.
     activity: ID_RE.test(String(s.activity || '')) ? String(s.activity) : '',
+    // Autres sports de la séance (multi-sports) et catégories choisies à la main (sinon reconnues d'après les exercices).
+    sports: idList(s.sports, 8).filter((x) => x !== s.activity),
+    tags: strList(s.tags, 8, 30),
     intentions: Array.isArray(s.intentions) ? s.intentions.slice(0, 7).map((x) => ({ id: str(x?.id, 20), p: clamp(x?.p, 1, 3, 2) })).filter((x) => x.id) : [],
     context: normalizeContext(s.context),
     template: !!s.template,

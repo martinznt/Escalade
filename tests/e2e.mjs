@@ -351,15 +351,17 @@ await step('commande naturelle : « je n’ai que 12 minutes » reconstruit la s
 });
 await step('« Que faire aujourd’hui ? » et tableau de bord personnalisé', async () => {
   assert.match(await a.text('main'), /Que faire aujourd’hui/);
-  // Mode édition : rien ne change sans deux validations
+  // Mode édition : explication claire, « ✕ Quitter » en haut, aperçu avant d'enregistrer
   await a.click('.topicons [data-act=layEdit]'); await A.waitForSelector('.edlist');
+  assert.match(await a.text('.editbar'), /Grand[\s\S]*Icône[\s\S]*Masqué/); assert.equal(await a.count('header [data-act=layQuit], .topicons [data-act=layQuit], [data-act=layQuit]') >= 1, true);
   await a.click('[data-act=layAs][data-id=records][data-v=big]'); await a.click('[data-act=layAs][data-id=timer][data-v=icon]');
   await a.click('[data-act=layPick][data-id=gen]'); await a.click('[data-act=layColor][data-id=gen][data-v="#5fa8d3"]');
-  await a.click('[data-act=layCancel]'); await A.waitForSelector('.quick [data-act=timerOpen]'); assert.equal(await a.count('h3:has-text("Records")'), 0, 'annulé : rien n’a changé');
+  await A.locator('[data-act=layQuit]').first().click(); await a.confirm(); await A.waitForSelector('.quick [data-act=timerOpen]'); assert.equal(await a.count('h3:has-text("Records")'), 0, 'quitté : rien n’a changé');
   await a.click('.topicons [data-act=layEdit]'); await a.click('[data-act=layAs][data-id=records][data-v=big]'); await a.click('[data-act=layAs][data-id=timer][data-v=icon]');
   await a.click('[data-act=layPick][data-id=gen]'); await a.click('[data-act=layColor][data-id=gen][data-v="#5fa8d3"]');
-  await a.click('[data-act=laySave]'); await A.waitForSelector('#dialog.open'); await A.click('#dialog.open [data-dlg="0"]'); await A.waitForSelector('.edlist'); // 1re validation refusée : on reste en édition
-  await a.click('[data-act=laySave]'); await confirm2(A);
+  await a.click('.editdock [data-act=layPreview]'); await A.waitForSelector('h3:has-text("Records")'); assert.equal(await a.count('.topicons [data-act=timerOpen]'), 1, 'aperçu : minuteur en icône');
+  await a.click('.editdock [data-act=layBack]'); await A.waitForSelector('.edlist');
+  await a.click('.editdock [data-act=laySave]'); await a.confirm();
   await A.waitForSelector('h3:has-text("Records")'); assert.equal(await a.count('.quick [data-act=timerOpen]'), 0);
   assert.equal(await a.count('.topicons [data-act=timerOpen]'), 1, 'minuteur passé en icône en haut');
   assert.equal(await a.count('.slot[style*="#5fa8d3"] [data-act=genOpen]'), 1, 'couleur appliquée');
@@ -432,6 +434,103 @@ await step('format de séance : parties au choix, durée libre (2 h 30), séance
   const heads = await A.$$eval('#genresult .blockhead', (x) => x.map((e) => e.textContent));
   assert.ok(heads[0].includes('Échauffement') && heads.some((t) => t.includes('Technique')) && heads.at(-1).includes('Étirements'), heads.join(' | '));
   await a.click('[data-act=gFmt][data-v=""]'); await a.click('[data-act=gDur][data-v="30"]');
+});
+await step('fusionner deux séances : conseil noté, ordre conseillé, nouvelle séance ; les originales ne changent pas', async () => {
+  await a.tab('library'); await a.sub('libSub', 'seances'); await A.waitForSelector('[data-act=mergeOpen]');
+  const before = await a.api('GET', '/api/sync'); const n0 = before.data.items.filter((s) => !s.deleted).length;
+  await a.click('[data-act=mergeOpen]'); await A.waitForSelector('#sheet [data-act=mergePick]');
+  const picks = A.locator('#sheet [data-act=mergePick]'); await picks.nth(0).click(); await picks.nth(1).click();
+  await A.waitForSelector('#sheet [data-act=mergeGo]'); assert.match(await a.text('#sheet'), /\/100/);
+  await a.click('#sheet [data-act=mergeBest]'); await A.waitForSelector('#sheet [data-act=mergeOpen][data-ids]');
+  await A.locator('#sheet [data-act=mergeOpen][data-ids]').first().click(); await A.waitForSelector('#sheet [data-act=mergeGo]');
+  await A.fill('#sheet input[data-change=mergeName]', 'Ma fusion'); await A.press('#sheet input[data-change=mergeName]', 'Tab');
+  await a.click('#sheet [data-act=mergeGo]'); await A.waitForSelector('input[data-change=sName]');
+  assert.equal(await A.inputValue('input[data-change=sName]'), 'Ma fusion');
+  assert.match(await a.text('#main'), /Échauffement/);
+  await poll(async () => (await a.api('GET', '/api/sync')).data.items.filter((s) => !s.deleted).length === n0 + 1, 12000, 'séance fusionnée synchronisée');
+  const after = (await a.api('GET', '/api/sync')).data.items;
+  for (const o of before.data.items) assert.equal(JSON.stringify(after.find((x) => x.id === o.id)?.exercises), JSON.stringify(o.exercises), 'originale intacte');
+});
+await step('mes séances : plusieurs sports, catégories, filtres et tris (dont « selon ma forme »)', async () => {
+  await a.tab('library'); await a.sub('libSub', 'seances'); await A.waitForSelector('[data-act=sfOpen]');
+  const n0 = await a.count('#main [data-act=openSeance]'); assert.ok(n0 >= 3, `${n0} séances`);
+  await A.locator('#main .card:has-text("Ma fusion") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sSport]');
+  await a.click('[data-act=sSport][data-id=running]'); await a.click('[data-act=sTag][data-id=mobilite]');
+  await a.tab('library'); await a.sub('libSub', 'seances'); await a.click('[data-act=sfOpen]');
+  await a.click('#sheet [data-act=sfTog][data-k=sports][data-v=running]'); await A.waitForSelector('#sheet [data-act=sfDone]');
+  await a.click('#sheet [data-act=sfSort][data-id=form]'); await a.click('#sheet [data-act=sfForm][data-id=low]'); await a.click('#sheet [data-act=sfDone]');
+  await A.waitForFunction(() => document.querySelectorAll('#main [data-act=openSeance]').length === 1);
+  assert.match(await a.text('#main'), /Ma fusion[\s\S]*Mobilité/); assert.match(await a.text('#main'), /Selon ma forme du jour : Fatigué/);
+  await a.click('#main [data-act=sfDrop]'); await A.waitForFunction((n) => document.querySelectorAll('#main [data-act=openSeance]').length === n, n0);
+  await A.fill('.sfbar input', 'zzz-rien'); await A.waitForSelector('#main [data-act=sfClear]'); await a.click('#main [data-act=sfClear]');
+  await A.waitForFunction((n) => document.querySelectorAll('#main [data-act=openSeance]').length === n, n0);
+  await a.click('[data-act=sfOpen]'); await a.click('#sheet [data-act=sfSort][data-id=recent]'); await a.click('#sheet [data-act=sfGroup][data-id=cat]'); await a.click('#sheet [data-act=sfDone]');
+  await A.waitForSelector('#main .blockhead'); assert.ok(await a.count('#main .blockhead') >= 2, 'groupes par catégorie');
+  await a.click('[data-act=selStart]'); await A.locator('#main [data-act=selTog]').nth(0).click(); await A.locator('#main [data-act=selTog]').nth(1).click();
+  assert.match(await a.text('.selbar'), /2 sélectionnée/); assert.equal(await a.count('#main [data-act=play]'), 0, 'boutons cachés pendant la sélection');
+  await a.click('.selbar [data-act=selBulk][data-id=cat]'); await a.click('#sheet [data-act=selApply][data-id=endurance]'); await A.waitForSelector('#toast.show:has-text("2 séance")');
+  await A.waitForSelector('#main .blockhead:has-text("Endurance")');
+  await a.click('[data-act=sfOpen]'); await a.click('#sheet [data-act=sfGroup][data-id=none]'); await a.click('#sheet [data-act=sfDone]');
+});
+await step('chaque séance et chaque exercice : c’est quoi, à quoi ça sert, pourquoi (et mon pourquoi)', async () => {
+  await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('#main .card:has-text("Ma fusion") [data-act=openSeance]').click();
+  await A.waitForSelector('#main .brief'); const b0 = await a.text('#main .brief');
+  assert.match(b0, /C’est quoi \?[\s\S]*exercice[\s\S]*À quoi ça sert \?/);
+  await a.click('[data-act=sWhy]'); await A.fill('#sheet textarea[name=why]', 'Pour mon projet'); await a.click('#sheet form[data-submit=sWhyGo] button');
+  await A.waitForSelector('#main .brief:has-text("Mon pourquoi")'); assert.match(await a.text('#main .brief'), /Pour mon projet/);
+  await A.locator('#main .item.ex button.linkish[data-act=exInfo]').nth(1).click(); await A.waitForSelector('#sheet .brief');
+  assert.match(await a.text('#sheet .brief'), /C’est quoi \?[\s\S]*À quoi ça sert \?[\s\S]*Pourquoi ici \?/);
+  await A.keyboard.press('Escape');
+  await a.sub('libSub', 'catalog'); await A.locator('[data-act=catOpen]').first().click(); await A.waitForSelector('#sheet .brief');
+  assert.match(await a.text('#sheet .brief'), /Pourquoi \?/); await A.locator('#sheet [data-act=catExInfo]').first().click();
+  await A.waitForSelector('#sheet .brief:has-text("Pourquoi ici")'); await A.keyboard.press('Escape');
+});
+await step('escalade structurée : objectif « réussir le plus dur » et parties au choix (structures, adaptation)', async () => {
+  await a.tab('library'); await a.sub('libSub', 'climbplan'); await A.waitForSelector('[data-act=cpMode][data-id=goal]');
+  await a.click('[data-act=cpMode][data-id=goal]'); await A.waitForSelector('[data-act=cpGoalGo]');
+  await a.click('[data-act=cpStyle][data-id=st-devers]'); await a.click('[data-act=cpMin][data-id="90"]'); await a.click('[data-act=cpGoalGo]');
+  await A.waitForSelector('#cpresult'); const r = await a.text('#cpresult');
+  assert.match(r, /Échauffement en grimpant[\s\S]*Montée[\s\S]*Objectif/); assert.match(r, /dévers/);
+  await a.click('[data-act=cpMode][data-id=parts]'); await a.click('[data-act=cpExample]'); await A.waitForSelector('.cpart');
+  assert.equal(await a.count('.cpart'), 5); assert.match(await a.text('#main'), /Voie max[\s\S]*adapté à avant/);
+  await A.locator('[data-act=cpEdit]').nth(1).click(); await A.waitForSelector('#sheet [data-act=cpPart][data-k=structure]');
+  assert.ok(await a.count('#sheet [data-act=cpPart][data-k=structure]') >= 4, 'plusieurs structures proposées');
+  await a.click('#sheet [data-act=cpPart][data-k=structure][data-v=limit]'); await a.click('#sheet [data-act=cpPartStyle][data-id=st-reglettes]');
+  await A.keyboard.press('Escape'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
+  assert.match(await a.text('#cpresult'), /Essais sur blocs/);
+  await a.click('[data-act=cpSave]'); await A.waitForSelector('input[data-change=sName]');
+  assert.match(await a.text('#main .brief'), /Bloc|voie/i);
+  await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpMode][data-id=goal]');
+  await A.selectOption('select[data-change=cpWarm]', '0'); await A.selectOption('select[data-change=cpStretch]', '15'); await a.click('[data-act=cpGoalGo]');
+  await A.waitForSelector('#cpresult'); const g2 = await a.text('#cpresult'); assert.ok(!/Montée en température/.test(g2), 'sans échauffement général'); assert.match(g2, /Étirements/);
+  await a.click('[data-act=cpMode][data-id=surprise]'); await a.click('[data-act=spSet][data-k=sport][data-v=bloc]'); await a.click('[data-act=spSet][data-k=aim][data-v=new]');
+  await a.click('[data-act=spGo]'); await A.waitForSelector('#cpresult:has-text("Pourquoi cette surprise")'); assert.match(await a.text('#cpresult'), /jamais|peu/);
+  await a.click('[data-act=spGo][data-again]'); await A.waitForSelector('#cpresult');
+  await a.click('[data-act=cpMode][data-id=parts]');
+});
+await step('trois niveaux d’aide : l’app choisit (puis on ajuste), l’app guide (options expliquées), je compose ; 🧭 dans une séance', async () => {
+  await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpHelp][data-id=auto]'); await a.click('[data-act=cpMode][data-id=parts]');
+  await a.click('[data-act=cpExample]'); await a.click('[data-act=cpAdd][data-id=fingers]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
+  const before = await A.locator('#cpresult .rpart').last().innerText();
+  await A.locator('#cpresult [data-act=cpOpts]').last().click(); await A.waitForSelector('#sheet .optrow');
+  assert.match(await a.text('#sheet'), /Travaille :/); assert.ok(await a.count('#sheet .optrow') >= 1);
+  const wasOn = await A.locator('#sheet .optrow').first().evaluate((x) => x.classList.contains('on'));
+  await A.locator('#sheet .optrow [data-act=cpPick].ck').first().click();
+  await A.waitForFunction((w) => document.querySelector('#sheet .optrow')?.classList.contains('on') !== w, wasOn); await a.click('#sheet [data-act=cpOptsDone]');
+  assert.notEqual(await A.locator('#cpresult .rpart').last().innerText(), before, 'les exercices de la partie ont changé');
+  await A.locator('#cpresult input[data-change=cpBMin]').first().fill('25'); await A.locator('#cpresult input[data-change=cpBMin]').first().press('Tab');
+  await a.click('[data-act=cpHelp][data-id=guide]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult details.guide[open] .optrow');
+  assert.match(await a.text('#cpresult details.guide[open]'), /conseillé[\s\S]*💡/);
+  await a.click('[data-act=cpHelp][data-id=free]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
+  assert.match(await A.locator('#cpresult .rpart').last().innerText(), /Rien pour l’instant/);
+  await A.locator('#cpresult [data-act=cpOpts]').last().click(); await A.waitForSelector('#sheet input[data-input=cpQ]');
+  await A.locator('#sheet .optrow [data-act=cpPick].ck').first().click(); await a.click('#sheet [data-act=cpOptsDone]');
+  assert.doesNotMatch(await A.locator('#cpresult .rpart').last().innerText(), /Rien pour l’instant/);
+  await a.click('[data-act=cpSave]'); await A.waitForSelector('[data-act=partOpts]');
+  await A.locator('[data-act=partOpts]').last().click(); await A.waitForSelector('#sheet [data-act=partAdd]');
+  const n0 = await a.count('#main .item.ex'); await A.locator('#sheet [data-act=partAdd]').first().click(); await A.waitForSelector('#toast.show:has-text("ajouté")');
+  await A.keyboard.press('Escape'); assert.equal(await a.count('#main .item.ex'), n0 + 1);
+  await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpHelp][data-id=auto]');
 });
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
@@ -577,6 +676,56 @@ await step('idée d’un utilisateur (système de cotation) → notification de 
   cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset][data-k=grading]'); await c.click('[data-act=glReset][data-k=grading]'); await c.confirm();
   await c.tab('settings'); await c.sub('setSub', 'updates'); await C.waitForSelector('.upd [data-act=notifTour]'); assert.ok(await c.count('.upd') >= 10, 'toutes les mises à jour listées');
   await B.keyboard.press('Escape');
+});
+await step('demande de modification d’un non-administrateur → l’admin l’applique → tout le monde la voit', async () => {
+  cur = B; await b.tab('library'); await b.sub('libSub', 'exercises'); await B.locator('#main [data-act=libInfo]').first().click(); await B.waitForSelector('#sheet [data-act=gxEdit]');
+  await b.click('#sheet [data-act=gxEdit]'); const old = await B.inputValue('#sheet input[name=name]');
+  await B.fill('#sheet input[name=name]', old + ' (demande)'); await b.click('#sheet form[data-submit=exEditGo] button.pri');
+  await B.waitForSelector('#sheet [data-act=scopePick][data-id=propose]'); await b.click('#sheet [data-act=scopePick][data-id=propose]');
+  await B.waitForSelector('#toast.show');
+  let reqId;
+  await poll(async () => { const p = (await c.api('GET', '/api/admin/proposals')).data.proposals.find((x) => x.payload?.target && x.payload?.data?.name === old + ' (demande)'); reqId = p?.id; return p && p.label === `Modifier « ${old} »`; }, 10000, 'demande reçue par les admins, avec le nom d’origine');
+  cur = C; await C.reload(); await C.waitForSelector('nav.tabs'); await c.click('.topicons [data-act=notifOpen]');
+  await C.waitForSelector(`#sheet [data-act=propOpen][data-id="${reqId}"]`, { timeout: 10000 }); await c.click(`#sheet [data-act=propOpen][data-id="${reqId}"]`);
+  await C.waitForSelector('#sheet button[value=accept]'); assert.match(await c.text('#sheet'), /Appliquer pour tout le monde/);
+  await c.click('#sheet button[value=accept]'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await b.sub('libSub', 'exercises');
+  await B.waitForSelector(`#main :text("${old} (demande)")`, { timeout: 10000 });
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
+  await C.waitForSelector('text=Rien n’a encore été changé');
+});
+await step('idée avec l’endroit : B vise un élément, l’admin y est emmené et le modifie pour tout le monde', async () => {
+  cur = B; await b.tab('home'); await B.evaluate(() => { location.hash = '#/settings/main'; }); await B.waitForSelector('[data-act=ideaNew]');
+  await b.click('[data-act=ideaNew]'); await B.fill('#sheet textarea[name=detail]', 'Ce titre pourrait être plus clair');
+  await b.click('#sheet [data-act=ideaPick]'); await B.waitForSelector('#pickbar');
+  await b.click('#pickbar [data-act=pickNav]'); await b.tab('library'); await B.waitForSelector('#main h1');
+  await b.click('#pickbar [data-act=pickAim]'); await B.locator('#main h1').first().click(); await B.waitForSelector('#pickbar [data-act=pickOk]');
+  await b.click('#pickbar [data-act=pickOk]'); await B.waitForSelector('#sheet :text("Endroit joint")');
+  assert.match(await b.text('#sheet'), /Endroit joint : « .+ »/); await b.click('#sheet form[data-submit=ideaGo] button.pri'); await B.waitForSelector('#toast.show:has-text("Merci")');
+  let id; await poll(async () => { const p = (await c.api('GET', '/api/admin/proposals')).data.proposals.find((x) => x.payload?.sel && /plus clair/.test(x.detail || '')); id = p?.id; return !!p; }, 10000, 'idée reçue avec son endroit');
+  cur = C; await C.reload(); await C.waitForSelector('nav.tabs'); await c.click('.topicons [data-act=notifOpen]');
+  await C.waitForSelector(`#sheet [data-act=propOpen][data-id="${id}"]`, { timeout: 10000 }); await c.click(`#sheet [data-act=propOpen][data-id="${id}"]`);
+  await C.waitForFunction(() => location.hash.startsWith('#/library')); await C.waitForSelector('#sheet [data-act=propEditPlace]');
+  await c.click('#sheet [data-act=propSee]'); await C.waitForSelector('#propbar'); await c.click('#propbar [data-act=propEditPlace]');
+  await C.waitForSelector('#sheet form[data-submit=textSave]'); await C.fill('#sheet textarea[name=to]', 'Ma bibliothèque');
+  await c.click('#sheet form[data-submit=textSave] button.pri'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
+  await c.click('.topicons [data-act=notifOpen]'); await c.click(`#sheet [data-act=propOpen][data-id="${id}"]`); await C.waitForSelector('#sheet button[value=accept]'); await c.click('#sheet button[value=accept]');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await B.waitForSelector('#main h1:has-text("Ma bibliothèque")', { timeout: 10000 });
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
+});
+await step('admin sans code : réécrire un texte et envoyer une annonce ; l’autre compte les voit ; tout s’annule', async () => {
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=textModeOn]'); await C.waitForSelector('#textbar');
+  await C.locator('.quick .qa.pri b').first().click(); await C.waitForSelector('#sheet textarea[name=to]');
+  await C.fill('#sheet textarea[name=to]', 'Ma séance du jour'); await c.click('#sheet form[data-submit=textSave] button.pri'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
+  await c.click('#textbar [data-act=textModeOff]');
+  await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=announceNew]');
+  await C.fill('#sheet input[name=title]', 'Salle Bloc Club ajoutée'); await c.click('#sheet form[data-submit=announceGo] button.pri'); await c.confirm(); await C.waitForSelector('#toast.show:has-text("Annonce")');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('home');
+  await B.waitForSelector('#main :text("Ma séance du jour")', { timeout: 10000 });
+  await b.click('.topicons [data-act=notifOpen]'); await B.waitForSelector('#sheet :text("Salle Bloc Club ajoutée")', { timeout: 10000 }); await B.keyboard.press('Escape');
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin');
+  for (let k = 0; k < 2; k++) { await C.locator('[data-act=glReset]').first().click(); await c.confirm(); await C.waitForTimeout(400); }
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('home'); await B.waitForSelector('#main :text-is("Séance du jour")', { timeout: 10000 });
 });
 await step('Service Worker actif, puis passage hors ligne : l’application s’ouvre avec les données', async () => {
   await A.evaluate(() => navigator.serviceWorker.ready); await A.reload(); await A.waitForSelector('nav.tabs'); await A.waitForTimeout(600);

@@ -14,7 +14,7 @@ import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.13.0';
+const APP_VERSION = '8.22.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -23,7 +23,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -470,11 +470,24 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (!u.isAdmin) return fail('Droit administrateur requis.', 403);
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
     if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
+    if ((x = p.match(/^\/api\/admin\/users\/([\w-]{1,64})\/role$/)) && m === 'POST') {
+      // Nommer ou retirer un administrateur. On ne peut pas retirer le dernier administrateur.
+      const b = await readJson(request, 500), make = !!b?.admin;
+      const t = await db(env, 'SELECT id FROM users WHERE id=?', x[1]).first(); if (!t) return fail('Compte introuvable.', 404);
+      if (!make) { const n = await db(env, 'SELECT COUNT(*) c FROM users WHERE is_admin=1 AND id<>?', x[1]).first(); if (!Number(n?.c)) return fail('Il faut garder au moins un administrateur.', 409); }
+      await db(env, 'UPDATE users SET is_admin=? WHERE id=?', make ? 1 : 0, x[1]).run();
+      return json({ ok: true, admin: make });
+    }
     if (p === '/api/admin/proposals' && m === 'GET') return json({ ok: true, proposals: ((await db(env, `SELECT p.id,p.kind,p.activity,p.label,p.detail,p.payload_json,p.status,p.reply,p.created_at,u.username FROM proposals p LEFT JOIN users u ON u.id=p.user_id WHERE p.status=? ORDER BY p.created_at DESC LIMIT 100`, url.searchParams.get('status') === 'done' ? 'done' : 'open').all()).results || []).map((r) => ({ ...r, payload: safeParse(r.payload_json) || {}, payload_json: undefined })) });
     if ((x = p.match(/^\/api\/admin\/proposals\/([\w-]{1,64})$/)) && m === 'POST') return proposalReview(request, env, u, x[1]);
     if ((x = p.match(/^\/api\/admin\/global\/(\w{1,20})\/([\w-]{1,64})$/))) {
       if (!GLOBAL_KINDS.includes(x[1])) return fail('Type inconnu.', 400);
-      if (m === 'PUT') return globalPut(request, env, u, x[1], x[2]);
+      if (m === 'PUT') {
+        const res = await globalPut(request, env, u, x[1], x[2]);
+        // Une annonce part tout de suite en notification sur les appareils abonnés aux nouveautés.
+        if (x[1] === 'announce' && res.status === 200) try { await notifyType(env, 'announce'); } catch (e) { console.error('annonce', e?.message); }
+        return res;
+      }
       if (m === 'DELETE') { await db(env, 'DELETE FROM global_content WHERE kind=? AND id=?', x[1], x[2]).run(); return json({ ok: true }); }
     }
     if (p === '/api/admin/intents' && m === 'POST') { const b = await readJson(request, 4000); const r = await intentCreate(env, u, b); return r.error ? fail(r.error) : json({ ok: true, id: r.id }); }
@@ -1028,7 +1041,12 @@ async function proposalCreate(request, env, u) {
   const data = GLOBAL_KINDS.includes(kind) && kind !== 'intent' ? cleanGlobal(kind, b?.data) : null;
   if (GLOBAL_KINDS.includes(kind) && kind !== 'intent' && !data) return fail('Proposition incomplète : il manque des informations.');
   if (await limited(env, 'prop:' + u.id, 10, DAY)) return fail('Tu as déjà fait beaucoup de propositions aujourd’hui : merci ! Réessaie demain.', 429);
-  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps), ...(data ? { data } : {}), from: str(b?.from, 40) };
+  // target : l'élément existant à modifier (demande de modification), sinon c'est un ajout.
+  const PLACE_SEL = /^[\w\s\-\[\]="'#.:()>,*]{1,200}$/;
+  const target = GLOBAL_KINDS.includes(kind) && GLOBAL_ID.test(String(b?.target || '')) ? String(b.target) : '';
+  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps), ...(data ? { data } : {}), from: str(b?.from, 80), ...(target ? { target } : {}),
+    // Endroit touché dans l'app (idée) : sélecteur simple et texte visible, pour que l'admin y aille en un clic.
+    ...(PLACE_SEL.test(String(b?.sel || '')) ? { sel: String(b.sel), snippet: str(b?.snippet, 120) } : {}) };
   const id = 'pr-' + uid().slice(0, 12), activity = /^[\w:.-]{0,60}$/.test(String(b?.activityId || '')) ? String(b?.activityId || '') : '';
   await db(env, 'INSERT INTO proposals(id,user_id,kind,activity,label,detail,payload_json,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)', id, u.id, kind, activity, label, detail, JSON.stringify(payload), 'open', Date.now()).run();
   // Prévenir les administrateurs (notification sur leurs appareils abonnés ; best effort)
@@ -1049,8 +1067,8 @@ async function proposalReview(request, env, u, id) {
     // L'administrateur peut ajuster la proposition avant de l'ajouter (b.data), sinon elle est ajoutée telle quelle.
     const pl = safeParse(p.payload_json) || {}, data = cleanGlobal(p.kind, b?.data || pl.data);
     if (!data) return fail('Proposition incomplète : impossible de l’ajouter.');
-    added = 'g-' + uid().slice(0, 12);
-    await db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,0,?,?)', p.kind, added, JSON.stringify(data), Date.now(), u.id).run();
+    added = pl.target && GLOBAL_ID.test(pl.target) ? pl.target : 'g-' + uid().slice(0, 12); // demande de modification : on modifie l'élément visé
+    await db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,0,?,?) ON CONFLICT(kind,id) DO UPDATE SET data_json=excluded.data_json,hidden=0,updated_at=excluded.updated_at,updated_by=excluded.updated_by', p.kind, added, JSON.stringify(data), Date.now(), u.id).run();
   }
   if (decision === 'accept' && p.kind === 'intent') {
     const pl = safeParse(p.payload_json) || {}, r = await intentCreate(env, u, { label: p.label, emoji: pl.emoji, caps: Object.entries(pl.caps || {}).map(([cid, w]) => ({ id: cid, w })), activityId: p.activity });
@@ -1107,13 +1125,13 @@ async function adminActivate(request, env, u) {
 /** Liste des comptes pour l'administrateur : identité du compte et activité, JAMAIS les données d'entraînement
  * (séances, performances, profil) ; l'e-mail est masqué ; aucun mot de passe ni jeton. */
 async function adminUsers(env) {
-  const r = await db(env, `SELECT us.username,us.email,us.created_at,us.is_admin,
+  const r = await db(env, `SELECT us.id,us.username,us.email,us.created_at,us.is_admin,
       (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id=us.id) AS last_login,
       (SELECT COUNT(*) FROM history h WHERE h.user_id=us.id) AS sessions_done,
       (SELECT MAX(h.started_at) FROM history h WHERE h.user_id=us.id) AS last_session
     FROM users us ORDER BY us.created_at DESC LIMIT 2000`).all();
   const mask = (e) => { const [a, d] = String(e || '').split('@'); return d ? `${a.slice(0, 1)}•••@${d}` : ''; };
-  const users = r.results.map((x) => ({ username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, lastLogin: x.last_login || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
+  const users = r.results.map((x) => ({ id: x.id, username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, lastLogin: x.last_login || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
   return json({ ok: true, total: users.length, users });
 }
 async function adminBugs(url, env) {
