@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.18.0
+# FINAL_AUDIT — Séances entraînement v8.19.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -767,3 +767,46 @@ Chaque séance et chaque exercice répond à trois questions (`public/explain.js
   - les 143 exercices ont un « c'est quoi » et un « à quoi ça sert » sans trou ;
   - les séances prêtes gardent leur pourquoi.
 - E2E : bloc « en bref », mon pourquoi, fiche d'exercice avec « Pourquoi ici ? », séance prête.
+
+## Évolution 8.19.0 : structurer sa séance d'escalade
+
+Nouvelle page : Bibliothèque › « 🧗 Structurer ma séance d'escalade ». Elle est aussi dans « Nouvelle séance » et dans la recherche. Code : `public/climbplan.js` (sans DOM, testé) et `public/views-climbplan.js`.
+
+**Cotations**
+- Le système utilisé est celui de la salle choisie, sinon un système personnel de l'activité, sinon la référence (Fontainebleau pour le bloc, cotation française pour la voie). On peut le changer.
+- Le maximum n'est utilisé que s'il est noté (performances max_bloc / max_voie, dans le même système ou par correspondance). Sinon on ne l'invente pas : les plages par défaut sont modestes et affichées « (auto) ».
+
+**Mode « objectif de fin de séance »** (ex. réussir un U8 en dévers et réglettes, en 2 h)
+- Déroulé :
+  1. échauffement général ;
+  2. échauffement en grimpant 4 à 5 crans sous l'objectif (U3–U4 pour U8), dans les styles choisis ;
+  3. montée (U5–U6) en pyramide ;
+  4. spécifique un cran sous l'objectif, style par style (si au moins 75 min) ;
+  5. essais sur l'objectif, avec des repos de 3 min ;
+  6. retour au calme.
+- Le temps disponible est réparti entre les parties.
+- Un conseil honnête est affiché si le maximum est connu : ambitieux, un cran au-dessus, ou dans tes cordes.
+
+**Mode « je structure moi-même »**
+- Des parties (bloc, voie, échauffement, renfo, gainage, mobilité, étirements, retour au calme), chacune avec sa durée. On peut les réordonner et ajuster le total au temps disponible.
+- Pour chaque partie de grimpe :
+  - bloc ou voie ;
+  - intensité (tranquille / modéré / intense / max) ;
+  - cotations de… à… (ou automatiques) ;
+  - un ou plusieurs styles.
+- **Plusieurs structures proposées**, les plus adaptées à l'intensité d'abord :
+  - bloc : pyramide, blocs max, tour des styles, 4×4, volume facile, technique par style ;
+  - voie : voies max, pyramide, voies enchaînées, continuité.
+- **« Adapter à ce que j'ai fait avant »** : un choix de l'utilisateur, jamais automatique.
+  - La charge des parties précédentes est estimée (doigts, puissance, endurance) d'après la durée, l'intensité et les styles.
+  - Au-delà d'un seuil, la partie garde moins de styles à doigts (réglettes, petites prises…) et descend d'un ou deux crans.
+  - L'explication est affichée.
+- Les parties « corps » sont construites par le générateur habituel, selon le matériel.
+
+**Résultat** : un aperçu. Rien n'est enregistré tant que l'utilisateur ne choisit pas ▶ Lancer ou 💾 Enregistrer. La séance a ses sports (bloc et/ou voie), son objectif et son pourquoi.
+
+**Affichage** : une étape de grimpe s'écrit « 15 blocs · repos 2 min » (et non plus « 15 × 1 blocs »).
+
+**Tests**
+- Nouveau fichier `climbplan.test.mjs` (7 tests) : systèmes, objectif U8, peu de temps, parties au choix, structures, cotations, adaptation.
+- E2E : les deux modes, choix d'une structure et d'un style, enregistrement.

@@ -572,3 +572,5 @@ body.textedit #main :is(h1,h2,h3,b,p,small,span,summary,button,label,li){cursor:
 .brief{display:grid;gap:10px}.brief .w3{display:flex;gap:10px;align-items:flex-start}.brief .w3i{font-size:1.15rem;width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:9px;background:var(--card2)}
 .brief .w3 b{font-size:.82rem;color:var(--accent)}.brief .w3 p{margin:2px 0 0;font-size:.92rem;line-height:1.4}
 .linkish{appearance:none;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.cpart{padding:10px 0;border-bottom:1px solid var(--line);display:grid;gap:6px}.cpart:last-of-type{border-bottom:0}.cpart .cpbtns{justify-content:flex-end}
+.setrow.dim{opacity:.6}

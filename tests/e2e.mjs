@@ -483,6 +483,22 @@ await step('chaque séance et chaque exercice : c’est quoi, à quoi ça sert, 
   assert.match(await a.text('#sheet .brief'), /Pourquoi \?/); await A.locator('#sheet [data-act=catExInfo]').first().click();
   await A.waitForSelector('#sheet .brief:has-text("Pourquoi ici")'); await A.keyboard.press('Escape');
 });
+await step('escalade structurée : objectif « réussir le plus dur » et parties au choix (structures, adaptation)', async () => {
+  await a.tab('library'); await a.sub('libSub', 'climbplan'); await A.waitForSelector('[data-act=cpMode][data-id=goal]');
+  await a.click('[data-act=cpMode][data-id=goal]'); await A.waitForSelector('[data-act=cpGoalGo]');
+  await a.click('[data-act=cpStyle][data-id=st-devers]'); await a.click('[data-act=cpMin][data-id="90"]'); await a.click('[data-act=cpGoalGo]');
+  await A.waitForSelector('#cpresult'); const r = await a.text('#cpresult');
+  assert.match(r, /Échauffement en grimpant[\s\S]*Montée[\s\S]*Objectif/); assert.match(r, /dévers/);
+  await a.click('[data-act=cpMode][data-id=parts]'); await a.click('[data-act=cpExample]'); await A.waitForSelector('.cpart');
+  assert.equal(await a.count('.cpart'), 5); assert.match(await a.text('#main'), /Voie max[\s\S]*adapté à avant/);
+  await A.locator('[data-act=cpEdit]').nth(1).click(); await A.waitForSelector('#sheet [data-act=cpPart][data-k=structure]');
+  assert.ok(await a.count('#sheet [data-act=cpPart][data-k=structure]') >= 4, 'plusieurs structures proposées');
+  await a.click('#sheet [data-act=cpPart][data-k=structure][data-v=limit]'); await a.click('#sheet [data-act=cpPartStyle][data-id=st-reglettes]');
+  await A.keyboard.press('Escape'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
+  assert.match(await a.text('#cpresult'), /Essais sur blocs/);
+  await a.click('[data-act=cpSave]'); await A.waitForSelector('input[data-change=sName]');
+  assert.match(await a.text('#main .brief'), /Bloc|voie/i);
+});
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');
