@@ -129,8 +129,8 @@ await step('performances : mesure + « je ne sais pas »', async () => {
   await A.waitForSelector('text=je ne sais pas');
   assert.ok(await a.count('text=Gainage bateau') > 0);
 });
-await step('cotations : système U1→U8 avec correspondance, style personnalisé, maxima multiples multi-styles', async () => {
-  await a.sub('profSub', 'climbing'); await a.click('[data-act=carnetAdv]');
+await step('cotations (dans Mes sports) : système U1→U8 avec correspondance, style personnalisé ; maxima multiples multi-styles (dans Records et mesures)', async () => {
+  await a.sub('profSub', 'activities'); await A.waitForSelector('[data-act=sysNew]');
   await a.click('[data-act=sysNew]'); await a.click('[data-act=sysFromTpl][data-id=u8]');
   await A.waitForSelector('#sheet form[data-submit=lvlSave]');
   const u5 = A.locator('#sheet form[data-submit=lvlSave]').nth(4);
@@ -139,6 +139,7 @@ await step('cotations : système U1→U8 avec correspondance, style personnalis�
   await a.click('[data-act=styleNew]'); await A.fill('#sheet input[name=label]', 'Arête'); await a.click('#sheet button[type=submit]');
   await A.waitForSelector('text=Arête ✎');
   // Maximum 1 : Fontainebleau 6C, styles Dévers + Réglettes
+  await a.sub('profSub', 'perfs'); await A.waitForSelector('[data-act=perfAdd][data-id=max_bloc]');
   await a.click('[data-act=perfAdd][data-id=max_bloc]'); await A.waitForSelector('#sheet select[name=systemId]');
   await pickSel(A, '#sheet select[name=systemId]', 'font'); await pickSel(A, '#sheet select[name=levelId]', { label: '6C' });
   await A.click('#sheet label.chip:has-text("Dévers")'); await A.click('#sheet label.chip:has-text("Réglettes")'); await a.click('#sheet button[type=submit]');
@@ -155,14 +156,14 @@ await step('carnet : ajout rapide, pyramide ; projet rangé avec les objectifs, 
   await a.tab('home'); await a.click('[data-act=goCarnet]'); await A.waitForSelector('[data-act=ascQuick]');
   await a.click('[data-act=ascQuick]'); await A.waitForSelector('.aq [data-act=aqGrade]');
   await A.locator('.aq [data-act=aqGrade]', { hasText: /^6A$/ }).first().click(); await a.click('.aq [data-act=aqResult][data-v=flash]'); await a.click('.aq [data-act=aqSave]');
-  await A.waitForSelector('.pyr-row'); assert.match(await a.text('.pyr'), /6A\s*1/);
-  await a.click('[data-act=projNew]'); await A.fill('#pj-name', 'Le toit rouge');
+  await a.tab('profile'); await a.sub('profSub', 'perfs'); await A.waitForSelector('.pyr-row'); assert.match(await a.text('.pyr'), /6A\s*1/, 'la pyramide est dans Records et mesures');
+  await a.sub('profSub', 'climbing'); await a.click('[data-act=projNew]'); await A.fill('#pj-name', 'Le toit rouge');
   await A.locator('.aq [data-act=pjGrade]', { hasText: /^6B$/ }).first().click(); await a.click('.aq [data-act=pjSave]');
   await A.waitForSelector('.proj:has-text("Le toit rouge")');
   await a.click('.proj [data-act=projTry]'); await a.click('.proj [data-act=projTry]'); await A.waitForSelector('.proj:has-text("2 essais")');
   await a.click('.proj [data-act=projDone]'); await a.confirm();
   await A.waitForSelector('.setrow:has-text("Le toit rouge")'); assert.match(await a.text('main'), /Objectifs réussis[\s\S]*Le toit rouge/, 'le projet réussi est avec les objectifs réussis');
-  await a.tab('home'); await a.click('[data-act=goCarnet]'); await A.waitForSelector('.pyr-row'); assert.match(await a.text('.pyr'), /6B\s*1/, 'la réussite du projet entre dans la pyramide');
+  await a.sub('profSub', 'perfs'); await A.waitForSelector('.pyr-row'); assert.match(await a.text('.pyr'), /6B\s*1/, 'la réussite du projet entre dans la pyramide');
   await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'project' && i.d.status === 'done' && i.d.tries.length), 12000, 'projet synchronisé');
 });
 await step('ma salle : cotation U1 → U8+, espaces et matériel ; bloc noté « U7 dur, dévers » dans cette salle', async () => {

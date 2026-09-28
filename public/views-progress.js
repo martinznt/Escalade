@@ -13,18 +13,20 @@ import { composePage } from './layout.js';
 const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
 const SUB_INFO = {
   history: ['📋', 'Historique', (c) => (c.history.length ? `${c.history.length} séance${c.history.length > 1 ? 's' : ''} enregistrée${c.history.length > 1 ? 's' : ''}` : 'Tes séances faites, une par une')],
-  records: ['🏆', 'Records', () => 'Tes meilleures performances'], timeline: ['🕰️', 'Frise', () => 'Tout ce qui s’est passé, dans l’ordre'],
+  records: ['🏆', 'Records et mesures', () => 'Records, tests, maxima (dans ton profil)'], timeline: ['🕰️', 'Frise', () => 'Tout ce qui s’est passé, dans l’ordre'],
   journal: ['📝', 'Journal', () => 'Tes notes et tes ressentis'], analyses: ['🔍', 'Analyses', () => 'Tendances, charge, pourquoi je stagne'], lab: ['🧪', 'Lab', () => 'Graphiques détaillés pour aller plus loin'],
 };
 /** Progrès : le résumé d'abord (l'essentiel), puis la liste des rubriques ; chaque rubrique a sa page. */
 export function vProgress() {
   const sub = SUBS.some(([k]) => k === S.sub.progress) ? S.sub.progress : 'summary';
-  const views = { summary: vSummary, history: vHistory, records: vRecords, timeline: vTimeline, journal: vJournal, analyses: vAnalyses, lab: vLab };
+  // Les records ont rejoint « Records et mesures » (Profil) : l'ancienne adresse y mène.
+  if (sub === 'records') { setTimeout(() => go('profile', 'perfs'), 0); return ''; }
+  const views = { summary: vSummary, history: vHistory, timeline: vTimeline, journal: vJournal, analyses: vAnalyses, lab: vLab };
   if (sub === 'summary') { const c = ctx(); return h`<h1>📈 Progrès</h1>${vSummary()}<span class="kicker">Aller plus loin</span>${menuList(Object.entries(SUB_INFO).map(([k, [ic, t, d]]) => ['progSub', k, ic, t, d(c)]))}`; }
   const [ic, t] = SUB_INFO[sub];
   return h`${subHead('progSub', 'summary', 'Progrès', `${ic} ${t}`)}${views[sub]()}`;
 }
-ACT.progSub = (el) => go('progress', el.dataset.id);
+ACT.progSub = (el) => (el.dataset.id === 'records' ? go('profile', 'perfs') : go('progress', el.dataset.id));
 const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);
 
 function vSummary() {
@@ -90,13 +92,14 @@ SUBMIT.histSave = (f) => { const d = Object.fromEntries(new FormData(f)), e = S.
 ACT.histDel = async (el) => { if (!(await ask('Supprimer cette séance de l’historique ?', { ok: 'Supprimer', danger: true }))) return; deleteHistory(el.dataset.id); go('progress', 'history'); };
 
 /* ═════════ Records ═════════ */
-function vRecords() {
+/** Records des séances (dans Profil › Records et mesures). */
+export function recordsCards() {
   const c = ctx(), r = records(c);
   const names = new Map(); for (const hh of c.history) for (const e of hh.data?.exercises || []) names.set(exKey(e.name), e.name);
   const key = S.progressEx && names.has(S.progressEx) ? S.progressEx : [...names.keys()][0] || '';
   const pts = [];
   for (const hh of [...c.history].reverse()) { const ex = (hh.data?.exercises || []).find((e) => exKey(e.name) === key); if (!ex) continue; const sets = (ex.sets || []).filter((s) => s.done !== false); const load = Math.max(0, ...sets.map((s) => s.load || 0)), sec = Math.max(0, ...sets.map((s) => s.seconds || 0)), reps = Math.max(0, ...sets.map((s) => s.reps || 0)); pts.push({ v: load || sec || reps, u: load ? 'kg' : sec ? 's' : 'rép.' }); }
-  return h`<div class="card"><h3>🏆 Records personnels</h3>${r.length ? r.map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.kind === 'perf' ? 'performance' : 'meilleure série'} · ${fmtDay(x.date)}</div></div><span>${x.text}</span></div>`) : h`<p class="muted small">Aucun record encore.</p>`}</div>
+  return h`<div class="card"><h3>🏆 Records des séances</h3>${r.length ? r.map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.kind === 'perf' ? 'performance' : 'meilleure série'} · ${fmtDay(x.date)}</div></div><span>${x.text}</span></div>`) : h`<p class="muted small">Tes meilleures séries apparaîtront ici après tes séances.</p>`}</div>
     ${names.size ? h`<div class="card"><h3>Évolution d’un exercice</h3><select data-change="progEx" aria-label="Exercice">${[...names].map(([k, n]) => h`<option value="${k}" ${k === key ? 'selected' : ''}>${n}</option>`)}</select>${lineChart(pts, pts[0]?.u || '')}</div>` : ''}`;
 }
 CHG.progEx = (el) => { S.progressEx = el.value; render(); };

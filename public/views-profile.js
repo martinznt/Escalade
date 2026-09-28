@@ -10,7 +10,8 @@ import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addL
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
 import { openGenerator } from './views-library.js';
-import { vCarnet, projectsSection, doneProjects, fingerCard } from './views-climb.js';
+import { vCarnet, projectsSection, doneProjects, fingerCard, pyramidCard } from './views-climb.js';
+import { recordsCards } from './views-progress.js';
 import { bodyFields, bodyToggle, cleanBody, bodyAdjust } from './body.js';
 import { sourcesLine } from './srcui.js';
 import { GOALS, INTENT_OF } from './views-setup.js';
@@ -21,14 +22,14 @@ import { allPlaces, placeStats, kindOfEnv, placesOf, KIND_LABEL } from './places
 import { celebrate } from './fx.js';
 
 const SUBS = [['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
-const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['📏', 'Mes mesures', 'tests, records'],
+const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
   climbing: ['🧗', 'Carnet', 'blocs, voies, pyramide'], goals: ['🎯', 'Objectifs', 'figures, projets d’escalade'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 /** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
 const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment', 'prefs']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['map', 'understand']], ['Partager', ['public']]];
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
   if (sub === 'home') return vHub();
-  const views = { body: vBody, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(vClimbAdvanced()), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
+  const views = { body: vBody, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
   const [ic, title] = TILES[sub];
   return h`${subHead('profSub', 'home', 'Profil', `${ic} ${title}`)}${views[sub]()}`;
 }
@@ -75,7 +76,7 @@ function vUnderstand() {
   const list = (items) => h`<ul class="clean">${items.slice(0, 12).map((x) => h`<li>${x}</li>`)}</ul>${items.length > 12 ? h`<p class="tiny muted">… et ${items.length - 12} autre(s)</p>` : ''}`;
   const todo = testReminders(ctx()).slice(0, 3);
   return h`<div class="statgrid">${stats.map(([ic, l, items, cls]) => h`<button class="stat2 ${cls}" data-act="uOpen" data-id="${l}"><b>${items.length}</b><span>${ic} ${l}</span></button>`)}</div>
-    ${todo.length ? h`<section class="card acc-b"><span class="kicker">✅ Pour mieux te connaître</span>${todo.map((t) => h`<div class="todo row"><span class="grow">📏 ${t.label}</span><button class="btn sm pri" data-act="perfAdd" data-id="${t.metricId}">Saisir</button></div>`)}</section>` : ''}
+    ${todo.length ? menuList([['allGo', '', '📏', `${todo.length} mesure${todo.length > 1 ? 's' : ''} à faire pour mieux te connaître`, 'Dans Records et mesures', 'profile/perfs']]) : ''}
     ${stats.map(([ic, l, items]) => h`<details class="card fold" id="u-${l}"><summary><span>${ic} ${l}</span><em>${items.length}</em></summary>${items.length ? list(items) : h`<p class="small muted">Rien pour l’instant.</p>`}</details>`)}
     ${u.missing.length ? h`<details class="card fold"><summary><span>❔ Ce qui manque</span><em>${u.missing.length}</em></summary>${list(u.missing)}</details>` : ''}
     <details class="card fold"><summary><span>💡 Comment l’app décide</span></summary><ol class="small">${u.method.map((m) => h`<li>${m}</li>`)}</ol></details>`;
@@ -123,6 +124,7 @@ function vActivities() {
       ${acts.filter((a) => !a.preset && !a.archived).map((a) => h`<div class="item"><div class="ico">${a.emoji || '🏅'}</div><div class="grow"><b>${a.label}</b><div class="tiny muted">${itemsOf('category').filter((x) => x.activityId === a.id && !x.archived).map((x) => x.label).join(', ') || 'aucune catégorie'}</div></div><button class="btn sm" data-act="actEdit" data-id="${a.id}">✎</button></div>`)}
       ${!acts.some((a) => !a.preset && !a.archived) ? h`<p class="muted small">Basketball, cyclisme, tennis, ski… : crée ton activité avec ses propres catégories, métriques et exercices.</p>` : ''}</div>
     ${Object.values(c.activities).map((a) => vActivityCard(a))}
+    ${Object.keys(c.activities).some((a) => a.startsWith('climbing')) ? h`<span class="kicker">🧗 Escalade : cotations et styles</span>${climbSystemsStyles()}` : ''}
     <div class="card"><div class="row between"><h3>Mes métriques personnalisées</h3><button class="btn sm" data-act="metricNew">＋ Métrique</button></div>${itemsOf('metric').filter((m) => !m.archived).map((m) => h`<div class="item"><div class="grow"><b>${m.label}</b><div class="tiny muted">${m.unit || 'sans unité'} · ${m.activityId ? activityLabel(m.activityId, c) : 'toutes activités'} · ${(m.caps || []).map((x) => capL(x.id)).join(', ') || 'aucune capacité liée'}</div></div><button class="btn sm" data-act="metricEdit" data-id="${m.id}">✎</button></div>`)}</div>`;
 }
 function vActivityCard(a) {
@@ -174,7 +176,8 @@ function vPerfs() {
   for (const p of c.perfs) { if (!groups.has(p.metricId)) groups.set(p.metricId, []); groups.get(p.metricId).push(p); }
   const climber = Object.keys(c.activities).some((a) => a.startsWith('climbing'));
   return h`<div class="row wrapf"><button class="btn pri" data-act="perfAdd">＋ Saisir une performance</button><button class="btn" data-act="metricNew">＋ Métrique personnalisée</button></div>
-    ${climber ? fingerCard() : ''}
+    ${recordsCards()}
+    ${climber ? h`<span class="kicker">🧗 Escalade</span>${climbMaxima()}${pyramidCard()}${fingerCard()}` : ''}
     ${rem.length ? h`<div class="card flat"><h3>📏 À mesurer</h3>${rem.map((t) => h`<div class="item"><div class="grow"><b class="small">${t.label}</b><div class="tiny muted">${t.unknown ? 'tu ne sais pas encore' : t.age != null ? `il y a ${t.age} j` : 'jamais mesuré'} · pour ${t.why}</div>${t.test ? h`<details class="how mini"><summary>Comment faire le test ?</summary><p class="tiny">${t.test}</p></details>` : ''}</div><button class="btn sm pri" data-act="perfAdd" data-id="${t.metricId}">Saisir</button></div>`)}</div>` : ''}
     ${groups.size ? [...groups.entries()].map(([mid, list]) => { const m = c.metrics[mid] || { label: mid, unit: '' }; const t = metricTrend(mid, c); const pts = list.filter((p) => !p.unknown && p.value != null).sort((a, b) => a.date - b.date).map((p) => ({ v: p.value })); return h`<div class="card"><div class="row between"><h3>${m.label}</h3><button class="btn sm" data-act="perfAdd" data-id="${mid}">＋</button></div>
       ${m.tiers ? h`<p class="tiny muted">${metricTierText(m)}</p>` : ''}${t ? h`<p class="small">${t.dir > 0 ? '📈' : t.dir < 0 ? '📉' : '➖'} ${t.text}</p>` : ''}${pts.length >= 2 ? lineChart(pts, m.unit) : ''}
@@ -222,16 +225,18 @@ SUBMIT.perfSave = (f) => {
 ACT.perfDel = async (el) => { const p = item('perf', el.dataset.id); if (p && (await ask('Supprimer cette performance ?', { ok: 'Supprimer', danger: true }))) { delItem('perf', p.id); render(); } };
 
 /* ═════════ Escalade : systèmes de cotation, styles, maxima, journal ═════════ */
-function vClimbAdvanced() {
-  const c = ctx();
-  const userSys = Object.values(c.systems).filter((s) => !s.builtin);
-  const maxPerfs = c.perfs.filter((p) => p.metricId === 'max_bloc' || p.metricId === 'max_voie');
-  const sum = maximaSummary(maxPerfs, c.styles);
-  return h`<div class="card"><div class="row between"><h3>🧗 Mes maxima</h3><button class="btn sm pri" data-act="perfAdd" data-id="max_bloc">＋ Bloc</button><button class="btn sm pri" data-act="perfAdd" data-id="max_voie">＋ Voie</button></div>
+/** Maxima d'escalade (dans Records et mesures). */
+export function climbMaxima() {
+  const c = ctx(), maxPerfs = c.perfs.filter((p) => p.metricId === 'max_bloc' || p.metricId === 'max_voie'), sum = maximaSummary(maxPerfs, c.styles);
+  return h`<div class="card"><div class="row between wrapf"><h3>🧗 Mes maxima</h3><div class="row tight wrapf"><button class="btn sm pri" data-act="perfAdd" data-id="max_bloc">＋ Bloc</button><button class="btn sm pri" data-act="perfAdd" data-id="max_voie">＋ Voie</button></div></div><button class="btn sm pri" data-act="perfAdd" data-id="max_bloc">＋ Bloc</button><button class="btn sm pri" data-act="perfAdd" data-id="max_voie">＋ Voie</button></div>
       <p class="tiny muted">Plusieurs maxima possibles : par système de cotation, par style (multi-sélection) et par contexte. Chaque saisie garde le système utilisé à ce moment-là.</p>
       ${sum.length ? sum.map((x) => h`<div class="card flat"><b>${x.systemName}</b> ${c.systems[x.systemId]?.archived ? tag('archivé') : !c.systems[x.systemId] ? tag('supprimé') : ''}<p class="small">Meilleur : <b>${snapshotText(x.best.grade, c.systems)}</b> (${fmtDay(x.best.date)})</p>${x.byStyle.length ? h`<div class="chips">${x.byStyle.map((s) => h`<span class="chip static">${s.label} : ${s.perf.grade.label}</span>`)}</div>` : ''}
-        <details><summary class="small">${x.entries.length} saisie(s)</summary>${x.entries.map((p) => h`<div class="item"><div class="grow small">${p.grade.label} · ${fmtDay(p.date)}${p.styles?.length ? ' · ' + p.styles.map((s) => c.styles[s]?.label || s).join(', ') : ''}${p.context?.kind ? ' · ' + p.context.kind : ''}</div><button class="btn sm ic" data-act="perfEdit" data-id="${p.id}">✎</button><button class="btn danger sm ic" data-act="perfDel" data-id="${p.id}">✕</button></div>`)}</details></div>`) : h`<p class="muted small">Aucun maximum enregistré.</p>`}</div>
-    <div class="card"><div class="row between"><h3>Systèmes de cotation</h3><button class="btn sm" data-act="sysNew">＋ Système</button></div>
+        <details><summary class="small">${x.entries.length} saisie(s)</summary>${x.entries.map((p) => h`<div class="item"><div class="grow small">${p.grade.label} · ${fmtDay(p.date)}${p.styles?.length ? ' · ' + p.styles.map((s) => c.styles[s]?.label || s).join(', ') : ''}${p.context?.kind ? ' · ' + p.context.kind : ''}</div><button class="btn sm ic" data-act="perfEdit" data-id="${p.id}">✎</button><button class="btn danger sm ic" data-act="perfDel" data-id="${p.id}">✕</button></div>`)}</details></div>`) : h`<p class="muted small">Aucun maximum enregistré.</p>`}</div>`;
+}
+/** Systèmes de cotation et styles d'escalade (dans Mes sports). */
+export function climbSystemsStyles() {
+  const c = ctx(), userSys = Object.values(c.systems).filter((s) => !s.builtin);
+  return h`<div class="card"><div class="row between"><h3>Systèmes de cotation</h3><button class="btn sm" data-act="sysNew">＋ Système</button></div>
       ${Object.values(BUILTIN_SYSTEMS).map((s) => h`<div class="item"><div class="grow"><b>${s.name}</b> ${s.global ? tag('🌍 pour tous', 'acc') : tag('intégré')}<div class="tiny muted">${s.levels.length} niveaux${s.maps.length ? ' · correspondance usuelle vers Fontainebleau' : ''}</div></div><button class="btn sm" data-act="sysDup" data-id="${s.id}">Dupliquer</button></div>${s.global && S.user?.isAdmin ? h`<div class="row"><button class="btn sm ghost" data-act="glReset" data-k="grading" data-id="${s.id}">↺ Retirer pour tous</button></div>` : ''}`)}
       ${userSys.map((s) => h`<div class="item"><div class="grow"><b>${s.name}</b> ${s.archived ? tag('archivé') : ''}<div class="tiny muted">${s.activity} · ${s.levels.length} niveaux · ${s.maps.length} correspondance(s)</div><div class="lvlrow">${sortedLevels(s).slice(0, 12).map((l) => raw(`<span class="lvl" style="${l.color ? `background:${l.color}` : ''}">${l.label.replace(/[<>&"]/g, '')}</span>`))}</div><div class="row wrapf">${shareButton('grading', s.id)}</div></div><button class="btn sm" data-act="sysEdit" data-id="${s.id}">✎</button></div>`)}</div>
     <div class="card"><div class="row between"><h3>Styles</h3><button class="btn sm" data-act="styleNew">＋ Style</button></div>

@@ -97,7 +97,7 @@ function vWhy() {
       ${levels.length <= 16 ? h`<div class="chips">${levels.map((l, i) => chip(i === t, l.label, `data-act="cpTarget" data-id="${i}"`))}</div>` : h`<select data-change="cpTargetSel">${levels.map((l, i) => h`<option value="${i}" ${i === t ? 'selected' : ''}>${l.label}</option>`)}</select>`}
       <span class="kicker">En <span class="tiny muted">(un ou plusieurs styles, ou aucun)</span></span>
       <div class="chips">${climbStyles().sort((a, b) => a.label.localeCompare(b.label, 'fr')).map((st) => chip(c.styles.includes(st.id), st.label, `data-act="cpStyle" data-id="${st.id}"`))}<input class="chipin" data-change="styleQuick" data-target="cp" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
-      ${advice ? h`<p class="small ${/ambitieux/.test(advice) ? 'warn-t' : 'muted'}">${advice}</p>` : h`<p class="tiny muted">Note ton maximum dans <button class="linkish acc-t" data-act="allGo" data-to="profile/climbing">Profil › Carnet</button> pour un conseil sur l’objectif.</p>`}</div>`;
+      ${advice ? h`<p class="small ${/ambitieux/.test(advice) ? 'warn-t' : 'muted'}">${advice}</p>` : h`<p class="tiny muted">Note ton maximum dans <button class="linkish acc-t" data-act="allGo" data-to="profile/perfs">Records et mesures</button> pour un conseil sur l’objectif.</p>`}</div>`;
   } else if (aim === 'target') {
     const ts = sportTargets(c.sport, x), mid = ts.some((t) => t.id === c.tMetric) ? c.tMetric : ts[0].id, t = ts.find((y) => y.id === mid), known = bestPerf(x, mid);
     const val = Number.isFinite(c.tValue) && c.tMetric === mid ? c.tValue : null, pace = val != null ? paceOf(mid, val) : null;

@@ -167,7 +167,7 @@ ACT.layReset = async (el) => {
 const ALL = [
   ['S’entraîner', [['🎯', 'Séance du jour', 'genOpen'], ['✨', 'Créer une séance', 'cpNew'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['📆', 'Programme', 'topProgram'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Coach', 'coachOpen']]],
   ['Escalade', [['🧗', 'Carnet (blocs, voies)', 'goCarnet'], ['📌', 'Projets (dans Objectifs)', 'goProjects'], ['✋', 'Test de doigts (Mesures)', 'allGo', 'profile/perfs']]],
-  ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📋', 'Historique', 'allGo', 'progress/history'], ['🏆', 'Records', 'allGo', 'progress/records'], ['📸', 'Bilan du mois', 'recapOpen']]],
+  ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📋', 'Historique', 'allGo', 'progress/history'], ['🏆', 'Records et mesures', 'allGo', 'profile/perfs'], ['📸', 'Bilan du mois', 'recapOpen']]],
   ['Planifier', [['📅', 'Calendrier', 'topCal'], ['⏰', 'Rappels', 'allGo', 'settings/notifs'], ['🔔', 'Notifications', 'notifOpen']]],
   ['Moi', [['👤', 'Mon profil', 'allGo', 'profile/home'], ['🎯', 'Objectifs', 'allGo', 'profile/goals'], ['🧰', 'Matériel et lieux', 'allGo', 'profile/equipment']]],
   ['Aider l’app', [['💡', 'Proposer une amélioration', 'ideaNew']]],

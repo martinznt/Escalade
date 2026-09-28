@@ -22,22 +22,15 @@ function sysFor(kind) {
 }
 const gradeChips = (sys, levelId, act) => h`<div class="chips grades">${sortedLevels(sys).map((l) => h`<button type="button" class="chip ${l.id === levelId ? 'on' : ''}" data-act="${act}" data-v="${l.id}" ${l.color ? raw(`style="--lc:${esc(l.color)}"`) : ''}>${l.label}</button>`)}</div>`;
 
-export function vCarnet(advanced = '') {
-  const c = ctx(), st = C(), days = PERIODS.find((p) => p[0] === st.period)?.[2] || 0;
-  const py = pyramid(c.ascents, { kind: st.kind, since: days ? Date.now() - days * 86400000 : 0 });
+export function vCarnet() {
+  const c = ctx();
   const nProj = itemsOf('project').filter((p) => p.status === 'active').length;
   return h`<section class="card carnet-hero"><h2>🧗 Mon carnet</h2>
       <div class="grid2"><button class="btn pri big" data-act="ascQuick">＋ Bloc ou voie</button><button class="btn big" data-act="projNew">📌 Nouveau projet</button></div></section>
-    <section class="card"><div class="row between"><h3>Ma pyramide</h3>${seg('carnetKind', st.kind, [['bloc', 'Bloc'], ['voie', 'Voie']])}</div>
-      ${seg('carnetPeriod', st.period, PERIODS.map(([k, l]) => [k, l]))}
-      ${py.rows.length ? h`<div class="pyr">${py.rows.map((r) => h`<div class="pyr-row"><span class="pyr-g" ${r.color ? raw(`style="--lc:${esc(r.color)}"`) : ''}>${r.label}</span>
-          <div class="pyr-bar"><i class="f" style="width:${Math.round((r.flash / Math.max(1, r.total)) * r.pct * 100)}%"></i><i class="s" style="width:${Math.round((r.send / Math.max(1, r.total)) * r.pct * 100)}%"></i></div><b>${r.total}</b></div>`)}</div>
-        <p class="tiny muted"><span class="dot f"></span> flash <span class="dot s"></span> réussi · ${py.total} réussite${py.total > 1 ? 's' : ''} en ${py.systemName}</p>`
-      : h`<p class="small muted">Note tes réussites en ${st.kind === 'bloc' ? 'bloc' : 'voie'} : ta pyramide se construit toute seule.</p>`}</section>
-    <div class="setmenu">${[['goProjects', '', '📌', 'Mes projets', nProj ? `${nProj} en cours · rangés avec tes objectifs` : 'Rangés avec tes objectifs'], ['allGo', 'profile/perfs', '✋', 'Test de doigts', 'Avec tes mesures et tes records']].map(([act, to, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${to ? raw(`data-to="${to}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
-    <section class="card"><h3>Journal</h3>
+    <div class="setmenu">${[['goProjects', '', '📌', 'Mes projets', nProj ? `${nProj} en cours · rangés avec tes objectifs` : 'Rangés avec tes objectifs'], ['allGo', 'profile/perfs', '🏆', 'Pyramide, maxima et test de doigts', 'Dans Records et mesures']].map(([act, to, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${to ? raw(`data-to="${to}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
+    <section class="card"><h3>Mes blocs et voies</h3>
       ${c.ascents.length ? h`${c.ascents.slice(0, 6).map(ascRow)}${c.ascents.length > 6 ? h`<details class="how mini"><summary>Tout voir (${c.ascents.length})</summary>${c.ascents.slice(6, 200).map(ascRow)}</details>` : ''}` : h`<p class="small muted">Rien pour l’instant.</p>`}</section>
-    ${advanced ? h`<details class="card how" ${st.adv ? 'open' : ''}><summary data-act="carnetAdv"><b>⚙️ Maxima, systèmes de cotation et styles</b></summary>${advanced}</details>` : ''}`;
+    `;
 }
 function trend(ft) {
   const list = ft.last?.metricId === 'suspension_lestee' ? ft.load : ft.time; if (list.length < 2) return '';
@@ -52,6 +45,17 @@ function projRow(p) {
   return h`<div class="proj card"><button class="proj-thumb" data-act="projOpen" data-id="${p.id}" aria-label="Ouvrir le projet">${ph?.data ? raw(`<img src="${esc(ph.data)}" alt="">`) : p.kind === 'voie' ? '🧗' : '🪨'}</button>
     <div class="grow"><b>${p.name || 'Projet'}</b> <span class="gpill sm">${p.grade?.label || p.gradeText || ''}</span><div class="tiny muted">${s.attempts} essai${s.attempts > 1 ? 's' : ''} · ${s.sessions} séance${s.sessions > 1 ? 's' : ''}${s.days ? ` · depuis ${s.days} j` : ''}</div></div>
     <div class="proj-act"><button class="btn sm" data-act="projTry" data-id="${p.id}">＋1 essai</button><button class="btn sm pri" data-act="projDone" data-id="${p.id}">✓ Réussi</button></div></div>`;
+}
+/** Pyramide de cotations (dans Records et mesures). */
+export function pyramidCard() {
+  const c = ctx(), st = C(), days = PERIODS.find((p) => p[0] === st.period)?.[2] || 0;
+  const py = pyramid(c.ascents, { kind: st.kind, since: days ? Date.now() - days * 86400000 : 0 });
+  return h`<section class="card"><div class="row between"><h3>Ma pyramide</h3>${seg('carnetKind', st.kind, [['bloc', 'Bloc'], ['voie', 'Voie']])}</div>
+      ${seg('carnetPeriod', st.period, PERIODS.map(([k, l]) => [k, l]))}
+      ${py.rows.length ? h`<div class="pyr">${py.rows.map((r) => h`<div class="pyr-row"><span class="pyr-g" ${r.color ? raw(`style="--lc:${esc(r.color)}"`) : ''}>${r.label}</span>
+          <div class="pyr-bar"><i class="f" style="width:${Math.round((r.flash / Math.max(1, r.total)) * r.pct * 100)}%"></i><i class="s" style="width:${Math.round((r.send / Math.max(1, r.total)) * r.pct * 100)}%"></i></div><b>${r.total}</b></div>`)}</div>
+        <p class="tiny muted"><span class="dot f"></span> flash <span class="dot s"></span> réussi · ${py.total} réussite${py.total > 1 ? 's' : ''} en ${py.systemName}</p>`
+      : h`<p class="small muted">Note tes réussites en ${st.kind === 'bloc' ? 'bloc' : 'voie'} : ta pyramide se construit toute seule.</p>`}</section>`;
 }
 /** Projets d'escalade : rangés avec les objectifs (ce sont des objectifs « réussir ce bloc / cette voie »). */
 export function projectsSection(status = 'active') {
@@ -70,7 +74,6 @@ export function fingerCard() {
       <div class="row wrapf"><button class="btn" data-act="fingerTime">⏱ Temps max sur 20 mm</button><button class="btn" data-act="fingerLoad">🏋️ 10 s avec lest</button></div></section>`;
 }
 ACT.goProjects = () => { S.filters.goals = 'active'; go('profile', 'goals'); };
-ACT.carnetAdv = () => { C().adv = !C().adv; render(); };
 ACT.carnetKind = (el) => { C().kind = el.dataset.id; render(); };
 ACT.carnetPeriod = (el) => { C().period = el.dataset.id; render(); };
 

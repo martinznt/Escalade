@@ -273,7 +273,7 @@ SUBMIT.proposeGo = async (f) => {
 };
 
 /* ───────── Administrateurs : ouvrir une proposition là où elle se trouve ───────── */
-const TARGET = { grading: 'profile/climbing', style: 'profile/climbing', exercise: 'library/exercises', catalog: 'library/catalog', format: 'library/generate', intent: 'library/generate', category: 'settings/admin', idea: 'settings/admin' };
+const TARGET = { grading: 'profile/activities', style: 'profile/activities', exercise: 'library/exercises', catalog: 'library/catalog', format: 'library/generate', intent: 'library/generate', category: 'settings/admin', idea: 'settings/admin' };
 function preview(p) {
   const d = p.payload?.data || {};
   if (p.kind === 'grading') return h`<div class="lvlrow">${(d.levels || []).map((l) => raw(`<span class="lvl" style="${l.color ? `background:${l.color}` : ''}">${String(l.label).replace(/[<>&"]/g, '')}</span>`))}</div><p class="tiny muted">${d.activity || ''} · ${(d.levels || []).length} niveaux · ${(d.maps || []).length} correspondance(s)</p>`;
