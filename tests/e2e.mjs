@@ -527,7 +527,7 @@ await step('trois niveaux d’aide : l’app choisit (puis on ajuste), l’app g
   await A.locator('#sheet .optrow [data-act=cpPick].ck').first().click(); await a.click('#sheet [data-act=cpOptsDone]');
   assert.doesNotMatch(await A.locator('#cpresult .rpart').last().innerText(), /Rien pour l’instant/);
   await a.click('[data-act=cpSave]'); await A.waitForSelector('[data-act=partOpts]');
-  await A.locator('[data-act=partOpts]').first().click(); await A.waitForSelector('#sheet [data-act=partAdd]');
+  await A.locator('[data-act=partOpts]').nth(1).click(); await A.waitForSelector('#sheet [data-act=partAdd]');
   const n0 = await a.count('#main .item.ex'); await A.locator('#sheet [data-act=partAdd]').first().click(); await A.waitForSelector('#toast.show:has-text("ajouté")');
   await A.keyboard.press('Escape'); assert.equal(await a.count('#main .item.ex'), n0 + 1);
   await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpHelp][data-id=auto]');
