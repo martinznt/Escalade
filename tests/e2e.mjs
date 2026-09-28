@@ -462,7 +462,13 @@ await step('mes séances : plusieurs sports, catégories, filtres et tris (dont 
   await a.click('#main [data-act=sfDrop]'); await A.waitForFunction((n) => document.querySelectorAll('#main [data-act=openSeance]').length === n, n0);
   await A.fill('.sfbar input', 'zzz-rien'); await A.waitForSelector('#main [data-act=sfClear]'); await a.click('#main [data-act=sfClear]');
   await A.waitForFunction((n) => document.querySelectorAll('#main [data-act=openSeance]').length === n, n0);
-  await a.click('[data-act=sfOpen]'); await a.click('#sheet [data-act=sfSort][data-id=recent]'); await a.click('#sheet [data-act=sfDone]');
+  await a.click('[data-act=sfOpen]'); await a.click('#sheet [data-act=sfSort][data-id=recent]'); await a.click('#sheet [data-act=sfGroup][data-id=cat]'); await a.click('#sheet [data-act=sfDone]');
+  await A.waitForSelector('#main .blockhead'); assert.ok(await a.count('#main .blockhead') >= 2, 'groupes par catégorie');
+  await a.click('[data-act=selStart]'); await A.locator('#main [data-act=selTog]').nth(0).click(); await A.locator('#main [data-act=selTog]').nth(1).click();
+  assert.match(await a.text('.selbar'), /2 sélectionnée/); assert.equal(await a.count('#main [data-act=play]'), 0, 'boutons cachés pendant la sélection');
+  await a.click('.selbar [data-act=selBulk][data-id=cat]'); await a.click('#sheet [data-act=selApply][data-id=endurance]'); await A.waitForSelector('#toast.show:has-text("2 séance")');
+  await A.waitForSelector('#main .blockhead:has-text("Endurance")');
+  await a.click('[data-act=sfOpen]'); await a.click('#sheet [data-act=sfGroup][data-id=none]'); await a.click('#sheet [data-act=sfDone]');
 });
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');

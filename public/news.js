@@ -89,6 +89,10 @@ export const NEWS = [
     ['library', 'seances', '[data-act=sfOpen]', '⇅ Trier et filtrer', 'Lieu, un ou plusieurs sports, catégories, et 10 façons de trier : selon ta forme, pas faites depuis longtemps, les plus courtes…'],
     ['library', 'seances', '.sfbar input', '🔍 Chercher', 'Tape un nom de séance ou d’exercice.'],
   ] },
+  { v: '8.17.0', date: '2026-10-04', title: 'Regrouper et modifier plusieurs séances', why: 'Mes séances se regroupent par lieu, sport ou catégorie, et on peut en sélectionner plusieurs pour leur donner un lieu, une catégorie, un sport, les fusionner ou les archiver d’un coup.', steps: [
+    ['library', 'seances', '[data-act=sfOpen]', '▤ Regrouper', 'Dans « ⇅ Trier », choisis « Regrouper par » : lieu, sport ou catégorie.'],
+    ['library', 'seances', '[data-act=selStart]', '☑ Plusieurs à la fois', 'Coche des séances puis choisis : lieu, catégorie, sport, fusionner ou archiver.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

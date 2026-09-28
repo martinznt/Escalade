@@ -568,3 +568,4 @@ body.textedit #main :is(h1,h2,h3,b,p,small,span,summary,button,label,li){cursor:
 /* Séance multi-sports : sport de chaque partie */
 .partrow .partact{display:block;margin-top:3px;padding:3px 6px;font-size:.78rem;min-height:0;max-width:100%;border-radius:8px}
 .sfbar{gap:8px;align-items:center}.sfbar input{min-width:0;flex:1}
+.selbox{flex:none;width:30px;height:30px;border-radius:9px;border:2px solid var(--line);background:none;color:var(--bg);font-weight:800;cursor:pointer;display:grid;place-items:center}.selbox.on{background:var(--accent);border-color:var(--accent)}.card.on-b{border-color:var(--accent)}.selbar .row.wrapf{gap:6px}

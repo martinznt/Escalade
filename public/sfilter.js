@@ -87,3 +87,16 @@ export function filterSessions(list, f = {}, history = []) {
 }
 /** Nombre de filtres actifs (pour l'afficher sur le bouton). */
 export const activeFilters = (f = {}) => (f.places?.length || 0) + (f.sports?.length || 0) + (f.cats?.length || 0) + (f.q ? 1 : 0);
+
+export const GROUPS = { none: ['▤', 'Rien'], place: ['📍', 'Lieu'], sport: ['🏷', 'Sport'], cat: ['🗂', 'Catégorie'] };
+/**
+ * Regroupe une liste déjà triée (l'ordre est gardé dans chaque groupe). Une séance à plusieurs sports ou
+ * catégories apparaît dans chacun de ses groupes. Les groupes les plus remplis d'abord, « sans » à la fin.
+ */
+export function groupSessions(list, by) {
+  if (!GROUPS[by] || by === 'none') return [{ key: '', items: list }];
+  const keys = (s) => (by === 'place' ? [placeOf(s)] : by === 'sport' ? sportsOf(s) : categoriesOf(s));
+  const m = new Map();
+  for (const s of list) { const ks = keys(s); for (const k of ks.length ? ks : ['none']) { if (!m.has(k)) m.set(k, []); m.get(k).push(s); } }
+  return [...m.entries()].map(([key, items]) => ({ key, items })).sort((a, b) => (a.key === 'none') - (b.key === 'none') || b.items.length - a.items.length);
+}

@@ -1,6 +1,6 @@
 // tests/sfilter.test.mjs — ranger ses séances : sports multiples, catégories, lieu, tris.
 import assert from 'node:assert/strict';
-import { filterSessions, autoCategories, categoriesOf, sportsOf, placeOf, intensityOf, activeFilters, SORTS } from '../public/sfilter.js';
+import { groupSessions, filterSessions, autoCategories, categoriesOf, sportsOf, placeOf, intensityOf, activeFilters, SORTS } from '../public/sfilter.js';
 import { normalizeSession } from '../public/shared.js';
 import { mergeSessions } from '../public/merge.js';
 import { byId } from '../public/library.js';
@@ -50,5 +50,13 @@ ok('fusion : garde tous les sports et le lieu commun', () => {
   assert.deepEqual(sportsOf(m).sort(), ['climbing_boulder', 'conditioning']);
   assert.equal(placeOf(m), 'none', 'lieux différents : pas de lieu imposé');
   assert.equal(placeOf(mergeSessions([bloc, { ...bloc, id: 'a2', name: 'Bloc 2' }])), 'salle');
+});
+ok('regrouper : par lieu, sport (une séance multi-sports dans chaque groupe), catégorie ; « sans » à la fin', () => {
+  const list = filterSessions(all, { sort: 'name' });
+  const g = (by) => groupSessions(list, by).map((x) => `${x.key}:${x.items.map((s) => s.id).join('')}`).join(' ');
+  assert.equal(g('none'), ':acb');
+  assert.equal(g('place'), 'salle:a maison:b none:c');
+  assert.equal(g('sport'), 'climbing_boulder:ab conditioning:cb');
+  assert.ok(g('cat').includes('Vacances:c'));
 });
 console.log(`\n${n} tests de rangement des séances OK`);

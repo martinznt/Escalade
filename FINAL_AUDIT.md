@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.16.0
+# FINAL_AUDIT — Séances entraînement v8.17.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -719,3 +719,16 @@ Tout se fait depuis Paramètres › Admin › « 🛠 Modifier l'app sans code �
 **Tests**
 - Nouveau fichier `sfilter.test.mjs` (4 tests).
 - E2E : sports et catégories ajoutés dans l'éditeur, filtre par sport, tri « selon ma forme », puce retirée, recherche sans résultat, puis « Effacer ».
+
+## Évolution 8.17.0 : regrouper et modifier plusieurs séances
+
+**Regrouper par** lieu, sport ou catégorie (dans « ⇅ Trier »)
+- La liste garde son tri à l'intérieur de chaque groupe. `groupSessions` est pur et testé.
+- Une séance à plusieurs sports ou catégories apparaît dans chacun de ses groupes. Les groupes « sans » sont à la fin.
+
+**Sélection de plusieurs séances** (« ☑ Sélectionner plusieurs séances »)
+- Actions possibles : tout cocher, donner un lieu, ajouter une catégorie, ajouter un sport, fusionner (2 à 4), archiver ou désarchiver (avec confirmation).
+- Chaque séance est enregistrée normalement (synchronisation, dernière modification gagnante).
+- Pendant la sélection, les boutons Lancer, Ouvrir et Planifier sont cachés. La sélection s'efface en changeant de page ou de filtre.
+
+**Tests** : `sfilter.test.mjs` passe à 5 tests. E2E : groupes par catégorie, puis sélection de 2 séances et catégorie ajoutée aux deux.

@@ -7,7 +7,7 @@ import './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon, ls } from './state.js';
 import { cleanParts } from './format.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
-import { CATS, SORTS, FORMS, filterSessions, activeFilters, categoriesOf, autoCategories, sportsOf, placeOf, intensityOf, INTENSITY_LABEL } from './sfilter.js';
+import { CATS, SORTS, FORMS, GROUPS, groupSessions, filterSessions, activeFilters, categoriesOf, autoCategories, sportsOf, placeOf, intensityOf, INTENSITY_LABEL } from './sfilter.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
@@ -66,7 +66,7 @@ function vLibHome() {
   return h`<h1>📚 Bibliothèque</h1><button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
     ${menuList(Object.entries(LIB_INFO).map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
 }
-ACT.libSub = (el) => { closeSheet(); window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
+ACT.libSub = (el) => { closeSheet(); S.sel = null; window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
 /* ═════════ Mes séances ═════════ */
 const SF_KEY = 'sea:seances-filter';
@@ -87,12 +87,19 @@ function vSeances() {
       <button class="btn ${nf ? 'pri' : ''}" data-act="sfOpen">⇅ Trier${nf ? ` · ${nf}` : ''}</button></div>
     <div class="muted small">${SORTS[f.sort]?.[0] || ''} ${SORTS[f.sort]?.[1] || ''}${f.sort === 'form' ? ` : ${FORMS[f.form]?.[1] || ''}` : ''} · ${list.length}${list.length !== total ? ` sur ${total}` : ''} séance(s)</div>
     ${on.length ? h`<div class="chips">${on.map(([k, v, l]) => h`<button type="button" class="chip on" data-act="sfDrop" data-k="${k}" data-v="${v}" aria-label="Retirer le filtre">${l} ✕</button>`)}</div>` : ''}
-    ${list.length ? list.map((s) => { const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
-      <div class="tiny muted">${s.context?.env ? placeName(s.context.env) + ' · ' : ''}${cats.map(catName).join(' · ')}</div></div></div>
-      <div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div></div>`; })
+    ${S.sel ? h`<div class="card acc-b selbar"><div class="row between"><b>☑ ${S.sel.length} sélectionnée(s)</b><button class="btn sm ghost" data-act="selEnd">Terminer</button></div>
+      <div class="row wrapf"><button class="btn sm" data-act="selAll">Tout</button><button class="btn sm" data-act="selBulk" data-id="place" ${S.sel.length ? '' : 'disabled'}>📍 Lieu</button><button class="btn sm" data-act="selBulk" data-id="cat" ${S.sel.length ? '' : 'disabled'}>🗂 Catégorie</button><button class="btn sm" data-act="selBulk" data-id="sport" ${S.sel.length ? '' : 'disabled'}>🏷 Sport</button><button class="btn sm" data-act="selMerge" ${S.sel.length >= 2 && S.sel.length <= 4 ? '' : 'disabled'}>🔀 Fusionner</button><button class="btn sm" data-act="selArchive" ${S.sel.length ? '' : 'disabled'}>${st === 'archived' ? '↩ Désarchiver' : '🗄 Archiver'}</button></div></div>`
+      : list.length ? h`<button class="btn sm ghost" data-act="selStart">☑ Sélectionner plusieurs séances</button>` : ''}
+    ${list.length ? groupSessions(list, f.group).map((g) => h`${g.key ? h`<div class="blockhead">${groupName(f.group, g.key)} · ${g.items.length}</div>` : ''}${g.items.map(seanceCard)}`)
       : nf ? h`<div class="card flat"><p class="muted">Aucune séance avec ces filtres.</p><button class="btn" data-act="sfClear">Effacer les filtres</button></div>`
       : empty(st === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
 }
+function seanceCard(s) {
+  const sel = S.sel?.includes(s.id); const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card ${sel ? 'on-b' : ''}"><div class="row">${S.sel ? h`<button class="selbox ${sel ? 'on' : ''}" data-act="selTog" data-id="${s.id}" aria-pressed="${!!sel}" aria-label="Sélectionner">${sel ? '✓' : ''}</button>` : ''}<div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
+      <div class="tiny muted">${s.context?.env ? placeName(s.context.env) + ' · ' : ''}${cats.map(catName).join(' · ')}</div></div></div>
+      ${S.sel ? '' : h`<div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div>`}</div>`;
+}
+const groupName = (by, k) => (by === 'place' ? placeName(k) : by === 'sport' ? (k === 'none' ? '🏷 Sans sport' : sportName(k)) : k === 'none' ? '🗂 Sans catégorie' : catName(k));
 /* Trier et filtrer : une liste claire, comme les Paramètres. Plusieurs sports, lieux ou catégories à la fois. */
 function sfSheet() {
   const f = sf(), all = S.seances.items.filter((s) => !s.archived);
@@ -105,11 +112,44 @@ function sfSheet() {
     <span class="kicker">Lieu</span>${places.length ? group('places', places, placeName) : h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>`}
     <span class="kicker">Sports (un ou plusieurs)</span>${group('sports', sports, sportName)}
     <span class="kicker">Catégories</span>${cats.length ? group('cats', cats, catName) : h`<p class="tiny muted">Aucune catégorie pour l’instant.</p>`}
+    <span class="kicker">Regrouper par</span><div class="chips">${Object.entries(GROUPS).map(([k, [e, l]]) => chip((f.group || 'none') === k, `${e} ${l}`, `data-act="sfGroup" data-id="${k}"`))}</div>
     <span class="kicker">Trier par</span>
     <div class="setmenu">${Object.entries(SORTS).map(([k, [ic, l]]) => h`<button class="setrow" data-act="sfSort" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${l}</b>${k === 'form' ? h`<small>Les séances les plus adaptées à ton énergie d’aujourd’hui d’abord</small>` : ''}</span><span class="chev">${f.sort === k ? '✓' : ''}</span></button>${k === 'form' && f.sort === 'form' ? h`<div class="chips" style="padding:0 14px 12px">${Object.entries(FORMS).map(([fk, [e, l]]) => chip(f.form === fk, `${e} ${l}`, `data-act="sfForm" data-id="${fk}"`))}</div>` : ''}`)}</div>
     <div class="grid2"><button class="btn" data-act="sfClear">Effacer</button><button class="btn pri" data-act="sfDone">Voir ${count} séance(s)</button></div></div>`);
 }
 ACT.sfOpen = () => sfSheet();
+ACT.sfGroup = (el) => { sf().group = el.dataset.id; sfSave(); render(); sfSheet(); };
+/* Sélection de plusieurs séances : lieu, catégorie, sport, fusion ou archivage d'un coup. */
+const selected = () => (S.sel || []).map(getSeance).filter(Boolean);
+ACT.selStart = () => { S.sel = []; render(); };
+ACT.selEnd = () => { S.sel = null; render(); };
+ACT.selTog = (el) => { const id = el.dataset.id; S.sel = S.sel.includes(id) ? S.sel.filter((x) => x !== id) : [...S.sel, id]; render(); };
+ACT.selAll = () => { const st = S.filters.seances || 'active'; const all = filterSessions(S.seances.items, { ...sf(), status: st }, S.history).map((s) => s.id); S.sel = S.sel.length === all.length ? [] : all; render(); };
+ACT.selMerge = () => { const ids = S.sel.slice(); S.sel = null; render(); S.merge = { ids, name: '' }; mergeSheet(); };
+ACT.selArchive = async () => {
+  const list = selected(), arch = (S.filters.seances || 'active') !== 'archived';
+  if (arch && !(await ask(`Archiver ${list.length} séance(s) ?`, { ok: 'Archiver', detail: 'Elles restent dans « Archivées » et se désarchivent quand tu veux.' }))) return;
+  for (const s of list) saveSeance({ ...s, archived: arch });
+  S.sel = null; render(); toast(arch ? `${list.length} séance(s) archivée(s)` : `${list.length} séance(s) désarchivée(s)`);
+};
+ACT.selBulk = (el) => {
+  const what = el.dataset.id, c = ctx(), n = S.sel.length;
+  const rows = what === 'place' ? [...c.envs.map((e) => [e.id, `📍 ${e.name}`]), ['none', '📍 Sans lieu']]
+    : what === 'sport' ? activityOptions().map(([id, e, l]) => [id, `${e} ${l}`])
+    : [...new Set([...Object.keys(CATS), ...S.seances.items.flatMap((s) => s.tags || [])])].map((k) => [k, catName(k)]);
+  openSheet(h`<div class="stack"><h2 style="margin:0">${what === 'place' ? '📍 Lieu' : what === 'sport' ? '🏷 Ajouter un sport' : '🗂 Ajouter une catégorie'}</h2><p class="small muted">Pour les ${n} séance(s) sélectionnée(s).</p>
+    <div class="setmenu">${rows.map(([id, l]) => h`<button class="setrow" data-act="selApply" data-k="${what}" data-id="${id}"><span class="grow"><b>${l}</b></span><span class="chev">›</span></button>`)}</div>
+    ${what === 'place' && !c.envs.length ? h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>` : ''}</div>`);
+};
+ACT.selApply = (el) => {
+  const k = el.dataset.k, id = el.dataset.id, env = ctx().envs.find((e) => e.id === id), list = selected();
+  for (const s of list) {
+    if (k === 'place') saveSeance({ ...s, context: { ...s.context, env: id === 'none' ? '' : id, envName: env?.name || '', equipment: env?.equipment || s.context.equipment } });
+    else if (k === 'sport') { if (s.activity !== id) saveSeance({ ...s, activity: s.activity || id, sports: s.activity ? [...new Set([...(s.sports || []), id])] : s.sports }); }
+    else saveSeance({ ...s, tags: [...new Set([...(s.tags?.length ? s.tags : autoCategories(s)), id])].slice(0, 8) });
+  }
+  closeSheet(); S.sel = null; render(); toast(`${list.length} séance(s) modifiée(s)`);
+};
 ACT.sfSort = (el) => { sf().sort = el.dataset.id; sfSave(); render(); sfSheet(); };
 ACT.sfForm = (el) => { sf().form = el.dataset.id; sfSave(); render(); sfSheet(); };
 ACT.sfTog = (el) => { const f = sf(), k = el.dataset.k, v = el.dataset.v; f[k] = f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v]; sfSave(); render(); sfSheet(); };
@@ -163,7 +203,7 @@ ACT.mergeCoach = () => {
   const names = mergeable().slice(0, 12).map((s) => `« ${s.name} »`).join(', ');
   closeSheet(); ACT.coachOpen?.(); const inp = $('.chat-in input'); if (inp) inp.value = `Parmi mes séances ${names}, lesquelles je peux fusionner en une seule, et dans quel ordre ?`.slice(0, 500);
 };
-ACT.seanceFilter = (el) => { S.filters.seances = el.dataset.id; render(); };
+ACT.seanceFilter = (el) => { S.filters.seances = el.dataset.id; S.sel = null; render(); };
 ACT.newSeance = () => { closeSheet(); const s = saveSeance({ id: uid(), name: 'Nouvelle séance', emoji: '🏋️', exercises: [], source: 'manual', activity: Object.keys(ctx().activities)[0] || '' }); go('library', 'seance', s.id); };
 ACT.openSeance = (el) => go('library', 'seance', el.dataset.id);
 ACT.play = (el) => {
