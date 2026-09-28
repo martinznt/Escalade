@@ -171,7 +171,7 @@ export function analyzeSession(phasesIn, ctx = {}, o = {}) {
   if (totalMinutes(phases) > 300) add({ id: 'too-long', title: 'Séance très longue', text: `${Math.round(totalMinutes(phases) / 6) / 10} h au total : pense à des pauses et à t’hydrater.`, why: [R('fact', `${totalMinutes(phases)} min au total`)], patch: null });
   return out;
 }
-export const phaseName = (p) => (p.goal ? p.goal.slice(0, 40) : p.role === 'custom' && p.roleLabel ? p.roleLabel : ROLES[p.role]?.[1] || 'Phase');
+export const phaseName = (p) => (p.goal ? p.goal.slice(0, 40) : p.label ? String(p.label).replace(/^\S+\s/, '').slice(0, 40) : p.role === 'custom' && p.roleLabel ? p.roleLabel : ROLES[p.role]?.[1] || 'Phase');
 
 /** Applique une suggestion (nouvelle liste de phases). Refuse si elle touche un réglage verrouillé. */
 export function applySuggestion(phases, s) {

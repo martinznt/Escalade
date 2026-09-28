@@ -603,3 +603,5 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 .cpart>*{min-width:0}
 .nowrap{white-space:nowrap}
 .card.journal.row{display:flex;align-items:flex-start;gap:10px}
+.fhead{margin-top:6px}.lockc{min-height:30px;padding:3px 10px;font-size:.78rem}
+.optwhy{margin:0 0 6px 40px}.optrow .fit{color:var(--accent)}ul.why li{margin:2px 0}.sugg b{display:block}
