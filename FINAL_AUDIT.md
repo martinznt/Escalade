@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.22.0
+# FINAL_AUDIT — Séances entraînement v8.23.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -913,3 +913,29 @@ Dans Bibliothèque › Structurer ma séance, on choisit d'abord **comment** cr�
 **Tests**
 - Nouveau fichier `guide.test.mjs` (6 tests) : options et matériel, conseils, « je veux plus de », ordre, assemblage et temps, exercices proches.
 - E2E : les trois niveaux d'aide, la durée d'une partie modifiée, un choix dans les options, et 🧭 dans une séance enregistrée.
+
+## Évolution 8.23.0 : un seul assistant « Créer une séance », les lieux, les objectifs réussis
+
+**Créer une séance (tous les sports)** — un seul assistant en 5 étapes, avec « ‹ Retour / Suivant › » :
+1. Comment l'app aide (choisit tout / guide / je compose).
+2. Sport (« ＋ Ajouter un sport »), lieu (le matériel du lieu est affiché et utilisé), cotation, forme, temps.
+3. Pour quoi : plusieurs objectifs cochés (« ＋ Ajouter des objectifs ici »), ce qu'on veut travailler (ajoutable avec ses mots), zones à ménager ; ou une cotation à réussir (escalade), ou « Surprends-moi ».
+4. Le format (parties et temps), proposé puis modifiable.
+5. Les exercices, partie par partie.
+Le brouillon est gardé (« Reprendre ma séance » sur l'accueil). Les anciens modes séparés sont retirés.
+
+**Lieux** — « 📍 Mes lieux » : salles, falaises (avec secteurs), autres lieux. Chaque lieu montre ce qui y a été fait (séances, blocs et voies par secteur, meilleurs niveaux). Dans le carnet, « Où ? » : en salle / en falaise → le lieu → le secteur, ajoutables sur place.
+
+**Objectifs réussis** — « 🏆 J'ai réussi » : date, perf enregistrée dans le profil (exactement la cible, marquée « déclarée »), objectifs suivants proposés. Liste des objectifs réussis dans Objectifs et dans Progrès. La page Objectifs n'a plus d'onglets : des sections repliables.
+
+**Grandes listes** — les listes de 10 choix ou plus ouvrent un sélecteur : recherche, catégories triées, « ＋ Ajouter » si absent (mesures, sports, capacités…).
+
+**Raccourcis contextuels** — une ou deux indications utiles par page (masquables), qui mènent à la bonne page avec une barre « ‹ Retour ». Les administrateurs peuvent en ajouter.
+
+**Notifications** — réabonnement automatique de l'appareil (au plus une fois par ~20 h), « 🩺 Vérifier cet appareil », et côté admin le suivi du dernier envoi (ciblés, envoyés, expirés, erreurs).
+
+**Mise en page** — toutes les sous-pages ont le même en-tête (« ‹ retour » au-dessus du titre, Paramètres compris) ; liste des sources repliée ; saisie du journal sur toute la largeur ; « Rejoindre un ami » reste écrit (seuls les symboles clairs sont en icône).
+
+**Sécurité** — inchangée : aucun secret côté client, droits d'administration décidés par le serveur, contenus « hint » globaux réservés aux admins.
+
+**Tests** — nouveaux : `goaldone`, `places`, `hints` ; `climbplan`, `push-ics`, `global`, `model` étendus. E2E réécrits pour l'assistant en 5 étapes.

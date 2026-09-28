@@ -240,7 +240,7 @@ function rangeText(p) {
   const a = levels[lo]?.label, b = levels[hi]?.label; return a ? (a === b ? a : `${a}–${b}`) + (p.from == null ? ' (auto)' : '') : '';
 }
 function vResult() {
-  const c = CP(), s = c.result, sp = c.mode === 'surprise' && c.reasons?.length && c.help !== 'free', help = c.help || 'auto';
+  const c = CP(), s = c.result, sp = c.aim === 'surprise' && c.reasons?.length && c.help !== 'free', help = c.help || 'auto';
   const exLi = (e) => h`<li><button class="linkish" data-act="cpExInfo" data-id="${e.id}"><b>${e.name}</b> <span class="tiny muted">ⓘ</span></button>${e.sets > 1 ? ` × ${e.sets}` : ''}${e.note ? h`<div class="tiny muted">${e.note}</div>` : ''}</li>`;
   const byPart = c.built ? c.built.map((p, i) => ({ p, i, label: partLabel(p, i, c.built) })) : [...new Set(s.exercises.map((e) => e.part))].map((label) => ({ p: null, i: -1, label }));
   return h`<div class="card stack" id="cpresult"><h2 style="margin:0">${s.emoji} ${s.name}</h2>
@@ -265,16 +265,14 @@ ACT.cpKind = (el) => { CP().kind = el.dataset.id; CP().target = null; keep(); re
 ACT.cpTarget = (el) => { CP().target = Number(el.dataset.id); keep(); render(); };
 CHG.cpTargetSel = (el) => { CP().target = Number(el.value); keep(); render(); };
 ACT.cpStyle = (el) => { const c = CP(), id = el.dataset.id; c.styles = c.styles.includes(id) ? c.styles.filter((x) => x !== id) : [...c.styles, id]; keep(); render(); };
-CHG.cpWarm = (el) => { CP().warm = el.value === '' ? null : Number(el.value); keep(); render(); };
-CHG.cpStretch = (el) => { CP().stretch = Number(el.value) || 0; keep(); render(); };
 ACT.cpMin = (el) => { CP().minutes = Number(el.dataset.id); keep(); render(); };
-CHG.cpMinIn = (el) => { CP().minutes = Math.max(40, Math.min(240, Number(el.value) || 120)); keep(); render(); };
+CHG.cpMinIn = (el) => { CP().minutes = Math.max(10, Math.min(240, Number(el.value) || 60)); keep(); render(); };
 const scrollRes = () => setTimeout(() => document.getElementById('cpresult')?.scrollIntoView({ behavior: 'smooth' }), 50);
 /** (Re)construit la séance à partir des parties retenues : chaque réglage de partie (temps, exercices) la reconstruit. */
 function rebuild() {
   const c = CP(); if (!c.built) return;
   let s = buildFromParts(c.built, ctx(), { ...c.bopts, free: c.help === 'free' });
-  if (c.mode === 'surprise' && c.reasons?.length && c.help !== 'free') s = { ...s, emoji: '🎲', notes: [{ title: 'Pourquoi cette surprise', text: c.reasons.join('\n') }, ...s.notes] };
+  if (c.aim === 'surprise' && c.reasons?.length && c.help !== 'free') s = { ...s, emoji: '🎲', notes: [{ title: 'Pourquoi cette surprise', text: c.reasons.join('\n') }, ...s.notes] };
   c.result = s;
 }
 function startBuild(parts, bopts) { const c = CP(); c.built = parts.map((p) => ({ ...p, styles: [...(p.styles || [])] })); c.bopts = bopts; rebuild(); render(); scrollRes(); }

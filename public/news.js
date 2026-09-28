@@ -98,11 +98,11 @@ export const NEWS = [
     ['library', 'exercises', '#main [data-act=libInfo]', '🎯 Chaque exercice', 'Touche un exercice (ou son nom dans une séance) : c’est quoi, à quoi ça sert, et pourquoi il est là.'],
   ] },
   { v: '8.19.0', date: '2026-10-06', title: 'Structurer ta séance d’escalade', why: 'Dis ce que tu veux réussir à la fin (ex. un U8 en dévers) et le temps que tu as : l’app construit toute la séance. Ou structure-la toi-même : parties, bloc ou voie, intensité, cotations, styles, et plusieurs propositions de structure.', steps: [
-    ['library', 'climbplan', '[data-act=cpMode][data-id=goal]', '🎯 Ton objectif', 'Choisis la cotation à réussir, les styles et ton temps : échauffement sur des niveaux bien plus faciles, montée, puis essais.'],
-    ['library', 'climbplan', '[data-act=cpMode][data-id=parts]', '🧩 À ta façon', 'Tes parties (ex. 1 h 30 bloc intense, 30 min tranquille, voie max), une structure au choix pour chacune, et « adapter à ce que j’ai fait avant ».'],
+    ['library', 'climbplan', '.steps', '🎯 Ton objectif', 'Choisis la cotation à réussir, les styles et ton temps : échauffement sur des niveaux bien plus faciles, montée, puis essais.'],
+    ['library', 'climbplan', '.steps', '🧩 À ta façon', 'Tes parties (ex. 1 h 30 bloc intense, 30 min tranquille, voie max), une structure au choix pour chacune, et « adapter à ce que j’ai fait avant ».'],
   ] },
   { v: '8.20.0', date: '2026-10-07', title: 'Surprends-moi', why: 'Dis seulement ce que tu veux (sport, temps, forme… ou rien) : l’app te prépare une séance différente de d’habitude, ou qui te fait progresser, et t’explique pourquoi. Échauffement et étirements réglables partout.', steps: [
-    ['library', 'climbplan', '[data-act=cpMode][data-id=surprise]', '🎲 Surprends-moi', 'Nouveau pour toi (styles, structures, exercices jamais faits) ou pour progresser (tes styles faibles, ton objectif).'],
+    ['library', 'climbplan', '.steps', '🎲 Surprends-moi', 'Nouveau pour toi (styles, structures, exercices jamais faits) ou pour progresser (tes styles faibles, ton objectif).'],
   ] },
   { v: '8.21.0', date: '2026-10-08', title: 'Idées avec l’endroit, mise en page plus claire', why: 'Quand tu proposes une idée, tu peux montrer l’endroit exact à changer ; l’administrateur y va en un clic et le modifie pour tout le monde. Le mode ✏️ de mise en page explique ce qu’il fait, a un aperçu et un bouton Quitter.', steps: [
     ['settings', 'main', '[data-act=ideaNew]', '📍 Montre l’endroit', 'Écris ton idée, puis « Choisir l’endroit à changer » et touche l’élément concerné.'],
@@ -111,6 +111,12 @@ export const NEWS = [
   { v: '8.22.0', date: '2026-10-09', title: 'Choisis combien l’app t’aide', why: 'Trois façons de créer ta séance : l’app choisit tout (et tu ajustes le temps et les exercices de chaque partie), l’app te guide (plusieurs exercices expliqués et l’ordre conseillé), ou tu composes toi-même.', steps: [
     ['library', 'climbplan', '[data-act=cpHelp][data-id=guide]', '🧭 L’app me guide', 'Pour chaque partie : des exercices expliqués (ce qu’ils travaillent, où les placer, quoi prendre pour travailler plus une chose). Tu coches.'],
     ['library', 'climbplan', '[data-act=cpHelp][data-id=free]', '✋ Je compose', 'Tes parties et tes exercices, dans tout le catalogue.'],
+  ] },
+  { v: '8.23.0', date: '2026-10-10', title: 'Une seule façon de créer une séance, et tes lieux', why: 'Créer une séance se fait en 5 étapes pour tous les sports : comment l’app t’aide, sport + lieu (le matériel suit), plusieurs objectifs, le format puis les exercices. Tes salles et falaises (avec secteurs) gardent tout ce que tu y as fait, et tes objectifs réussis sont enregistrés.', steps: [
+    ['library', 'climbplan', '.steps', '✨ Créer une séance', 'Étape par étape : comment l’app t’aide, sport, lieu et temps, tes objectifs, le format, puis les exercices. « ‹ Retour » à chaque étape.'],
+    ['profile', 'equipment', '[data-act=envNewCrag]', '📍 Mes lieux', 'Salles et falaises (avec leurs secteurs). Touche un lieu pour voir tout ce que tu y as fait.'],
+    ['profile', 'goals', '.setsec', '🏆 Objectifs réussis', 'Un bouton « J’ai réussi » enregistre la perf dans ton profil et propose la suite. Tout est rangé par section, sans onglets.'],
+    ['settings', 'notifs', '.card', '🔔 Notifications', 'Si tu ne reçois plus les nouveautés : « 🩺 Vérifier cet appareil » répare l’abonnement.'],
   ] },
 ];
 

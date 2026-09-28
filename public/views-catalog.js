@@ -1,6 +1,6 @@
 // views-catalog.js — Bibliothèque › « Prêtes » (séances sourcées, filtres, tri pour toi), « Top exercices »
 // (classement par catégorie, adapté à ton profil) et la liste des sources scientifiques citées.
-import { h, raw, chip, openSheet, closeSheet, toast, fmtDur } from './ui.js';
+import { h, raw, chip, openSheet, closeSheet, toast, fmtDur, subHead } from './ui.js';
 import { S, ACT, ctx, render, saveSeance, item } from './state.js';
 import { uid } from './shared.js';
 import { ACTIVITIES, CAPACITIES, EQUIPMENT } from './model.js';
@@ -63,7 +63,7 @@ ACT.catSave = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); i
 /* ───────── Top exercices ───────── */
 export function vBest() {
   const p = profileNeeds(), cat = (S.bestCat ||= 'tirer'), r = rankExercises({ need: p.need, level: p.level, equipment: p.equipment, acts: p.acts })[cat] || [];
-  return h`<button class="btn sm ghost setback" data-act="libSub" data-id="exercises">‹ Exercices</button><h2 style="margin:0">🏆 Top exercices pour toi</h2><p class="tiny muted">Les exercices les plus utiles pour toi dans chaque catégorie : d’après ce que tu veux travailler, ton niveau et ton matériel.</p>
+  return h`${subHead('libSub', 'exercises', 'Exercices', '🏆 Top exercices pour toi')}<p class="tiny muted">Les exercices les plus utiles pour toi dans chaque catégorie : d’après ce que tu veux travailler, ton niveau et ton matériel.</p>
     <div class="chips">${EX_CATEGORIES.map(([k, l]) => chip(cat === k, l, `data-act="bestCat" data-v="${k}"`))}</div>
     ${r.length ? r.map((x, i) => h`<button class="card pick bestrow" data-act="libInfo" data-id="${x.lib.id}"><span class="rank">${i + 1}</span><div class="grow"><b>${x.lib.emoji} ${x.lib.name}</b>
       <div class="tiny muted">${x.hits.length ? `Pour toi : ${x.hits.join(', ')}` : Object.entries(x.lib.caps || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([c]) => CAPACITIES[c]?.label).join(', ')}${x.missing.length ? ` · matériel : ${x.missing.map((n) => EQUIPMENT[n] || n).join(', ')}` : ''}${x.tooHard ? ' · niveau plus avancé' : ''}</div></div></button>`) : h`<p class="small muted">Aucun exercice pour cette catégorie avec tes sports.</p>`}
@@ -74,5 +74,5 @@ ACT.bestCat = (el) => { S.bestCat = el.dataset.v; render(); };
 /* ───────── Toutes les sources ───────── */
 export function vSources() {
   return h`<div class="card"><div class="row between"><h3>📚 Sources citées</h3>${S.user?.isAdmin ? h`<button class="btn sm" data-act="srcEdit" data-id="">＋ Ajouter</button>` : ''}</div><p class="small muted">Les conseils de l’app s’appuient sur ces études et recommandations officielles. Touche une source pour voir ce qu’elle montre.</p>
-    ${Object.entries(SOURCES).sort((a, b) => b[1].year - a[1].year).map(([id, s]) => h`<div class="row"><button class="item pick grow" data-act="srcOpen" data-id="${id}"><div class="grow"><b class="small">${s.title}</b><div class="tiny muted">${s.authors} · ${s.year} · ${s.journal}</div></div></button>${sourceAdminButtons(id)}</div>`)}</div>`;
+    <details class="how srclist"><summary>Voir les ${Object.keys(SOURCES).length} sources</summary>${Object.entries(SOURCES).sort((a, b) => b[1].year - a[1].year).map(([id, s]) => h`<div class="row"><button class="item pick grow" data-act="srcOpen" data-id="${id}"><div class="grow"><b class="small">${s.title}</b><div class="tiny muted">${s.authors} · ${s.year} · ${s.journal}</div></div></button>${sourceAdminButtons(id)}</div>`)}</details></div>`;
 }

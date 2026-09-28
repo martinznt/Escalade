@@ -1,6 +1,6 @@
 // views-home.js — Accueil : tableau de bord personnalisable, « Que faire aujourd'hui ? », commandes en langage
 // naturel, calendrier visuel (planifié / réalisé), premier lancement.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk } from './ui.js';
+import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk, subHead } from './ui.js';
 import { sceneSvg, moodLine } from './scene.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings } from './state.js';
 import { uid, summarizeHistory } from './shared.js';
@@ -37,7 +37,7 @@ const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  if (sub === 'cal') return h`<div class="row pagehead"><button class="btn sm" data-act="homeSub" data-id="dash">‹ Accueil</button><h1 class="grow">📅 Calendrier</h1></div>${vCalendar()}`;
+  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Calendrier')}${vCalendar()}`;
   return h`${reinstallCard()}${vDash()}`;
 }
 function hero() {

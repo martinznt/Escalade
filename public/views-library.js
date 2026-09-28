@@ -185,7 +185,7 @@ INPUT.sfQ = (el) => { sf().q = el.value; clearTimeout(sfT); sfT = setTimeout(() 
 /** Nouvelle séance : les façons de la créer, expliquées en une ligne. */
 ACT.exMore = () => { S.exMore = true; render(); };
 ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>${draftBanner()}
-  ${[['cpNew', '', '✨', 'Créer une séance', 'Tous sports. L’app choisit tout, te guide, ou tu composes toi-même.'], ['libSub', 'seances', '📂', 'Reprendre une de mes séances', 'La relancer, la modifier ou la dupliquer.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
+  ${[['cpNew', '', '✨', 'Créer une séance', 'Tous sports. L’app choisit tout, te guide, ou tu composes toi-même.'], ['newSeance', '', '📄', 'Page blanche', 'Une séance vide : tu ajoutes tes exercices un par un.'], ['libSub', 'seances', '📂', 'Reprendre une de mes séances', 'La relancer, la modifier ou la dupliquer.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
     ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
     ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);

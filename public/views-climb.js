@@ -52,7 +52,9 @@ function trend(ft) {
   const d = Math.round((list.at(-1).value - list.at(-2).value) * 10) / 10, u = ft.last.metricId === 'suspension_lestee' ? 'kg' : 's';
   return d > 0 ? h` <span class="ok-t">+${d} ${u} depuis le test précédent</span>` : d < 0 ? h` <span class="muted">(${d} ${u})</span>` : h` <span class="muted">(stable)</span>`;
 }
-const ascRow = (a) => h`<div class="item"><span class="gpill" ${a.grade?.color ? raw(`style="--lc:${esc(a.grade.color)}"`) : ''}>${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${RESULT_WORD[a.result] || a.result}${a.nuance ? ` · ${a.nuance}` : ''}${a.attempts > 1 ? ` · ${a.attempts} essais` : ''}${a.context?.place ? ` · ${a.context.place}` : ''} · ${fmtDay(a.date)}</div></div><button class="btn ghost sm ic" data-act="ascDel" data-id="${a.id}" aria-label="Supprimer">✕</button></div>`;
+/** Où : « Salle » ou « Falaise › secteur » (les anciennes saisies n'ont que le nom). */
+const ascWhere = (a) => { const e = a.context?.env && ctx().envs.find((x) => x.id === a.context.env), p = a.context?.place || ''; return [e?.name, p && p !== e?.name ? p : ''].filter(Boolean).join(' › '); };
+const ascRow = (a) => h`<div class="item"><span class="gpill" ${a.grade?.color ? raw(`style="--lc:${esc(a.grade.color)}"`) : ''}>${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${RESULT_WORD[a.result] || a.result}${a.nuance ? ` · ${a.nuance}` : ''}${a.attempts > 1 ? ` · ${a.attempts} essais` : ''}${ascWhere(a) ? ` · ${ascWhere(a)}` : ''} · ${fmtDay(a.date)}</div></div><button class="btn ghost sm ic" data-act="ascDel" data-id="${a.id}" aria-label="Supprimer">✕</button></div>`;
 function projRow(p) {
   const s = projectStats(p), ph = p.hasPhoto ? item('photo', p.id) : null;
   return h`<div class="proj"><button class="proj-thumb" data-act="projOpen" data-id="${p.id}" aria-label="Ouvrir le projet">${ph?.data ? raw(`<img src="${esc(ph.data)}" alt="">`) : p.kind === 'voie' ? '🧗' : '🪨'}</button>

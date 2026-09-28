@@ -109,7 +109,7 @@ function vTimeline() {
 }
 function vJournal() {
   const j = journal(ctx());
-  return h`<form data-submit="jnote" class="card"><div class="row"><textarea name="text" maxlength="1000" required rows="1" class="grow" placeholder="📝 Une note, une sensation…" aria-label="Ajouter une note au journal"></textarea><button class="btn pri" type="submit">Ajouter</button></div></form>
+  return h`<form data-submit="jnote" class="card"><textarea name="text" maxlength="1000" required rows="2" placeholder="📝 Une note, une sensation…" aria-label="Ajouter une note au journal"></textarea><button class="btn pri" type="submit">＋ Ajouter au journal</button></form>
     ${j.length ? j.map((e) => h`<div class="card journal ${e.kind}"><div class="row"><span class="ico sm">${e.icon}</span><div class="grow"><div class="row between"><b>${e.title}</b><span class="tiny muted">${fmtDateTime(e.t)}</span></div><div class="small">${e.text}</div>${e.note ? h`<div class="small muted">« ${e.note} »</div>` : ''}${e.more?.length ? h`<details class="how mini"><summary>Détails</summary><p class="tiny">${e.more.join(' · ')}</p></details>` : ''}</div>${e.kind === 'note' ? '' : ''}</div></div>`) : empty('Ton journal regroupera tes séances, mesures, ascensions et notes.')}`;
 }
 SUBMIT.jnote = (f) => { const t = String(new FormData(f).get('text') || '').trim(); if (!t) return; putItem('jnote', 'jn-' + uid().slice(0, 14), { date: Date.now(), text: t }); f.reset(); buzzOk(); toast('Note ajoutée'); render(); };

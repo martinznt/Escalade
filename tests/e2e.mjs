@@ -41,6 +41,13 @@ const step = async (name, fn) => {
   try { await fn(); n++; console.log('  ✓', name); }
   catch (e) { console.log('  ✗', name); if (cur) await cur.screenshot({ path: '/tmp/e2e-fail.png', fullPage: true }).catch(() => {}); throw e; }
 };
+// Choisir dans une liste : les longues listes passent par le sélecteur (recherche + catégories), comme un vrai utilisateur.
+const pickSel = async (P, sel, v) => {
+  const L = typeof sel === 'string' ? P.locator(sel) : sel;
+  await L.waitFor({ state: 'attached' }); await P.waitForTimeout(40);
+  if (!(await L.evaluate((x) => x.classList.contains('pick-hidden')))) return L.selectOption(v);
+  await L.locator('xpath=following-sibling::button[contains(@class,"pickbtn")][1]').click(); await (v?.label ? P.locator('#picker .setrow', { has: P.locator(`b:text-is("${v.label}")`) }) : P.locator(`#picker .setrow[data-v="${v}"]`)).first().click();
+};
 const H = (page) => ({
   click: (sel) => page.locator(sel).first().click(),
   text: (sel) => page.locator(sel).first().innerText(),
@@ -56,6 +63,8 @@ const H = (page) => ({
       else await page.evaluate((hsh) => { location.hash = hsh; }, { libSub: '#/library/home', progSub: '#/progress/summary', profSub: '#/profile/home', setSub: '#/settings/main' }[act]);
       await page.waitForTimeout(150);
     }
+    // Page retirée des listes mais toujours accessible par son adresse (ex. le générateur « Sur mesure »).
+    if (!(await page.locator(sel).count()) && root) { await page.evaluate((hsh) => { location.hash = hsh; }, `#/${{ libSub: 'library', progSub: 'progress', profSub: 'profile', setSub: 'settings' }[act]}/${id}`); await page.waitForTimeout(200); return; }
     await page.locator(sel).first().click(); await page.waitForTimeout(120);
   },
   noOverflow: async (where) => { const ok = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1); assert.ok(ok, `défilement horizontal de page détecté (${where})`); },
@@ -111,11 +120,11 @@ await step('rechargement : session conservée', async () => {
 });
 await step('performances : mesure + « je ne sais pas »', async () => {
   await a.tab('profile'); await a.sub('profSub', 'perfs');
-  await a.click('[data-act=perfAdd]'); await A.selectOption('#sheet select[name=metricId]', 'max_tractions');
+  await a.click('[data-act=perfAdd]'); await pickSel(A, '#sheet select[name=metricId]', 'max_tractions');
   await A.waitForSelector('#sheet input[name=value]'); assert.equal(await A.getAttribute('#sheet input[name=value]', 'inputmode'), 'decimal');
-  await A.fill('#sheet input[name=value]', '8'); await A.selectOption('#sheet select[name=source]', 'measured'); await a.click('#sheet button[type=submit]');
+  await A.fill('#sheet input[name=value]', '8'); await pickSel(A, '#sheet select[name=source]', 'measured'); await a.click('#sheet button[type=submit]');
   await A.waitForSelector('text=Tractions strictes max');
-  await a.click('[data-act=perfAdd]'); await A.selectOption('#sheet select[name=metricId]', 'hollow_hold'); await A.waitForSelector('#sheet input[name=unknown]');
+  await a.click('[data-act=perfAdd]'); await pickSel(A, '#sheet select[name=metricId]', 'hollow_hold'); await A.waitForSelector('#sheet input[name=unknown]');
   await A.check('#sheet input[name=unknown]'); await a.click('#sheet button[type=submit]');
   await A.waitForSelector('text=je ne sais pas');
   assert.ok(await a.count('text=Gainage bateau') > 0);
@@ -125,18 +134,18 @@ await step('cotations : système U1→U8 avec correspondance, style personnalis�
   await a.click('[data-act=sysNew]'); await a.click('[data-act=sysFromTpl][data-id=u8]');
   await A.waitForSelector('#sheet form[data-submit=lvlSave]');
   const u5 = A.locator('#sheet form[data-submit=lvlSave]').nth(4);
-  await u5.locator('select[name=map]').selectOption('6B'); await u5.locator('button[type=submit]').click();
+  await pickSel(A, u5.locator('select[name=map]'), '6B'); await u5.locator('button[type=submit]').click();
   await A.waitForTimeout(150); await a.click('#sheet [data-act=closeSheet].btn');
   await a.click('[data-act=styleNew]'); await A.fill('#sheet input[name=label]', 'Arête'); await a.click('#sheet button[type=submit]');
   await A.waitForSelector('text=Arête ✎');
   // Maximum 1 : Fontainebleau 6C, styles Dévers + Réglettes
   await a.click('[data-act=perfAdd][data-id=max_bloc]'); await A.waitForSelector('#sheet select[name=systemId]');
-  await A.selectOption('#sheet select[name=systemId]', 'font'); await A.selectOption('#sheet select[name=levelId]', { label: '6C' });
+  await pickSel(A, '#sheet select[name=systemId]', 'font'); await pickSel(A, '#sheet select[name=levelId]', { label: '6C' });
   await A.click('#sheet label.chip:has-text("Dévers")'); await A.click('#sheet label.chip:has-text("Réglettes")'); await a.click('#sheet button[type=submit]');
   // Maximum 2 : système U, U5, style Arête
   await a.click('[data-act=perfAdd][data-id=max_bloc]'); await A.waitForSelector('#sheet select[name=systemId]');
   const uId = await A.evaluate(() => [...document.querySelectorAll('#sheet select[name=systemId] option')].find((o) => o.textContent.includes('U1'))?.value);
-  await A.selectOption('#sheet select[name=systemId]', uId); await A.selectOption('#sheet select[name=levelId]', { label: 'U5' });
+  await pickSel(A, '#sheet select[name=systemId]', uId); await pickSel(A, '#sheet select[name=levelId]', { label: 'U5' });
   await A.click('#sheet label.chip:has-text("Arête")'); await a.click('#sheet button[type=submit]');
   await A.waitForSelector('text=Salle U1 → U8');
   assert.ok(await a.count('text=Dévers : 6C') > 0, 'maximum par style');
@@ -160,7 +169,7 @@ await step('ma salle : cotation U1 → U8+, espaces et matériel ; bloc noté «
   await a.click('#sheet [data-act=sysNew]'); await a.click('[data-act=sysFromTpl][data-id=u8plus]'); await A.waitForSelector('#sheet form[data-submit=lvlSave]'); await a.click('#sheet [data-act=closeSheet].btn');
   await a.click('[data-act=envNewGym]'); await A.fill('#sheet input[name=name]', 'Arkose Test'); await A.fill('#sheet input[name=city]', 'Montreuil');
   const sysId = await A.evaluate(() => [...document.querySelectorAll('#sheet select[name=gradeSys] option')].find((o) => /U8\+/.test(o.textContent))?.value);
-  await A.selectOption('#sheet select[name=gradeSys]', sysId);
+  await pickSel(A, '#sheet select[name=gradeSys]', sysId);
   await A.click('#sheet .garea:has-text("Espace entraînement") label.chip:has-text("Campus")');
   await a.click('#sheet button[type=submit]'); await A.waitForSelector('text=Arkose Test'); assert.match(await a.text('main'), /Montreuil/);
   await a.tab('home'); await a.click('[data-act=goCarnet]'); await a.click('[data-act=ascQuick]'); await A.waitForSelector('.aq [data-act=aqEnv]');
@@ -168,7 +177,7 @@ await step('ma salle : cotation U1 → U8+, espaces et matériel ; bloc noté «
   await A.locator('.aq [data-act=aqGrade]', { hasText: /^U7$/ }).click(); await a.click('.aq [data-act=aqNuance][data-v=dur]');
   await A.locator('.aq [data-act=aqStyle]', { hasText: 'Dévers' }).click(); await a.click('.aq [data-act=aqSave]');
   await A.waitForSelector('text=réussi · dur'); assert.match(await a.text('main'), /U7[\s\S]*dur · Arkose Test/);
-  await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'ascent' && i.d.nuance === 'dur' && i.d.grade?.label === 'U7' && i.d.context?.place === 'Arkose Test' && i.d.styles.length), 12000, 'bloc synchronisé');
+  await poll(async () => (await a.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'ascent' && i.d.nuance === 'dur' && i.d.grade?.label === 'U7' && i.d.context?.env && i.d.context?.kind === 'salle' && i.d.styles.length), 12000, 'bloc synchronisé');
 });
 await step('notifications : boîte des mises à jour (utilité, visite), réponses aux propositions, réglages par type', async () => {
   await a.tab('home'); await A.evaluate(() => localStorage.setItem('sea:inbox-seen', '1'));
@@ -255,7 +264,7 @@ await step('objectif complexe : front lever (arbre, blocages, chemins)', async (
   await a.noOverflow('objectif');
 });
 await step('matériel : ajout d’une barre et d’un élastique à la maison', async () => {
-  await a.sub('profSub', 'equipment'); await a.click('[data-act=envEdit]');
+  await a.sub('profSub', 'equipment'); await A.locator('[data-act=placeOpen]').filter({ hasNotText: 'Arkose' }).first().click(); await a.click('[data-act=envEdit]');
   for (const t of ['Barre de traction', 'Élastique']) { const chip = A.locator(`#sheet label.chip:has-text("${t}")`); if (!(await chip.getAttribute('class')).includes('on')) await chip.click(); }
   await a.click('#sheet button[type=submit]'); await A.waitForSelector('text=Barre de traction');
 });
@@ -415,7 +424,7 @@ await step('import CSV : correspondance proposée, vérifiée, import sans doubl
 await step('mode Lab et timeline', async () => {
   await a.tab('progress'); await a.sub('progSub', 'lab'); await a.click('[data-act=labNew]');
   await A.fill('#sheet input[name=title]', 'Gainage 2×/semaine'); await A.fill('#sheet input[name=before]', '30'); await A.fill('#sheet input[name=after]', '45');
-  await A.selectOption('#sheet select[name=metricId]', 'hollow_hold');
+  await pickSel(A, '#sheet select[name=metricId]', 'hollow_hold');
   await a.click('#sheet form[data-submit=labSave] button[type=submit]');
   await A.waitForSelector('text=Gainage 2×/semaine'); assert.match(await a.text('main'), /causalité/);
   await a.sub('progSub', 'timeline'); await A.waitForSelector('text=Première séance');
@@ -485,32 +494,36 @@ await step('chaque séance et chaque exercice : c’est quoi, à quoi ça sert, 
   assert.match(await a.text('#sheet .brief'), /Pourquoi \?/); await A.locator('#sheet [data-act=catExInfo]').first().click();
   await A.waitForSelector('#sheet .brief:has-text("Pourquoi ici")'); await A.keyboard.press('Escape');
 });
-await step('escalade structurée : objectif « réussir le plus dur » et parties au choix (structures, adaptation)', async () => {
-  await a.tab('library'); await a.sub('libSub', 'climbplan'); await A.waitForSelector('[data-act=cpMode][data-id=goal]');
-  await a.click('[data-act=cpMode][data-id=goal]'); await A.waitForSelector('[data-act=cpGoalGo]');
-  await a.click('[data-act=cpStyle][data-id=st-devers]'); await a.click('[data-act=cpMin][data-id="90"]'); await a.click('[data-act=cpGoalGo]');
-  await A.waitForSelector('#cpresult'); const r = await a.text('#cpresult');
+// Assistant « Créer une séance » : aller à une étape (1 à 5) avec les boutons Suivant / Retour.
+const cpTo = async (n) => {
+  for (let k = 0; k < 8; k++) {
+    const cur = Number((await a.text('.steps b')).match(/Étape (\d)/)[1]); if (cur === n) return;
+    await a.click(`.stepdock [data-act=cpStep][data-d="${cur < n ? 1 : -1}"]`); await A.waitForFunction((c) => !document.querySelector('.steps b')?.textContent.includes(`Étape ${c}/`), cur);
+  }
+};
+const cpFresh = async (help = 'auto') => { await a.tab('library'); await a.sub('libSub', 'climbplan'); await A.waitForSelector('.steps'); if (await a.count('[data-act=cpRestart]')) await a.click('[data-act=cpRestart]'); await a.click(`[data-act=cpHelp][data-id=${help}]`); };
+await step('créer une séance (assistant en 5 étapes) : sport, lieu, cotation à réussir, format modifiable, surprise', async () => {
+  await cpFresh(); await cpTo(2); await a.click('[data-act=cpSport][data-id=climbing_boulder]'); await a.click('[data-act=cpMin][data-id="150"]');
+  assert.match(await a.text('#main'), /Matériel/);
+  await cpTo(3); await a.click('[data-act=cpAim][data-id=grade]'); await a.click('[data-act=cpStyle][data-id=st-devers]');
+  await cpTo(4); await A.waitForSelector('.cpart'); assert.ok(await a.count('.cpart') >= 3, 'un format proposé');
+  await cpTo(5); await A.waitForSelector('#cpresult'); const r = await a.text('#cpresult');
   assert.match(r, /Échauffement en grimpant[\s\S]*Montée[\s\S]*Objectif/); assert.match(r, /dévers/);
-  await a.click('[data-act=cpMode][data-id=parts]'); await a.click('[data-act=cpExample]'); await A.waitForSelector('.cpart');
-  assert.equal(await a.count('.cpart'), 5); assert.match(await a.text('#main'), /Voie max[\s\S]*adapté à avant/);
-  await A.locator('[data-act=cpEdit]').nth(1).click(); await A.waitForSelector('#sheet [data-act=cpPart][data-k=structure]');
+  await cpTo(4); await A.locator('[data-act=cpEdit]').nth(1).click(); await A.waitForSelector('#sheet [data-act=cpPart][data-k=structure]');
   assert.ok(await a.count('#sheet [data-act=cpPart][data-k=structure]') >= 4, 'plusieurs structures proposées');
   await a.click('#sheet [data-act=cpPart][data-k=structure][data-v=limit]'); await a.click('#sheet [data-act=cpPartStyle][data-id=st-reglettes]');
-  await A.keyboard.press('Escape'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
+  await A.keyboard.press('Escape'); await cpTo(5); await A.waitForSelector('#cpresult');
   assert.match(await a.text('#cpresult'), /Essais sur blocs/);
   await a.click('[data-act=cpSave]'); await A.waitForSelector('input[data-change=sName]');
   assert.match(await a.text('#main .brief'), /Bloc|voie/i);
-  await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpMode][data-id=goal]');
-  await A.selectOption('select[data-change=cpWarm]', '0'); await A.selectOption('select[data-change=cpStretch]', '15'); await a.click('[data-act=cpGoalGo]');
-  await A.waitForSelector('#cpresult'); const g2 = await a.text('#cpresult'); assert.ok(!/Montée en température/.test(g2), 'sans échauffement général'); assert.match(g2, /Étirements/);
-  await a.click('[data-act=cpMode][data-id=surprise]'); await a.click('[data-act=spSet][data-k=sport][data-v=bloc]'); await a.click('[data-act=spSet][data-k=aim][data-v=new]');
-  await a.click('[data-act=spGo]'); await A.waitForSelector('#cpresult:has-text("Pourquoi cette surprise")'); assert.match(await a.text('#cpresult'), /jamais|peu/);
-  await a.click('[data-act=spGo][data-again]'); await A.waitForSelector('#cpresult');
-  await a.click('[data-act=cpMode][data-id=parts]');
+  await cpFresh(); await cpTo(2); await a.click('[data-act=cpSport][data-id=climbing_boulder]'); await cpTo(3); await a.click('[data-act=cpAim][data-id=surprise]');
+  await a.click('[data-act=cpSurAim][data-id=new]'); await cpTo(5); await A.waitForSelector('#cpresult');
+  await A.waitForSelector('#cpresult:has-text("Pourquoi cette surprise")'); assert.match(await a.text('#cpresult'), /jamais|peu/);
+  await a.click('[data-act=cpAgain]'); await A.waitForSelector('#cpresult');
 });
 await step('trois niveaux d’aide : l’app choisit (puis on ajuste), l’app guide (options expliquées), je compose ; 🧭 dans une séance', async () => {
-  await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpHelp][data-id=auto]'); await a.click('[data-act=cpMode][data-id=parts]');
-  await a.click('[data-act=cpExample]'); await a.click('[data-act=cpAdd][data-id=fingers]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
+  await cpFresh('auto'); await cpTo(2); await a.click('[data-act=cpSport][data-id=climbing_boulder]'); await cpTo(3); await a.click('[data-act=cpAim][data-id=none]');
+  await cpTo(4); await a.click('[data-act=cpAdd][data-id=fingers]'); await cpTo(5); await A.waitForSelector('#cpresult');
   const before = await A.locator('#cpresult .rpart').last().innerText();
   await A.locator('#cpresult [data-act=cpOpts]').last().click(); await A.waitForSelector('#sheet .optrow');
   assert.match(await a.text('#sheet'), /Travaille :/); assert.ok(await a.count('#sheet .optrow') >= 1);
@@ -519,9 +532,9 @@ await step('trois niveaux d’aide : l’app choisit (puis on ajuste), l’app g
   await A.waitForFunction((w) => document.querySelector('#sheet .optrow')?.classList.contains('on') !== w, wasOn); await a.click('#sheet [data-act=cpOptsDone]');
   assert.notEqual(await A.locator('#cpresult .rpart').last().innerText(), before, 'les exercices de la partie ont changé');
   await A.locator('#cpresult input[data-change=cpBMin]').first().fill('25'); await A.locator('#cpresult input[data-change=cpBMin]').first().press('Tab');
-  await a.click('[data-act=cpHelp][data-id=guide]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult details.guide[open] .optrow');
+  await cpTo(1); await a.click('[data-act=cpHelp][data-id=guide]'); await cpTo(5); await A.waitForSelector('#cpresult details.guide[open] .optrow');
   assert.match(await a.text('#cpresult details.guide[open]'), /conseillé[\s\S]*💡/);
-  await a.click('[data-act=cpHelp][data-id=free]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
+  await cpTo(1); await a.click('[data-act=cpHelp][data-id=free]'); await cpTo(5); await A.waitForSelector('#cpresult');
   assert.match(await A.locator('#cpresult .rpart').last().innerText(), /Rien pour l’instant/);
   await A.locator('#cpresult [data-act=cpOpts]').last().click(); await A.waitForSelector('#sheet input[data-input=cpQ]');
   await A.locator('#sheet .optrow [data-act=cpPick].ck').first().click(); await a.click('#sheet [data-act=cpOptsDone]');
@@ -530,7 +543,7 @@ await step('trois niveaux d’aide : l’app choisit (puis on ajuste), l’app g
   await A.locator('[data-act=partOpts]').last().click(); await A.waitForSelector('#sheet [data-act=partAdd]');
   const n0 = await a.count('#main .item.ex'); await A.locator('#sheet [data-act=partAdd]').first().click(); await A.waitForSelector('#toast.show:has-text("ajouté")');
   await A.keyboard.press('Escape'); assert.equal(await a.count('#main .item.ex'), n0 + 1);
-  await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpHelp][data-id=auto]');
+  await cpFresh('auto');
 });
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
@@ -735,7 +748,7 @@ await step('Service Worker actif, puis passage hors ligne : l’application s’
 await step('modifications hors ligne (séance, performance, note), fermeture puis réouverture', async () => {
   await a.click('[data-act=newChoose]'); await a.click('#sheet [data-act=newSeance]'); await A.waitForSelector('input[data-change=sName]'); await A.fill('input[data-change=sName]', 'Créée hors ligne'); await A.press('input[data-change=sName]', 'Tab');
   await a.tab('profile'); await a.sub('profSub', 'perfs'); await a.click('[data-act=perfAdd]');
-  await A.selectOption('#sheet select[name=metricId]', 'max_pompes'); await A.waitForSelector('#sheet input[name=value]'); await A.fill('#sheet input[name=value]', '25'); await a.click('#sheet button[type=submit]');
+  await pickSel(A, '#sheet select[name=metricId]', 'max_pompes'); await A.waitForSelector('#sheet input[name=value]'); await A.fill('#sheet input[name=value]', '25'); await a.click('#sheet button[type=submit]');
   await a.tab('progress'); await a.sub('progSub', 'journal'); await A.fill('form[data-submit=jnote] textarea', 'Note écrite hors ligne'); await a.click('form[data-submit=jnote] button');
   await A.waitForSelector('.syncbadge.offline');
   await A.close(); // fermeture de l'onglet avant toute synchronisation

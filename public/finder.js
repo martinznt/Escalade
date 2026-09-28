@@ -33,7 +33,7 @@ export const SETTINGS_INDEX = [
   E('setting', '🔄', 'Synchronisation', 'Paramètres', 'settings/sync', 'synchro envoi hors ligne attente serveur', {}),
   E('setting', '🧭', 'Visite guidée', 'Aide', 'settings/help', 'tuto tutoriel aide decouvrir visite', { sel: '[data-act=helpTour]' }),
   E('setting', '❓', 'Questions fréquentes', 'Aide', 'settings/help', 'faq aide question comment', { sel: 'details' }),
-  E('setting', '📚', 'Sources citées', 'Aide', 'settings/help', 'etudes science references sources', { sel: '[data-act=srcOpen]' }),
+  E('setting', '📚', 'Sources citées', 'Aide', 'settings/help', 'etudes science references sources', { sel: 'details.srclist > summary' }),
   E('setting', '🐞', 'Signaler un bug', 'Paramètres', 'settings/bug', 'bug probleme erreur signaler contact', {}),
   E('setting', '🚪', 'Se déconnecter', 'Compte', 'settings/main', 'deconnexion quitter compte', { sel: '[data-act=logout]' }),
   E('setting', '🔑', 'Changer le mot de passe', 'Compte', 'settings/main', 'mot de passe password securite', { sel: 'details.how.mini' }),
