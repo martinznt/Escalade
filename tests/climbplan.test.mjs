@@ -70,4 +70,10 @@ ok('adapter à ce qui précède (au choix) : après beaucoup de doigts, moins de
   assert.ok(adapted.range[1] < plain.range[1]); assert.match(adapted.exercises[0].note, /doigts/);
   assert.equal(C.priorLoad([{ type: 'warmup', minutes: 15 }, after], 1).fingers, 0);
 });
+ok('choix de l’utilisateur respecté : exercices choisis, ou partie vide si tout est décoché', () => {
+  const parts = [{ type: 'fingers', minutes: 15, pick: ['finger-extensions'] }, { type: 'core', minutes: 10, pick: [] }, { type: 'climb', kind: 'bloc', intensity: 'hard', minutes: 20, pick: [] }];
+  const s = C.buildFromParts(parts, ctx);
+  assert.deepEqual([...new Set(s.exercises.map((e) => e.libId))], ['finger-extensions']);
+  const free = C.buildFromParts([{ type: 'core', minutes: 10 }], ctx, { free: true }); assert.equal(free.exercises.length, 0, 'mode libre : rien d’imposé');
+});
 console.log(`\n${n} tests d’escalade structurée OK`);

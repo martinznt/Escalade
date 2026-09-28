@@ -181,13 +181,14 @@ export function buildFromParts(parts, ctx, opts = {}) {
     const label = partLabel(p, i, parts);
     if (p.type !== 'climb') {
       // Choisis par l'utilisateur (guidé ou libre), sinon par l'app.
-      if (p.pick?.length) { out.push(...buildPicked(p, p.pick, label)); return; }
+      if (Array.isArray(p.pick)) { out.push(...buildPicked(p, p.pick, label)); return; } // choix de l'utilisateur, même vide
       if (opts.free) return; // mode libre : rien d'imposé, l'utilisateur choisit
       if (GUIDE_PARTS[p.type]) { const eq = availableEquipment(ctx, opts.envId), rec = partOptions(p, { eq, fingersTired: priorLoad(parts, i).fingers >= 40 }).filter((x) => x.recommended).map((x) => x.id); out.push(...buildPicked(p, rec, label)); return; }
       out.push(...bodyPart(p, ctx, 'climbing_boulder', label, seed + i)); return;
     }
     const sys = opts.systems?.[p.kind] || pickSystem(ctx, p.kind, opts.envId), levels = sortedLevels(sys);
     if (!levels.length) return;
+    if (Array.isArray(p.pick) && !p.pick.length) return; // tout décoché : partie vide, comme demandé
     const structs = p.pick?.length ? p.pick.filter((id) => STRUCTURES[p.kind === 'voie' ? 'voie' : 'bloc'][id]) : [p.structure || null];
     const each = Math.max(5, Math.round(p.minutes / Math.max(1, structs.length)));
     structs.forEach((st, k) => {
