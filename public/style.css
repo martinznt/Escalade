@@ -594,3 +594,5 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 #picker .pk-panel{width:100%;max-width:640px;max-height:86dvh;overflow:auto;background:var(--bg);border-radius:18px 18px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));display:grid;gap:10px;align-content:start}
 #picker .pk-q{position:sticky;top:0;z-index:1}
 .chipin{min-width:0;width:auto;flex:1 1 140px;max-width:220px;border-radius:999px;padding:8px 12px;min-height:38px;font-size:.9rem}
+.hints{display:grid;gap:6px;margin:0 0 12px}.hint{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;background:var(--card);border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--line));font-size:.88rem}
+.hint .linkish{display:block;line-height:1.35}.hint{padding:6px 8px}
