@@ -21,15 +21,18 @@ import { donePerf, nextGoals, doneGoals } from './goaldone.js';
 import { allPlaces, placeStats, kindOfEnv, placesOf, KIND_LABEL } from './places.js';
 import { celebrate } from './fx.js';
 
-const SUBS = [['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
-const TILES = { body: ['🫀', 'Mon corps', 'âge, poids, forme'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
+const SUBS = [['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const TILES = { analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
   climbing: ['🧗', 'Carnet', 'blocs, voies, pyramide'], goals: ['🎯', 'Objectifs', 'figures, projets d’escalade'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 /** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
-const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment', 'prefs']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['map', 'understand']], ['Partager', ['public']]];
+const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['analyse']], ['Partager', ['public']]];
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
   if (sub === 'home') return vHub();
-  const views = { body: vBody, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
+  // Préférences : avec « Mon corps » ; capacités et « pourquoi » : dans « Mon analyse ».
+  if (sub === 'prefs') { setTimeout(() => go('profile', 'body'), 0); return ''; }
+  if (sub === 'map' || sub === 'understand') { const [ic, title] = TILES[sub]; return h`${subHead('profSub', 'analyse', 'Mon analyse', `${ic} ${title}`)}${(sub === 'map' ? vMap : vUnderstand)()}`; }
+  const views = { analyse: vAnalyseHub, body: () => h`${vBody()}<span class="kicker">❤️ Mes préférences</span>${vPrefs()}`, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
   const [ic, title] = TILES[sub];
   return h`${subHead('profSub', 'home', 'Profil', `${ic} ${title}`)}${views[sub]()}`;
 }
@@ -70,6 +73,11 @@ const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;
 const statusTag = (s) => tag(STATUS_WORD[s.status], s.status === 'fort' ? 'ok' : s.status === 'faible' ? 'warn' : s.status === 'developpement' ? 'info' : '');
 
 /* ═════════ Comprendre mon profil ═════════ */
+/** Mon analyse : tout ce que l'app comprend de toi, au même endroit. */
+function vAnalyseHub() {
+  return menuList([['profSub', 'map', '🗺️', 'Mes capacités', 'Forces et points à travailler, muscles travaillés'], ['allGo', '', '🔍', 'Tendances et diagnostics', 'Peu travaillé, objectifs délaissés, pourquoi je stagne', 'progress/analyses'],
+    ['profSub', 'understand', '🔎', 'Pourquoi ces conseils', 'Ce que l’app sait de toi, et ce qui manque'], ['allGo', '', '🧪', 'Lab', 'Tester une idée sur quelques semaines', 'progress/lab']]);
+}
 function vUnderstand() {
   const u = understandProfile(ctx());
   const stats = [['📏', 'Mesuré', u.measured, 'ok'], ['🗣️', 'Déclaré', u.declared, 'info'], ['🧮', 'Calculé', u.calculated, ''], ['≈', 'Estimé', u.inferred, 'warn']];

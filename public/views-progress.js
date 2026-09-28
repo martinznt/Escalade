@@ -13,7 +13,7 @@ import { composePage } from './layout.js';
 const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
 const SUB_INFO = {
   journal: ['📝', 'Journal', (c) => (c.history.length ? `${c.history.length} séance${c.history.length > 1 ? 's' : ''}, blocs et voies, mesures, notes, étapes` : 'Séances, blocs et voies, mesures, notes, étapes')],
-  records: ['🏆', 'Records et mesures', () => 'Records, tests, maxima (dans ton profil)'], analyses: ['🔍', 'Analyses', () => 'Tendances, charge, pourquoi je stagne'], lab: ['🧪', 'Lab', () => 'Graphiques détaillés pour aller plus loin'],
+  records: ['🏆', 'Records et mesures', () => 'Records, tests, maxima (dans ton profil)'], analyse: ['🔎', 'Mon analyse', () => 'Capacités, tendances, pourquoi ces conseils, lab'],
 };
 /** Progrès : le résumé d'abord (l'essentiel), puis la liste des rubriques ; chaque rubrique a sa page. */
 export function vProgress() {
@@ -25,10 +25,12 @@ export function vProgress() {
   if (sub === 'history') return h`${subHead('progSub', 'journal', 'Journal', '📋 Séance')}${vHistory()}`;
   const views = { summary: vSummary, history: vHistory, journal: vJournal, analyses: vAnalyses, lab: vLab };
   if (sub === 'summary') { const c = ctx(); return h`<h1>📈 Progrès</h1>${vSummary()}<span class="kicker">Aller plus loin</span>${menuList(Object.entries(SUB_INFO).map(([k, [ic, t, d]]) => ['progSub', k, ic, t, d(c)]))}`; }
+  // Tendances et Lab font partie de « Mon analyse » (profil).
+  if (sub === 'analyses' || sub === 'lab') return h`${subHead('profSub', 'analyse', 'Mon analyse', sub === 'lab' ? '🧪 Lab' : '🔍 Tendances et diagnostics')}${views[sub]()}`;
   const [ic, t] = SUB_INFO[sub];
   return h`${subHead('progSub', 'summary', 'Progrès', `${ic} ${t}`)}${views[sub]()}`;
 }
-ACT.progSub = (el) => { if (el.dataset.id === 'journal' && !el.dataset.keep) S.jf = S.jf || 'all'; return el.dataset.id === 'records' ? go('profile', 'perfs') : go('progress', el.dataset.id); };
+ACT.progSub = (el) => { if (el.dataset.id === 'journal' && !el.dataset.keep) S.jf = S.jf || 'all'; return el.dataset.id === 'records' ? go('profile', 'perfs') : el.dataset.id === 'analyse' ? go('profile', 'analyse') : go('progress', el.dataset.id); };
 const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);
 
 function vSummary() {
@@ -49,7 +51,8 @@ function vSummary() {
   const SUM = () => h`<details class="card fold"><summary><span>🗓️ Résumé ${per === 'week' ? 'de la semaine' : 'du mois'}</span><em>${s.sessions}</em></summary>
       <div class="chips">${chip(per === 'week', 'Semaine', 'data-act="sumKind" data-id="week"')}${chip(per === 'month', 'Mois', 'data-act="sumKind" data-id="month"')}</div>
       <p class="small">${s.sessions} séance(s) · ${s.minutes} min${s.activities.length ? ' · ' + s.activities.map((a) => `${a.label} ×${a.n}`).join(', ') : ''}</p>
-      ${s.undertrained.length ? h`<p class="small">🧩 Peu travaillé : ${s.undertrained.join(', ')}</p>` : ''}</details>`;
+      ${s.undertrained.length ? h`<p class="small">🧩 Peu travaillé : ${s.undertrained.join(', ')}</p>` : ''}
+      <button class="btn" data-act="recapOpen">📸 Mon bilan du mois en image</button></details>`;
   const kpisView = () => h`<div class="kpiwrap"><div class="row between">${seg('benchDays', String(days), [['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']])}</div>
     <div class="kpis">${kpi('🏋️', 'Séances', b.cur.sessions, b.deltas.sessions)}${kpi('⏱', 'Minutes', b.cur.minutes, b.deltas.minutes)}${kpi('🔁', 'Séries', b.cur.sets, b.deltas.sets)}${kpi('😮‍💨', 'Ressenti', b.cur.rpe ?? '—', null)}</div>
     <p class="tiny muted center">Comparé aux ${days} jours d’avant · uniquement toi</p></div>`;
