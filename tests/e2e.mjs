@@ -511,19 +511,19 @@ await step('escalade structurée : objectif « réussir le plus dur » et partie
 await step('trois niveaux d’aide : l’app choisit (puis on ajuste), l’app guide (options expliquées), je compose ; 🧭 dans une séance', async () => {
   await a.tab('library'); await a.sub('libSub', 'climbplan'); await a.click('[data-act=cpHelp][data-id=auto]'); await a.click('[data-act=cpMode][data-id=parts]');
   await a.click('[data-act=cpExample]'); await a.click('[data-act=cpAdd][data-id=fingers]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
-  const before = await a.text('#cpresult .rpart:last-of-type');
+  const before = await A.locator('#cpresult .rpart').last().innerText();
   await A.locator('#cpresult [data-act=cpOpts]').last().click(); await A.waitForSelector('#sheet .optrow');
   assert.match(await a.text('#sheet'), /Travaille :/); await A.locator('#sheet .optrow:not(.on) [data-act=cpPick].ck').first().click();
   await A.waitForSelector('#sheet .optrow.on'); await a.click('#sheet [data-act=cpOptsDone]');
-  assert.notEqual(await a.text('#cpresult .rpart:last-of-type'), before, 'les exercices de la partie ont changé');
+  assert.notEqual(await A.locator('#cpresult .rpart').last().innerText(), before, 'les exercices de la partie ont changé');
   await A.locator('#cpresult input[data-change=cpBMin]').first().fill('25'); await A.locator('#cpresult input[data-change=cpBMin]').first().press('Tab');
   await a.click('[data-act=cpHelp][data-id=guide]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult details.guide[open] .optrow');
   assert.match(await a.text('#cpresult details.guide[open]'), /conseillé[\s\S]*💡/);
   await a.click('[data-act=cpHelp][data-id=free]'); await a.click('[data-act=cpPartsGo]'); await A.waitForSelector('#cpresult');
-  assert.match(await a.text('#cpresult .rpart:last-of-type'), /Rien pour l’instant/);
+  assert.match(await A.locator('#cpresult .rpart').last().innerText(), /Rien pour l’instant/);
   await A.locator('#cpresult [data-act=cpOpts]').last().click(); await A.waitForSelector('#sheet input[data-input=cpQ]');
   await A.locator('#sheet .optrow [data-act=cpPick].ck').first().click(); await a.click('#sheet [data-act=cpOptsDone]');
-  assert.doesNotMatch(await a.text('#cpresult .rpart:last-of-type'), /Rien pour l’instant/);
+  assert.doesNotMatch(await A.locator('#cpresult .rpart').last().innerText(), /Rien pour l’instant/);
   await a.click('[data-act=cpSave]'); await A.waitForSelector('[data-act=partOpts]');
   await A.locator('[data-act=partOpts]').first().click(); await A.waitForSelector('#sheet [data-act=partAdd]');
   const n0 = await a.count('#main .item.ex'); await A.locator('#sheet [data-act=partAdd]').first().click(); await A.waitForSelector('#toast.show:has-text("ajouté")');
