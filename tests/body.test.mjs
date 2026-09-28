@@ -39,7 +39,7 @@ ok('objectif « perte de poids » : repos courts (circuit)', () => {
   assert.ok(s.exercises.filter((e) => e.block === 'main').every((e) => (e.rest || 0) <= 45));
 });
 ok('objectif écrit (assistant) : capacités et mesures autorisées seulement, cible jamais inventée hors mesure', () => {
-  const g = cleanGoal({ label: 'Courir 10 km sans m’arrêter', caps: [{ id: 'endurance_aerobie', w: 1 }, { id: 'super_pouvoir', w: 1 }], metricId: 'course_10k', target: '55', weeks: 12, steps: ['a', 'b'] });
+  const g = cleanGoal({ label: 'Courir 10 km sans m’arrêter', caps: [{ id: 'endurance_aerobie', w: 1 }, { id: 'super_pouvoir', w: 1 }], metricId: 'course_10k', target: '55', weeks: 12, steps: ['a', 'b'] }, 'Courir 10 km en 55 min');
   assert.deepEqual(g.caps.map((c) => c.id), ['endurance_aerobie']); assert.equal(g.metricId, 'course_10k'); assert.equal(g.target, 55); assert.equal(g.weeks, 12);
   assert.equal(cleanGoal({ label: 'x', caps: [{ id: 'endurance_aerobie' }], metricId: 'inconnue', target: 9 }).target, null);
   assert.equal(cleanGoal({ label: 'rien', caps: [] }), null, 'rien d’exploitable : refusé');

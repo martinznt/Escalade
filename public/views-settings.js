@@ -1,6 +1,6 @@
 // views-settings.js — Paramètres : séance, apparence, compte, données (export / import JSON, import CSV),
 // synchronisation et diagnostic, administration (EDIT_PASSWORD vérifié par le serveur), signalement de bug.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead } from './ui.js';
+import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead, menuList } from './ui.js';
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, ctx, go, render, api, queue, saveSettings, syncAll, retryFailed, discardFailed, restoreConflict, pendingCount, persistNow, clearLocal, DEFAULT_SETTINGS, putItem, itemsOf, addHistory, saveEvent, ls, writePending, persist, bump, syncSoon } from './state.js';
 import { uid, mergeSeances, readStored, normalizeSession } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
@@ -10,6 +10,8 @@ import { installCard, openSetup, showTour } from './views-setup.js';
 import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
 import { NEWS } from './news.js';
+import { filterBugs } from './adminlist.js';
+import { vStudio, vStudioSet, vAudit, vLab } from './views-studio.js';
 import { FAQ } from './help.js';
 import { faqAdminButtons, announcements } from './content.js';
 import { vAdminContent } from './content.js';
@@ -19,7 +21,7 @@ import { CAPACITIES, ACTIVITIES } from './model.js';
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
 export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
-const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin']];
+const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire']];
 /** Rubriques des paramètres : une ligne claire par rubrique, comme les réglages d'un téléphone. */
 const MENU = [
   ['display', '🎨', 'Affichage', 'Thème, ambiance, couleur, taille, langue, mise en page'],
@@ -35,11 +37,12 @@ const MENU = [
 ];
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
 export function vSettings() {
-  const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin'].includes(k)) : SUBS;
+  const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin', 'studio', 'studioSet', 'audit', 'lab'].includes(k)) : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   if (sub === 'main') return h`<h1>Paramètres</h1>${views.main()}`;
   const ic = MENU.find(([k]) => k === sub)?.[1];
+  if (['studio', 'studioSet', 'audit', 'lab'].includes(sub)) return h`${subHead('setSub', sub === 'studio' ? 'admin' : 'studio', sub === 'studio' ? 'Admin' : 'Studio', { studio: '🧪 Studio', studioSet: '🧪 Lot', audit: '📜 Journal', lab: '🧠 Laboratoire' }[sub])}${views[sub]()}`;
   return h`${subHead('setSub', 'main', 'Paramètres', `${ic ? ic + ' ' : ''}${subs.find(([k]) => k === sub)[1]}`)}${views[sub]()}`;
 }
 ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug' && !S.user?.guest) loadMyBugs(); };
@@ -292,12 +295,29 @@ function vAdmin() {
   if (!bugs && !S.admin.error) setTimeout(loadBugs, 0);
   if (S.admin.push === undefined) { S.admin.push = null; api('GET', '/api/admin/push-status').then((r) => { S.admin.push = r; render(); }).catch(() => {}); }
   return h`${pushStatusCard()}<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier presque tout pour tous les comptes : exercices, séances prêtes, intentions par sport, formats de séance et bibliothèque commune. À chaque changement, l’app te demande si c’est pour toi ou pour tout le monde. Tu n’as pas accès aux données privées des autres comptes.</p>
-      <div class="row wrapf"><button class="btn" data-act="libSub" data-id="common">📚 Bibliothèque commune</button><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
+      ${menuList([
+        ['setSub', 'studio', '🧪', 'Studio', 'Brouillons, vérifications, publication, retour arrière'],
+        ['setSub', 'lab', '🧠', 'Laboratoire', 'Analyser un problème, simuler les règles sur des exemples'],
+        ['setSub', 'audit', '📜', 'Journal des changements', 'Qui a fait quoi, quand, avant / après'],
+        ['libSub', 'common', '🌍', 'Bibliothèque commune', 'Séances partagées par les membres'],
+      ])}
+      <div class="row wrapf"><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
     ${vAdminContent()}
     ${vAdminProposals()}${vAdminUsers()}
-    <div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['done', 'Traités'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>
-      ${S.admin.error ? h`<p class="err small">${S.admin.error}</p>` : !bugs ? skeleton(2) : bugs.filter((b) => f === 'all' || b.status === f).length ? bugs.filter((b) => f === 'all' || b.status === f).map((b) => h`<div class="card flat"><div class="row between"><b>${b.title}</b>${tag(b.status === 'done' ? 'traité' : 'ouvert', b.status === 'done' ? 'ok' : 'warn')}</div><p class="small pre">${b.description}</p><p class="tiny muted">par ${b.author} · ${fmtDateTime(b.createdAt)}${b.page ? ' · page : ' + b.page : ''}${b.appVersion ? ' · v' + b.appVersion : ''}${b.userAgent ? ' · ' + b.userAgent.slice(0, 80) : ''}</p><button class="btn sm" data-act="bugStatus" data-id="${b.id}" data-v="${b.status === 'done' ? 'open' : 'done'}">${b.status === 'done' ? 'Rouvrir' : 'Marquer traité'}</button></div>`) : h`<p class="muted small">Aucun signalement.</p>`}</div>`;
+    <div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload" aria-label="Actualiser">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['done', 'Traités'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>
+      <input id="bugq" type="search" aria-label="Rechercher un signalement" placeholder="🔎 Rechercher (titre, texte, page, auteur)" value="${S.admin.bugQ || ''}" data-input="bugQ">
+      <div id="bugres">${S.admin.error ? h`<p class="err small">${S.admin.error}</p>` : !bugs ? skeleton(2) : bugList()}</div></div>`;
 }
+function bugList() {
+  const list = filterBugs(S.admin.bugs, S.admin.filter || 'open', S.admin.bugQ || '');
+  if (!list.length) return h`<p class="muted small">${S.admin.bugQ ? 'Aucun signalement ne correspond.' : 'Aucun signalement.'}</p>`;
+  return h`<p class="tiny muted">${list.length} signalement(s)${list.some((b) => b.recent) ? ` · ${list.filter((b) => b.recent).length} récent(s)` : ''}</p>${list.map((b) => h`<div class="card flat${b.recent && b.status === 'open' ? ' acc-b' : ''}"><div class="row between"><b>${b.title}</b><span>${b.recent ? tag('nouveau', 'acc') : ''}${tag(b.status === 'done' ? 'traité' : 'ouvert', b.status === 'done' ? 'ok' : 'warn')}</span></div>
+    <p class="tiny muted">par ${b.author} · ${fmtDateTime(b.createdAt)}${b.page ? ' · page : ' + b.page : ''}</p>
+    ${b.description.length > 180 ? h`<details class="how mini"><summary>${b.description.slice(0, 140)}…</summary><p class="small pre">${b.description}</p></details>` : h`<p class="small pre">${b.description}</p>`}
+    ${b.appVersion || b.userAgent ? h`<details class="how mini"><summary>Détail technique</summary><p class="tiny muted">${b.appVersion ? 'Version ' + b.appVersion : ''}${b.userAgent ? ' · ' + b.userAgent.slice(0, 200) : ''}${b.updatedAt && b.updatedAt !== b.createdAt ? ' · statut changé ' + fmtDateTime(b.updatedAt) : ''}</p></details>` : ''}
+    <button class="btn sm" data-act="bugStatus" data-id="${b.id}" data-v="${b.status === 'done' ? 'open' : 'done'}">${b.status === 'done' ? 'Rouvrir' : 'Marquer traité'}</button></div>`)}`;
+}
+INPUT.bugQ = (el) => { S.admin.bugQ = el.value.slice(0, 80); const box = $('#bugres'); if (box && S.admin.bugs) box.innerHTML = bugList().s; };
 /* Propositions des utilisateurs (intentions, idées) et intentions communes. */
 async function loadProps() {
   try { const [p, ci] = await Promise.all([api('GET', '/api/admin/proposals?status=' + (S.admin.propF || 'open')), api('GET', '/api/community/intents')]); S.admin.props = p.proposals; S.admin.cintents = ci.intents; S.admin.propErr = ''; }
@@ -311,16 +331,18 @@ function vAdminProposals() {
     <div class="chips">${[['open', 'À traiter'], ['done', 'Traitées']].map(([k, l]) => chip((S.admin.propF || 'open') === k, l, `data-act="propF" data-id="${k}"`))}</div>
     ${S.admin.propErr ? h`<p class="err small">${S.admin.propErr}</p>` : !p ? skeleton(1) : p.length ? p.map((x) => h`<div class="item prop"><div class="grow"><b>${x.payload?.emoji || ''} ${x.label}</b> ${tag(x.kind === 'intent' ? 'intention' : x.kind === 'category' ? 'catégorie' : 'idée')}
         <div class="tiny muted">${x.username || 'compte supprimé'} · ${relDate(x.created_at)}${x.activity ? ' · ' + (ACTIVITIES[x.activity]?.label || x.activity) : ''}</div>
-        ${x.detail ? h`<p class="small">${x.detail}</p>` : ''}${Object.keys(x.payload?.caps || {}).length ? h`<div class="chips">${Object.keys(x.payload.caps).map((c) => h`<span class="chip static">${capL(c)}</span>`)}</div>` : ''}${x.reply ? h`<p class="tiny">${x.reply}</p>` : ''}</div>
+        ${x.detail ? h`<p class="small">${x.detail}</p>` : ''}${Object.keys(x.payload?.caps || {}).length ? h`<div class="chips">${Object.keys(x.payload.caps).map((c) => h`<span class="chip static">${capL(c)}</span>`)}</div>` : ''}${x.status === 'done' ? h`<p class="tiny">${x.reply || 'Traitée.'}</p><p class="tiny muted">🕑 Traitée par ${x.reviewer || 'un administrateur'}${x.reviewed_at ? ' · ' + fmtDateTime(x.reviewed_at) : ''}</p>` : ''}
+        ${x.status === 'open' ? h`<label class="small">Réponse à l’auteur (facultative)<textarea rows="2" maxlength="300" data-input="propReply" data-id="${x.id}" placeholder="Ex. merci, c’est ajouté pour tous">${S.admin.replies?.[x.id] || ''}</textarea></label>` : ''}</div>
       ${x.status === 'open' ? h`<div class="row tight"><button class="btn sm pri" data-act="propOpen" data-id="${x.id}">📍 Voir et décider</button><button class="btn sm pri" data-act="propDo" data-id="${x.id}" data-d="accept">${x.kind === 'intent' ? 'Ajouter pour tous' : 'Accepter'}</button><button class="btn sm ghost" data-act="propDo" data-id="${x.id}" data-d="refuse">Refuser</button></div>` : ''}</div>`) : h`<p class="small muted">Rien à traiter.</p>`}
     ${S.admin.cintents?.length ? h`<details class="how mini"><summary>Intentions communes (${S.admin.cintents.length})</summary>${S.admin.cintents.map((x) => h`<div class="item"><div class="grow small">${x.emoji} ${x.label} <span class="tiny muted">${x.activityId ? ACTIVITIES[x.activityId]?.label || x.activityId : 'tous sports'}</span></div><button class="btn sm ghost danger" data-act="cintentDel" data-id="${x.id}" aria-label="Retirer">✕</button></div>`)}</details>` : ''}</div>`;
 }
+INPUT.propReply = (el) => { S.admin.replies = { ...(S.admin.replies || {}), [el.dataset.id]: el.value.slice(0, 300) }; };
 ACT.propsReload = () => { S.admin.props = null; loadProps(); };
 ACT.propF = (el) => { S.admin.propF = el.dataset.id; ACT.propsReload(); };
 ACT.propDo = async (el) => {
   const accept = el.dataset.d === 'accept';
   if (!(await ask(accept ? 'Accepter cette proposition ?' : 'Refuser cette proposition ?', { ok: accept ? 'Accepter' : 'Refuser', danger: !accept, detail: accept ? 'Une intention acceptée apparaît pour tous les utilisateurs.' : '' }))) return;
-  try { await api('POST', '/api/admin/proposals/' + el.dataset.id, { decision: el.dataset.d }); toast(accept ? 'Ajoutée pour tout le monde' : 'Refusée'); } catch (e) { toast(e.message, 4000, 'bad'); }
+  try { await api('POST', '/api/admin/proposals/' + el.dataset.id, { decision: el.dataset.d, reply: (S.admin.replies?.[el.dataset.id] || '').trim() }); if (S.admin.replies) delete S.admin.replies[el.dataset.id]; toast(accept ? 'Ajoutée pour tout le monde' : 'Refusée'); } catch (e) { toast(e.message, 4000, 'bad'); }
   ACT.propsReload();
 };
 ACT.cintentDel = async (el) => { if (!(await ask('Retirer cette intention pour tout le monde ?', { danger: true, ok: 'Retirer' }))) return; try { await api('DELETE', '/api/admin/intents/' + el.dataset.id); } catch (e) { toast(e.message, 4000, 'bad'); } ACT.propsReload(); };

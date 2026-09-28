@@ -12,6 +12,10 @@ export function sanitizeForPublication(s) {
   return normalizeSession({
     ...n, exercises, explain: null, origin: null, template: false, archived: false,
     notes: n.notes.filter((x) => !/^pourquoi/i.test(x.title) && !/^analyse du profil/i.test(x.title)),
-    context: { equipment: n.context.equipment, plannedMin: n.context.plannedMin || n.durationMin },
+    context: {
+      equipment: n.context.equipment, plannedMin: n.context.plannedMin || n.durationMin,
+      // Ossature (activités, rôles, durées) gardée pour classer la séance ; le but écrit et l'intention du jour restent privés.
+      ...(n.context.phases?.length ? { phases: n.context.phases.map((p) => ({ ...p, goal: '', priorities: [] })) } : {}),
+    },
   });
 }

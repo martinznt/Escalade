@@ -116,7 +116,8 @@ export function partRange(p, levels, max) {
 /** Construit les exercices d'une partie de grimpe (liste d'« étapes » : cotation, style, nombre, repos, consigne). */
 export function buildClimbPart(p, { levels, max = null, styles = {}, load = null, label = '' }) {
   const kind = p.kind === 'voie' ? 'voie' : 'bloc', notes = [];
-  let st = p.styles || [], [lo, hi] = partRange(p, levels, max);
+  const out0 = (p.stylesOut || []);
+  let st = (p.styles || []).filter((x) => !out0.includes(x)), [lo, hi] = partRange(p, levels, max);
   if (p.adapt && load) { const a = adaptPart(p, load, styles); st = a.styles; notes.push(...a.notes); lo = Math.max(0, lo - a.drop); hi = Math.max(lo, hi - a.drop); }
   const stTxt = st.length ? ` · ${joinFr(styleNames(st, styles))}` : '', unit = kind === 'voie' ? 'voies' : 'blocs';
   const per = kind === 'voie' ? 5 : 1; // minutes d'effort par essai
@@ -135,14 +136,14 @@ export function buildClimbPart(p, { levels, max = null, styles = {}, load = null
     } else if (s === 'limit') {
       const n = Math.max(3, fit(180)); out.push(mk(`Essais sur blocs ${range(levels, Math.max(lo, hi - 1), hi)}${stTxt}`, n, 180, { note: 'Repos 3 min entre les essais ; change de bloc après 4 à 6 essais sans progrès.', why: 'Travailler au plus dur demande d’être frais : peu de blocs, de vrais repos.' }));
     } else if (s === 'styles') {
-      const list = st.length ? st : ['st-dalle', 'st-devers', 'st-reglettes', 'st-dynamique'];
+      const list = (st.length ? st : ['st-dalle', 'st-devers', 'st-reglettes', 'st-dynamique']).filter((x) => !out0.includes(x));
       const each = Math.max(1, Math.round(fit(120) / list.length));
       for (const id of list) out.push(mk(`Blocs ${range(levels, lo, hi)} · ${styleNames([id], styles)[0]}`, each, 120));
     } else if (s === 'fourx4') {
       out.push(mk(`4×4 : 4 blocs ${range(levels, lo, Math.max(lo, hi - 1))}${stTxt} enchaînés`, 4, 240, { endu: true, note: 'Enchaîne les 4 blocs sans repos, puis 4 min de repos. Arrête si les mouvements deviennent brouillons.' }));
     } else if (s === 'technique') {
       const drills = ['pieds silencieux', 'hanches contre le mur', 'bras tendus', 'regarder chaque pied'];
-      const list = st.length ? st : ['st-dalle', 'st-vertical'], each = Math.max(2, Math.round(fit(60) / list.length));
+      const list = (st.length ? st : ['st-dalle', 'st-vertical']).filter((x) => !out0.includes(x)), each = Math.max(2, Math.round(fit(60) / list.length));
       list.forEach((id, k) => out.push(mk(`Blocs ${range(levels, lo, hi)} · ${styleNames([id], styles)[0]} — ${drills[k % drills.length]}`, each, 60, { intensity: 'low' })));
     } else {
       out.push(mk(`Blocs faciles ${range(levels, lo, hi)}${stTxt}`, fit(60), 60, { intensity: 'low', note: 'Grimpe propre et fluide, sans te mettre dans le rouge.' }));
@@ -153,6 +154,8 @@ export function buildClimbPart(p, { levels, max = null, styles = {}, load = null
     else if (s === 'enchain') out.push(mk(`2 voies ${range(levels, lo, Math.max(lo, hi - 1))}${stTxt} à la suite`, Math.max(1, fit(420)), 420, { endu: true, note: 'Redescends et repars aussitôt ; repos 7 min entre les séries.' }));
     else out.push(mk(`Voies faciles ${range(levels, lo, hi)}${stTxt}`, fit(120), 120, { intensity: 'low', endu: true, note: 'Grimpe sans t’arrêter, en respirant.' }));
   }
+  // Nombre d'essais maximum choisi par l'utilisateur : jamais dépassé.
+  if (p.attemptsMax) { let cut = false; for (const e of out) if (e.sets > p.attemptsMax) { e.sets = p.attemptsMax; cut = true; } if (cut) notes.push(`Au plus ${p.attemptsMax} essais, comme tu l’as choisi.`); }
   if (notes.length && out[0]) out[0].note = [notes.join(' '), out[0].note].filter(Boolean).join(' ');
   return { exercises: out, notes, range: [lo, hi], styles: st };
 }
@@ -162,12 +165,16 @@ function bodyPart(p, ctx, act, label, seed, o = {}) {
   const type = { warmup: 'warmup', main: 'main', technique: 'technique', cardio: 'cardio', strength: 'strength', core: 'core', mobility: 'mobility', stretch: 'stretch', cool: 'cool' }[p.type] || 'stretch';
   try {
     // Le lieu choisi décide du matériel ; les objectifs, intentions et zones à ménager orientent le choix des exercices.
-    const plan = G.planSession({ activityId: p.activity || act, parts: [{ type, minutes: p.minutes }], seed, envId: o.envId, goalIds: o.goalIds, intents: o.intents, avoidZones: o.avoidZones, light: o.light }, ctx);
+    // Le but, les priorités et l'intensité de la phase orientent aussi le choix (sans créer d'objectif).
+    const caps = Object.fromEntries((p.priorities || []).map((c) => [c, 1]));
+    const intents = [...(o.intents || []), ...(Object.keys(caps).length ? [{ label: p.goal || 'Priorités de la phase', caps }] : [])];
+    const plan = G.planSession({ activityId: p.activity || act, parts: [{ type, minutes: p.minutes }], seed, envId: o.envId, goalIds: o.goalIds, intents, avoidZones: o.avoidZones, light: o.light || p.intensity === 'easy' }, ctx);
     return G.generateFromPlan(plan, ctx).session.exercises.map((e) => normalizeEx({ ...e, id: uid(), part: label }));
   } catch { return []; }
 }
 export const partLabel = (p, i, parts) => {
   if (p.label) return p.label;
+  if (p.type === 'pause') return '⏸️ Pause';
   if (p.type === 'main') return `💪 ${ACTIVITIES[p.activity]?.label || 'Corps de séance'}`;
   if (p.type === 'work') { const same = parts.filter((x) => x.type === 'work' && workTitle(x) === workTitle(p)); return same.length > 1 ? `${workTitle(p)} (${same.indexOf(p) + 1})` : workTitle(p); }
   if (p.type !== 'climb') return `${CLIMB_PARTS[p.type]?.[0] || '•'} ${CLIMB_PARTS[p.type]?.[1] || p.type}`;
@@ -183,7 +190,16 @@ export const partLabel = (p, i, parts) => {
 export function buildFromParts(parts, ctx, opts = {}) {
   const out = [], why = [], seed = opts.seed || 1;
   parts.forEach((p, i) => {
-    const label = partLabel(p, i, parts);
+    const label = partLabel(p, i, parts), n0 = out.length;
+    buildOne(p, i, label);
+    for (const e of out.slice(n0)) e.phase = p.id || ''; // chaque exercice sait de quelle phase il vient
+  });
+  function buildOne(p, i, label) {
+    if (p.type === 'pause') {
+      // Pause : un temps de récupération réel, que le lecteur de séance décompte.
+      out.push(normalizeEx({ id: uid(), name: 'Pause · récupération', emoji: '⏸️', mode: 'time', sets: 1, secMin: Math.round(p.minutes * 60), secMax: Math.round(p.minutes * 60), rest: 0, block: 'main', part: label, intensity: 'low', note: p.goal || 'Récupère : bois, mange un peu, reste au chaud.' }));
+      return;
+    }
     if (p.type === 'work') {
       // Partie « travail » d'un sport (course, natation, muscu, poids du corps) : une ou plusieurs structures.
       if (Array.isArray(p.pick) && !p.pick.length) return;
@@ -199,7 +215,8 @@ export function buildFromParts(parts, ctx, opts = {}) {
       if (GUIDE_PARTS[p.type]) { const eq = availableEquipment(ctx, opts.envId), rec = partOptions(p, { eq, fingersTired: priorLoad(parts, i).fingers >= 40 }).filter((x) => x.recommended).map((x) => x.id); out.push(...buildPicked(p, rec, label)); return; }
       out.push(...bodyPart(p, ctx, opts.sport || 'climbing_boulder', label, seed + i, opts)); return;
     }
-    const sys = opts.systems?.[p.kind] || pickSystem(ctx, p.kind, opts.envId), levels = sortedLevels(sys);
+    // Système de cotation : celui choisi pour la phase, sinon celui de la séance, sinon celui du lieu (aucune équivalence inventée).
+    const sys = (p.systemId && ctx.systems?.[p.systemId]) || opts.systems?.[p.kind] || pickSystem(ctx, p.kind, opts.envId), levels = sortedLevels(sys);
     if (!levels.length) return;
     if (Array.isArray(p.pick) && !p.pick.length) return; // tout décoché : partie vide, comme demandé
     if (opts.envId && !availableEquipment(ctx, opts.envId).has('wall')) why.push(`⚠️ ${opts.envName || 'Ce lieu'} n’a pas de mur d’escalade dans son matériel : ajoute-le dans Profil › Matériel et lieux, ou choisis un autre lieu pour « ${label} ».`);
@@ -209,12 +226,12 @@ export function buildFromParts(parts, ctx, opts = {}) {
       const r = buildClimbPart({ ...p, minutes: each, structure: st || undefined }, { levels, max: knownMax(ctx, sys, p.kind), styles: ctx.styles, load: priorLoad(parts, i), label });
       if (!k) why.push(...r.notes); out.push(...r.exercises);
     });
-  });
-  const acts = [...new Set([...parts.filter((p) => p.type === 'climb').map((p) => (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder')), ...parts.map((p) => p.activity).filter(Boolean), ...(opts.sport && !parts.some((p) => p.type === 'climb') ? [opts.sport] : [])])];
+  }
+  const acts = [...new Set([...parts.filter((p) => p.type === 'climb').map((p) => (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder')), ...parts.map((p) => p.activity).filter((a) => a && a !== 'pause'), ...(opts.sport && !parts.some((p) => p.type === 'climb') ? [opts.sport] : [])])];
   const now = Date.now();
   return normalizeSession({
     id: uid(), name: opts.name || 'Ma séance', emoji: opts.emoji || (acts[0]?.startsWith('climbing') ? '🧗' : '🏋️'), source: 'generated', activity: acts[0] || opts.sport || 'climbing_boulder', sports: acts.slice(1),
-    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: opts.envId || '', envName: opts.envName || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0) },
+    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: opts.envId || '', envName: opts.envName || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0), intent: opts.intent || null, phases: parts.map((p) => ({ id: p.id, type: p.type, activity: p.activity || (p.type === 'climb' ? (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder') : ''), role: p.role, goal: p.goal, minutes: p.minutes, intensity: p.intensity, priorities: p.priorities })) },
     objectives: opts.goal ? [opts.goal] : [],
     notes: [{ title: 'Pourquoi cette séance', text: [opts.goal || 'Séance structurée par toi, partie par partie.', ...why].join('\n') }],
     createdAt: now, updatedAt: now,

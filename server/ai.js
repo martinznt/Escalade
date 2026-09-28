@@ -110,30 +110,49 @@ export async function aiChat(env, { messages, profile }) {
   return reply;
 }
 
-/* ───────── Objectif écrit avec ses mots → objectif suivi ───────── */
+/* ───────── Objectif écrit avec ses mots → fiche d'objectif structurée (relue et modifiée avant l'enregistrement) ───────── */
 export function buildGoal(text, profile) {
   const capList = Object.entries(CAPACITIES).map(([id, c]) => `${id} (${c.label})`).join(', ');
   const metList = Object.entries(METRICS).map(([id, m]) => `${id} (${m.label}${m.unit ? ', ' + m.unit : ''})`).join(', ');
+  const actList = Object.entries(ACTIVITIES).map(([id, a]) => `${id} (${a.label})`).join(', ');
   return [{ role: 'system', content: `Tu es un entraîneur sportif francophone, précis et prudent. Réponds UNIQUEMENT par un objet JSON valide.
-Transforme l'objectif écrit par l'utilisateur en objectif d'entraînement suivi, adapté à son profil.
-Format : {"label":"objectif reformulé, court (max 70 caractères)","summary":"1 à 2 phrases : ce qu'il faut travailler et pourquoi","caps":[{"id":"...","w":0.8}],"steps":["étape 1","étape 2","étape 3"],"metricId":"identifiant de mesure ou vide","target":nombre ou null,"weeks":nombre de semaines réaliste,"confidence":"haute|moyenne|faible"}
-Capacités autorisées (3 à 5, identifiants exacts) : ${capList}.
+Transforme l'objectif écrit par l'utilisateur en fiche d'objectif d'entraînement, adaptée à son profil.
+Format : {"label":"nom court (max 70 caractères)","description":"1 à 2 phrases : ce qu'il faut travailler et pourquoi","activityId":"identifiant de sport ou vide","caps":[{"id":"...","w":0.8}],"indicators":["comment voir qu'on progresse"],"metricId":"identifiant de mesure ou vide","target":nombre ou null,"steps":["étape 1","étape 2","étape 3"],"weeks":nombre de semaines réaliste ou 0,"confidence":"haute|moyenne|faible","missing":["information qui manque pour être plus précis"]}
+Capacités autorisées (3 à 5, identifiants exacts, w = importance de 0.1 à 1) : ${capList}.
+Sports autorisés : ${actList}.
 Mesures autorisées : ${metList}.
-Ne donne une cible chiffrée que si l'utilisateur en donne une ou si elle découle clairement de son texte. Pas de conseil médical. Perte de poids : objectif progressif et raisonnable, sans régime.
+Ne donne une cible chiffrée QUE si l'utilisateur écrit lui-même ce nombre. Sinon target = null et ajoute dans missing ce qu'il faudrait préciser. Pas de conseil médical. Perte de poids : progressive et raisonnable, sans régime.
 Profil : ${str(profile, 900) || 'non renseigné'}.` }, { role: 'user', content: str(text, 300) }];
 }
-export function cleanGoal(x, text = '') {
+/** Nombres écrits par l'utilisateur (« 10 km en 50 min » → [10, 50] ; « 7,5 » → 7.5). */
+export const numbersIn = (text) => (String(text || '').match(/\d+(?:[.,]\d+)?/g) || []).map((x) => Number(x.replace(',', '.')));
+/**
+ * Fiche d'objectif propre : seuls les identifiants connus sont gardés, les champs inconnus ignorés, et une cible chiffrée
+ * n'est gardée que si elle figure dans le texte de l'utilisateur (jamais inventée). `how` dit d'où vient chaque élément.
+ */
+export function cleanGoal(x, text = '', { hadProfile = false } = {}) {
   if (!x || typeof x !== 'object') return null;
   const c = caps(x.caps);
   const metricId = METRICS[String(x.metricId || '')] ? String(x.metricId) : '';
-  const target = metricId && Number.isFinite(Number(x.target)) && x.target !== null && x.target !== '' ? Math.round(Number(x.target) * 10) / 10 : null;
+  const raw = metricId && x.target !== null && x.target !== '' && Number.isFinite(Number(x.target)) ? Math.round(Number(x.target) * 10) / 10 : null;
+  const target = raw != null && numbersIn(text).some((n) => Math.abs(n - raw) < 0.01) ? raw : null;
   const label = str(x.label, 80) || str(text, 80);
   if (!label || (!Object.keys(c).length && !metricId)) return null;
-  return { label, summary: str(x.summary, 300), caps: Object.entries(c).map(([id, w]) => ({ id, w })), steps: list(x.steps, 5, 160), metricId, target, weeks: num(x.weeks, 0, 52, 0), confidence: ['haute', 'moyenne', 'faible'].includes(x.confidence) ? x.confidence : 'moyenne' };
+  const activityId = ACTIVITIES[String(x.activityId || '')] ? String(x.activityId) : '';
+  const missing = list(x.missing, 5, 160);
+  if (raw != null && target == null) missing.unshift('Cible chiffrée : tu ne l’as pas écrite, elle n’est pas ajoutée. Ajoute-la si tu en as une.');
+  const how = [
+    { cat: 'fact', text: `Ton texte : « ${str(text, 160)} »` },
+    ...(hadProfile ? [{ cat: 'fact', text: 'Ton profil (sports, séances récentes, objectifs) a été pris en compte.' }] : [{ cat: 'missing', text: 'Profil peu rempli : la fiche s’appuie surtout sur ton texte.' }]),
+    { cat: 'rule', text: 'Capacités, sports et mesures choisis uniquement dans les listes structurées de l’app.' },
+    ...(target != null ? [{ cat: 'fact', text: `Cible ${target} : écrite par toi.` }] : []),
+    ...(num(x.weeks, 0, 52, 0) ? [{ cat: 'inference', text: `Durée d’environ ${num(x.weeks, 0, 52, 0)} semaines : estimation, pas une garantie.` }] : []),
+  ];
+  return { label, summary: str(x.description ?? x.summary, 300), activityId, caps: Object.entries(c).map(([id, w]) => ({ id, w })), indicators: list(x.indicators, 4, 140), steps: list(x.steps, 5, 160), metricId, target, weeks: num(x.weeks, 0, 52, 0), confidence: ['haute', 'moyenne', 'faible'].includes(x.confidence) ? x.confidence : 'moyenne', missing: missing.slice(0, 5), how };
 }
 export async function aiGoal(env, { text, profile }) {
   if (!env.AI?.run) { const e = new Error('Assistant non activé sur ce serveur.'); e.status = 503; throw e; }
-  const goal = cleanGoal(extractJson(await env.AI.run(env.AI_MODEL || DEFAULT_MODEL, { messages: buildGoal(text, profile), max_tokens: 700, temperature: 0.3 })), text);
+  const goal = cleanGoal(extractJson(await env.AI.run(env.AI_MODEL || DEFAULT_MODEL, { messages: buildGoal(text, profile), max_tokens: 900, temperature: 0.3 })), text, { hadProfile: !!str(profile, 900) });
   if (!goal) { const e = new Error('L’assistant n’a pas compris cet objectif. Reformule-le.'); e.status = 502; throw e; }
   return goal;
 }

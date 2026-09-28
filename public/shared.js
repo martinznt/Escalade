@@ -53,6 +53,7 @@ export function normalizeEx(x = {}) {
     risk: ['finger', 'shoulder', 'elbow', 'knee'].includes(x.risk) ? x.risk : '',
     block: ['warmup', 'main', 'cool'].includes(x.block) ? x.block : 'main',
     part: str(x.part, 40), // partie du format choisi (« 🧘 Étirements »…), vide sinon
+    phase: str(x.phase, 40), // identifiant de la phase (V1), vide pour les anciennes séances
     libId: str(x.libId, 40),
     isNew: !!x.isNew,
     // V2 : relations sémantiques (capacités pondérées, muscles principaux/secondaires), activités compatibles,
@@ -144,6 +145,9 @@ export function normalizeContext(c) {
   return {
     env: ID_RE.test(String(c.env || '')) ? String(c.env) : '', envName: str(c.envName, 60), equipment: idList(c.equipment, 30),
     plannedMin: clamp(c.plannedMin, 0, 600, 0), goalId: ID_RE.test(String(c.goalId || '')) ? String(c.goalId) : '', place: str(c.place, 80),
+    // V1 : intention ponctuelle de la séance (jamais un objectif du compte) et ossature validée, phase par phase.
+    ...(c.intent && typeof c.intent === 'object' && (c.intent.text || c.intent.priorities?.length) ? { intent: { text: str(c.intent.text, 240), priorities: idList(c.intent.priorities, 6) } } : {}),
+    ...(Array.isArray(c.phases) && c.phases.length ? { phases: c.phases.slice(0, 20).filter((p) => p && typeof p === 'object').map((p) => ({ id: str(p.id, 40), type: str(p.type, 20), activity: str(p.activity, 60), role: str(p.role, 20), goal: str(p.goal, 200), minutes: clamp(p.minutes, 0, 600, 0), intensity: str(p.intensity, 8), priorities: idList(p.priorities, 6) })) } : {}),
   };
 }
 function normalizeExplain(e) {

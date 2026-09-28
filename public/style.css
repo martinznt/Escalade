@@ -226,8 +226,8 @@ ul.clean{list-style:none;padding:0;margin:0 16px 14px;display:grid;gap:6px}ul.cl
 .stat2{appearance:none;cursor:pointer;font:inherit}
 .phero .chip.static{min-height:30px;padding:4px 10px;font-size:.78rem}.todo.row{gap:8px}
 /* Progrès : tuiles chiffrées, bonnes nouvelles, barres */
-.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:2px;animation:rise .3s ease both}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.kpi{min-width:0;overflow-wrap:anywhere;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:2px;animation:rise .3s ease both}
 .kpi span{font-size:.8rem;color:var(--muted)}.kpi b{font-size:2rem;line-height:1.1;letter-spacing:-.02em}
 .kpi i{font-style:normal;font-size:.78rem;font-weight:700;color:var(--muted)}.kpi i.up{color:var(--ok)}.kpi i.down{color:var(--warn)}
 .win{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:var(--card2);font-size:.9rem}.win span{flex:none}
@@ -252,7 +252,7 @@ details.fold2>summary{list-style:none;cursor:pointer}details.fold2>summary::-web
 .journal textarea,form[data-submit=jnote] textarea{min-height:44px}
 ul.clean.tight{margin:4px 0 0}ul.clean.tight li{background:var(--card)} .chip .lg{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px}
 /* Admin : liste des comptes */
-.ulist{display:grid;gap:8px}.urow{display:flex;gap:10px;align-items:center;padding:10px;border-radius:16px;background:var(--card2)}
+.ulist{display:grid;gap:8px;min-width:0}.urow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;min-width:0;padding:10px;border-radius:16px;background:var(--card2)}
 .uav{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-weight:800;background:color-mix(in srgb,var(--accent) 25%,var(--card));flex:none}
 .ustat{display:grid;justify-items:end;text-align:right;font-size:.78rem;min-width:56px}.ustat b{font-size:1.05rem}
 
@@ -603,3 +603,14 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 .cpart>*{min-width:0}
 .nowrap{white-space:nowrap}
 .card.journal.row{display:flex;align-items:flex-start;gap:10px}
+.fhead{margin-top:6px}.lockc{min-height:30px;padding:3px 10px;font-size:.78rem}
+.optwhy{margin:0 0 6px 40px}.optrow .fit{color:var(--accent)}ul.why li{margin:2px 0}.sugg b{display:block}
+/* Studio : différences avant → après et vérifications */
+.diff { padding-left: 1.1em; margin: .4em 0; font-size: .88em; overflow-wrap: anywhere; }
+.diff li { margin: .25em 0; }
+.diff del { background: color-mix(in srgb, var(--bad, #e5484d) 18%, transparent); text-decoration: line-through; border-radius: 4px; padding: 0 3px; }
+.diff ins { background: color-mix(in srgb, var(--ok, #30a46c) 20%, transparent); text-decoration: none; border-radius: 4px; padding: 0 3px; }
+.checks { list-style: none; padding: 0; margin: .4em 0; font-size: .9em; }
+.checks li { margin: .2em 0; overflow-wrap: anywhere; }
+pre.txt { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+.urow .grow{flex:1 1 140px;min-width:0;overflow-wrap:anywhere}.urow .ustat{flex:0 1 auto;min-width:0}

@@ -39,6 +39,12 @@ export function activityOptions() {
 }
 const BLOCKS = { warmup: '🔥 Échauffement', main: '💪 Corps de séance', cool: '🧘 Retour au calme' };
 const levelTag = (lv) => (lv?.level ? tag(LEVEL_LABEL[lv.level] + ' (estimé)', lv.level === 'avance' ? 'warn' : lv.level === 'intermediaire' ? 'info' : 'ok') : '');
+/** Métadonnées automatiques d'une séance commune : étiquettes, et « Classée ainsi parce que… » (raisons réelles). */
+const metaTags = (m) => (m?.tags?.length ? h`<div class="chips">${m.tags.map((t) => h`<span class="chip static">${t}</span>`)}</div>` : '');
+function metaWhy(m) {
+  if (!m?.reasons?.length) return '';
+  return h`<details class="how"><summary>🏷 Classée ainsi parce que…</summary><ul>${m.reasons.map((r) => h`<li><b>${r.tag}</b> : ${r.why}</li>`)}</ul><p class="tiny muted">Étiquettes calculées automatiquement à partir des exercices, des phases et de la durée de la séance. Ta copie enregistrée reste indépendante.</p></details>`;
+}
 function levelDetails(lv) {
   if (!lv?.criteria) return '';
   return h`<details class="how"><summary>🔎 Pourquoi ce niveau ?</summary><p class="small">${lv.text}</p><ul>${lv.criteria.map((c) => h`<li><b>${c.label}</b> : ${c.value} <span class="muted">— ${c.effect}</span></li>`)}</ul><p class="tiny muted">Estimation automatique et approximative, jamais un classement de personnes.</p></details>`;
@@ -61,9 +67,9 @@ const LIB_INFO = {
   generate: ['🎯', 'Séance sur mesure', () => ''],
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
   climbplan: ['✨', 'Créer une séance', () => draftText() || 'Tous sports : l’app choisit, te guide, ou tu composes'],
-  catalog: ['🗂', 'Séances prêtes', () => `${CATALOG.length} séances expliquées et sourcées`],
+  catalog: ['🗂', 'Séances prêtes', () => `Catalogue officiel : ${CATALOG.length} séances expliquées et sourcées`],
   exercises: ['💪', 'Exercices', () => `${LIBRARY.length} exercices, et le top pour toi`],
-  common: ['🌍', 'Partagées', () => 'Les séances publiées par la communauté'],
+  common: ['🌍', 'Bibliothèque commune', () => 'Séances partagées par les membres (non vérifiées)'],
   search: ['🔍', 'Rechercher', () => 'Une séance, un exercice, une capacité…'],
 };
 /** Bibliothèque : créer une séance, puis la liste des rubriques (même format que les paramètres). */
@@ -646,13 +652,13 @@ function vCommon() {
   if (!sh.common && !sh.loading && !sh.error) setTimeout(loadCommon, 0);
   const f = S.filters.common || {};
   const list = (sh.common || []).filter((x) => (!f.level || x.level?.level === f.level) && (!f.activity || x.activity === f.activity) && (!f.noEq || !x.needs.length) && (!f.max || (x.durationMin || 0) <= f.max));
-  return h`<p class="muted small">Séances partagées volontairement par les membres. Tu peux les enregistrer dans tes séances : ta copie est indépendante et librement modifiable ; l’original ne change jamais.</p>
+  return h`<p class="muted small">🌍 Séances partagées volontairement par les membres, classées automatiquement. Ce n’est pas le catalogue officiel (🗂 Séances prêtes, vérifiées et sourcées). Ta copie enregistrée est indépendante ; l’original ne change jamais.</p>
     <div class="row wrapf"><button class="btn pri sm" data-act="commonPublish">＋ Partager une de mes séances</button><button class="btn sm" data-act="commonReload">↻ Actualiser</button></div>
     <div class="chips">${[['', 'Tous niveaux'], ['debutant', 'Débutant'], ['intermediaire', 'Intermédiaire'], ['avance', 'Avancé']].map(([k, l]) => chip((f.level || '') === k, l, `data-act="cFilter" data-k="level" data-v="${k}"`))}${chip(!!f.noEq, 'Sans matériel', 'data-act="cFilter" data-k="noEq" data-v="1"')}${chip(f.max === 30, '≤ 30 min', 'data-act="cFilter" data-k="max" data-v="30"')}</div>
     <select data-change="cAct" aria-label="Activité"><option value="">Toutes activités</option>${Object.entries(ACTIVITIES).map(([id, a]) => h`<option value="${id}" ${f.activity === id ? 'selected' : ''}>${a.emoji} ${a.label}</option>`)}</select>
     ${sh.loading && !sh.common ? skeleton(3) : sh.error ? h`<div class="card flat"><p class="err">${sh.error}</p><button class="btn" data-act="commonReload">Réessayer</button></div>`
       : list.length ? list.map((x) => h`<div class="card"><div class="row"><div class="ico">${x.emoji}</div><div class="grow"><b>${x.title}</b><div class="muted small">par ${x.author || 'compte supprimé'}${x.mine ? ' (toi)' : ''} · ${x.activity ? activityLabel(x.activity, ctx()) + ' · ' : ''}~${x.durationMin} min · ${x.exerciseCount} exercice(s)</div>
-          <div class="row wrapf tight">${levelTag(x.level)}${x.needs.length ? tag(x.needs.map((k) => EQUIPMENT[k] || k).join(', ')) : tag('sans matériel', 'ok')}${x.gradeHint ? tag('🧗 ' + gradeHintText(x.gradeHint), 'info') : ''}</div>${x.caps.length ? h`<div class="tiny muted">Capacités : ${x.caps.map(capL).join(', ')}</div>` : ''}</div></div>
+          <div class="row wrapf tight">${levelTag(x.level)}${x.needs.length ? tag(x.needs.map((k) => EQUIPMENT[k] || k).join(', ')) : tag('sans matériel', 'ok')}${x.gradeHint ? tag('🧗 ' + gradeHintText(x.gradeHint), 'info') : ''}</div>${x.caps.length ? h`<div class="tiny muted">Capacités : ${x.caps.map(capL).join(', ')}</div>` : ''}${metaTags(x.level?.meta)}</div></div>
           <div class="row wrapf"><button class="btn sm" data-act="commonOpen" data-id="${x.id}">Voir</button><button class="btn sm pri" data-act="commonCopy" data-id="${x.id}">Enregistrer dans mes séances</button></div></div>`)
       : empty(sh.common?.length ? 'Aucune séance ne correspond à ces filtres.' : 'La bibliothèque commune est vide pour l’instant : partage la première séance !')}`;
 }
@@ -667,7 +673,7 @@ function vCommonDetail() {
   const s = normalizeSession(d.session);
   return h`<div class="row"><button class="btn sm" data-act="libSub" data-id="common" aria-label="Retour">‹</button><div class="grow"></div><button class="btn pri" data-act="play" data-shared="1">▶ Lancer</button></div>
     <div class="card"><h2 style="margin:0">${s.emoji} ${d.title}</h2><p class="muted small">par ${d.author || 'compte supprimé'}${d.mine ? ' (toi)' : ''} · créée le ${fmtDay(d.createdAt)} · modifiée ${relDate(d.updatedAt)}</p>
-      <div class="row wrapf tight">${levelTag(d.level)}${d.gradeHint ? tag('🧗 ' + gradeHintText(d.gradeHint), 'info') : ''}</div>${levelDetails(d.level)}
+      <div class="row wrapf tight">${levelTag(d.level)}${d.gradeHint ? tag('🧗 ' + gradeHintText(d.gradeHint), 'info') : ''}</div>${levelDetails(d.level)}${metaTags(d.level?.meta)}${metaWhy(d.level?.meta)}
       ${s.intentions.length ? h`<p class="small">Intentions : ${s.intentions.map((i) => INTENTIONS[i.id]?.label || i.id).join(', ')}</p>` : ''}${s.notes.map((n) => h`<details class="how"><summary>${n.title}</summary><pre class="txt">${n.text}</pre></details>`)}</div>
     ${sessionBrief(s)}
     <div class="card">${blocksOf(s, 'view')}</div>

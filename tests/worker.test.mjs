@@ -198,6 +198,16 @@ await ok('publication : données personnelles retirées, niveau estimé avec cri
   assert.ok(!d.session.notes.some((n) => /pourquoi/i.test(n.title))); assert.equal(d.session.explain, null); assert.equal(d.session.context.envName, ''); assert.equal(d.session.context.goalId, '');
   assert.equal(d.author, 'Alice'); assert.equal(d.canEdit, false); assert.equal(d.canDelete, false);
   const raw = env.DB.raw.prepare("SELECT data_json FROM shared_sessions WHERE id='pub1'").get().data_json; assert.ok(!raw.includes('Dernière fois'), 'rien de privé stocké');
+  assert.ok(d.level.meta.tags.length >= 3 && d.level.meta.reasons.every((x) => x.why), 'métadonnées automatiques expliquées');
+  assert.deepEqual(d.level.meta.activities, ['conditioning']);
+});
+await ok('séance à phases publiée : ossature gardée pour le classement, but écrit et intention restent privés', async () => {
+  const ph = { ...session, id: 'loc2', context: { plannedMin: 90, intent: { text: 'Mon secret du jour' }, phases: [{ id: 'a', type: 'climb', activity: 'climbing_boulder', role: 'prep', goal: 'Préparer mon projet perso', minutes: 60 }, { id: 'p', type: 'pause', activity: 'pause', role: 'pause', minutes: 30 }] } };
+  const r = await A.post('/api/shared', { id: 'pub-ph', scope: 'common', session: ph, title: 'Phases' }); assert.equal(r.status, 200);
+  const raw = env.DB.raw.prepare("SELECT data_json FROM shared_sessions WHERE id='pub-ph'").get().data_json;
+  assert.ok(!raw.includes('Préparer mon projet') && !raw.includes('Mon secret'), 'textes personnels non publiés');
+  assert.ok(r.data.level.meta.tags.includes('Avec pause'));
+  assert.equal((await A.del('/api/shared/pub-ph')).status, 200);
 });
 await ok('rejeu de la publication : aucun doublon ; même identifiant par un autre compte refusé', async () => {
   assert.equal((await A.post('/api/shared', { id: 'pub1', scope: 'common', session })).data.replay, true);

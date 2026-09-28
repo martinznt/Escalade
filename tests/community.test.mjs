@@ -24,8 +24,10 @@ await ok('proposition : envoyée, visible par l’auteur, jamais par un autre ut
 await ok('administrateur : accepte → intention ajoutée pour tout le monde ; une seule fois', async () => {
   assert.equal((await A.post('/api/admin/activate', { password: 'Adm1n-Secret!' })).status, 200);
   const list = (await A.get('/api/admin/proposals')).data.proposals; assert.equal(list.length, 1); assert.equal(list[0].username, 'grimpeur'); assert.deepEqual(Object.keys(list[0].payload.caps), ['technique_pieds']);
-  assert.equal((await A.post('/api/admin/proposals/' + list[0].id, { decision: 'accept' })).status, 200);
+  assert.equal((await A.post('/api/admin/proposals/' + list[0].id, { decision: 'accept', reply: 'Merci <b>!</b>' })).status, 200);
   assert.equal((await A.post('/api/admin/proposals/' + list[0].id, { decision: 'refuse' })).status, 409, 'déjà traitée');
+  const done = (await A.get('/api/admin/proposals?status=done')).data.proposals[0];
+  assert.match(done.reply, /Acceptée\. Merci/); assert.ok(done.reviewer && done.reviewed_at > 0, 'historique : qui et quand');
   const ci = (await O.get('/api/community/intents')).data.intents; assert.equal(ci.length, 1); assert.equal(ci[0].label, 'Talons crochets'); assert.equal(ci[0].activityId, 'climbing_boulder');
   assert.match((await U.get('/api/proposals/mine')).data.proposals[0].reply, /Acceptée/);
   assert.equal((await U.post('/api/admin/intents', { label: 'Pirate', caps: { force_doigts: 1 } })).status, 403);
