@@ -3,6 +3,7 @@
 import { h, openSheet, closeSheet, fmtDay } from './ui.js';
 import { S, ACT, api, ls, go, item, putItem } from './state.js';
 import { NEWS } from './news.js';
+import { announcements } from './global.js';
 import { startTour } from './tour.js';
 import { beep } from './sound.js';
 
@@ -12,6 +13,8 @@ const t = (d) => new Date(d + 'T12:00:00').getTime();
 function entries() {
   const out = NEWS.slice().reverse().map((n) => ({ id: 'v' + n.v, kind: 'update', at: t(n.date || '2026-09-27'), icon: '🆕', title: n.title || `Version ${n.v}`, text: n.why || '', v: n.v, steps: n.steps }));
   for (const p of S.inbox?.mine || []) if (p.status === 'done') out.push({ id: 'p' + p.id, kind: 'reply', at: p.reviewed_at || p.created_at, icon: /Accept/.test(p.reply) ? '✅' : '💬', title: `Ta proposition « ${p.label} »`, text: p.reply });
+  // Annonces écrites par un administrateur, pour tout le monde
+  for (const a of announcements()) out.push({ id: 'a' + a.id, kind: 'announce', at: a.at, icon: a.emoji || '📣', title: a.title, text: a.body || '' });
   // Administrateurs : une notification par idée proposée ; un toucher mène à l'endroit d'où elle vient.
   if (S.user?.isAdmin) for (const p of S.inbox?.adminList || []) out.push({ id: 'i' + p.id, kind: 'admin', propId: p.id, at: p.created_at, icon: '💡', title: `${p.username || 'Quelqu’un'} propose : ${p.label}`, text: `${PROP_WHAT[p.kind] || 'Idée'}${p.detail ? ' · « ' + p.detail.slice(0, 120) + ' »' : ''}` });
   return out.sort((a, b) => (b.kind === 'admin') - (a.kind === 'admin') || b.at - a.at); // les idées à traiter en premier

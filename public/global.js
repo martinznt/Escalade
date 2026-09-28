@@ -9,9 +9,11 @@ import { SPORT_INTENTS } from './intentions.js';
 import { PRESETS, totalMinutes } from './format.js';
 import { BUILTIN_SYSTEMS } from './grading.js';
 import { BUILTIN_STYLES } from './model.js';
+import { FAQ } from './help.js';
+import { SOURCES } from './sources.js';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
-const ORIG = { lib: clone(LIBRARY), cat: clone(CATALOG), intents: clone(SPORT_INTENTS), presets: clone(PRESETS), systems: clone(BUILTIN_SYSTEMS), styles: clone(BUILTIN_STYLES) };
+const ORIG = { lib: clone(LIBRARY), cat: clone(CATALOG), intents: clone(SPORT_INTENTS), presets: clone(PRESETS), systems: clone(BUILTIN_SYSTEMS), styles: clone(BUILTIN_STYLES), faq: clone(FAQ), sources: clone(SOURCES) };
 export const isBuiltin = { exercise: (id) => ORIG.lib.some((x) => x.id === id), catalog: (id) => ORIG.cat.some((x) => x.id === id), format: (id) => ORIG.presets.some((x) => x[0] === id) };
 export const original = { exercise: (id) => ORIG.lib.find((x) => x.id === id) || null, catalog: (id) => ORIG.cat.find((x) => x.id === id) || null };
 const EX_FIELDS = ['name', 'emoji', 'mode', 'sets', 'repsMin', 'repsMax', 'secMin', 'secMax', 'rest', 'perSide', 'unit', 'cues', 'bad', 'why', 'group', 'intensity'];
@@ -64,6 +66,12 @@ export function applyLayers(global = GLOBAL, mine = MINE) {
   for (const g of by('grading')) { if (g.hidden) { delete BUILTIN_SYSTEMS[g.id]; continue; } BUILTIN_SYSTEMS[g.id] = { id: g.id, ...clone(g.data), builtin: true, global: true }; }
   BUILTIN_STYLES.length = 0; for (const s of ORIG.styles) BUILTIN_STYLES.push(clone(s));
   for (const g of by('style')) { const i = BUILTIN_STYLES.findIndex((s) => s.id === g.id); if (g.hidden) { if (i >= 0) BUILTIN_STYLES.splice(i, 1); continue; } const s = { id: g.id, ...clone(g.data), builtin: true, global: true }; if (i >= 0) BUILTIN_STYLES[i] = s; else BUILTIN_STYLES.push(s); }
+  // Questions fréquentes (« f<n> » = question d'origine n°n ; « g-… » = ajoutée) et sources citées
+  FAQ.length = 0; ORIG.faq.forEach((f, i) => FAQ.push([f[0], f[1], 'f' + i]));
+  for (const g of by('faq')) { const i = FAQ.findIndex((f) => f[2] === g.id); if (g.hidden) { if (i >= 0) FAQ.splice(i, 1); continue; } const f = [g.data.q, g.data.a, g.id]; if (i >= 0) FAQ[i] = f; else FAQ.push(f); }
+  for (const k of Object.keys(SOURCES)) delete SOURCES[k];
+  Object.assign(SOURCES, clone(ORIG.sources));
+  for (const g of by('source')) { if (g.hidden) { delete SOURCES[g.id]; continue; } SOURCES[g.id] = { ...(SOURCES[g.id] || {}), ...clone(g.data), global: true }; }
   // Formats de séance tout prêts
   PRESETS.length = 0; for (const p of ORIG.presets) PRESETS.push(clone(p));
   for (const g of by('format')) {
@@ -73,3 +81,10 @@ export function applyLayers(global = GLOBAL, mine = MINE) {
     if (i >= 0) PRESETS[i] = p; else PRESETS.push(p);
   }
 }
+
+/** Textes de l'app réécrits pour tout le monde : texte d'origine → nouveau texte. */
+export const textOverrides = () => new Map(GLOBAL.filter((x) => x.kind === 'text' && !x.hidden && x.data).map((x) => [x.data.from, x.data.to]));
+/** Annonces et notes de mise à jour écrites dans l'app, de la plus récente à la plus ancienne. */
+export const announcements = () => GLOBAL.filter((x) => x.kind === 'announce' && !x.hidden && x.data).map((x) => ({ id: x.id, at: x.updatedAt || 0, by: x.by || '', ...x.data })).sort((a, b) => b.at - a.at);
+/** Mise en page de base pour tous (par page) et fonctions masquées pour tous. */
+export const globalLayout = () => GLOBAL.find((x) => x.kind === 'layout' && x.id === 'default' && !x.hidden)?.data || { pages: {}, off: {} };

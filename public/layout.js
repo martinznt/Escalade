@@ -4,6 +4,8 @@
 // confirmations, et « Revenir à la mise en page de base » remet tout comme au départ (après confirmation aussi).
 import { h, raw, openSheet, closeSheet, ask, toast } from './ui.js';
 import { S, ACT, item, putItem, render, go } from './state.js';
+import { globalLayout } from './global.js';
+import { chooseScope, saveLayoutGlobal } from './content.js';
 
 /** Icônes possibles en haut à droite : [emoji, nom, action]. */
 export const ICONS = {
@@ -45,19 +47,23 @@ const OLD_DASH = { today: 'today', next: 'next', goals: 'goals', reco: 'reco', c
 
 /** Mise en page enregistrée (validée, complétée avec les fonctions ajoutées depuis). */
 export function layout(page, saved = savedLayouts()) {
-  const feats = FEATURES[page] || {}, def = DEFAULTS[page] || [];
+  // Mise en page de base : celle choisie par un administrateur pour tout le monde, sinon celle de l'app.
+  const gl = globalLayout(), forcedOff = new Set(gl.off?.[page] || []);
+  const feats = FEATURES[page] || {}, def = gl.pages?.[page]?.length ? gl.pages[page].map((e) => [e.id, e.as, e.color]) : DEFAULTS[page] || [];
   let list = Array.isArray(saved?.[page]) ? saved[page] : null;
   if (!list && page === 'home') { // ancien tableau de bord personnalisé : on le reprend
     const old = item('config', 'dashboard')?.blocks;
     if (Array.isArray(old) && old.length) { const big = old.map((b) => OLD_DASH[b]).filter(Boolean); list = [...def.filter(([id]) => ['hero', 'gen', 'seances', 'timer', 'carnet', 'program', 'finger'].includes(id)), ...big.map((id) => [id, id === 'cal' ? 'big' : 'big']), ['cal', big.includes('cal') ? 'big' : 'icon'], ['notif', 'icon'], ['all', 'icon']].map(([id, as]) => ({ id, as })); }
   }
-  list = (list || def.map(([id, as]) => ({ id, as }))).map((e) => (Array.isArray(e) ? { id: e[0], as: e[1] } : e));
+  list = (list || def.map(([id, as, color]) => ({ id, as, color }))).map((e) => (Array.isArray(e) ? { id: e[0], as: e[1] } : e));
   const seen = new Set(), out = [];
   for (const e of list) {
     const f = feats[e?.id]; if (!f || seen.has(e.id)) continue; seen.add(e.id);
     out.push({ id: e.id, as: e.as === 'off' || f.k.includes(e.as) ? e.as : f.k[0], color: COLORS.includes(e.color) ? e.color : '' });
   }
   for (const [id] of Object.entries(feats)) if (!seen.has(id)) { const d = def.find((x) => x[0] === id); out.push({ id, as: d ? d[1] : 'off', color: '' }); }
+  // Masqué pour tout le monde par un administrateur : jamais affiché (l'éditeur le montre, marqué).
+  for (const e of out) if (forcedOff.has(e.id)) { e.as = 'off'; e.forced = true; }
   return out;
 }
 export function savedLayouts() { try { return JSON.parse(item('config', 'layout')?.lay || '{}') || {}; } catch { return {}; } }
@@ -96,7 +102,7 @@ function editor(page) {
   const FORM = { big: 'Grand', icon: 'Icône', off: 'Masqué' };
   return h`<section class="card editbar"><h2>✏️ Mise en page</h2><p class="small muted">Change l’ordre, la forme (en grand, en petite icône en haut, ou masqué) et la couleur. Rien n’est enregistré avant ta validation.</p></section>
     <div class="edlist">${list.map((e, i) => { const f = feats[e.id]; return h`<div class="edrow ${e.as}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>
-      <div class="row"><span class="edic">${ICONS[e.id]?.[0] || (f.tile ? '▢' : '▭')}</span><b class="grow small">${f.l}</b>
+      <div class="row"><span class="edic">${ICONS[e.id]?.[0] || (f.tile ? '▢' : '▭')}</span><b class="grow small">${f.l}${e.forced ? h` <span class="tag warn">🚫 masqué pour tous</span>` : ''}</b>
         <button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descendre">↓</button></div>
       <div class="row wrapf"><div class="seg sm">${[...f.k, 'off'].map((k) => h`<button type="button" class="${e.as === k ? 'on' : ''}" data-act="layAs" data-id="${e.id}" data-v="${k}">${FORM[k]}</button>`)}</div><span class="grow"></span>
         <button type="button" class="swc cur" data-act="layPick" data-id="${e.id}" aria-label="Couleur" ${raw(e.color ? `style="background:${e.color}"` : '')}>${e.color ? '' : '🎨'}</button></div>
@@ -117,7 +123,19 @@ ACT.laySave = async () => {
   if (!S.lay) return;
   if (!(await ask('Enregistrer cette mise en page ?', { ok: 'Oui, enregistrer' }))) return;
   if (!(await ask('Tu es sûr ?', { ok: 'Oui, j’en suis sûr', detail: 'Elle remplacera la mise en page actuelle de cette page, sur tous tes appareils. Tu pourras revenir à la mise en page de base quand tu veux.' }))) return;
-  const all = savedLayouts(); all[S.lay.page] = S.lay.list.map(({ id, as, color }) => (color ? { id, as, color } : { id, as }));
+  const list = S.lay.list.map(({ id, as, color }) => (color ? { id, as, color } : { id, as }));
+  const scope = await chooseScope('Cette mise en page. Pour tout le monde : elle devient la mise en page de base, et ce que tu as masqué est masqué pour tous.');
+  if (!scope) return;
+  if (scope === 'all') {
+    const page = S.lay.page, gl = globalLayout();
+    try {
+      await saveLayoutGlobal({ pages: { ...(gl.pages || {}), [page]: list }, off: { ...(gl.off || {}), [page]: list.filter((e) => e.as === 'off').map((e) => e.id) } });
+      const all = savedLayouts(); delete all[page]; store(all); // tu vois la même chose que tout le monde
+      S.lay = null; render(); toast('Mise en page enregistrée pour tout le monde ✓');
+    } catch (e) { toast(e.message, 4500, 'bad'); }
+    return;
+  }
+  const all = savedLayouts(); all[S.lay.page] = list;
   store(all); S.lay = null; render(); toast('Mise en page enregistrée ✓');
 };
 ACT.layReset = async (el) => {

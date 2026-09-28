@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.13.0
+# FINAL_AUDIT — Séances entraînement v8.14.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -631,3 +631,29 @@ J'ai relu chaque écran pour repérer ce qui n'était pas logique. Voici ce qui 
 - Une visite longue affiche une barre de progression. Avant, les points poussaient le bouton « Suivant » hors de l'écran.
 
 **Tests** : `global.test.mjs` passe à 11 tests (proposition, validation, acceptation, refus). E2E à 62 étapes : un utilisateur propose un système, l'administrateur est notifié, l'ouvre au bon endroit et l'accepte, et l'utilisateur le voit « pour tous ».
+
+## Évolution 8.14.0 : l'app se modifie sans code
+
+Tout se fait depuis Paramètres › Admin › « 🛠 Modifier l'app sans code ».
+
+**Modifier les textes**
+- En mode textes, l'administrateur touche n'importe quel texte de l'app et le réécrit pour tout le monde (type `text` : texte d'origine → nouveau texte).
+- Le remplacement s'applique partout où ce texte apparaît exactement pareil, par la même couche d'affichage que la traduction (`i18n.js`). « ↺ Remettre l'original » revient en arrière.
+
+**Annonces** (type `announce`)
+- Un titre, un message, et en option « note de mise à jour ».
+- L'annonce arrive dans la boîte 🔔 de tout le monde, en notification sur les téléphones abonnés aux nouveautés, et dans « Toutes les mises à jour » si c'est une note de mise à jour.
+
+**Mise en page pour tous** (type `layout`)
+- En enregistrant une mise en page, l'administrateur choisit « Pour tout le monde ». Elle devient alors la mise en page de base de tous les comptes qui n'ont pas la leur.
+- Ce qu'il a masqué est masqué pour tous. L'éditeur l'indique : « 🚫 masqué pour tous ».
+
+**Questions fréquentes et sources** (types `faq` et `source`) : modifier, ajouter ou retirer. Une source doit avoir un lien https.
+
+**Administrateurs**
+- Un administrateur peut nommer ou retirer un administrateur depuis la liste des comptes (`POST /api/admin/users/:id/role`). Le serveur refuse de retirer le dernier administrateur.
+- Tous ces changements apparaissent dans « Changements pour tout le monde », chacun avec « ↺ Annuler ».
+
+**Tests** : `global.test.mjs` passe à 15 tests (validation des nouveaux types, rôles, annonces, application puis retrait). E2E à 63 étapes : un texte réécrit et une annonce vus par un autre compte, puis annulés.
+
+**Ce qui demande encore du code** : une fonctionnalité vraiment nouvelle (un nouvel écran, un nouveau calcul), la correction d'un bug, la sécurité et l'hébergement.

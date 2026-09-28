@@ -10,6 +10,8 @@ import { installCard, openSetup, showTour } from './views-setup.js';
 import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
 import { NEWS } from './news.js';
+import { FAQ } from './help.js';
+import { faqAdminButtons, announcements } from './content.js';
 import { vAdminContent } from './content.js';
 import { vSources } from './views-catalog.js';
 import { CAPACITIES, ACTIVITIES } from './model.js';
@@ -67,8 +69,10 @@ function prefs() {
 const back = () => h`<button class="btn sm ghost setback" data-act="setSub" data-id="main">‹ Paramètres</button>`;
 /* ═════════ Toutes les mises à jour, de la plus récente à la première ═════════ */
 function vUpdates() {
+  const notes = announcements().filter((a) => a.update);
   const list = NEWS.slice().reverse();
   return h`<p class="small muted">Chaque mise à jour a sa visite : elle montre, à l’écran, ce qui a changé. Idéal pour voir comment l’app a évolué.</p>
+    ${notes.map((a) => h`<div class="card upd"><div class="row between"><span class="kicker">${a.emoji} Note de l’équipe</span><span class="tiny muted">${new Date(a.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div><h3 style="margin:.2em 0">${a.title}</h3>${a.body ? h`<p class="small">${a.body}</p>` : ''}</div>`)}
     ${list.map((n, i) => h`<div class="card upd ${i === 0 ? 'acc-b' : ''}"><div class="row between"><span class="kicker">Version ${n.v}${i === 0 ? ' · la plus récente' : ''}</span><span class="tiny muted">${new Date(n.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
       <h3 style="margin:.2em 0">${n.title}</h3><p class="small">${n.why}</p>
       <div class="row wrapf"><button class="btn sm ${i === 0 ? 'pri' : ''}" data-act="notifTour" data-v="${n.v}">🧭 Lancer la visite (${n.steps.length} étape${n.steps.length > 1 ? 's' : ''})</button></div>
@@ -112,19 +116,9 @@ ACT.guestQuit = async () => {
 };
 
 /* ═════════ Aide ═════════ */
-const FAQ = [
-  ['Comment faire ma première séance ?', 'Sur l’Accueil, touche « 🎯 Séance du jour », choisis la durée, puis « Voir la simulation » et « Générer ». Touche ensuite ▶ pour commencer : l’écran te guide exercice par exercice.'],
-  ['Comment l’app choisit mes exercices ?', 'Elle utilise ce que tu lui as dit (sports, niveau, matériel, zones à ménager), tes séances passées et tes mesures. Chaque séance générée a un encadré « Pourquoi cette séance ? » qui explique ses choix.'],
-  ['Je ne connais pas mon niveau, c’est grave ?', 'Non. Réponds « Je ne sais pas » : l’app reste prudente et apprend avec tes séances. Tu peux faire des petits tests plus tard (Profil › Performances).'],
-  ['Où sont mes séances enregistrées ?', 'Dans l’onglet 📚 Bibliothèque. L’historique de ce que tu as fait est dans 📈 Progrès › Historique.'],
-  ['Ça marche sans internet ?', 'Oui. Tout ce que tu fais hors connexion est gardé sur l’appareil et envoyé automatiquement quand internet revient.'],
-  ['Mes données sont-elles privées ?', 'Oui, par défaut personne ne voit tes données. Tu peux choisir de partager certaines choses dans Profil › Public.'],
-  ['Comment installer l’application ?', 'Dans ⚙️ Paramètres, carte « Installer l’application ». Sur Android et ordinateur, l’app s’installe comme une vraie application. Sur iPhone : Safari › Partager › « Sur l’écran d’accueil ».'],
-  ['Un problème ?', 'Va dans « 🐞 Signaler un bug » et décris ce qui s’est passé : le message arrive directement à l’administrateur.'],
-];
 function vHelp() {
   return h`<div class="card"><h3>🧭 Visite guidée</h3><p class="small">Revois en 30 secondes à quoi sert chaque onglet.</p><div class="row wrapf"><button class="btn pri" data-act="helpTour">Lancer la visite</button><button class="btn" data-act="newsTour">🆕 Revoir les nouveautés</button></div></div>
-    <div class="card"><h3>❓ Questions fréquentes</h3>${FAQ.map(([q, r]) => h`<details class="faq"><summary>${q}</summary><p class="small">${r}</p></details>`)}</div>${vSources()}`;
+    <div class="card"><div class="row between"><h3>❓ Questions fréquentes</h3>${S.user?.isAdmin ? h`<button class="btn sm" data-act="faqEdit" data-id="">＋ Ajouter</button>` : ''}</div>${FAQ.map(([q, r, id]) => h`<div class="row faqrow"><details class="faq grow"><summary>${q}</summary><p class="small">${r}</p></details>${faqAdminButtons(id)}</div>`)}</div>${vSources()}`;
 }
 ACT.helpTour = () => showTour(0);
 ACT.soundTest = () => { beep(660, 120); setTimeout(() => beep(1040, 300), 350); };
@@ -335,7 +329,7 @@ function vAdminUsers() {
       <div class="ulist">${list.slice(0, 200).map((x) => h`<div class="urow"><div class="uav">${x.username.slice(0, 1).toUpperCase()}</div><div class="grow"><b>${x.username}</b> ${x.isAdmin ? tag('admin', 'acc') : ''}
         <div class="tiny muted">inscrit ${relDate(x.createdAt)}${x.email ? ' · ' + x.email : ''}</div></div>
         <div class="ustat"><b>${x.sessionsDone}</b><span>séance${x.sessionsDone > 1 ? 's' : ''}</span></div>
-        <div class="ustat"><span>${x.lastLogin ? relDate(x.lastLogin) : 'jamais'}</span><span class="tiny muted">connexion</span></div></div>`)}
+        <div class="ustat"><span>${x.lastLogin ? relDate(x.lastLogin) : 'jamais'}</span><span class="tiny muted">connexion</span><button class="btn sm ${x.isAdmin ? 'ghost' : ''}" data-act="userRole" data-id="${x.id}" data-v="${x.isAdmin ? '0' : '1'}">${x.isAdmin ? 'Retirer admin' : 'Nommer admin'}</button></div></div>`)}
         ${list.length > 200 ? h`<p class="tiny muted">… ${list.length - 200} autre(s) : affine la recherche.</p>` : ''}${!list.length ? h`<p class="small muted">Aucun compte trouvé.</p>` : ''}</div>
       <details class="how mini"><summary>Ce que tu vois ici</summary><p class="tiny">Pseudo, date d’inscription, e-mail masqué, nombre de séances réalisées et dernière connexion. Les séances, performances et profils des membres restent privés.</p></details>`}</div>`;
 }
@@ -368,4 +362,12 @@ SUBMIT.bugSend = (f) => {
   const d = Object.fromEntries(new FormData(f));
   queue('POST', '/api/bugs', { id: uid(), title: d.title, description: d.description, page: d.page, appVersion: d.device ? APP_VERSION : '', userAgent: d.device ? navigator.userAgent.slice(0, 300) : '' });
   f.reset(); buzzOk(); toast('Signalement enregistré : il est envoyé aux administrateurs. Merci !'); setTimeout(loadMyBugs, 2500);
+};
+
+/** Nommer ou retirer un administrateur (le serveur garde toujours au moins un administrateur). */
+ACT.userRole = async (el) => {
+  const make = el.dataset.v === '1', u = S.admin.users?.users?.find((x) => x.id === el.dataset.id);
+  if (!(await ask(make ? `Nommer ${u?.username || 'ce compte'} administrateur ?` : `Retirer les droits d’administrateur de ${u?.username || 'ce compte'} ?`, { ok: make ? 'Oui, nommer' : 'Oui, retirer', danger: !make, detail: make ? 'Il pourra modifier le contenu de l’app pour tout le monde et traiter les idées. Il n’aura pas accès aux données privées des comptes.' : '' }))) return;
+  try { await api('POST', `/api/admin/users/${encodeURIComponent(el.dataset.id)}/role`, { admin: make }); toast(make ? 'Administrateur nommé' : 'Droits retirés'); S.admin.users = null; render(); }
+  catch (e) { toast(e.message, 4500, 'bad'); }
 };

@@ -559,3 +559,9 @@ html[data-motion=off] .scene *{animation:none!important}
 /* Visite longue : une barre de progression au lieu d'une rangée de points */
 .tour-bubble .tbar{height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin:6px 0}.tour-bubble .tbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
 .tour-bubble .dots{flex-wrap:wrap}
+/* Mode « modifier les textes » (administrateur) */
+#textbar{position:fixed;left:12px;right:12px;top:calc(62px + env(safe-area-inset-top));z-index:25;display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--accent);box-shadow:var(--shadow);max-width:620px;margin:0 auto;font-size:.9rem}
+body.textedit #main :is(h1,h2,h3,b,p,small,span,summary,button,label,li){cursor:text;outline:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:2px}
+.faqrow{align-items:flex-start;gap:6px}
+/* Une tuile seule sur sa ligne prend toute la largeur (ex. quand l'administrateur masque une fonction) */
+.quick:not(:has(>:nth-child(4):last-child))>:nth-child(even):last-child{grid-column:1/-1}

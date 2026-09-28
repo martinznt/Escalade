@@ -578,6 +578,20 @@ await step('idée d’un utilisateur (système de cotation) → notification de 
   await c.tab('settings'); await c.sub('setSub', 'updates'); await C.waitForSelector('.upd [data-act=notifTour]'); assert.ok(await c.count('.upd') >= 10, 'toutes les mises à jour listées');
   await B.keyboard.press('Escape');
 });
+await step('admin sans code : réécrire un texte et envoyer une annonce ; l’autre compte les voit ; tout s’annule', async () => {
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=textModeOn]'); await C.waitForSelector('#textbar');
+  await C.locator('.quick .qa.pri b').first().click(); await C.waitForSelector('#sheet textarea[name=to]');
+  await C.fill('#sheet textarea[name=to]', 'Ma séance du jour'); await c.click('#sheet form[data-submit=textSave] button.pri'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
+  await c.click('#textbar [data-act=textModeOff]');
+  await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=announceNew]');
+  await C.fill('#sheet input[name=title]', 'Salle Bloc Club ajoutée'); await c.click('#sheet form[data-submit=announceGo] button.pri'); await c.confirm(); await C.waitForSelector('#toast.show:has-text("Annonce")');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('home');
+  await B.waitForSelector('#main :text("Ma séance du jour")', { timeout: 10000 });
+  await b.click('.topicons [data-act=notifOpen]'); await B.waitForSelector('#sheet :text("Salle Bloc Club ajoutée")', { timeout: 10000 }); await B.keyboard.press('Escape');
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin');
+  for (let k = 0; k < 2; k++) { await C.locator('[data-act=glReset]').first().click(); await c.confirm(); await C.waitForTimeout(400); }
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('home'); await B.waitForSelector('#main :text-is("Séance du jour")', { timeout: 10000 });
+});
 await step('Service Worker actif, puis passage hors ligne : l’application s’ouvre avec les données', async () => {
   await A.evaluate(() => navigator.serviceWorker.ready); await A.reload(); await A.waitForSelector('nav.tabs'); await A.waitForTimeout(600);
   await ctxA.setOffline(true); await A.reload(); await A.waitForSelector('nav.tabs', { timeout: 10000 });

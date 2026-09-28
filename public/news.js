@@ -76,6 +76,10 @@ export const NEWS = [
     ['profile', 'climbing', '[data-act=carnetAdv]', '💡 Proposer', 'Crée ton système de cotation ou ton style, puis « 💡 Proposer à tout le monde ». Pareil pour tes exercices, tes séances et tes formats.'],
     ['settings', 'updates', '.upd', '🆕 Toutes les mises à jour', 'L’évolution de l’app depuis le début, avec une visite pour chaque mise à jour.'],
   ] },
+  { v: '8.14.0', date: '2026-10-01', title: 'L’app se modifie sans code', why: 'Les administrateurs changent les textes, envoient des annonces, choisissent la mise en page pour tous, gèrent les questions, les sources et les autres administrateurs.', steps: [
+    ['settings', 'admin', '.setmenu', '🛠 Modifier l’app sans code', 'Textes, annonces, mise en page pour tous, questions fréquentes et sources : tout se fait ici, sans toucher au code.'],
+    ['home', 'dash', '[data-act=notifOpen]', '📣 Annonces', 'Les annonces de l’équipe arrivent dans tes notifications.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

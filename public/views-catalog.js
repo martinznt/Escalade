@@ -10,7 +10,7 @@ import { startPlayer } from './player.js';
 import { CATALOG, buildSession, rankCatalog, needsOf, rankExercises, EX_CATEGORIES } from './catalog.js';
 import { SOURCES } from './sources.js';
 import { sourcesLine } from './srcui.js';
-import { catalogEditButtons } from './content.js';
+import { catalogEditButtons, sourceAdminButtons } from './content.js';
 export { sourcesLine };
 
 const GOAL_L = { endurance: 'Endurance', force: 'Force', poids: 'Perte de poids', forme: 'Forme', sante: 'Santé', climb: 'Escalade', mobilite: 'Mobilité' };
@@ -71,6 +71,6 @@ ACT.bestCat = (el) => { S.bestCat = el.dataset.v; render(); };
 
 /* ───────── Toutes les sources ───────── */
 export function vSources() {
-  return h`<div class="card"><h3>📚 Sources citées</h3><p class="small muted">Les conseils de l’app s’appuient sur ces études et recommandations officielles. Touche une source pour voir ce qu’elle montre.</p>
-    ${Object.entries(SOURCES).sort((a, b) => b[1].year - a[1].year).map(([id, s]) => h`<button class="item pick" data-act="srcOpen" data-id="${id}"><div class="grow"><b class="small">${s.title}</b><div class="tiny muted">${s.authors} · ${s.year} · ${s.journal}</div></div></button>`)}</div>`;
+  return h`<div class="card"><div class="row between"><h3>📚 Sources citées</h3>${S.user?.isAdmin ? h`<button class="btn sm" data-act="srcEdit" data-id="">＋ Ajouter</button>` : ''}</div><p class="small muted">Les conseils de l’app s’appuient sur ces études et recommandations officielles. Touche une source pour voir ce qu’elle montre.</p>
+    ${Object.entries(SOURCES).sort((a, b) => b[1].year - a[1].year).map(([id, s]) => h`<div class="row"><button class="item pick grow" data-act="srcOpen" data-id="${id}"><div class="grow"><b class="small">${s.title}</b><div class="tiny muted">${s.authors} · ${s.year} · ${s.journal}</div></div></button>${sourceAdminButtons(id)}</div>`)}</div>`;
 }

@@ -73,7 +73,8 @@ export async function notifyType(env, type, { userIds = null, fetchFn = fetch, l
   const rows = (await q(env, 'SELECT endpoint,user_id,types FROM push_subs LIMIT ?', limit).all()).results || [];
   let sent = 0;
   for (const s of rows) {
-    if (!wants(s, type) || (userIds && !userIds.includes(s.user_id))) continue;
+    // Une annonce de l'administrateur va aux appareils qui veulent les nouveautés.
+    if (!wants(s, type === 'announce' ? 'update' : type) || (userIds && !userIds.includes(s.user_id))) continue;
     await q(env, 'UPDATE push_subs SET pending=? WHERE endpoint=?', type, s.endpoint).run();
     const r = await sendPush(env, s.endpoint, fetchFn);
     if (r === 'gone') await q(env, 'DELETE FROM push_subs WHERE endpoint=?', s.endpoint).run(); else if (r === 'ok') sent++;
@@ -98,6 +99,11 @@ export async function messageFor(env, endpoint, userId, tz, now = Date.now()) {
   const pending = mine ? sub.pending : '';
   if (mine && pending) await q(env, "UPDATE push_subs SET pending='' WHERE endpoint=?", endpoint).run();
   const silent = !!(mine && sub.silent);
+  if (pending === 'announce') {
+    const a = await q(env, "SELECT data_json FROM global_content WHERE kind='announce' AND hidden=0 ORDER BY updated_at DESC LIMIT 1").first();
+    let d = {}; try { d = JSON.parse(a?.data_json || '{}'); } catch { /* rien */ }
+    return { title: `${d.emoji || '📣'} ${d.title || 'Annonce'}`, body: String(d.body || '').slice(0, 180), url: '/?news=1#/home/dash', silent };
+  }
   if (pending === 'update') return { title: 'Nouvelle mise à jour disponible ✨', body: 'Ouvre l’app pour voir ce qui a changé et à quoi ça sert.', url: '/?news=1#/home/dash', silent };
   if (pending === 'admin') return { title: 'Nouvelle proposition 📬', body: 'Quelqu’un propose une idée pour l’app. À valider dans Paramètres › Admin.', url: '/?news=1#/home/dash', silent }; // la boîte 🔔 : une notification par idée, qui mène à l'endroit concerné
   if (pending === 'reply' && userId) {

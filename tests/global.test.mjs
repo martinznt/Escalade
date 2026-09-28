@@ -76,6 +76,29 @@ await ok('accepter : ajouté pour tout le monde ; l’auteur reçoit la réponse
   assert.equal((await V.get('/api/global')).data.items.length, n0);
 });
 
+console.log('Modifier l’app sans code');
+await ok('textes, annonces, mise en page, questions, sources : validés ; lien de source https obligatoire', () => {
+  assert.deepEqual(cleanGlobal('text', { from: 'Accueil', to: 'Maison' }), { from: 'Accueil', to: 'Maison' }); assert.equal(cleanGlobal('text', { from: 'x', to: '' }), null);
+  assert.equal(cleanGlobal('announce', { title: '' }), null); assert.equal(cleanGlobal('announce', { title: 'Nouvelle salle', update: 1 }).emoji, '🆕');
+  const l = cleanGlobal('layout', { pages: { home: [{ id: 'timer', as: 'icon' }, { id: 'bad id!', as: 'big' }] }, off: { home: ['coach', '<x>'] } });
+  assert.deepEqual(l.pages.home.map((e) => e.id), ['timer']); assert.deepEqual(l.off.home, ['coach']);
+  assert.equal(cleanGlobal('source', { title: 'T', url: 'javascript:alert(1)' }), null); assert.equal(cleanGlobal('source', { title: 'T', url: 'https://doi.org/x' }).year, 2020);
+  assert.equal(cleanGlobal('faq', { q: 'Q ?', a: '' }), null);
+});
+await ok('nommer ou retirer un administrateur : réservé aux admins ; jamais zéro administrateur', async () => {
+  const users = (await A.get('/api/admin/users')).data.users, bruno = users.find((x) => x.username === 'Bruno'), admina = users.find((x) => x.username === 'Admina');
+  assert.equal((await B.post(`/api/admin/users/${admina.id}/role`, { admin: false })).status, 403);
+  assert.equal((await A.post(`/api/admin/users/${admina.id}/role`, { admin: false })).status, 409, 'dernier administrateur : refusé');
+  assert.equal((await A.post(`/api/admin/users/${bruno.id}/role`, { admin: true })).status, 200);
+  assert.equal((await B.get('/api/auth/me')).data.user.isAdmin, true);
+  assert.equal((await B.post(`/api/admin/users/${bruno.id}/role`, { admin: false })).status, 200);
+  assert.equal((await B.get('/api/auth/me')).data.user.isAdmin, false);
+});
+await ok('annonce : enregistrée pour tout le monde, lisible sans compte', async () => {
+  assert.equal((await A.put('/api/admin/global/announce/g-ann1', { data: { title: 'Salle ajoutée', body: 'Bloc Club' } })).status, 200);
+  const a = (await V.get('/api/global')).data.items.find((x) => x.kind === 'announce'); assert.equal(a.data.title, 'Salle ajoutée');
+});
+
 console.log('Application dans l’app');
 const n0 = LIBRARY.length, c0 = CATALOG.length, first = LIBRARY.find((x) => x.role === 'main');
 await ok('pour tout le monde : modifié, ajouté, masqué ; pour moi : par-dessus', () => {
@@ -95,6 +118,14 @@ await ok('pour tout le monde : modifié, ajouté, masqué ; pour moi : par-dessu
 await ok('masquer un exercice : il reste connu (séances existantes) mais n’est plus proposé', () => {
   applyLayers([{ kind: 'exercise', id: first.id, hidden: true }], { ex: [], cat: [] });
   assert.ok(byId(first.id)); assert.equal(byId(first.id).hidden, true);
+});
+await ok('textes, questions et sources appliqués puis retirés proprement', async () => {
+  const { textOverrides } = await import('../public/global.js'); const { FAQ } = await import('../public/help.js'); const { SOURCES } = await import('../public/sources.js');
+  const f0 = FAQ.length, s0 = Object.keys(SOURCES).length;
+  applyLayers([{ kind: 'text', id: 't1', data: { from: 'Accueil', to: 'Maison' } }, { kind: 'faq', id: 'f0', data: { q: 'Q modifiée', a: 'R' } }, { kind: 'faq', id: 'g-q', data: { q: 'Nouvelle', a: 'R' } }, { kind: 'source', id: 'g-s', data: { title: 'Étude', url: 'https://x.org', year: 2024 } }, { kind: 'source', id: 'who2020', hidden: true }], { ex: [], cat: [] });
+  assert.equal(textOverrides().get('Accueil'), 'Maison'); assert.equal(FAQ[0][0], 'Q modifiée'); assert.equal(FAQ.length, f0 + 1);
+  assert.equal(SOURCES['g-s'].title, 'Étude'); assert.equal(SOURCES.who2020, undefined);
+  applyLayers([], { ex: [], cat: [] }); assert.equal(FAQ.length, f0); assert.equal(Object.keys(SOURCES).length, s0); assert.equal(textOverrides().size, 0);
 });
 await ok('tout annulé : on retrouve exactement le contenu d’origine', () => {
   applyLayers([], { ex: [], cat: [] });

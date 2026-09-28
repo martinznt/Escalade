@@ -76,6 +76,7 @@ const EN = {
   '💡 Proposer à tout le monde': '💡 Suggest to everyone', '🌍 Pour tout le monde': '🌍 For everyone', 'Envoyer la proposition': 'Send the suggestion', 'Voir et décider': 'View and decide', '📍 Voir et décider': '📍 View and decide',
   '✓ Ajouter pour tout le monde': '✓ Add for everyone', '✗ Refuser': '✗ Decline', '🧭 Lancer la visite': '🧭 Start the tour', 'Toutes les mises à jour': 'All updates', 'Ce qui a changé': 'What changed',
   'L’évolution de l’app depuis le début, avec une visite pour chacune': 'How the app evolved, with a tour for each update', '💡 Proposer comme séance prête': '💡 Suggest as a ready-made session',
+  'Modifier les textes': 'Edit texts', 'Écrire une annonce': 'Write an announcement', 'Mise en page pour tous': 'Layout for everyone', 'Questions fréquentes et sources': 'FAQ and sources', 'Nommer admin': 'Make admin', 'Retirer admin': 'Remove admin', 'Terminer': 'Done',
   // Partage et séance à deux
   'Séance à deux': 'Partner session', 'Rejoindre la séance': 'Join the session', 'Rejoindre': 'Join', 'Copier le lien': 'Copy link', 'Envoyer…': 'Send…', 'Arrêter le mode à deux': 'Stop partner mode',
   'Lien et QR code': 'Link and QR code', 'Mon profil public': 'My public profile', 'Bibliothèque commune': 'Shared library', 'À deux': 'Partner', 'En attente': 'Waiting',
@@ -138,27 +139,45 @@ function trCore(core) {
   return core;
 }
 
-let lang = 'fr', obs = null;
+let lang = 'fr', obs = null, OVR = new Map();
+const ORIGINAL = new WeakMap(); // texte d'origine de chaque texte remplacé (pour pouvoir le modifier à nouveau)
+/** Texte affiché : d'abord la réécriture d'un administrateur (pour tout le monde), puis la traduction si l'anglais est choisi. */
+function display(text) {
+  const s = String(text ?? ''), core = s.trim();
+  if (core && OVR.has(core)) { const pre = s.slice(0, s.indexOf(core)), post = s.slice(s.indexOf(core) + core.length); const o = OVR.get(core); return pre + (lang === 'en' ? tr(o) : o) + post; }
+  return lang === 'en' ? tr(s) : s;
+}
 const ATTRS = ['placeholder', 'aria-label', 'title'];
 function walk(root) {
-  if (root.nodeType === 3) { const v = root.nodeValue, t = tr(v); if (t !== v) root.nodeValue = t; return; }
+  if (root.nodeType === 3) { const v = root.nodeValue, t = display(v); if (t !== v) { if (!ORIGINAL.has(root)) ORIGINAL.set(root, v.trim()); root.nodeValue = t; } return; }
   if (root.nodeType !== 1 || root.closest?.('script,style,textarea,svg,[data-noi18n]')) return;
-  for (const a of ATTRS) { const v = root.getAttribute?.(a); if (v) { const t = tr(v); if (t !== v) root.setAttribute(a, t); } }
-  if (root.tagName === 'INPUT' && (root.type === 'button' || root.type === 'submit') && root.value) { const t = tr(root.value); if (t !== root.value) root.value = t; }
+  for (const a of ATTRS) { const v = root.getAttribute?.(a); if (v) { const t = display(v); if (t !== v) root.setAttribute(a, t); } }
+  if (root.tagName === 'INPUT' && (root.type === 'button' || root.type === 'submit') && root.value) { const t = display(root.value); if (t !== root.value) root.value = t; }
   for (const c of root.childNodes) walk(c);
+}
+/** Texte d'origine d'un nœud texte (avant réécriture ou traduction). */
+export const originalText = (node) => ORIGINAL.get(node) || String(node?.nodeValue || '').trim();
+function observe(on) {
+  if (on && !obs && typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+    obs = new MutationObserver((list) => { for (const m of list) { if (m.type === 'characterData') walk(m.target); else for (const n of m.addedNodes) walk(n); } });
+    obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+  } else if (!on && obs) { obs.disconnect(); obs = null; }
+}
+/** Textes réécrits pour tout le monde par un administrateur (texte d'origine → nouveau texte). */
+export function setOverrides(map) {
+  const same = map.size === OVR.size && [...map].every(([k, v]) => OVR.get(k) === v);
+  if (same) return false;
+  OVR = map; observe(lang === 'en' || OVR.size > 0);
+  if (typeof document !== 'undefined' && document.body) walk(document.body);
+  return true;
 }
 /** Active ou coupe la traduction. Retourne true si l'affichage doit être refait (retour au français). */
 export function setLang(l) {
   const next = l === 'en' ? 'en' : 'fr', changed = next !== lang;
   lang = next;
   try { document.documentElement.lang = lang; } catch { /* rien */ }
-  if (lang === 'en') {
-    if (!obs && typeof MutationObserver !== 'undefined') {
-      obs = new MutationObserver((list) => { for (const m of list) { if (m.type === 'characterData') walk(m.target); else for (const n of m.addedNodes) walk(n); } });
-      obs.observe(document.body, { childList: true, subtree: true, characterData: true });
-    }
-    walk(document.body);
-  } else if (obs) { obs.disconnect(); obs = null; }
+  observe(lang === 'en' || OVR.size > 0);
+  if (lang === 'en') walk(document.body);
   return changed && lang === 'fr';
 }
 export const currentLang = () => lang;
