@@ -701,7 +701,7 @@ await step('idée avec l’endroit : B vise un élément, l’admin y est emmen�
   await b.click('#pickbar [data-act=pickNav]'); await b.tab('library'); await B.waitForSelector('#main h1');
   await b.click('#pickbar [data-act=pickAim]'); await B.locator('#main h1').first().click(); await B.waitForSelector('#pickbar [data-act=pickOk]');
   await b.click('#pickbar [data-act=pickOk]'); await B.waitForSelector('#sheet :text("Endroit joint")');
-  assert.match(await b.text('#sheet'), /Bibliothèque/); await b.click('#sheet form[data-submit=ideaGo] button.pri'); await B.waitForSelector('#toast.show:has-text("Merci")');
+  assert.match(await b.text('#sheet'), /Endroit joint : « .+ »/); await b.click('#sheet form[data-submit=ideaGo] button.pri'); await B.waitForSelector('#toast.show:has-text("Merci")');
   let id; await poll(async () => { const p = (await c.api('GET', '/api/admin/proposals')).data.proposals.find((x) => x.payload?.sel && /plus clair/.test(x.detail || '')); id = p?.id; return !!p; }, 10000, 'idée reçue avec son endroit');
   cur = C; await C.reload(); await C.waitForSelector('nav.tabs'); await c.click('.topicons [data-act=notifOpen]');
   await C.waitForSelector(`#sheet [data-act=propOpen][data-id="${id}"]`, { timeout: 10000 }); await c.click(`#sheet [data-act=propOpen][data-id="${id}"]`);
