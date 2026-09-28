@@ -85,6 +85,10 @@ export const NEWS = [
     ['library', 'seances', '[data-act=mergeOpen]', '🔀 Fusionner des séances', 'Choisis 2 à 4 séances : l’app note le mélange, conseille l’ordre et crée une nouvelle séance. Tes séances d’origine ne changent pas.'],
     ['settings', 'main', '[data-act=ideaNew]', '💡 Proposer une amélioration', 'Une idée ou une modification ? Envoie-la : les administrateurs l’acceptent ou non, et tu reçois la réponse.'],
   ] },
+  { v: '8.16.0', date: '2026-10-03', title: 'Ranger ses séances', why: 'Chaque séance a ses sports (plusieurs), son lieu et ses catégories ; « Mes séances » se filtre et se trie comme tu veux, même selon ta forme du jour.', steps: [
+    ['library', 'seances', '[data-act=sfOpen]', '⇅ Trier et filtrer', 'Lieu, un ou plusieurs sports, catégories, et 10 façons de trier : selon ta forme, pas faites depuis longtemps, les plus courtes…'],
+    ['library', 'seances', '.sfbar input', '🔍 Chercher', 'Tape un nom de séance ou d’exercice.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

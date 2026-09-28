@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.15.0
+# FINAL_AUDIT — Séances entraînement v8.16.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -688,3 +688,34 @@ Tout se fait depuis Paramètres › Admin › « 🛠 Modifier l'app sans code �
 - `format.test.mjs` : multi-sports.
 - `global.test.mjs` passe à 17 tests : demande ciblée acceptée, idée.
 - E2E : fusion, et demande d'un non-admin appliquée par l'admin.
+
+## Évolution 8.16.0 : ranger ses séances
+
+**Chaque séance a**
+- **plusieurs sports** : le sport principal, plus d'autres (`sports`, identifiants validés, 8 au plus). Le générateur multi-sports et la fusion les remplissent tout seuls.
+- **un lieu** (`context.env`), avec « ＋ Ajouter un lieu » qui mène à Profil › Matériel et lieux.
+- **des catégories** : Force, Doigts, Technique, Gainage, Puissance, Endurance, Mobilité, plus les siennes (`tags`, 8 au plus).
+  - Sans choix, elles sont **reconnues d'après ce que travaillent les exercices** (au moins un quart du travail).
+  - Toucher une catégorie fixe la liste à la main.
+
+**Mes séances** (`public/sfilter.js`, sans DOM, testé)
+- Une recherche (nom de séance ou d'exercice) et un bouton « ⇅ Trier » qui ouvre une liste claire.
+- Filtres :
+  - lieux ;
+  - un ou plusieurs sports (la séance en contient au moins un) ;
+  - catégories.
+- Dix tris :
+  - récentes ;
+  - **selon ma forme du jour** (fatigué / normal / en forme : l'intensité la plus proche d'abord, et les plus courtes si fatigué) ;
+  - pas faites depuis longtemps ;
+  - les plus faites ;
+  - les plus courtes ou les plus longues ;
+  - les plus douces ou les plus intenses ;
+  - par nom ;
+  - par sport.
+- Les filtres actifs sont affichés en puces qu'on retire d'un toucher. Le choix est gardé sur l'appareil (préférence d'affichage, pas une donnée).
+- L'app ne mesure pas la forme du jour : c'est l'utilisateur qui la choisit.
+
+**Tests**
+- Nouveau fichier `sfilter.test.mjs` (4 tests).
+- E2E : sports et catégories ajoutés dans l'éditeur, filtre par sport, tri « selon ma forme », puce retirée, recherche sans résultat, puis « Effacer ».

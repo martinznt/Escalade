@@ -449,6 +449,21 @@ await step('fusionner deux séances : conseil noté, ordre conseillé, nouvelle 
   const after = (await a.api('GET', '/api/sync')).data.items;
   for (const o of before.data.items) assert.equal(JSON.stringify(after.find((x) => x.id === o.id)?.exercises), JSON.stringify(o.exercises), 'originale intacte');
 });
+await step('mes séances : plusieurs sports, catégories, filtres et tris (dont « selon ma forme »)', async () => {
+  await a.tab('library'); await a.sub('libSub', 'seances'); await A.waitForSelector('[data-act=sfOpen]');
+  const n0 = await a.count('#main [data-act=openSeance]'); assert.ok(n0 >= 3, `${n0} séances`);
+  await A.locator('#main .card:has-text("Ma fusion") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sSport]');
+  await a.click('[data-act=sSport][data-id=running]'); await a.click('[data-act=sTag][data-id=mobilite]');
+  await a.tab('library'); await a.sub('libSub', 'seances'); await a.click('[data-act=sfOpen]');
+  await a.click('#sheet [data-act=sfTog][data-k=sports][data-v=running]'); await A.waitForSelector('#sheet [data-act=sfDone]');
+  await a.click('#sheet [data-act=sfSort][data-id=form]'); await a.click('#sheet [data-act=sfForm][data-id=low]'); await a.click('#sheet [data-act=sfDone]');
+  await A.waitForFunction(() => document.querySelectorAll('#main [data-act=openSeance]').length === 1);
+  assert.match(await a.text('#main'), /Ma fusion[\s\S]*Mobilité/); assert.match(await a.text('#main'), /Selon ma forme du jour : Fatigué/);
+  await a.click('#main [data-act=sfDrop]'); await A.waitForFunction((n) => document.querySelectorAll('#main [data-act=openSeance]').length === n, n0);
+  await A.fill('.sfbar input', 'zzz-rien'); await A.waitForSelector('#main [data-act=sfClear]'); await a.click('#main [data-act=sfClear]');
+  await A.waitForFunction((n) => document.querySelectorAll('#main [data-act=openSeance]').length === n, n0);
+  await a.click('[data-act=sfOpen]'); await a.click('#sheet [data-act=sfSort][data-id=recent]'); await a.click('#sheet [data-act=sfDone]');
+});
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');

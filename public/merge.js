@@ -3,6 +3,7 @@
 import { normalizeSession, normalizeEx, uid, exKey } from './shared.js';
 import { exMinutes, sessionMinutes } from './engine.js';
 import { byId } from './library.js';
+import { sportsOf } from './sfilter.js';
 
 const capsOf = (s) => { const out = {}; for (const e of s.exercises.filter((x) => x.block === 'main')) for (const [c, w] of Object.entries(e.caps && Object.keys(e.caps).length ? e.caps : byId(e.libId)?.caps || {})) out[c] = (out[c] || 0) + w * (e.sets || 1); return out; };
 const FRESH = { technique_escalade: 1, technique_pieds: 1, coordination: 1, explosivite: 1, puissance_haut: 1, force_doigts: 1, blocage: 0.7, force_jambes: 0.6, tirage_vertical: 0.6, vitesse: 0.8 };
@@ -66,7 +67,8 @@ export function mergeSessions(list, { name = '' } = {}) {
   const exercises = [...warm.map((e) => ({ ...e, part: '🔥 Échauffement' })), ...main, ...cool.map((e) => ({ ...e, part: '🌬️ Retour au calme' }))].map((e) => normalizeEx({ ...e, id: uid() }));
   const now = Date.now();
   return normalizeSession({
-    id: uid(), name: (name || ss.map((s) => s.name).join(' + ')).slice(0, 100), emoji: '🔀', source: 'merge', activity: ss[0]?.activity || '',
+    id: uid(), name: (name || ss.map((s) => s.name).join(' + ')).slice(0, 100), emoji: '🔀', source: 'merge', activity: ss[0]?.activity || '', sports: [...new Set(ss.flatMap(sportsOf))],
+    context: new Set(ss.map((s) => s.context?.env || '')).size === 1 && ss[0]?.context?.env ? { env: ss[0].context.env, envName: ss[0].context.envName } : {},
     exercises, durationMin: sessionMinutes({ exercises }), createdAt: now, updatedAt: now,
     notes: [{ title: 'Séance fusionnée', text: `Faite à partir de : ${ss.map((s) => `« ${s.name} »`).join(', ')}. Les séances d’origine n’ont pas changé.${skipped.length ? ` Exercices en double gardés une seule fois : ${[...new Set(skipped)].join(', ')}.` : ''}` }],
   });

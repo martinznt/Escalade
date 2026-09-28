@@ -47,6 +47,7 @@ export const FEATURE_INDEX = [
   E('feature', '🧩', 'Séance sur mesure (format, durée)', 'Bibliothèque', 'library/generate', 'generer format parties echauffement etirements duree 2h personnaliser', {}),
   E('feature', '＋', 'Nouvelle séance', 'Bibliothèque', '', 'creer ajouter seance main coller', { act: 'newChoose', to: 'library/home' }),
   E('feature', '📋', 'Mes séances', 'Bibliothèque', 'library/seances', 'seances enregistrees liste modeles archives', {}),
+  E('feature', '⇅', 'Trier et filtrer mes séances', 'Bibliothèque', 'library/seances', 'trier filtrer lieu salle sport style categorie forme duree intense douce ranger classer', { sel: '[data-act=sfOpen]' }),
   E('feature', '🔀', 'Fusionner des séances', 'Bibliothèque', '', 'fusionner combiner melanger regrouper assembler deux seances conseil', { act: 'mergeOpen', to: 'library/seances' }),
   E('feature', '💡', 'Proposer une amélioration', 'Aider l’app', '', 'idee suggestion demande modification ameliorer proposer administrateur', { act: 'ideaNew' }),
   E('feature', '🗂', 'Séances prêtes', 'Bibliothèque', 'library/catalog', 'catalogue sourcees toutes faites programme', {}),

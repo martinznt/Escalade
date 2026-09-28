@@ -7,6 +7,7 @@ import './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon, ls } from './state.js';
 import { cleanParts } from './format.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
+import { CATS, SORTS, FORMS, filterSessions, activeFilters, categoriesOf, autoCategories, sportsOf, placeOf, intensityOf, INTENSITY_LABEL } from './sfilter.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
@@ -68,16 +69,55 @@ function vLibHome() {
 ACT.libSub = (el) => { closeSheet(); window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
 /* ═════════ Mes séances ═════════ */
+const SF_KEY = 'sea:seances-filter';
+const sf = () => (S.sfilter ||= { sort: 'recent', form: 'normal', places: [], sports: [], cats: [], q: '', ...(ls.get(SF_KEY, {}) || {}) });
+const sfSave = () => { const { q, ...keep } = sf(); ls.set(SF_KEY, keep); };
+const sportName = (id) => { const c = ctx(), a = c.activities[id] || ACTIVITIES[id]; return a ? `${a.emoji || '🏅'} ${a.label}` : id; };
+const catName = (k) => (CATS[k] ? `${CATS[k].emoji} ${CATS[k].label}` : `🏷 ${k}`);
+const placeName = (id) => (id === 'none' ? '📍 Sans lieu' : `📍 ${ctx().envs.find((e) => e.id === id)?.name || S.seances.items.find((s) => s.context?.env === id)?.context?.envName || 'Lieu'}`);
 function vSeances() {
-  const f = S.filters.seances || 'active';
-  const list = S.seances.items.filter((s) => (f === 'archived' ? s.archived : f === 'templates' ? s.template && !s.archived : !s.archived));
+  const st = S.filters.seances || 'active', f = sf();
+  const list = filterSessions(S.seances.items, { ...f, status: st }, S.history);
+  const nf = activeFilters(f), total = S.seances.items.filter((s) => (st === 'archived' ? s.archived : st === 'templates' ? s.template && !s.archived : !s.archived)).length;
+  const on = [...f.places.map((x) => ['places', x, placeName(x)]), ...f.sports.map((x) => ['sports', x, sportName(x)]), ...f.cats.map((x) => ['cats', x, catName(x)])];
   return h`<button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
     ${S.seances.items.filter((s) => !s.archived && s.exercises.length).length >= 2 ? h`<button class="btn" data-act="mergeOpen">🔀 Fusionner des séances</button>` : ''}
-    <div class="chips">${[['active', 'Actives'], ['templates', 'Modèles'], ['archived', 'Archivées']].map(([k, l]) => chip(f === k, l, `data-act="seanceFilter" data-id="${k}"`))}</div>
-    ${list.length ? list.map((s) => h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div></div></div>
-      <div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div></div>`)
-      : empty(f === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
+    <div class="chips">${[['active', 'Actives'], ['templates', 'Modèles'], ['archived', 'Archivées']].map(([k, l]) => chip(st === k, l, `data-act="seanceFilter" data-id="${k}"`))}</div>
+    <div class="row sfbar"><input type="search" class="grow" data-input="sfQ" value="${f.q}" placeholder="🔍 Chercher une séance ou un exercice" aria-label="Chercher dans mes séances">
+      <button class="btn ${nf ? 'pri' : ''}" data-act="sfOpen">⇅ Trier${nf ? ` · ${nf}` : ''}</button></div>
+    <div class="muted small">${SORTS[f.sort]?.[0] || ''} ${SORTS[f.sort]?.[1] || ''}${f.sort === 'form' ? ` : ${FORMS[f.form]?.[1] || ''}` : ''} · ${list.length}${list.length !== total ? ` sur ${total}` : ''} séance(s)</div>
+    ${on.length ? h`<div class="chips">${on.map(([k, v, l]) => h`<button type="button" class="chip on" data-act="sfDrop" data-k="${k}" data-v="${v}" aria-label="Retirer le filtre">${l} ✕</button>`)}</div>` : ''}
+    ${list.length ? list.map((s) => { const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
+      <div class="tiny muted">${s.context?.env ? placeName(s.context.env) + ' · ' : ''}${cats.map(catName).join(' · ')}</div></div></div>
+      <div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div></div>`; })
+      : nf ? h`<div class="card flat"><p class="muted">Aucune séance avec ces filtres.</p><button class="btn" data-act="sfClear">Effacer les filtres</button></div>`
+      : empty(st === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
 }
+/* Trier et filtrer : une liste claire, comme les Paramètres. Plusieurs sports, lieux ou catégories à la fois. */
+function sfSheet() {
+  const f = sf(), all = S.seances.items.filter((s) => !s.archived);
+  const places = [...new Set([...ctx().envs.map((e) => e.id), ...all.map(placeOf)])];
+  const sports = [...new Set([...all.flatMap(sportsOf), ...Object.keys(ctx().activities)])];
+  const cats = [...new Set([...Object.keys(CATS).filter((k) => all.some((s) => categoriesOf(s).includes(k))), ...all.flatMap((s) => s.tags || [])])];
+  const count = filterSessions(S.seances.items, { ...f, status: S.filters.seances || 'active' }, S.history).length;
+  const group = (k, ids, name) => h`<div class="chips">${ids.map((x) => chip(f[k].includes(x), name(x), `data-act="sfTog" data-k="${k}" data-v="${x}"`))}</div>`;
+  openSheet(h`<div class="stack"><h2 style="margin:0">⇅ Trier et filtrer</h2>
+    <span class="kicker">Lieu</span>${places.length ? group('places', places, placeName) : h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>`}
+    <span class="kicker">Sports (un ou plusieurs)</span>${group('sports', sports, sportName)}
+    <span class="kicker">Catégories</span>${cats.length ? group('cats', cats, catName) : h`<p class="tiny muted">Aucune catégorie pour l’instant.</p>`}
+    <span class="kicker">Trier par</span>
+    <div class="setmenu">${Object.entries(SORTS).map(([k, [ic, l]]) => h`<button class="setrow" data-act="sfSort" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${l}</b>${k === 'form' ? h`<small>Les séances les plus adaptées à ton énergie d’aujourd’hui d’abord</small>` : ''}</span><span class="chev">${f.sort === k ? '✓' : ''}</span></button>${k === 'form' && f.sort === 'form' ? h`<div class="chips" style="padding:0 14px 12px">${Object.entries(FORMS).map(([fk, [e, l]]) => chip(f.form === fk, `${e} ${l}`, `data-act="sfForm" data-id="${fk}"`))}</div>` : ''}`)}</div>
+    <div class="grid2"><button class="btn" data-act="sfClear">Effacer</button><button class="btn pri" data-act="sfDone">Voir ${count} séance(s)</button></div></div>`);
+}
+ACT.sfOpen = () => sfSheet();
+ACT.sfSort = (el) => { sf().sort = el.dataset.id; sfSave(); render(); sfSheet(); };
+ACT.sfForm = (el) => { sf().form = el.dataset.id; sfSave(); render(); sfSheet(); };
+ACT.sfTog = (el) => { const f = sf(), k = el.dataset.k, v = el.dataset.v; f[k] = f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v]; sfSave(); render(); sfSheet(); };
+ACT.sfDrop = (el) => { const f = sf(); f[el.dataset.k] = f[el.dataset.k].filter((x) => x !== el.dataset.v); sfSave(); render(); };
+ACT.sfClear = () => { Object.assign(sf(), { places: [], sports: [], cats: [], q: '' }); sfSave(); closeSheet(); render(); };
+ACT.sfDone = () => closeSheet();
+let sfT = null;
+INPUT.sfQ = (el) => { sf().q = el.value; clearTimeout(sfT); sfT = setTimeout(() => { const pos = el.selectionStart; render(); const i = $('.sfbar input'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch { /* rien */ } } }, 250); };
 /** Nouvelle séance : les façons de la créer, expliquées en une ligne. */
 ACT.exMore = () => { S.exMore = true; render(); };
 ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>
@@ -167,8 +207,11 @@ function vEditor(s, mode) {
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
     ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
     <div class="card"><div class="row"><input type="text" data-change="sEmoji" value="${s.emoji}" maxlength="4" class="emoji-in" aria-label="Emoji"><input type="text" data-change="sName" value="${s.name}" maxlength="100" aria-label="Nom de la séance"></div>
-      <div class="grid2"><label>Activité<select data-change="sActivity"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
-      <label>Environnement<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}</select></label></div>
+      <div class="grid2"><label>Sport principal<select data-change="sActivity"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
+      <label>Lieu<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label></div>
+      <b class="small">Autres sports dans cette séance</b><div class="chips">${activityOptions().filter(([id]) => id !== s.activity).map(([id, e, l]) => chip((s.sports || []).includes(id), `${e} ${l}`, `data-act="sSport" data-id="${id}"`))}</div>
+      <b class="small">Catégories ${s.tags?.length ? '' : h`<span class="tiny muted">(reconnues automatiquement, touche pour choisir)</span>`}</b>
+      <div class="chips">${[...new Set([...Object.keys(CATS), ...(s.tags || [])])].map((k) => chip((s.tags?.length ? s.tags : autoCategories(s)).includes(k), catName(k), `data-act="sTag" data-id="${k}"`))}<button type="button" class="chip" data-act="sTagNew">＋ Autre</button></div>
       <div class="muted small">~${sessionMinutes(s)} min · ${s.exercises.length} exercice(s) ${levelTag(lv)}</div>
       <b class="small">Intentions</b><div class="chips">${Object.entries(INTENTIONS).map(([id, I]) => chip(intents.has(id), `${I.emoji} ${I.label}${intents.has(id) ? ' ×' + intents.get(id) : ''}`, `data-act="sIntent" data-id="${id}" title="Touche pour changer la priorité"`))}</div>
       <form data-submit="sAdapt" class="row"><label class="grow">Adapter la durée à<span class="unitbox"><input type="number" inputmode="numeric" name="minutes" min="5" max="240" value="${s.context.plannedMin || sessionMinutes(s)}"><em>min</em></span></label><button class="btn" type="submit">⏱ Reconstruire</button></form>
@@ -184,8 +227,13 @@ ACT.backSeances = () => go('library', 'seances');
 const edit = (fn) => { const e = editing(); if (!e) return; e.save(fn(e.s)); };
 CHG.sName = (el) => edit((s) => ({ ...s, name: el.value.trim() || 'Séance' }));
 CHG.sEmoji = (el) => edit((s) => ({ ...s, emoji: el.value.trim() || '🏋️' }));
-CHG.sActivity = (el) => edit((s) => ({ ...s, activity: el.value }));
-CHG.sEnv = (el) => edit((s) => { const env = ctx().envs.find((e) => e.id === el.value); return { ...s, context: { ...s.context, env: el.value, envName: env?.name || '', equipment: env?.equipment || s.context.equipment } }; });
+CHG.sActivity = (el) => edit((s) => ({ ...s, activity: el.value, sports: (s.sports || []).filter((x) => x !== el.value) }));
+CHG.sEnv = (el) => { if (el.value === '__new') { go('profile', 'equipment'); return; } edit((s) => { const env = ctx().envs.find((e) => e.id === el.value); return { ...s, context: { ...s.context, env: el.value, envName: env?.name || '', equipment: env?.equipment || s.context.equipment } }; }); };
+ACT.sSport = (el) => edit((s) => { const l = s.sports || [], id = el.dataset.id; return { ...s, sports: l.includes(id) ? l.filter((x) => x !== id) : [...l, id] }; });
+// Toucher une catégorie reconnue automatiquement fixe la liste à la main (les autres reconnues restent cochées).
+ACT.sTag = (el) => edit((s) => { const l = s.tags?.length ? s.tags : autoCategories(s), id = el.dataset.id; const n = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; return { ...s, tags: n.length ? n : [] }; });
+ACT.sTagNew = () => openSheet(h`<form data-submit="sTagGo" class="stack"><h2 style="margin:0">🏷 Nouvelle catégorie</h2><label>Nom<input name="tag" maxlength="30" required placeholder="Ex. Compétition, Vacances, Avec Léa"></label><button class="btn pri big">Ajouter</button></form>`);
+SUBMIT.sTagGo = (f) => { const t = String(new FormData(f).get('tag') || '').trim().slice(0, 30); if (!t) return; closeSheet(); edit((s) => { const l = s.tags?.length ? s.tags : autoCategories(s); return { ...s, tags: [...new Set([...l, t])].slice(0, 8) }; }); };
 CHG.sNotes = (el) => edit((s) => ({ ...s, notes: [...s.notes.filter((n) => n.title !== 'Notes'), ...(el.value.trim() ? [{ title: 'Notes', text: el.value.trim() }] : [])] }));
 ACT.sIntent = (el) => edit((s) => {
   const list = [...(s.intentions || [])], i = list.findIndex((x) => x.id === el.dataset.id);

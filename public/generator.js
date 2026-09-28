@@ -421,7 +421,7 @@ export function generateFromPlan(plan, ctx) {
   const name = plan.goalLabel ? `${plan.goalLabel} — ${plan.minutes} min` : `${plan.activityLabel} — ${plan.light ? 'séance légère' : plan.mode === 'strengths' ? 'points forts' : 'axes de progrès'} ${plan.minutes} min`;
   const session = normalizeSession({
     id: uid(), name, emoji: ACTIVITIES[plan.activityId]?.emoji || ctx.activities[plan.activityId]?.emoji || '🎯', goal: plan.goalId ? 'goal' : plan.mode, source: 'generated',
-    durationMin: sessionMinutes({ exercises }), objectives: [plan.intentionText], activity: plan.activityId, intentions: plan.intentions,
+    durationMin: sessionMinutes({ exercises }), objectives: [plan.intentionText], activity: plan.activityId, sports: (plan.parts || []).map((p) => p.activity).filter((a) => a && a !== plan.activityId), intentions: plan.intentions,
     context: { env: plan.envId, envName: plan.envName, equipment: plan.equipment, plannedMin: plan.minutes, goalId: plan.goalId },
     notes: [
       { title: 'Pourquoi cette séance', text: [plan.intentionText + '.', ...why].join('\n') },
