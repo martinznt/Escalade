@@ -587,3 +587,10 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 .setsec>summary{list-style:none}.setsec>summary::-webkit-details-marker{display:none}.setsec[open]>summary .chev{transform:rotate(90deg)}.setsec .secbody{padding:4px 12px 12px}.setsec .secbody:empty{display:none}
 .setmenu.secs{margin-top:12px}
 .retbar{display:flex;gap:6px;align-items:center;margin:0 0 10px}
+.pick-hidden{display:none!important}
+.pickbtn{display:flex;align-items:center;gap:8px;width:100%;min-height:46px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.pickbtn .chev{color:var(--muted)}
+#picker{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+#picker .pk-panel{width:100%;max-width:640px;max-height:86dvh;overflow:auto;background:var(--bg);border-radius:18px 18px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));display:grid;gap:10px;align-content:start}
+#picker .pk-q{position:sticky;top:0;z-index:1}
+.chipin{min-width:0;width:auto;flex:1 1 140px;max-width:220px;border-radius:999px;padding:8px 12px;min-height:38px;font-size:.9rem}

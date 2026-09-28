@@ -5,7 +5,7 @@ import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
 import { uid, normalizeEx, normalizeSession } from './shared.js';
-import { CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
+import { capOptionGroups, CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
 import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addLevel, moveLevel, removeLevel, renameLevel, setMapping, sortedLevels, gradeSnapshot, maximaSummary, snapshotText, REFERENCE, LEVEL_WORDS } from './grading.js';
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -118,7 +118,7 @@ function vActivityCard(a) {
     <div class="chips">${cats.map((x) => x.native ? h`<span class="chip static" title="${x.caps.map((k) => capL(k.id)).join(', ')}">${x.label}</span>` : chip(false, `${x.emoji ? x.emoji + ' ' : ''}${x.label} ✎`, `data-act="catEdit" data-id="${x.id}"`))}</div>
     ${sw.strengths.length || sw.weaknesses.length ? h`<div class="chips">${sw.strengths.slice(0, 3).map((s) => h`<button class="chip okc" data-act="capOpen" data-id="${s.capId}">💪 ${s.label}</button>`)}${sw.weaknesses.slice(0, 3).map((s) => h`<button class="chip warnc" data-act="capOpen" data-id="${s.capId}">🌱 ${s.label}</button>`)}</div>` : ''}</div>`;
 }
-ACT.actNew = () => openSheet(h`<h2 style="margin:0">Nouvelle activité</h2><form data-submit="actSave" class="stack"><input type="hidden" name="id" value=""><div class="row"><input name="emoji" value="🏅" maxlength="4" class="emoji-in" aria-label="Emoji"><input name="label" required maxlength="60" placeholder="Ex. Basketball, cyclisme, tennis…" aria-label="Nom"></div><label>Mots-clés (séparés par des virgules)<input name="aliases" maxlength="180"></label><button class="btn pri" type="submit">Créer</button></form>`);
+ACT.actNew = (el) => openSheet(h`<h2 style="margin:0">Nouvelle activité</h2><form data-submit="actSave" class="stack"><input type="hidden" name="id" value=""><div class="row"><input name="emoji" value="🏅" maxlength="4" class="emoji-in" aria-label="Emoji"><input name="label" required maxlength="60" value="${el?.dataset?.q || ''}" placeholder="Ex. Basketball, cyclisme, tennis…" aria-label="Nom"></div><label>Mots-clés (séparés par des virgules)<input name="aliases" maxlength="180"></label><button class="btn pri" type="submit">Créer</button></form>`);
 ACT.actEdit = (el) => { const a = item('activity', el.dataset.id); if (!a) return; openSheet(h`<h2 style="margin:0">Modifier l’activité</h2><form data-submit="actSave" class="stack"><input type="hidden" name="id" value="${a.id}"><div class="row"><input name="emoji" value="${a.emoji || '🏅'}" maxlength="4" class="emoji-in" aria-label="Emoji"><input name="label" required maxlength="60" value="${a.label}" aria-label="Nom"></div><label>Mots-clés<input name="aliases" maxlength="180" value="${(a.aliases || []).join(', ')}"></label><div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button><button class="btn danger" type="button" data-act="actArchive" data-id="${a.id}">Archiver</button></div></form>`); };
 SUBMIT.actSave = (f) => { const d = Object.fromEntries(new FormData(f)); const id = d.id || 'custom-' + uid().slice(0, 12); putItem('activity', id, { label: d.label, emoji: d.emoji, aliases: String(d.aliases || '').split(',').map((x) => x.trim()).filter(Boolean), preset: '', archived: false }); closeSheet(); buzzOk(); toast('Activité enregistrée'); render(); };
 ACT.actArchive = async (el) => { const a = item('activity', el.dataset.id); if (a && (await ask(`Archiver « ${a.label} » ?`, { detail: 'L’historique et les performances liées sont conservés.' }))) { putItem('activity', a.id, { ...a, archived: true }); closeSheet(); render(); } };
@@ -136,18 +136,20 @@ ACT.catNew = (el) => openSheet(catForm(null, el.dataset.id), { wide: true });
 ACT.catEdit = (el) => { const cat = item('category', el.dataset.id); if (cat) openSheet(catForm(cat, cat.activityId), { wide: true }); };
 SUBMIT.catSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd), prev = d.id ? item('category', d.id) || {} : {}; putItem('category', d.id || 'cat-' + uid().slice(0, 12), { emoji: prev.emoji, guide: prev.guide, howTo: prev.howTo, source: prev.source, activityId: d.activityId, label: d.label, description: d.description, caps: fd.getAll('caps').map((id) => ({ id, w: 1 })) }); closeSheet(); toast('Catégorie enregistrée'); render(); };
 ACT.catDel = async (el) => { const cat = item('category', el.dataset.id); if (!cat) return; const used = itemsOf('metric').some((m) => (m.caps || []).some((x) => x.id === cat.id)); if (!(await ask(`Supprimer la catégorie « ${cat.label} » ?`, { danger: true, ok: used ? 'Archiver' : 'Supprimer', detail: used ? 'Des métriques y sont reliées : elle sera archivée (masquée) pour ne rien casser.' : '' }))) return; if (used) putItem('category', cat.id, { ...cat, archived: true }); else delItem('category', cat.id); closeSheet(); render(); };
-function metricForm(m) {
+function metricForm(m, pre = '') {
   const c = ctx(), caps = new Set((m?.caps || []).map((x) => x.id));
   return h`<h2 style="margin:0">${m ? 'Modifier la métrique' : 'Nouvelle métrique'}</h2><form data-submit="metricSave" class="stack"><input type="hidden" name="id" value="${m?.id || ''}">
-    <label>Ce qui est mesuré<input name="label" required maxlength="80" value="${m?.label || ''}" placeholder="Ex. Détente au panier, 40 km vélo…"></label>
+    <label>Ce qui est mesuré<input name="label" required maxlength="80" value="${m?.label || pre}" placeholder="Ex. Détente au panier, 40 km vélo…"></label>
     <div class="grid2"><label>Unité<input name="unit" maxlength="20" value="${m?.unit || ''}" placeholder="reps, kg, s, km, cm…"></label><label>Sens<select name="dir"><option value="1" ${m?.dir !== -1 ? 'selected' : ''}>Plus c’est haut, mieux c’est</option><option value="-1" ${m?.dir === -1 ? 'selected' : ''}>Plus c’est bas, mieux c’est (temps)</option></select></label></div>
     <label>Activité<select name="activityId"><option value="">Toutes</option>${Object.values(c.activities).map((a) => h`<option value="${a.id}" ${m?.activityId === a.id ? 'selected' : ''}>${a.label}</option>`)}</select></label>
     <label>Capacités suivies</label><div class="chips">${[...Object.entries(CAPACITIES), ...Object.values(c.categories).map((x) => [x.id, { label: x.label + ' (catégorie)' }])].map(([id, x]) => h`<label class="chip ${caps.has(id) ? 'on' : ''}"><input type="checkbox" class="hidden" name="caps" value="${id}" ${caps.has(id) ? 'checked' : ''} data-change="chipToggle">${x.label}</label>`)}</div>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${m ? h`<button class="btn danger" type="button" data-act="metricArchive" data-id="${m.id}">Archiver</button>` : ''}</div></form>`;
 }
-ACT.metricNew = () => openSheet(metricForm(null), { wide: true });
+ACT.metricNew = (el) => { S.metricBack = el?.dataset?.from === 'metricId' && document.querySelector('#sheet form[data-submit=perfSave]') ? 'perf' : ''; openSheet(metricForm(null, el?.dataset?.q || ''), { wide: true }); };
 ACT.metricEdit = (el) => { const m = item('metric', el.dataset.id); if (m) openSheet(metricForm(m), { wide: true }); };
-SUBMIT.metricSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd); putItem('metric', d.id || 'm-' + uid().slice(0, 12), { label: d.label, unit: d.unit, dir: Number(d.dir) === -1 ? -1 : 1, activityId: d.activityId, kind: 'other', caps: fd.getAll('caps').map((id) => ({ id, w: 1 })) }); closeSheet(); toast('Métrique enregistrée'); render(); };
+SUBMIT.metricSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd), mid = d.id || 'm-' + uid().slice(0, 12); putItem('metric', mid, { label: d.label, unit: d.unit, dir: Number(d.dir) === -1 ? -1 : 1, activityId: d.activityId, kind: 'other', caps: fd.getAll('caps').map((id) => ({ id, w: 1 })) }); closeSheet(); toast('Mesure enregistrée'); render();
+  // Créée depuis la liste d'une saisie : on revient à la saisie, avec cette mesure choisie.
+  if (S.metricBack === 'perf') { S.metricBack = ''; setTimeout(() => ACT.perfAdd({ dataset: { id: mid } }), 150); } };
 ACT.metricArchive = (el) => { const m = item('metric', el.dataset.id); if (m) { putItem('metric', m.id, { ...m, archived: true }); closeSheet(); toast('Métrique archivée (performances conservées)'); render(); } };
 
 /* ═════════ Performances (valeurs observées) ═════════ */
@@ -171,7 +173,7 @@ function perfForm(p, metricId) {
   const styles = Object.values(c.styles).filter((s) => !s.archived && (s.activity === 'climbing' || !s.activity || s.activity === 'escalade'));
   const d = p?.date ? new Date(p.date) : new Date();
   return h`<h2 style="margin:0">${p ? 'Modifier la performance' : 'Nouvelle performance'}</h2><form data-submit="perfSave" class="stack"><input type="hidden" name="id" value="${p?.id || ''}">
-    <label>Métrique<select name="metricId" data-change="perfMetric" required><option value="">— choisir —</option>${list.map(([id, x]) => h`<option value="${id}" ${id === mid ? 'selected' : ''}>${x.label}${x.native ? '' : ' (perso)'}</option>`)}</select></label>
+    <label>Métrique<select name="metricId" data-change="perfMetric" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure" required><option value="">— choisir —</option>${metricOptions(list, mid)}</select></label>
     ${m?.test ? h`<p class="tiny muted">Protocole : ${m.test}</p>` : ''}${m?.tiers ? h`<p class="tiny muted">${metricTierText(m)}</p>` : ''}
     ${isGrade ? h`<label>Système de cotation<select name="systemId" data-change="perfSystem">${systems.map((s) => h`<option value="${s.id}" ${(p?.grade?.systemId || S.perfSys) === s.id ? 'selected' : ''}>${s.name}</option>`)}</select></label>
       <label>Niveau<select name="levelId">${sortedLevels(c.systems[p?.grade?.systemId || S.perfSys] || systems[0]).map((l) => h`<option value="${l.id}" ${p?.grade?.levelId === l.id ? 'selected' : ''}>${l.label}</option>`)}</select></label>
@@ -361,7 +363,7 @@ function goalForm(g) {
   return h`<h2 style="margin:0">${g ? 'Modifier l’objectif' : 'Nouvel objectif'}</h2><form data-submit="goalSave" class="stack"><input type="hidden" name="id" value="${g?.id || ''}">
     <label>Type<select name="type" data-change="goalType">${[['skill', 'Figure / skill'], ['metric', 'Performance à atteindre'], ['grade', 'Niveau d’escalade'], ['sessions', 'Nombre de séances'], ['ascents', 'Réussites en escalade'], ['custom', 'Autre (valeur manuelle)']].map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label>
     ${t === 'skill' ? h`<label>Figure<select name="skillId">${Object.entries(SKILLS).map(([id, s]) => h`<option value="${id}" ${g?.skillId === id ? 'selected' : ''}>${s.emoji} ${s.label}</option>`)}</select></label>` : ''}
-    ${t === 'metric' ? h`<label>Métrique<select name="metricId">${Object.entries(c.metrics).filter(([, m]) => m.kind !== 'grade').map(([id, m]) => h`<option value="${id}" ${g?.metricId === id ? 'selected' : ''}>${m.label}</option>`)}</select></label>${numberField('target', 'Valeur visée', g?.target ?? '', { required: true })}` : ''}
+    ${t === 'metric' ? h`<label>Métrique<select name="metricId" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure">${metricOptions(Object.entries(c.metrics).filter(([, m]) => m.kind !== 'grade'), g?.metricId)}</select></label>${numberField('target', 'Valeur visée', g?.target ?? '', { required: true })}` : ''}
     ${t === 'grade' ? h`<label>Discipline<select name="metricId"><option value="max_bloc" ${g?.metricId !== 'max_voie' ? 'selected' : ''}>Bloc</option><option value="max_voie" ${g?.metricId === 'max_voie' ? 'selected' : ''}>Voie</option></select></label><label>Système<select name="systemId" data-change="goalSys">${systems.map((s) => h`<option value="${s.id}" ${(g?.gradeTarget?.systemId || S.goalSys || 'font') === s.id ? 'selected' : ''}>${s.name}</option>`)}</select></label><label>Niveau visé<select name="levelId">${sortedLevels(c.systems[g?.gradeTarget?.systemId || S.goalSys || 'font']).map((l) => h`<option value="${l.id}" ${g?.gradeTarget?.levelId === l.id ? 'selected' : ''}>${l.label}</option>`)}</select></label>` : ''}
     ${['sessions', 'ascents', 'custom'].includes(t) ? h`<label>Nom<input name="label" maxlength="80" value="${g?.label || ''}" required placeholder="${t === 'sessions' ? '3 séances par semaine pendant 1 mois' : 'Mon objectif'}"></label>${numberField('target', 'Cible', g?.target ?? '', { required: true })}${t === 'custom' ? numberField('current', 'Valeur actuelle', g?.current ?? 0) : ''}` : ''}
     ${['metric', 'grade', 'skill'].includes(t) ? h`<label>Nom (facultatif)<input name="label" maxlength="80" value="${g?.label || ''}"></label>` : ''}
@@ -472,7 +474,7 @@ function goalGraph(g) {
 function goalWhatIf(g) {
   const caps = goalCaps(g, ctx()), cap = S.whatCap || caps[0]?.id, n = S.whatN || 2;
   const w = cap ? whatIf(cap, n, ctx()) : null;
-  return h`<div class="card"><h3>Simulation « Et si… ? »</h3><label>Si je travaillais<select data-change="whatCap">${caps.map((x) => h`<option value="${x.id}" ${x.id === cap ? 'selected' : ''}>${capL(x.id)}</option>`)}</select></label>
+  return h`<div class="card"><h3>Simulation « Et si… ? »</h3><label>Si je travaillais<select data-change="whatCap">${raw(capOptionGroups(caps.map((x) => x.id), cap, capL))}</select></label>
     <div class="chips">${[1, 2, 3, 4].map((k) => chip(n === k, `${k}× / semaine`, `data-act="whatN" data-id="${k}"`))}</div>${w ? h`<p class="small">${w.text}</p><p class="tiny muted">${w.disclaimer}</p>` : ''}</div>`;
 }
 CHG.whatCap = (el) => { S.whatCap = el.value; render(); };
@@ -483,6 +485,27 @@ function goalWhy(g) {
 }
 
 /* ═════════ Matériel et environnements ═════════ */
+/* Longues listes de mesures : rangées par catégorie (et triées dans le sélecteur). */
+const METRIC_GROUPS = [['grade', '🧗 Niveaux d’escalade'], ['doigts', '✋ Doigts'], ['haut', '💪 Haut du corps'], ['gainage', '🧱 Gainage'], ['jambes', '🦵 Jambes et explosivité'], ['souplesse', '🤸 Souplesse'], ['course', '🏃 Course'], ['natation', '🏊 Natation'], ['corps', '⚖️ Corps'], ['perso', '✍️ Mes mesures'], ['autre', '📏 Autres']];
+export function metricGroup(id, m) {
+  const caps = Object.keys(m.caps || {}), has = (re) => caps.some((c) => re.test(c));
+  if (!m.native) return 'perso';
+  if (m.kind === 'grade') return 'grade';
+  if ((m.acts || []).includes('running')) return 'course';
+  if ((m.acts || []).includes('swimming')) return 'natation';
+  if (/^body_|poids|taille/.test(id)) return 'corps';
+  if (has(/doigts|pince/)) return 'doigts';
+  if (has(/^mobilite/)) return 'souplesse';
+  if (has(/^gainage/)) return 'gainage';
+  if (has(/jambes|explosivite|chaine_posterieure/)) return 'jambes';
+  if (has(/tirage|poussee|blocage|scapulaire|epaules/)) return 'haut';
+  return 'autre';
+}
+function metricOptions(list, selected) {
+  const by = new Map(METRIC_GROUPS.map(([k]) => [k, []]));
+  for (const [id, x] of list) by.get(metricGroup(id, x))?.push([id, x]);
+  return h`${METRIC_GROUPS.filter(([k]) => by.get(k).length).map(([k, l]) => h`<optgroup label="${l}">${by.get(k).sort((a, b) => a[1].label.localeCompare(b[1].label, 'fr')).map(([id, x]) => h`<option value="${id}" ${id === selected ? 'selected' : ''}>${x.label}</option>`)}</optgroup>`)}`;
+}
 /** Contexte d'une mesure : le lieu précis (salle ou falaise) et le secteur. */
 function perfContext(d) {
   const env = ctx().envs.find((e) => e.id === d.ctxEnv);

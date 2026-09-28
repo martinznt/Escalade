@@ -13,6 +13,7 @@ import { surprise, surpriseClimbParts, AIMS } from './surprise.js';
 import { intentsFor, AVOID_ZONES, FORMES } from './intentions.js';
 import { activeGoals, goalLabel } from './brain.js';
 import { presetParts } from './format.js';
+import { extraIntents } from './views-gen.js';
 import { setReturn } from './nav.js';
 import { EQUIPMENT } from './model.js';
 import { ACTIVITIES } from './model.js';
@@ -79,12 +80,12 @@ function vWhy() {
   const aim = c.aim && AIM.some(([k]) => k === c.aim) ? c.aim : 'goals';
   let detail = '';
   if (aim === 'goals') {
-    const ints = intentsFor(c.sport, []);
+    const ints = intentsFor(c.sport, extraIntents());
     detail = h`<div class="card stack"><span class="kicker">Mes objectifs <span class="tiny muted">(plusieurs possibles)</span></span>
       ${goals.length ? h`<div class="chips">${goals.map((g) => chip((c.goalIds || []).includes(g.id), goalLabel(g), `data-act="cpGoal" data-id="${g.id}"`))}</div>` : h`<p class="small muted">Aucun objectif en cours.</p>`}
       <button class="btn sm" data-act="cpAddGoals">＋ Ajouter des objectifs ici</button>
       <span class="kicker">Ce que je veux travailler <span class="tiny muted">(facultatif)</span></span>
-      <div class="chips">${ints.map((it) => chip((c.intents || []).includes(it.id), `${it.emoji} ${it.label}`, `data-act="cpIntent" data-id="${it.id}"`))}</div>
+      <div class="chips">${ints.map((it) => chip((c.intents || []).includes(it.id), `${it.emoji} ${it.label}`, `data-act="cpIntent" data-id="${it.id}"`))}<button type="button" class="chip add" data-act="cpIntentWrite">✍️ Autre, avec mes mots</button></div>
       <span class="kicker">Zones à ménager <span class="tiny muted">(facultatif)</span></span>
       <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div></div>`;
   } else if (aim === 'grade') {
@@ -94,7 +95,7 @@ function vWhy() {
     detail = h`<div class="card stack"><span class="kicker">À la fin, je veux avoir réussi</span>
       ${levels.length <= 16 ? h`<div class="chips">${levels.map((l, i) => chip(i === t, l.label, `data-act="cpTarget" data-id="${i}"`))}</div>` : h`<select data-change="cpTargetSel">${levels.map((l, i) => h`<option value="${i}" ${i === t ? 'selected' : ''}>${l.label}</option>`)}</select>`}
       <span class="kicker">En <span class="tiny muted">(un ou plusieurs styles, ou aucun)</span></span>
-      <div class="chips">${climbStyles().map((st) => chip(c.styles.includes(st.id), st.label, `data-act="cpStyle" data-id="${st.id}"`))}</div>
+      <div class="chips">${climbStyles().sort((a, b) => a.label.localeCompare(b.label, 'fr')).map((st) => chip(c.styles.includes(st.id), st.label, `data-act="cpStyle" data-id="${st.id}"`))}<input class="chipin" data-change="styleQuick" data-target="cp" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
       ${advice ? h`<p class="small ${/ambitieux/.test(advice) ? 'warn-t' : 'muted'}">${advice}</p>` : h`<p class="tiny muted">Note ton maximum dans <button class="linkish acc-t" data-act="allGo" data-to="profile/climbing">Profil › Carnet</button> pour un conseil sur l’objectif.</p>`}</div>`;
   } else if (aim === 'surprise') {
     detail = h`<div class="setmenu">${Object.entries(AIMS).map(([k, [ic, t, d]]) => h`<button class="setrow" data-act="cpSurAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${(c.surAim || 'any') === k ? '✓' : ''}</span></button>`)}</div>`;
@@ -125,7 +126,7 @@ function proposeParts() {
 }
 const FORME_MAP = { exhausted: 'low', tired: 'low', ok: 'normal', fresh: 'normal', top: 'top' };
 function buildOpts() {
-  const c = CP(), env = envOf(), x = ctx(), ints = intentsFor(c.sport, []).filter((it) => (c.intents || []).includes(it.id)).map((it) => ({ label: it.label, caps: it.caps }));
+  const c = CP(), env = envOf(), x = ctx(), ints = intentsFor(c.sport, extraIntents()).filter((it) => (c.intents || []).includes(it.id)).map((it) => ({ label: it.label, caps: it.caps }));
   const names = (c.goalIds || []).map((id) => x.goals.find((g) => g.id === id)).filter(Boolean).map(goalLabel);
   const levels = levelsOf(kindOf(c.sport)), t = c.targetShown ?? c.target;
   const goal = c.aim === 'grade' ? `Réussir ${kindOf(c.sport) === 'voie' ? 'une voie' : 'un bloc'} ${levels[t]?.label || ''}${c.styles.length ? ' en ' + c.styles.map((id) => x.styles[id]?.label?.toLowerCase() || id).join(', ') : ''}.`
@@ -156,6 +157,7 @@ ACT.cpForme = (el) => { CP().forme = el.dataset.id; keep(); render(); };
 ACT.cpAim = (el) => { CP().aim = el.dataset.id; keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };
+ACT.cpIntentWrite = () => { S.gen.activityId = CP().sport; ACT.gWrite?.({ dataset: { k: 'intent' } }); };
 ACT.cpGoal = tog('goalIds'); ACT.cpIntent = tog('intents'); ACT.cpZone = tog('zones');
 // Aller ajouter des objectifs, puis revenir à la séance (le brouillon est gardé).
 ACT.cpAddGoals = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'goals'); };
@@ -310,7 +312,7 @@ function editPart(i) {
     <div class="grid2"><label>De<select data-change="cpPartLv" data-i="${i}" data-k="from">${opt(lo)}</select></label><label>À<select data-change="cpPartLv" data-i="${i}" data-k="to">${opt(hi)}</select></label></div>
     ${p.from != null ? h`<button class="btn sm ghost" data-act="cpPartAuto" data-i="${i}">↺ Cotations automatiques</button>` : ''}
     <span class="kicker">Styles <span class="tiny muted">(plusieurs possibles)</span></span>
-    <div class="chips">${climbStyles().map((s) => chip((p.styles || []).includes(s.id), s.label, `data-act="cpPartStyle" data-i="${i}" data-id="${s.id}"`))}</div>
+    <div class="chips">${climbStyles().sort((a, b) => a.label.localeCompare(b.label, 'fr')).map((s) => chip((p.styles || []).includes(s.id), s.label, `data-act="cpPartStyle" data-i="${i}" data-id="${s.id}"`))}<input class="chipin" data-change="styleQuick" data-target="cpPart" data-i="${i}" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
     <span class="kicker">Comment structurer cette partie ?</span>
     <div class="setmenu">${props.map((s) => h`<button class="setrow ${s.fit ? '' : 'dim'}" data-act="cpPart" data-i="${i}" data-k="structure" data-v="${s.id}"><span class="sic">${s.emoji}</span><span class="grow"><b>${s.name}</b><small>${s.desc}${s.fit ? '' : ' (moins adapté à cette intensité)'}</small></span><span class="chev">${cur === s.id ? '✓' : ''}</span></button>`)}</div>
     ${i > 0 ? h`<label class="row"><input type="checkbox" data-change="cpPartAdapt" data-i="${i}" ${p.adapt ? 'checked' : ''}><span class="grow"><b>Adapter à ce que j’ai fait avant</b><small class="muted"> Moins de doigts ou de puissance si les parties d’avant en ont beaucoup demandé.</small></span></label>

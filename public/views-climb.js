@@ -78,7 +78,7 @@ function aqBody() {
         ${cur && whereOf(cur) === 'falaise' ? h`<label>Secteur</label><div class="chips">${(cur.sectors || []).map((x) => chip(q.sector === x, x, `data-act="aqSector" data-v="${x}"`))}</div><input id="aq-sector" maxlength="60" value="${(cur.sectors || []).includes(q.sector) ? '' : q.sector || ''}" placeholder="Autre secteur (il sera ajouté à la falaise)">` : ''}`; })() : ''}
     <label>Niveau <span class="tiny muted">(${sys?.name || ''})</span></label>${gradeChips(sys, q.levelId, 'aqGrade')}
     ${lv ? h`<label>Pour un ${lv.label}, c’était…</label><div class="chips">${NUANCE.map(([k, l]) => chip(q.nuance === k, l, `data-act="aqNuance" data-v="${k}"`))}</div>` : ''}
-    <label>Style <span class="tiny muted">(plusieurs choix)</span></label><div class="chips">${styles.map((st) => chip((q.styles || []).includes(st.id), st.label, `data-act="aqStyle" data-v="${st.id}"`))}</div>
+    <label>Style <span class="tiny muted">(plusieurs choix)</span></label><div class="chips">${styles.sort((a, b) => a.label.localeCompare(b.label, 'fr')).map((st) => chip((q.styles || []).includes(st.id), st.label, `data-act="aqStyle" data-v="${st.id}"`))}<input class="chipin" data-change="styleQuick" data-target="aq" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
     <label>Résultat</label><div class="chips">${results.map(([k, l]) => h`<button type="button" class="chip ${q.result === k ? 'on' : ''}" data-act="aqResult" data-v="${k}">${l}</button>`)}</div>
     ${q.result !== 'flash' ? h`<label>Essais</label><div class="stepper sm"><button type="button" data-act="aqAtt" data-d="-1" aria-label="Moins">−</button><b>${q.attempts}</b><button type="button" data-act="aqAtt" data-d="1" aria-label="Plus">+</button></div>` : ''}
     <details class="how mini"><summary>Plus de détails</summary><label>Nom<input id="aq-name" maxlength="80" value="${q.name || ''}" placeholder="Le jaune du dévers…"></label>
@@ -98,6 +98,17 @@ ACT.aqWhere = (el) => { S.aq.where = el.dataset.v; const g = ctx().envs.find((e)
 ACT.aqSector = (el) => { S.aq.sector = S.aq.sector === el.dataset.v ? '' : el.dataset.v; const i = $('#aq-sector'); if (i) i.value = ''; openSheet(aqBody()); };
 ACT.aqNewPlace = (el) => { closeSheet(); setReturn('Retour au carnet', 'profile/climbing'); go('profile', 'equipment'); setTimeout(() => (el.dataset.v === 'falaise' ? ACT.envNewCrag : ACT.envNewGym)?.(), 200); };
 ACT.aqEnv = (el) => { const c = ctx(), g = c.envs.find((e) => e.id === el.dataset.v); S.aq.env = el.dataset.v; S.aq.sector = ''; if (g?.gradeSys && c.systems[g.gradeSys]) { S.aq.systemId = g.gradeSys; S.aq.levelId = ''; } aqDraw(); };
+/** Style absent de la liste : créé (pour tous tes prochains choix) et coché tout de suite. */
+CHG.styleQuick = (el) => {
+  const label = el.value.trim().slice(0, 40); if (!label) return; el.value = '';
+  const c = ctx(), found = Object.values(c.styles).find((x) => !x.archived && x.label.toLowerCase() === label.toLowerCase());
+  const id = found?.id || 'st-u-' + uid().slice(0, 10); if (!found) putItem('style', id, { label, activity: 'climbing' });
+  const t = el.dataset.target;
+  if (t === 'aq') { (S.aq.styles ||= []).includes(id) || S.aq.styles.push(id); aqDraw(); }
+  else if (t === 'cp') { const cp = S.cp; if (cp && !cp.styles.includes(id)) cp.styles.push(id); render(); }
+  else if (t === 'cpPart') { const p = S.cp?.parts?.[Number(el.dataset.i)]; if (p) { p.styles = [...new Set([...(p.styles || []), id])]; render(); ACT.cpEdit?.({ dataset: { i: el.dataset.i } }); } }
+  toast(found ? `« ${found.label} » coché` : `Style « ${label} » ajouté`);
+};
 ACT.aqNuance = (el) => { S.aq.nuance = S.aq.nuance === el.dataset.v ? '' : el.dataset.v; aqDraw(); };
 ACT.aqStyle = (el) => { const l = (S.aq.styles ||= []), i = l.indexOf(el.dataset.v); if (i >= 0) l.splice(i, 1); else l.push(el.dataset.v); aqDraw(); };
 ACT.aqKind = (el) => { S.aq.kind = el.dataset.id; S.aq.systemId = sysFor(el.dataset.id)?.id; S.aq.levelId = ''; aqDraw(); };

@@ -41,6 +41,11 @@ export const CAPACITIES = {
   technique_course: { label: 'Technique de course', family: 'technique', desc: 'Économie et posture de course.' },
   technique_nage: { label: 'Technique de nage', family: 'technique', desc: 'Efficacité, glisse et respiration dans l’eau.' },
 };
+/** Options d'une liste de capacités, rangées par famille (Force, Puissance…), pour le sélecteur. */
+export function capOptionGroups(ids, selected, label = (id) => CAPACITIES[id]?.label || id) {
+  const by = {}; for (const id of ids) { const f = CAPACITIES[id]?.family || 'autre'; (by[f] ||= []).push(id); }
+  return Object.entries(by).map(([f, list]) => `<optgroup label="${CAP_FAMILIES[f] || 'Autres'}">${list.sort((a, b) => String(label(a)).localeCompare(String(label(b)), 'fr')).map((id) => `<option value="${id}"${id === selected ? ' selected' : ''}>${String(label(id)).replace(/[<>&"]/g, '')}</option>`).join('')}</optgroup>`).join('');
+}
 export const CAP_FAMILIES = { force: 'Force', puissance: 'Puissance', gainage: 'Gainage', endurance: 'Endurance', technique: 'Technique', mobilite: 'Mobilité', prevention: 'Prévention' };
 
 /* ───────── Muscles (noms français, vue de face / de dos) et leur lien vers les capacités ───────── */
