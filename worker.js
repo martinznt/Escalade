@@ -14,7 +14,7 @@ import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.20.0';
+const APP_VERSION = '8.21.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -1042,8 +1042,11 @@ async function proposalCreate(request, env, u) {
   if (GLOBAL_KINDS.includes(kind) && kind !== 'intent' && !data) return fail('Proposition incomplète : il manque des informations.');
   if (await limited(env, 'prop:' + u.id, 10, DAY)) return fail('Tu as déjà fait beaucoup de propositions aujourd’hui : merci ! Réessaie demain.', 429);
   // target : l'élément existant à modifier (demande de modification), sinon c'est un ajout.
+  const PLACE_SEL = /^[\w\s\-\[\]="'#.:()>,*]{1,200}$/;
   const target = GLOBAL_KINDS.includes(kind) && GLOBAL_ID.test(String(b?.target || '')) ? String(b.target) : '';
-  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps), ...(data ? { data } : {}), from: str(b?.from, 80), ...(target ? { target } : {}) };
+  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps), ...(data ? { data } : {}), from: str(b?.from, 80), ...(target ? { target } : {}),
+    // Endroit touché dans l'app (idée) : sélecteur simple et texte visible, pour que l'admin y aille en un clic.
+    ...(PLACE_SEL.test(String(b?.sel || '')) ? { sel: String(b.sel), snippet: str(b?.snippet, 120) } : {}) };
   const id = 'pr-' + uid().slice(0, 12), activity = /^[\w:.-]{0,60}$/.test(String(b?.activityId || '')) ? String(b?.activityId || '') : '';
   await db(env, 'INSERT INTO proposals(id,user_id,kind,activity,label,detail,payload_json,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)', id, u.id, kind, activity, label, detail, JSON.stringify(payload), 'open', Date.now()).run();
   // Prévenir les administrateurs (notification sur leurs appareils abonnés ; best effort)

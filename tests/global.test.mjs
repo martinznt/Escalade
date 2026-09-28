@@ -154,5 +154,13 @@ await ok('idée libre : envoyée aux admins avec l’endroit d’où elle vient'
   const p = (await A.get('/api/admin/proposals')).data.proposals.find((x) => x.id === r.data.id);
   assert.equal(p.payload.from, '#/progress');
 });
+await ok('idée avec l’endroit à changer : sélecteur et texte gardés ; sélecteur dangereux ignoré', async () => {
+  const r = await B.post('/api/proposals', { kind: 'idea', label: 'Texte pas clair', detail: 'Ce bouton n’est pas clair', from: '#/home/dash', sel: '[data-act="genOpen"]', snippet: 'Séance du jour' });
+  const p = (await A.get('/api/admin/proposals')).data.proposals.find((x) => x.id === r.data.id);
+  assert.equal(p.payload.sel, '[data-act="genOpen"]'); assert.equal(p.payload.snippet, 'Séance du jour');
+  const r2 = await B.post('/api/proposals', { kind: 'idea', label: 'Autre idée', detail: 'Encore une idée', sel: '<img src=x onerror=alert(1)>', snippet: 'a' });
+  const p2 = (await A.get('/api/admin/proposals')).data.proposals.find((x) => x.id === r2.data.id);
+  assert.equal(p2.payload.sel, undefined); assert.equal(p2.payload.snippet, undefined);
+});
 
 done('tests du contenu global');

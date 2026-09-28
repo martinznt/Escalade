@@ -351,15 +351,17 @@ await step('commande naturelle : « je n’ai que 12 minutes » reconstruit la s
 });
 await step('« Que faire aujourd’hui ? » et tableau de bord personnalisé', async () => {
   assert.match(await a.text('main'), /Que faire aujourd’hui/);
-  // Mode édition : rien ne change sans deux validations
+  // Mode édition : explication claire, « ✕ Quitter » en haut, aperçu avant d'enregistrer
   await a.click('.topicons [data-act=layEdit]'); await A.waitForSelector('.edlist');
+  assert.match(await a.text('.editbar'), /Grand[\s\S]*Icône[\s\S]*Masqué/); assert.equal(await a.count('header [data-act=layQuit], .topicons [data-act=layQuit], [data-act=layQuit]') >= 1, true);
   await a.click('[data-act=layAs][data-id=records][data-v=big]'); await a.click('[data-act=layAs][data-id=timer][data-v=icon]');
   await a.click('[data-act=layPick][data-id=gen]'); await a.click('[data-act=layColor][data-id=gen][data-v="#5fa8d3"]');
-  await a.click('[data-act=layCancel]'); await A.waitForSelector('.quick [data-act=timerOpen]'); assert.equal(await a.count('h3:has-text("Records")'), 0, 'annulé : rien n’a changé');
+  await A.locator('[data-act=layQuit]').first().click(); await a.confirm(); await A.waitForSelector('.quick [data-act=timerOpen]'); assert.equal(await a.count('h3:has-text("Records")'), 0, 'quitté : rien n’a changé');
   await a.click('.topicons [data-act=layEdit]'); await a.click('[data-act=layAs][data-id=records][data-v=big]'); await a.click('[data-act=layAs][data-id=timer][data-v=icon]');
   await a.click('[data-act=layPick][data-id=gen]'); await a.click('[data-act=layColor][data-id=gen][data-v="#5fa8d3"]');
-  await a.click('[data-act=laySave]'); await A.waitForSelector('#dialog.open'); await A.click('#dialog.open [data-dlg="0"]'); await A.waitForSelector('.edlist'); // 1re validation refusée : on reste en édition
-  await a.click('[data-act=laySave]'); await confirm2(A);
+  await a.click('.editdock [data-act=layPreview]'); await A.waitForSelector('h3:has-text("Records")'); assert.equal(await a.count('.topicons [data-act=timerOpen]'), 1, 'aperçu : minuteur en icône');
+  await a.click('.editdock [data-act=layBack]'); await A.waitForSelector('.edlist');
+  await a.click('.editdock [data-act=laySave]'); await a.confirm();
   await A.waitForSelector('h3:has-text("Records")'); assert.equal(await a.count('.quick [data-act=timerOpen]'), 0);
   assert.equal(await a.count('.topicons [data-act=timerOpen]'), 1, 'minuteur passé en icône en haut');
   assert.equal(await a.count('.slot[style*="#5fa8d3"] [data-act=genOpen]'), 1, 'couleur appliquée');
@@ -667,6 +669,25 @@ await step('demande de modification d’un non-administrateur → l’admin l’
   await B.waitForSelector(`#main :text("${old} (demande)")`, { timeout: 10000 });
   cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
   await C.waitForSelector('text=Rien n’a encore été changé');
+});
+await step('idée avec l’endroit : B vise un élément, l’admin y est emmené et le modifie pour tout le monde', async () => {
+  cur = B; await b.tab('home'); await B.evaluate(() => { location.hash = '#/settings/main'; }); await B.waitForSelector('[data-act=ideaNew]');
+  await b.click('[data-act=ideaNew]'); await B.fill('#sheet textarea[name=detail]', 'Ce titre pourrait être plus clair');
+  await b.click('#sheet [data-act=ideaPick]'); await B.waitForSelector('#pickbar');
+  await b.click('#pickbar [data-act=pickNav]'); await b.tab('library'); await B.waitForSelector('#main h1');
+  await b.click('#pickbar [data-act=pickAim]'); await B.locator('#main h1').first().click(); await B.waitForSelector('#pickbar [data-act=pickOk]');
+  await b.click('#pickbar [data-act=pickOk]'); await B.waitForSelector('#sheet :text("Endroit joint")');
+  assert.match(await b.text('#sheet'), /Bibliothèque/); await b.click('#sheet form[data-submit=ideaGo] button.pri'); await B.waitForSelector('#toast.show:has-text("Merci")');
+  let id; await poll(async () => { const p = (await c.api('GET', '/api/admin/proposals')).data.proposals.find((x) => x.payload?.sel && /plus clair/.test(x.detail || '')); id = p?.id; return !!p; }, 10000, 'idée reçue avec son endroit');
+  cur = C; await C.reload(); await C.waitForSelector('nav.tabs'); await c.click('.topicons [data-act=notifOpen]');
+  await C.waitForSelector(`#sheet [data-act=propOpen][data-id="${id}"]`, { timeout: 10000 }); await c.click(`#sheet [data-act=propOpen][data-id="${id}"]`);
+  await C.waitForFunction(() => location.hash.startsWith('#/library')); await C.waitForSelector('#sheet [data-act=propEditPlace]');
+  await c.click('#sheet [data-act=propSee]'); await C.waitForSelector('#propbar'); await c.click('#propbar [data-act=propEditPlace]');
+  await C.waitForSelector('#sheet form[data-submit=textSave]'); await C.fill('#sheet textarea[name=to]', 'Ma bibliothèque');
+  await c.click('#sheet form[data-submit=textSave] button.pri'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
+  await c.click('.topicons [data-act=notifOpen]'); await c.click(`#sheet [data-act=propOpen][data-id="${id}"]`); await C.waitForSelector('#sheet button[value=accept]'); await c.click('#sheet button[value=accept]');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await B.waitForSelector('#main h1:has-text("Ma bibliothèque")', { timeout: 10000 });
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
 });
 await step('admin sans code : réécrire un texte et envoyer une annonce ; l’autre compte les voit ; tout s’annule', async () => {
   cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=textModeOn]'); await C.waitForSelector('#textbar');

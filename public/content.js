@@ -2,7 +2,7 @@
 // Tout le monde peut modifier « pour moi » (lié à son compte). Un administrateur choisit à chaque fois :
 // « pour moi » ou « pour tout le monde » (enregistré sur le serveur, appliqué à tous les comptes).
 import { h, raw, openSheet, closeSheet, toast, ask, menuList, relDate } from './ui.js';
-import { S, ACT, SUBMIT, api, ls, render, itemsOf, putItem, delItem, item, go } from './state.js';
+import { S, ACT, SUBMIT, INPUT, api, ls, render, itemsOf, putItem, delItem, item, go } from './state.js';
 import { uid, normalizeEx } from './shared.js';
 import { parseFormats, PART_TYPES } from './format.js';
 import { applyLayers, isBuiltin, textOverrides, announcements } from './global.js';
@@ -286,17 +286,46 @@ ACT.propOpen = async (el) => {
   const from = String(p.payload?.from || '');
   if (from.startsWith('#/') && (p.kind === 'idea' || p.payload?.target)) location.hash = from; // là où la personne était
   else { const [t, sub] = (TARGET[p.kind] || 'settings/admin').split('/'); go(t, sub); }
+  S.propCur = p;
+  const place = p.payload?.sel ? h`<div class="card flat acc-b stack"><span class="small">📍 <b>Endroit à changer</b> : « ${p.payload.snippet || 'élément'} »</span>
+    <div class="grid2"><button type="button" class="btn" data-act="propSee">👁 Voir l’endroit</button><button type="button" class="btn pri" data-act="propEditPlace">✏️ Modifier pour tout le monde</button></div></div>` : '';
+  if (p.payload?.sel) setTimeout(() => placeEl(p.payload.sel, true), 400);
   setTimeout(() => openSheet(h`<div class="stack"><span class="kicker">💡 ${p.payload?.target ? 'Demande de modification' : 'Proposition'} · ${WHAT[p.kind] || 'idée'}</span><h2 style="margin:0">${p.label}</h2>
-    <p class="tiny muted">De ${p.username || 'un compte supprimé'} · ${relDate(p.created_at)}</p>${p.detail ? h`<p class="small">« ${p.detail} »</p>` : ''}${preview(p)}
+    <p class="tiny muted">De ${p.username || 'un compte supprimé'} · ${relDate(p.created_at)}</p>${p.detail ? h`<p class="small">« ${p.detail} »</p>` : ''}${place}${preview(p)}
     <form data-submit="propDecide" class="stack"><input type="hidden" name="id" value="${p.id}"><label>Réponse à ${p.username || 'la personne'} (facultatif)<input name="reply" maxlength="300" placeholder="Merci !"></label>
     <div class="grid2"><button class="btn pri" name="decision" value="accept">${p.kind === 'idea' ? '✓ C’est noté' : p.payload?.target ? '✓ Appliquer pour tout le monde' : '✓ Ajouter pour tout le monde'}</button><button class="btn danger" name="decision" value="refuse">✗ Refuser</button></div></form>
     <p class="tiny muted">Une fois ajouté, tu peux encore le modifier ici avec ✏️, ou l’annuler dans Paramètres › Admin.</p></div>`, { wide: true }), 180);
+};
+/** L'élément joint à une idée, sur la page courante (null s'il a disparu depuis). */
+function placeEl(sel, flash = false) {
+  let el = null; try { el = document.querySelector(`#main ${sel}`); } catch { el = null; }
+  if (el && flash) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.remove('found'); void el.offsetWidth; el.classList.add('found'); setTimeout(() => el.classList.remove('found'), 3000); }
+  return el;
+}
+function propBar(on) {
+  document.getElementById('propbar')?.remove(); if (!on || !S.propCur) return;
+  const b = document.createElement('div'); b.id = 'propbar';
+  b.innerHTML = h`<span class="grow">💡 ${S.propCur.label}</span><button class="btn sm" data-act="propBack">Revenir à l’idée</button><button class="btn sm pri" data-act="propEditPlace">✏️ Modifier</button>`.s;
+  document.body.appendChild(b);
+}
+ACT.propSee = () => { closeSheet(); const el = placeEl(S.propCur?.payload?.sel || '', true); if (!el) toast('Cet endroit n’existe plus tel quel (la page a peut-être changé).', 4000); propBar(true); };
+ACT.propBack = () => { propBar(false); if (S.propCur) ACT.propOpen({ dataset: { id: S.propCur.id } }); };
+/** Modifier l'endroit joint : la fiche de l'exercice ou de la séance prête s'il s'agit de l'une d'elles, sinon le texte. */
+ACT.propEditPlace = () => {
+  const el = placeEl(S.propCur?.payload?.sel || ''); propBar(false);
+  if (!el) { toast('Endroit introuvable sur cette page : va le chercher, puis utilise Paramètres › Admin › Modifier les textes.', 5000); return; }
+  const ex = el.closest('[data-act=libInfo][data-id], [data-act=gxEdit][data-id]'), cat = el.closest('[data-act=catOpen][data-id]');
+  if (ex && byId(ex.dataset.id)) { closeSheet(); ACT.gxEdit({ dataset: { id: ex.dataset.id } }); return; }
+  if (cat) { closeSheet(); ACT.gcEdit?.({ dataset: { id: cat.dataset.id } }); return; }
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) }), node = w.nextNode();
+  if (!node) { toast('Pas de texte à cet endroit.'); return; }
+  closeSheet(); openTextEdit(node);
 };
 SUBMIT.propDecide = async (f, e) => {
   const d = Object.fromEntries(new FormData(f)), decision = (e?.submitter || document.activeElement)?.value || 'accept';
   try {
     await api('POST', `/api/admin/proposals/${encodeURIComponent(d.id)}`, { decision, reply: d.reply || '' });
-    closeSheet(); toast(decision === 'accept' ? 'Ajouté pour tout le monde ✓' : 'Proposition refusée');
+    closeSheet(); propBar(false); S.propCur = null; toast(decision === 'accept' ? 'Ajouté pour tout le monde ✓' : 'Proposition refusée');
     if (S.inbox?.adminList) S.inbox.adminList = S.inbox.adminList.filter((x) => x.id !== d.id);
     if (S.admin) S.admin.props = null;
     await loadGlobal(); sig = ''; render();
@@ -322,7 +351,10 @@ ACT.textModeOff = () => { S.textMode = false; textBar(false); toast('Mode textes
 document.addEventListener('click', (e) => {
   if (!S.textMode || e.target.closest('#textbar, #sheet, #dialog, nav.tabs')) return;
   const node = textNodeIn(e.target.closest('button, a, label, h1, h2, h3, p, b, span, small, li, summary, div') || e.target); if (!node) return;
-  e.preventDefault(); e.stopPropagation();
+  e.preventDefault(); e.stopPropagation(); openTextEdit(node);
+}, true);
+/** Réécrire un texte de l'app pour tout le monde (mode textes, ou depuis l'endroit joint à une idée). */
+function openTextEdit(node) {
   const from = originalText(node), now = node.nodeValue.trim(), g = globalOf('text', textId(from));
   S.textDraft = { from };
   openSheet(h`<form data-submit="textSave" class="stack"><h2 style="margin:0">✏️ Réécrire ce texte</h2>
@@ -330,7 +362,7 @@ document.addEventListener('click', (e) => {
     <label>Nouveau texte (pour tout le monde)<textarea name="to" rows="3" maxlength="300" required>${now}</textarea></label>
     <p class="tiny muted">Il remplace ce texte partout où il apparaît exactement pareil.</p>
     <div class="grid2"><button class="btn pri">Enregistrer pour tout le monde</button>${g ? h`<button type="button" class="btn" data-act="textReset">↺ Remettre l’original</button>` : h`<button type="button" class="btn" data-act="closeSheet">Annuler</button>`}</div></form>`);
-}, true);
+}
 SUBMIT.textSave = async (f) => {
   const from = S.textDraft?.from, to = String(new FormData(f).get('to') || '').trim(); if (!from || !to) return;
   try { if (to === from) await resetGlobal('text', textId(from)); else await putGlobal('text', textId(from), { data: { from, to } }); closeSheet(); toast('Texte modifié pour tout le monde'); }
@@ -400,17 +432,65 @@ async function sendRequest(kind, target, label, data) {
   catch (e) { toast(e.offline ? 'Connexion requise pour envoyer la demande.' : e.message, 4500, 'bad'); }
 }
 /** « Proposer une amélioration » : n'importe quelle idée, rattachée à la page où l'on se trouve. */
+/* ───────── Proposer une idée, avec l'endroit à changer ───────── */
+// L'utilisateur écrit son idée, puis peut « viser » l'élément de l'app concerné : l'admin y sera emmené en un clic.
+function ideaSheet() {
+  const d = S.ideaDraft ||= { detail: '', from: location.hash || '#/home/dash', place: null };
+  openSheet(h`<form data-submit="ideaGo" class="stack"><h2 style="margin:0">💡 Proposer une amélioration</h2>
+    <p class="small muted">Une idée, un texte à corriger, un exercice à ajouter… Les administrateurs la reçoivent.</p>
+    <label>Ton idée<textarea name="detail" rows="4" maxlength="1000" required data-input="ideaText" placeholder="Ex. ce texte n’est pas clair, ajouter un exercice pour les pinces…">${d.detail}</textarea></label>
+    ${d.place ? h`<div class="card flat acc-b row"><span class="grow small">📍 <b>Endroit joint</b> : « ${d.place.snippet || 'élément'} »</span><button type="button" class="btn sm ic" data-act="ideaPlaceDel" aria-label="Retirer l’endroit">✕</button></div>`
+      : h`<button type="button" class="btn" data-act="ideaPick">📍 Choisir l’endroit à changer <span class="tiny muted">(facultatif)</span></button>`}
+    <button class="btn pri big">Envoyer</button></form>`);
+}
 ACT.ideaNew = () => {
   if (!S.user || S.user.guest) { toast('Crée un compte (gratuit) pour proposer une amélioration.'); return; }
-  const here = location.hash || '#/home/dash';
-  closeSheet();
-  openSheet(h`<form data-submit="ideaGo" class="stack"><input type="hidden" name="from" value="${here}"><h2 style="margin:0">💡 Proposer une amélioration</h2>
-    <p class="small muted">Une idée, un texte à corriger, un exercice à ajouter… Les administrateurs la reçoivent, avec la page où tu étais.</p>
-    <label>Ton idée<textarea name="detail" rows="4" maxlength="1000" required placeholder="Ex. ajouter un exercice pour les pinces"></textarea></label>
-    <button class="btn pri big">Envoyer</button></form>`);
+  S.ideaDraft = null; closeSheet(); ideaSheet();
 };
+INPUT.ideaText = (el) => { if (S.ideaDraft) S.ideaDraft.detail = el.value; };
+ACT.ideaPlaceDel = () => { S.ideaDraft.place = null; ideaSheet(); };
 SUBMIT.ideaGo = async (f) => {
-  const d = Object.fromEntries(new FormData(f)), text = String(d.detail || '').trim(); if (text.length < 3) return;
-  try { await api('POST', '/api/proposals', { kind: 'idea', label: text.slice(0, 70), detail: text, from: d.from }); closeSheet(); toast('Merci ! Ton idée est envoyée aux administrateurs'); }
-  catch (e) { toast(e.offline ? 'Connexion requise pour envoyer.' : e.message, 4500, 'bad'); }
+  const d = S.ideaDraft || {}, text = String(new FormData(f).get('detail') || '').trim(); if (text.length < 3) return;
+  const pl = d.place || {};
+  try {
+    await api('POST', '/api/proposals', { kind: 'idea', label: text.slice(0, 70), detail: text, from: (pl.from || d.from || '').slice(0, 80), ...(pl.sel ? { sel: pl.sel, snippet: pl.snippet } : {}) });
+    S.ideaDraft = null; closeSheet(); toast('Merci ! Ton idée est envoyée aux administrateurs');
+  } catch (e) { toast(e.offline ? 'Connexion requise pour envoyer.' : e.message, 4500, 'bad'); }
 };
+/** Sélecteur court et stable pour un élément de la page (d'abord ses attributs data-act / data-id, sinon son chemin). */
+export function selectorFor(el) {
+  const main = document.getElementById('main'); if (!el || !main?.contains(el)) return '';
+  const q = (v) => String(v).replace(/["\\]/g, '');
+  const act = el.closest('[data-act]');
+  if (act && main.contains(act)) { const s = `[data-act="${q(act.dataset.act)}"]${act.dataset.id ? `[data-id="${q(act.dataset.id)}"]` : ''}`; try { if (main.querySelectorAll(s).length === 1) return s; } catch { /* sélecteur invalide */ } }
+  const path = []; let n = el;
+  while (n && n !== main && path.length < 8) { const p = n.parentElement; if (!p) break; const i = [...p.children].filter((c) => c.tagName === n.tagName).indexOf(n) + 1; path.unshift(`${n.tagName.toLowerCase()}:nth-of-type(${i})`); n = p; }
+  return path.join(' > ').slice(0, 200);
+}
+const snippetOf = (el) => String(el?.innerText || el?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+function pickBar() {
+  document.getElementById('pickbar')?.remove();
+  if (!S.pick) { document.body.classList.remove('picking'); return; }
+  document.body.classList.toggle('picking', S.pick.mode === 'aim');
+  const b = document.createElement('div'); b.id = 'pickbar';
+  b.innerHTML = (S.pick.cand
+    ? h`<span class="grow">📍 « ${S.pick.cand.snippet || 'cet élément'} »</span><button class="btn sm" data-act="pickOther">Autre</button><button class="btn sm pri" data-act="pickOk">✓ Joindre</button>`
+    : S.pick.mode === 'nav'
+      ? h`<span class="grow">🧭 Va sur la bonne page, puis touche <b>Viser</b>.</span><button class="btn sm" data-act="pickCancel">Annuler</button><button class="btn sm pri" data-act="pickAim">🎯 Viser</button>`
+      : h`<span class="grow">📍 Touche l’endroit à changer.</span><button class="btn sm" data-act="pickNav">Changer de page</button><button class="btn sm" data-act="pickCancel">Annuler</button>`).s;
+  document.body.appendChild(b);
+}
+ACT.ideaPick = () => { S.ideaDraft.detail = document.querySelector('#sheet textarea[name=detail]')?.value || S.ideaDraft.detail; closeSheet(); S.pick = { mode: 'aim', cand: null }; pickBar(); };
+ACT.pickNav = () => { S.pick.mode = 'nav'; pickBar(); };
+ACT.pickAim = () => { S.pick.mode = 'aim'; pickBar(); };
+ACT.pickOther = () => { document.querySelector('.pickfound')?.classList.remove('pickfound'); S.pick.cand = null; S.pick.mode = 'aim'; pickBar(); };
+ACT.pickCancel = () => { document.querySelector('.pickfound')?.classList.remove('pickfound'); S.pick = null; pickBar(); ideaSheet(); };
+ACT.pickOk = () => { document.querySelector('.pickfound')?.classList.remove('pickfound'); S.ideaDraft.place = { ...S.pick.cand, from: location.hash }; S.pick = null; pickBar(); ideaSheet(); };
+document.addEventListener('click', (e) => {
+  if (S.pick?.mode !== 'aim' || S.pick.cand || e.target.closest('#pickbar, #sheet, #dialog, nav.tabs')) return;
+  const el = e.target.closest('#main *'); if (!el) return;
+  e.preventDefault(); e.stopPropagation();
+  const target = el.closest('button, a, label, h1, h2, h3, li, .card, .setrow, .chip') || el;
+  document.querySelector('.pickfound')?.classList.remove('pickfound'); target.classList.add('pickfound');
+  S.pick.cand = { sel: selectorFor(target), snippet: snippetOf(target) }; pickBar();
+}, true);

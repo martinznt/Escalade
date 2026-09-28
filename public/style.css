@@ -574,3 +574,7 @@ body.textedit #main :is(h1,h2,h3,b,p,small,span,summary,button,label,li){cursor:
 .linkish{appearance:none;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .cpart{padding:10px 0;border-bottom:1px solid var(--line);display:grid;gap:6px}.cpart:last-of-type{border-bottom:0}.cpart .cpbtns{justify-content:flex-end}
 .setrow.dim{opacity:.6}
+.editdock.top{position:sticky;top:calc(60px + env(safe-area-inset-top));bottom:auto;margin-bottom:12px;align-items:center}
+#pickbar,#propbar{position:fixed;left:12px;right:12px;top:calc(62px + env(safe-area-inset-top));z-index:25;display:flex;gap:8px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--accent);box-shadow:var(--shadow);max-width:640px;margin:0 auto;font-size:.9rem}
+#pickbar .grow,#propbar .grow{min-width:0;overflow:hidden;text-overflow:ellipsis}
+body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)!important;outline-offset:3px;border-radius:10px}

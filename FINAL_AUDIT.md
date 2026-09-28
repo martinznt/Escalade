@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.20.0
+# FINAL_AUDIT — Séances entraînement v8.21.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -841,3 +841,39 @@ Nouvelle page : Bibliothèque › « 🧗 Structurer ma séance d'escalade ». E
 **Tests**
 - Nouveau fichier `surprise.test.mjs` (6 tests) : habitudes, styles faibles, nouveau, progresser (style faible et objectif), fatigue et graine, autre sport.
 - E2E : mode objectif sans échauffement et avec étirements, surprise « nouveau », « une autre surprise ».
+
+## Évolution 8.21.0 : idées avec l'endroit à changer, mode ✏️ plus clair
+
+**Idée avec l'endroit** (pour tous les comptes)
+- Après avoir écrit son idée, on peut toucher « 📍 Choisir l'endroit à changer ». Une barre en haut dit quoi faire :
+  - « Touche l'endroit à changer » ;
+  - ou « Changer de page » pour naviguer d'abord, puis « 🎯 Viser ».
+- L'élément touché est entouré ; on confirme (« ✓ Joindre ») ou on en choisit un autre.
+- L'idée part avec la page, un sélecteur simple (`data-act`/`data-id` quand c'est unique, sinon un chemin court) et le texte visible.
+- Le serveur ne garde un sélecteur que s'il ne contient que des caractères sûrs (pas de `<`, pas de script). Le texte est borné à 120 caractères et toujours affiché échappé.
+
+**Côté administrateur**
+- En ouvrant l'idée, l'app va sur la bonne page et fait clignoter l'élément.
+- **« ✏️ Modifier pour tout le monde »** ouvre directement la bonne fiche :
+  - un exercice : sa fiche de modification ;
+  - une séance prête : sa fiche ;
+  - sinon : le texte, à réécrire pour tout le monde.
+- **« 👁 Voir l'endroit »** ferme la fiche et laisse une barre « Revenir à l'idée / ✏️ Modifier ».
+- On termine par « ✓ C'est noté » ou « ✗ Refuser » (la personne reçoit la réponse).
+- Si l'endroit n'existe plus, l'app le dit.
+
+**Mode ✏️ (mise en page)**
+- Titre « Personnaliser l'Accueil » et une explication en quatre lignes :
+  - Grand = un bloc sur la page ;
+  - Icône = un petit bouton en haut ;
+  - Masqué = n'apparaît plus ;
+  - ↑ ↓ pour l'ordre, 🎨 pour la couleur.
+- **« ✕ Quitter »** en haut (au lieu d'un simple « Édition ») et en bas. S'il y a des changements, l'app demande « Quitter sans enregistrer ? ».
+- **« 👁 Aperçu »** montre la vraie page avec les changements, avec une barre « ✏️ Continuer / ✓ Enregistrer ».
+- Une seule confirmation pour enregistrer, au lieu de deux (pour un administrateur, c'est le choix « pour moi / pour tout le monde » qui sert de confirmation).
+
+**Tests**
+- `global.test.mjs` passe à 18 tests : endroit gardé, sélecteur dangereux ignoré.
+- E2E :
+  - mise en page : Quitter (rien ne change), Aperçu, Enregistrer ;
+  - idée avec l'endroit : B change de page, vise un titre et l'envoie ; l'admin y va, modifie le texte pour tout le monde et le valide ; B voit le nouveau texte.

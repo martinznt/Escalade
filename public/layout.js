@@ -5,7 +5,7 @@
 import { h, raw, openSheet, closeSheet, ask, toast } from './ui.js';
 import { S, ACT, item, putItem, render, go } from './state.js';
 import { globalLayout } from './global.js';
-import { chooseScope, saveLayoutGlobal } from './content.js';
+import { chooseScope, saveLayoutGlobal, isAdmin as isAdminUser } from './content.js';
 
 /** Icônes possibles en haut à droite : [emoji, nom, action]. */
 export const ICONS = {
@@ -70,12 +70,15 @@ export function savedLayouts() { try { return JSON.parse(item('config', 'layout'
 const store = (all) => putItem('config', 'layout', { lay: JSON.stringify(all).slice(0, 9000) });
 
 /* ───────── Barre d'icônes (en haut à droite) ───────── */
+// En aperçu, la page s'affiche avec le brouillon de mise en page (pas encore enregistré).
+const shown = (page) => (S.lay?.page === page && S.lay.preview ? S.lay.list : layout(page));
+const editing = (page) => S.lay?.page === page && !S.lay.preview;
 export function topIcons(page) {
-  if (S.lay?.page === page) return h`<span class="edit-flag">✏️ Édition</span>`;
-  const icons = layout(page).filter((e) => e.as === 'icon' && ICONS[e.id]);
+  if (editing(page)) return h`<button class="btn sm" data-act="layQuit">✕ Quitter</button>`;
+  const icons = shown(page).filter((e) => e.as === 'icon' && ICONS[e.id]);
   const unread = S.notifUnread || 0;
   return h`<nav class="topicons" aria-label="Raccourcis">${icons.map((e) => { const [ic, label, act] = ICONS[e.id]; return h`<button class="ti" data-act="${act}" data-id="${e.id}" aria-label="${label}" title="${label}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>${ic}${e.id === 'notif' && unread ? h`<i class="badge-dot">${unread > 9 ? '9+' : unread}</i>` : ''}</button>`; })}
-    ${FEATURES[page] ? h`<button class="ti edit" data-act="layEdit" aria-label="Modifier la mise en page" title="Modifier la mise en page">✏️</button>` : ''}</nav>`;
+    ${FEATURES[page] && !S.lay ? h`<button class="ti edit" data-act="layEdit" aria-label="Personnaliser cette page" title="Personnaliser cette page">✏️</button>` : ''}</nav>`;
 }
 
 /**
@@ -83,10 +86,11 @@ export function topIcons(page) {
  * En mode édition, chaque élément reçoit ses commandes (ordre, forme, couleur), même masqué.
  */
 export function composePage(page, renderers) {
-  if (S.lay?.page === page) return editor(page);
-  const feats = FEATURES[page], out = []; let tiles = [];
+  if (editing(page)) return editor(page);
+  const feats = FEATURES[page], out = [], preview = S.lay?.page === page; let tiles = [];
+  if (preview) out.push(h`<div class="editdock top"><span class="grow small"><b>👁 Aperçu</b> — pas encore enregistré</span><button class="btn sm" data-act="layBack">✏️ Continuer</button><button class="btn sm pri" data-act="laySave">✓ Enregistrer</button></div>`);
   const flush = () => { if (tiles.length) { out.push(h`<div class="quick">${tiles}</div>`); tiles = []; } };
-  for (const e of layout(page)) {
+  for (const e of shown(page)) {
     const f = feats[e.id]; if (!f || e.as !== 'big') continue;
     let content = ''; try { content = renderers[e.id]?.() || ''; } catch (err) { console.error(err); content = h`<section class="card"><p class="small warn-t">« ${f.l} » n’a pas pu s’afficher : ${err.message}</p></section>`; }
     if (!content) continue;
@@ -100,14 +104,17 @@ export function composePage(page, renderers) {
 function editor(page) {
   const list = S.lay.list, feats = FEATURES[page], n = list.length;
   const FORM = { big: 'Grand', icon: 'Icône', off: 'Masqué' };
-  return h`<section class="card editbar"><h2>✏️ Mise en page</h2><p class="small muted">Change l’ordre, la forme (en grand, en petite icône en haut, ou masqué) et la couleur. Rien n’est enregistré avant ta validation.</p></section>
+  const name = { home: 'l’Accueil', progress: 'Progrès' }[page] || 'cette page';
+  return h`<section class="card editbar"><h2>✏️ Personnaliser ${name}</h2><p class="small">Choisis ce qui s’affiche sur ${name}, et dans quel ordre :</p>
+    <ul class="clean tight small"><li><b>Grand</b> : un bloc sur la page</li><li><b>Icône</b> : un petit bouton en haut à droite</li><li><b>Masqué</b> : n’apparaît plus (tu peux le remettre ici)</li><li><b>↑ ↓</b> : l’ordre · <b>🎨</b> : la couleur</li></ul>
+    <p class="tiny muted">Rien ne change tant que tu n’as pas enregistré. <b>👁 Aperçu</b> pour voir le résultat, <b>✕ Quitter</b> en haut pour sortir sans rien changer. <button class="linkish acc-t" data-act="layReset">Revenir à la mise en page de base</button></p></section>
     <div class="edlist">${list.map((e, i) => { const f = feats[e.id]; return h`<div class="edrow ${e.as}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>
       <div class="row"><span class="edic">${ICONS[e.id]?.[0] || (f.tile ? '▢' : '▭')}</span><b class="grow small">${f.l}${e.forced ? h` <span class="tag warn">🚫 masqué pour tous</span>` : ''}</b>
         <button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descendre">↓</button></div>
       <div class="row wrapf"><div class="seg sm">${[...f.k, 'off'].map((k) => h`<button type="button" class="${e.as === k ? 'on' : ''}" data-act="layAs" data-id="${e.id}" data-v="${k}">${FORM[k]}</button>`)}</div><span class="grow"></span>
         <button type="button" class="swc cur" data-act="layPick" data-id="${e.id}" aria-label="Couleur" ${raw(e.color ? `style="background:${e.color}"` : '')}>${e.color ? '' : '🎨'}</button></div>
       ${S.lay.pick === e.id ? h`<div class="swatches">${COLORS.map((c) => h`<button type="button" class="swc ${e.color === c ? 'on' : ''}" data-act="layColor" data-id="${e.id}" data-v="${c}" aria-label="${c ? 'Couleur ' + c : 'Sans couleur'}" ${raw(c ? `style="background:${c}"` : '')}>${c ? '' : '∅'}</button>`)}</div>` : ''}</div>`; })}</div>
-    <div class="editdock"><button class="btn" data-act="layCancel">Annuler</button><button class="btn ghost" data-act="layReset">Par défaut</button><button class="btn pri" data-act="laySave">Enregistrer</button></div>`;
+    <div class="editdock"><button class="btn" data-act="layQuit">✕ Quitter</button><button class="btn" data-act="layPreview">👁 Aperçu</button><button class="btn pri" data-act="laySave">✓ Enregistrer</button></div>`;
 }
 
 /* ───────── Actions du mode édition ───────── */
@@ -119,10 +126,16 @@ ACT.layColor = (el) => { const e = findE(el.dataset.id); if (e) { e.color = el.d
 ACT.layPick = (el) => { S.lay.pick = S.lay.pick === el.dataset.id ? '' : el.dataset.id; render(); };
 ACT.layEditAt = (el) => { const [t, sub] = String(el.dataset.to).split('/'); go(t, sub); setTimeout(() => ACT.layEdit(), 150); };
 ACT.layCancel = () => { S.lay = null; render(); toast('Aucun changement enregistré.'); };
+const changed = () => S.lay && JSON.stringify(S.lay.list.map(({ id, as, color }) => [id, as, color || ''])) !== JSON.stringify(layout(S.lay.page).map(({ id, as, color }) => [id, as, color || '']));
+ACT.layQuit = async () => {
+  if (changed() && !(await ask('Quitter sans enregistrer ?', { ok: 'Quitter', detail: 'Tes changements de mise en page seront perdus.' }))) return;
+  S.lay = null; render(); window.scrollTo(0, 0);
+};
+ACT.layPreview = () => { if (!S.lay) return; S.lay.preview = true; render(); window.scrollTo(0, 0); };
+ACT.layBack = () => { if (!S.lay) return; S.lay.preview = false; render(); };
 ACT.laySave = async () => {
   if (!S.lay) return;
-  if (!(await ask('Enregistrer cette mise en page ?', { ok: 'Oui, enregistrer' }))) return;
-  if (!(await ask('Tu es sûr ?', { ok: 'Oui, j’en suis sûr', detail: 'Elle remplacera la mise en page actuelle de cette page, sur tous tes appareils. Tu pourras revenir à la mise en page de base quand tu veux.' }))) return;
+  if (!isAdminUser() && !(await ask('Enregistrer cette mise en page ?', { ok: 'Oui, enregistrer', detail: 'Elle remplace la mise en page de cette page, sur tous tes appareils. Tu pourras revenir à la mise en page de base quand tu veux.' }))) return;
   const list = S.lay.list.map(({ id, as, color }) => (color ? { id, as, color } : { id, as }));
   const scope = await chooseScope('Cette mise en page. Pour tout le monde : elle devient la mise en page de base, et ce que tu as masqué est masqué pour tous.');
   if (!scope) return;
