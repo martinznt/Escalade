@@ -1,4 +1,4 @@
-# Séances entraînement — v8.25.0
+# Séances entraînement — v8.25.1
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute

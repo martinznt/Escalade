@@ -14,7 +14,7 @@ import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.25.0';
+const APP_VERSION = '8.25.1';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -229,12 +229,17 @@ async function revokePresented(request, env) {
   const t = cookiesOf(request).session;
   if (t) await db(env, 'DELETE FROM sessions WHERE token_hash=?', await sha(t)).run();
 }
+const SEEN_EVERY = 10 * 60000;
 async function authenticate(request, env) {
   const token = cookiesOf(request).session;
   if (!token) return null;
   const now = Date.now(), hash = await sha(token);
-  const row = await db(env, 'SELECT u.id,u.username,u.email,u.is_admin,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', hash, now).first();
+  const row = await db(env, 'SELECT u.id,u.username,u.email,u.is_admin,u.last_seen,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', hash, now).first();
   if (!row) return null;
+  // Dernière visite : au plus une écriture toutes les 10 minutes par compte (pour la liste des comptes de l'admin).
+  if (!row.last_seen || now - row.last_seen > SEEN_EVERY) {
+    try { await db(env, 'UPDATE users SET last_seen=? WHERE id=?', now, row.id).run(); } catch (e) { console.error('last_seen', e); }
+  }
   let renew = false;
   if (row.expires_at - now < (SESSION_DAYS - 1) * DAY) { // prolonge au plus une fois par jour
     await db(env, 'UPDATE sessions SET expires_at=? WHERE token_hash=?', now + SESSION_DAYS * DAY, hash).run();
@@ -1137,13 +1142,13 @@ async function adminActivate(request, env, u) {
 /** Liste des comptes pour l'administrateur : identité du compte et activité, JAMAIS les données d'entraînement
  * (séances, performances, profil) ; l'e-mail est masqué ; aucun mot de passe ni jeton. */
 async function adminUsers(env) {
-  const r = await db(env, `SELECT us.id,us.username,us.email,us.created_at,us.is_admin,
+  const r = await db(env, `SELECT us.id,us.username,us.email,us.created_at,us.is_admin,us.last_seen,
       (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id=us.id) AS last_login,
       (SELECT COUNT(*) FROM history h WHERE h.user_id=us.id) AS sessions_done,
       (SELECT MAX(h.started_at) FROM history h WHERE h.user_id=us.id) AS last_session
     FROM users us ORDER BY us.created_at DESC LIMIT 2000`).all();
   const mask = (e) => { const [a, d] = String(e || '').split('@'); return d ? `${a.slice(0, 1)}•••@${d}` : ''; };
-  const users = r.results.map((x) => ({ id: x.id, username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, lastLogin: x.last_login || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
+  const users = r.results.map((x) => ({ id: x.id, username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, lastLogin: x.last_login || null, lastSeen: Math.max(x.last_seen || 0, x.last_login || 0) || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
   return json({ ok: true, total: users.length, users });
 }
 async function adminBugs(url, env) {

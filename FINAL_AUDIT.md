@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.25.0
+# FINAL_AUDIT — Séances entraînement v8.25.1
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -975,3 +975,9 @@ Le brouillon est gardé (« Reprendre ma séance » sur l'accueil). Les anciens 
 **Visite de rattrapage** (`catchup.js`, sans DOM, testé) : quand plusieurs mises à jour ont été ratées depuis la dernière visite, une seule visite reprend tout (un résumé d'abord, sans doublon — le texte le plus récent gagne —, les pages regroupées suivies). La barre et « Quoi de neuf » disent combien de mises à jour ont été ratées et les listent (connues sans Internet).
 
 **Tests** — nouveau `catchup.test.mjs` (4) ; E2E mis à jour (projets dans Objectifs, pyramide et maxima dans Records et mesures, cotations dans Mes sports, séance du jour → assistant, visite de rattrapage). Vérification de mise en page à 320/390/768/1280 px : aucun problème.
+
+## Évolution 8.25.1 : dernières connexions visibles par les administrateurs
+- Le serveur note la **dernière visite** de chaque compte connecté (colonne `users.last_seen`, ajoutée sans rien casser ; au plus une écriture toutes les 10 minutes par compte). Avant, seule la date de la dernière *identification* était connue : un membre resté connecté semblait absent.
+- Admin › Comptes : combien de membres sont venus aujourd'hui, sur 7 jours et sur 30 jours ; « 🕑 Dernières connexions » (les 10 plus récentes, date et heure) ; tous les comptes triés par dernière visite ou par inscription.
+- Confidentialité inchangée : l'admin voit l'identité du compte et son activité (date de visite, nombre de séances), jamais les séances, performances ou profils. Réservé aux administrateurs (vérifié par le serveur).
+- Test D1 : la dernière visite est connue pour chaque compte, et aucun champ en trop n'est renvoyé.

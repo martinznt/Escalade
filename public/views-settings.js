@@ -330,20 +330,27 @@ async function loadUsers() { try { const r = await api('GET', '/api/admin/users'
 function vAdminUsers() {
   const u = S.admin.users, q = (S.admin.userQ || '').toLowerCase();
   if (!u && !S.admin.usersErr) setTimeout(loadUsers, 0);
-  const list = u ? u.users.filter((x) => !q || x.username.toLowerCase().includes(q)) : [];
-  const d30 = u ? u.users.filter((x) => x.lastLogin && Date.now() - x.lastLogin < 30 * 86400000).length : 0;
+  const seen = (x) => x.lastSeen || x.lastLogin || 0, by = S.admin.userSort === 'created' ? (a, b) => (b.createdAt || 0) - (a.createdAt || 0) : (a, b) => seen(b) - seen(a);
+  const list = u ? u.users.filter((x) => !q || x.username.toLowerCase().includes(q)).sort(by) : [];
+  const since = (d) => (u ? u.users.filter((x) => seen(x) && Date.now() - seen(x) < d * 86400000).length : 0);
+  const recent = u ? u.users.filter(seen).sort((a, b) => seen(b) - seen(a)).slice(0, 10) : [];
   return h`<div class="card"><div class="row between"><h3>👥 Comptes</h3><button class="btn sm" data-act="usersReload" aria-label="Actualiser">↻</button></div>
     ${S.admin.usersErr ? h`<p class="err small">${S.admin.usersErr}</p>` : !u ? skeleton(2) : h`
-      <div class="kpis"><div class="kpi"><span>👥 Comptes</span><b>${u.total}</b></div><div class="kpi"><span>🟢 Actifs (30 j)</span><b>${d30}</b></div></div>
+      <div class="kpis"><div class="kpi"><span>👥 Comptes</span><b>${u.total}</b></div><div class="kpi"><span>🟢 Aujourd’hui</span><b>${since(1)}</b></div><div class="kpi"><span>📅 7 jours</span><b>${since(7)}</b></div><div class="kpi"><span>🗓️ 30 jours</span><b>${since(30)}</b></div></div>
+      <span class="kicker">🕑 Dernières connexions</span>
+      ${recent.length ? h`<div class="setmenu">${recent.map((x) => h`<div class="setrow"><span class="sic">${x.username.slice(0, 1).toUpperCase()}</span><span class="grow"><b>${x.username}</b> ${x.isAdmin ? tag('admin', 'acc') : ''}<small>${fmtDateTime(seen(x))} · ${relDate(seen(x))}</small></span></div>`)}</div>` : h`<p class="small muted">Personne ne s’est encore connecté.</p>`}
+      <span class="kicker">Tous les comptes</span>
+      <div class="chips">${chip(S.admin.userSort !== 'created', 'Dernière visite d’abord', 'data-act="userSort" data-id="seen"')}${chip(S.admin.userSort === 'created', 'Inscription la plus récente', 'data-act="userSort" data-id="created"')}</div>
       <input type="search" data-input="userQ" value="${S.admin.userQ || ''}" placeholder="🔎 Chercher un pseudo" aria-label="Chercher un compte">
       <div class="ulist">${list.slice(0, 200).map((x) => h`<div class="urow"><div class="uav">${x.username.slice(0, 1).toUpperCase()}</div><div class="grow"><b>${x.username}</b> ${x.isAdmin ? tag('admin', 'acc') : ''}
         <div class="tiny muted">inscrit ${relDate(x.createdAt)}${x.email ? ' · ' + x.email : ''}</div></div>
         <div class="ustat"><b>${x.sessionsDone}</b><span>séance${x.sessionsDone > 1 ? 's' : ''}</span></div>
-        <div class="ustat"><span>${x.lastLogin ? relDate(x.lastLogin) : 'jamais'}</span><span class="tiny muted">connexion</span><button class="btn sm ${x.isAdmin ? 'ghost' : ''}" data-act="userRole" data-id="${x.id}" data-v="${x.isAdmin ? '0' : '1'}">${x.isAdmin ? 'Retirer admin' : 'Nommer admin'}</button></div></div>`)}
+        <div class="ustat"><span title="${seen(x) ? fmtDateTime(seen(x)) : ''}">${seen(x) ? relDate(seen(x)) : 'jamais'}</span><span class="tiny muted">dernière visite</span><button class="btn sm ${x.isAdmin ? 'ghost' : ''}" data-act="userRole" data-id="${x.id}" data-v="${x.isAdmin ? '0' : '1'}">${x.isAdmin ? 'Retirer admin' : 'Nommer admin'}</button></div></div>`)}
         ${list.length > 200 ? h`<p class="tiny muted">… ${list.length - 200} autre(s) : affine la recherche.</p>` : ''}${!list.length ? h`<p class="small muted">Aucun compte trouvé.</p>` : ''}</div>
-      <details class="how mini"><summary>Ce que tu vois ici</summary><p class="tiny">Pseudo, date d’inscription, e-mail masqué, nombre de séances réalisées et dernière connexion. Les séances, performances et profils des membres restent privés.</p></details>`}</div>`;
+      <details class="how mini"><summary>Ce que tu vois ici</summary><p class="tiny">Pseudo, date d’inscription, e-mail masqué, nombre de séances réalisées et dernière visite (à 10 minutes près). Les séances, performances et profils des membres restent privés.</p></details>`}</div>`;
 }
 ACT.usersReload = () => { S.admin.users = null; loadUsers(); };
+ACT.userSort = (el) => { S.admin.userSort = el.dataset.id; render(); };
 INPUT.userQ = (el) => { S.admin.userQ = el.value; clearTimeout(INPUT.userQ.t); INPUT.userQ.t = setTimeout(() => { render(); const i = document.querySelector('input[data-input=userQ]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
 SUBMIT.adminOn = async (f) => {
   const pw = new FormData(f).get('password'); f.reset(); // la valeur saisie est effacée du formulaire immédiatement
