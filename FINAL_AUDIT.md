@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.17.0
+# FINAL_AUDIT — Séances entraînement v8.18.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -732,3 +732,38 @@ Tout se fait depuis Paramètres › Admin › « 🛠 Modifier l'app sans code �
 - Pendant la sélection, les boutons Lancer, Ouvrir et Planifier sont cachés. La sélection s'efface en changeant de page ou de filtre.
 
 **Tests** : `sfilter.test.mjs` passe à 5 tests. E2E : groupes par catégorie, puis sélection de 2 séances et catégorie ajoutée aux deux.
+
+## Évolution 8.18.0 : c'est quoi, à quoi ça sert, pourquoi
+
+Chaque séance et chaque exercice répond à trois questions (`public/explain.js`, sans DOM, testé). Tout est construit à partir des vraies données, rien n'est inventé.
+
+**Exercice**
+- **C'est quoi ?**
+  - Le type d'exercice (21 types), à tenir combien de temps ou combien de répétitions, le matériel et les muscles.
+  - Un administrateur peut écrire son propre texte (« C'est quoi ? » dans la fiche de modification, champ `what`, validé côté serveur).
+- **À quoi ça sert ?** Le bénéfice de la bibliothèque, plus les capacités développées.
+- **Pourquoi ici ?** (dans une séance)
+  - La raison donnée par le générateur.
+  - Sinon la place de l'exercice (échauffement, retour au calme).
+  - Sinon le lien avec les catégories de la séance.
+
+**Séance**
+- **C'est quoi ?** Les sports, le nombre d'exercices, la durée, les parties et l'intensité.
+- **À quoi ça sert ?** Les catégories et les capacités les plus travaillées.
+- **Pourquoi ?**
+  - Le pourquoi écrit par l'utilisateur (« ✎ Mon pourquoi », enregistré dans les notes de la séance).
+  - Sinon celui de la séance générée, prête ou fusionnée, ses objectifs ou ses intentions.
+
+**Où c'est affiché**
+- En haut de chaque séance : éditeur, générateur, séance partagée, séance prête.
+- Dans la fiche de chaque exercice : le nom d'un exercice dans une séance s'ouvre d'un toucher, même en mode modification.
+- Dans les exercices d'une séance prête.
+- Pendant la séance, dans un encadré repliable.
+
+**Correctif** : le « pourquoi » des séances prêtes était perdu quand on les gardait (texte au lieu d'une liste de notes). Il est maintenant enregistré.
+
+**Tests**
+- Nouveau fichier `explain.test.mjs` (5 tests) :
+  - les 143 exercices ont un « c'est quoi » et un « à quoi ça sert » sans trou ;
+  - les séances prêtes gardent leur pourquoi.
+- E2E : bloc « en bref », mon pourquoi, fiche d'exercice avec « Pourquoi ici ? », séance prête.

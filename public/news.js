@@ -93,6 +93,10 @@ export const NEWS = [
     ['library', 'seances', '[data-act=sfOpen]', '▤ Regrouper', 'Dans « ⇅ Trier », choisis « Regrouper par » : lieu, sport ou catégorie.'],
     ['library', 'seances', '[data-act=selStart]', '☑ Plusieurs à la fois', 'Coche des séances puis choisis : lieu, catégorie, sport, fusionner ou archiver.'],
   ] },
+  { v: '8.18.0', date: '2026-10-05', title: 'C’est quoi, à quoi ça sert, pourquoi', why: 'Chaque séance et chaque exercice répond maintenant à trois questions simples, et tu peux écrire ton propre pourquoi.', steps: [
+    ['library', 'seances', '#main .card [data-act=openSeance]', '🧐 En bref', 'Ouvre une séance : en haut, c’est quoi, à quoi elle sert et pourquoi. ✎ pour écrire ton pourquoi.'],
+    ['library', 'exercises', '#main [data-act=libInfo]', '🎯 Chaque exercice', 'Touche un exercice (ou son nom dans une séance) : c’est quoi, à quoi ça sert, et pourquoi il est là.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

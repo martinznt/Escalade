@@ -470,6 +470,19 @@ await step('mes séances : plusieurs sports, catégories, filtres et tris (dont 
   await A.waitForSelector('#main .blockhead:has-text("Endurance")');
   await a.click('[data-act=sfOpen]'); await a.click('#sheet [data-act=sfGroup][data-id=none]'); await a.click('#sheet [data-act=sfDone]');
 });
+await step('chaque séance et chaque exercice : c’est quoi, à quoi ça sert, pourquoi (et mon pourquoi)', async () => {
+  await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('#main .card:has-text("Ma fusion") [data-act=openSeance]').click();
+  await A.waitForSelector('#main .brief'); const b0 = await a.text('#main .brief');
+  assert.match(b0, /C’est quoi \?[\s\S]*exercice[\s\S]*À quoi ça sert \?/);
+  await a.click('[data-act=sWhy]'); await A.fill('#sheet textarea[name=why]', 'Pour mon projet'); await a.click('#sheet form[data-submit=sWhyGo] button');
+  await A.waitForSelector('#main .brief:has-text("Mon pourquoi")'); assert.match(await a.text('#main .brief'), /Pour mon projet/);
+  await A.locator('#main .item.ex button.linkish[data-act=exInfo]').nth(1).click(); await A.waitForSelector('#sheet .brief');
+  assert.match(await a.text('#sheet .brief'), /C’est quoi \?[\s\S]*À quoi ça sert \?[\s\S]*Pourquoi ici \?/);
+  await A.keyboard.press('Escape');
+  await a.sub('libSub', 'catalog'); await A.locator('[data-act=catOpen]').first().click(); await A.waitForSelector('#sheet .brief');
+  assert.match(await a.text('#sheet .brief'), /Pourquoi \?/); await A.locator('#sheet [data-act=catExInfo]').first().click();
+  await A.waitForSelector('#sheet .brief:has-text("Pourquoi ici")'); await A.keyboard.press('Escape');
+});
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');

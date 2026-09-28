@@ -7,6 +7,7 @@ import './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon, ls } from './state.js';
 import { cleanParts } from './format.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
+import { exWhat, exUse, exWhyHere, sessionWhat, sessionUse, sessionWhy } from './explain.js';
 import { CATS, SORTS, FORMS, GROUPS, groupSessions, filterSessions, activeFilters, categoriesOf, autoCategories, sportsOf, placeOf, intensityOf, INTENSITY_LABEL } from './sfilter.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
@@ -100,6 +101,25 @@ function seanceCard(s) {
       ${S.sel ? '' : h`<div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div>`}</div>`;
 }
 const groupName = (by, k) => (by === 'place' ? placeName(k) : by === 'sport' ? (k === 'none' ? '🏷 Sans sport' : sportName(k)) : k === 'none' ? '🗂 Sans catégorie' : catName(k));
+/** « C'est quoi ? · À quoi ça sert ? · Pourquoi ? » d'une séance, en trois lignes courtes. */
+export function sessionBrief(s, { edit = false, minutes = 0 } = {}) {
+  const why = sessionWhy(s, (id) => INTENTIONS[id]?.label || id), use = sessionUse(s);
+  const row = (ic, q, t, extra = '') => h`<div class="w3"><span class="w3i">${ic}</span><div class="grow"><b>${q}</b><p>${t}</p></div>${extra}</div>`;
+  return h`<div class="card brief">${row('🧐', 'C’est quoi ?', sessionWhat(s, (id) => sportName(id).replace(/^\S+\s/, ''), minutes))}${use ? row('🎯', 'À quoi ça sert ?', use) : ''}
+    ${why.text || edit ? row('💡', why.mine ? 'Mon pourquoi' : 'Pourquoi ?', why.text || h`<span class="muted">Écris pourquoi tu fais cette séance : ça aide à rester motivé.</span>`, edit ? h`<button class="btn sm ic" data-act="sWhy" aria-label="Écrire mon pourquoi">✎</button>` : '') : ''}</div>`;
+}
+/** Les trois questions pour un exercice (dans une séance, « Pourquoi ici ? » en plus). */
+export function exerciseBrief(e, s) {
+  const use = exUse(e), here = s ? exWhyHere(e, s) : '';
+  const row = (ic, q, t) => h`<div class="w3"><span class="w3i">${ic}</span><div class="grow"><b>${q}</b><p>${t}</p></div></div>`;
+  return h`<div class="card flat brief">${row('🧐', 'C’est quoi ?', exWhat(e))}${use ? row('🎯', 'À quoi ça sert ?', use) : ''}${here ? row('💡', 'Pourquoi ici ?', here) : ''}</div>`;
+}
+ACT.sWhy = () => {
+  const e = editing(); if (!e) return; const cur = e.s.notes.find((n) => n.title === 'Pourquoi')?.text || '';
+  openSheet(h`<form data-submit="sWhyGo" class="stack"><h2 style="margin:0">💡 Mon pourquoi</h2><p class="small muted">Pourquoi tu fais cette séance ? Une phrase suffit.</p>
+    <textarea name="why" rows="3" maxlength="400" placeholder="Ex. Tenir 10 s de plus sur les réglettes pour mon projet au Bloc Club">${cur}</textarea><button class="btn pri big">Enregistrer</button></form>`);
+};
+SUBMIT.sWhyGo = (f) => { const t = String(new FormData(f).get('why') || '').trim().slice(0, 400); closeSheet(); edit((s) => ({ ...s, notes: [...s.notes.filter((n) => n.title !== 'Pourquoi'), ...(t ? [{ title: 'Pourquoi', text: t }] : [])] })); };
 /* Trier et filtrer : une liste claire, comme les Paramètres. Plusieurs sports, lieux ou catégories à la fois. */
 function sfSheet() {
   const f = sf(), all = S.seances.items.filter((s) => !s.archived);
@@ -213,7 +233,7 @@ ACT.play = (el) => {
 
 /* ═════════ Éditeur de séance (séance personnelle ou contribution commune) ═════════ */
 function exRow(e, i, n, mode) {
-  return h`<div class="item ex ${mode === 'edit' ? 'editable' : ''}"><div class="ico">${e.emoji}</div><div class="grow"><b>${e.name}</b> ${e.isNew ? tag('🆕 découverte', 'acc') : ''}<div class="muted small">${exLine(e)}</div>${e.why ? h`<div class="tiny why">💡 ${e.why}</div>` : ''}${e.note ? h`<div class="tiny acc-t">${e.note}</div>` : ''}</div>
+  return h`<div class="item ex ${mode === 'edit' ? 'editable' : ''}"><div class="ico">${e.emoji}</div><div class="grow"><button class="linkish" data-act="exInfo" data-id="${e.id}" title="C’est quoi ? À quoi ça sert ?"><b>${e.name}</b> <span class="tiny muted">ⓘ</span></button> ${e.isNew ? tag('🆕 découverte', 'acc') : ''}<div class="muted small">${exLine(e)}</div>${e.why ? h`<div class="tiny why">💡 ${e.why}</div>` : ''}${e.note ? h`<div class="tiny acc-t">${e.note}</div>` : ''}</div>
     <div class="row tight ${mode === 'edit' ? 'acts' : ''}">${mode === 'edit' ? h`<button class="btn sm ic" data-act="exUp" data-id="${e.id}" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button class="btn sm ic" data-act="exDown" data-id="${e.id}" ${i === n - 1 ? 'disabled' : ''} aria-label="Descendre">↓</button><button class="btn sm ic" data-act="exSwap" data-id="${e.id}" aria-label="Remplacer">🔄</button><button class="btn sm ic" data-act="exEdit" data-id="${e.id}" aria-label="Modifier">✎</button><button class="btn danger sm ic" data-act="exDel" data-id="${e.id}" aria-label="Retirer">✕</button>` : h`<button class="btn sm ic" data-act="exInfo" data-id="${e.id}" aria-label="Détails">ⓘ</button>${mode === 'gen' ? h`<button class="btn sm ic" data-act="exSwap" data-id="${e.id}" aria-label="Remplacer">🔄</button>` : ''}`}</div></div>`;
 }
 export function blocksOf(s, mode) {
@@ -246,6 +266,7 @@ function vEditor(s, mode) {
   return h`<div class="row"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
     ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
+    ${sessionBrief(s, { edit: !shared })}
     <div class="card"><div class="row"><input type="text" data-change="sEmoji" value="${s.emoji}" maxlength="4" class="emoji-in" aria-label="Emoji"><input type="text" data-change="sName" value="${s.name}" maxlength="100" aria-label="Nom de la séance"></div>
       <div class="grid2"><label>Sport principal<select data-change="sActivity"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
       <label>Lieu<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label></div>
@@ -289,7 +310,7 @@ SUBMIT.sAdapt = (f) => {
 const moveEx = (id, d) => edit((s) => { const i = s.exercises.findIndex((e) => e.id === id), j = i + d; if (i < 0 || j < 0 || j >= s.exercises.length) return s; const ex = s.exercises.slice(); [ex[i], ex[j]] = [ex[j], ex[i]]; if (ex[i].block !== ex[j].block) { const b = ex[i].block; ex[i] = { ...ex[i], block: ex[j].block }; ex[j] = { ...ex[j], block: b }; } return { ...s, exercises: ex }; });
 ACT.exUp = (el) => moveEx(el.dataset.id, -1); ACT.exDown = (el) => moveEx(el.dataset.id, 1);
 ACT.exDel = async (el) => { const e = editing(); const ex = e?.s.exercises.find((x) => x.id === el.dataset.id); if (!ex || !(await ask(`Retirer « ${ex.name} » de la séance ?`, { ok: 'Retirer', danger: true }))) return; edit((s) => ({ ...s, exercises: s.exercises.filter((x) => x.id !== ex.id) })); };
-ACT.exInfo = (el) => { const e = editing(); const ex = e?.s.exercises.find((x) => x.id === el.dataset.id) || S.shared.detail?.session?.exercises?.find((x) => x.id === el.dataset.id); if (ex) openSheet(exerciseSheet(ex)); };
+ACT.exInfo = (el) => { const e = editing(), sh = S.shared.detail?.session; const ex = e?.s.exercises.find((x) => x.id === el.dataset.id); const ex2 = ex ? null : sh?.exercises?.find((x) => x.id === el.dataset.id); if (ex || ex2) openSheet(exerciseSheet(ex || ex2, '', ex ? e.s : normalizeSession(sh))); };
 ACT.sDup = (el) => { const s = getSeance(el.dataset.id); if (!s) return; const c = saveSeance({ ...s, id: uid(), name: s.name + ' (copie)', createdAt: 0, template: false, archived: false, exercises: s.exercises.map((e) => ({ ...e, id: uid() })) }); toast('Séance dupliquée'); go('library', 'seance', c.id); };
 ACT.sTemplate = (el) => { const s = getSeance(el.dataset.id); if (s) { saveSeance({ ...s, template: !s.template }); toast(s.template ? 'Retirée des modèles' : 'Enregistrée comme modèle'); render(); } };
 ACT.sArchive = (el) => { const s = getSeance(el.dataset.id); if (s) { saveSeance({ ...s, archived: !s.archived }); toast(s.archived ? 'Séance désarchivée' : 'Séance archivée'); render(); } };
@@ -500,6 +521,7 @@ ACT.genDo = () => { const g = S.gen; if (!g.plan) return; g.result = generateFro
 function vGenResult(r) {
   const s = r.session;
   return h`<div id="genresult" class="card"><div class="row"><div class="ico acc">${s.emoji}</div><div class="grow"><h3>${s.name}</h3><div class="muted small">~${sessionMinutes(s)} min ${levelTag(r.meta.level)}</div></div></div>
+    ${sessionBrief(s)}
     ${howBox({ ...s.explain, note: 'Faits = données de ton profil et de ton historique ; estimations = ce que l’application en déduit. Aucune performance n’est inventée.' }, { open: false, title: 'Pourquoi cette séance ?' })}
     ${blocksOf(s, 'gen')}
     <div class="row wrapf"><button class="btn pri" data-act="play" data-gen="1">▶ Lancer</button><button class="btn" data-act="genSave" ${S.gen.saved ? 'disabled' : ''}>${S.gen.saved ? '✓ Enregistrée' : '💾 Enregistrer'}</button><button class="btn" data-act="genAgain">🔁 Autre proposition</button></div></div>`;
@@ -528,19 +550,20 @@ function vExercises() {
 INPUT.exQ = (el) => { S.filters.exq = el.value; clearTimeout(INPUT.exQ.t); INPUT.exQ.t = setTimeout(() => { render(); const i = $('[data-input=exQ]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
 CHG.exAct = (el) => { S.filters.exAct = el.value; render(); };
 CHG.exCap = (el) => { S.filters.exCap = el.value; render(); };
-export function exerciseSheet(ex, actions = '') {
+export function exerciseSheet(ex, actions = '', session = null) {
   const lib = byId(ex.libId || ex.id) || null;
   const e = lib ? { ...lib, ...ex, caps: Object.keys(ex.caps || {}).length ? ex.caps : lib.caps, prim: ex.prim?.length ? ex.prim : lib.prim, sec: ex.sec?.length ? ex.sec : lib.sec } : ex;
   const g = graphFromExercise({ caps: e.caps || {}, prim: e.prim || [], sec: e.sec || [] }, ctx());
   const cues = e.ok?.length ? e.ok : e.cues || [];
   return h`<div class="row"><div class="ico">${e.emoji}</div><div class="grow"><h2 style="margin:0">${e.name}</h2>${e.sets ? h`<div class="muted small">${exLine(normalizeEx(e))}</div>` : ''}</div></div>
+    ${exerciseBrief({ ...ex, libId: ex.libId || (lib ? lib.id : '') }, session)}
     ${raw(anatomySvg({ primary: e.prim || [], secondary: e.sec || [] }))}
     <div class="chips">${g.muscles.prim.map((m) => h`<span class="chip static"><i class="lg p"></i>${m}</span>`)}${g.muscles.sec.map((m) => h`<span class="chip static"><i class="lg s"></i>${m}</span>`)}</div>
     <div class="chips">${e.needs?.length ? e.needs.map((k) => h`<span class="chip static">🧰 ${EQUIPMENT[k] || k}</span>`) : h`<span class="chip static">🙌 Sans matériel</span>`}${e.diff ? h`<span class="chip static">📶 ${'●'.repeat(e.diff)}${'○'.repeat(5 - e.diff)}</span>` : ''}${e.minLevel ? h`<span class="chip static">⭐ niveau ${['débutant', 'intermédiaire', 'avancé'][e.minLevel]}</span>` : ''}</div>
     ${cues.length ? h`<section class="card flat"><b class="small ok-t">✅ À faire</b><ul class="clean tight">${cues.map((c) => h`<li>${c}</li>`)}</ul></section>` : ''}
     ${e.bad?.length ? h`<details class="how mini"><summary>⚠️ Erreurs à éviter (${e.bad.length})</summary><ul class="small">${e.bad.map((c) => h`<li>${c}</li>`)}</ul></details>` : ''}
     ${g.caps.length ? h`<details class="how mini"><summary>💪 Ce que ça travaille (${g.caps.length})</summary>${g.caps.map((c) => h`<div class="cbar"><span>${c.label}</span><div class="track"><i class="cur" style="width:${Math.round(c.w * 100)}%"></i></div><b></b></div>${c.goals.length ? h`<p class="tiny muted">→ utile pour ${c.goals.map((x) => x.label).join(', ')}</p>` : ''}`)}</details>` : ''}
-    ${e.why && lib ? h`<p class="small muted">${lib.why}</p>` : ''}${actions}<button class="btn" data-act="closeSheet">Fermer</button>`;
+    ${actions}<button class="btn" data-act="closeSheet">Fermer</button>`;
 }
 ACT.libInfo = (el) => { const x = byId(el.dataset.id); if (!x) return; S.pickSrc = { kind: 'lib', id: x.id }; openSheet(exerciseSheet(x, h`<div class="row wrapf">${S.seances.items.length ? h`<select id="addTarget" aria-label="Séance cible">${S.seances.items.filter((s) => !s.archived).map((s) => h`<option value="${s.id}">${s.emoji} ${s.name}</option>`)}</select><button class="btn pri sm" data-act="addToSeance">＋ Ajouter</button>` : ''}<button class="btn sm" data-act="libKeep" data-id="${x.id}">Copier dans mes exercices</button></div>${exerciseEditButtons(x)}`), { wide: true }); };
 ACT.addToSeance = () => {
@@ -611,6 +634,7 @@ function vCommonDetail() {
     <div class="card"><h2 style="margin:0">${s.emoji} ${d.title}</h2><p class="muted small">par ${d.author || 'compte supprimé'}${d.mine ? ' (toi)' : ''} · créée le ${fmtDay(d.createdAt)} · modifiée ${relDate(d.updatedAt)}</p>
       <div class="row wrapf tight">${levelTag(d.level)}${d.gradeHint ? tag('🧗 ' + gradeHintText(d.gradeHint), 'info') : ''}</div>${levelDetails(d.level)}
       ${s.intentions.length ? h`<p class="small">Intentions : ${s.intentions.map((i) => INTENTIONS[i.id]?.label || i.id).join(', ')}</p>` : ''}${s.notes.map((n) => h`<details class="how"><summary>${n.title}</summary><pre class="txt">${n.text}</pre></details>`)}</div>
+    ${sessionBrief(s)}
     <div class="card">${blocksOf(s, 'view')}</div>
     <div class="row wrapf"><button class="btn pri" data-act="commonCopy" data-id="${d.id}">📥 Enregistrer dans mes séances</button>${d.canEdit ? h`<button class="btn" data-act="commonEdit">✎ Modifier l’original</button>` : ''}${d.canDelete ? h`<button class="btn danger" data-act="commonDelete">🗑 Supprimer</button>` : ''}</div>
     ${!d.canEdit ? h`<p class="tiny muted">Seul le créateur (ou un administrateur) peut modifier l’original. Enregistre-la pour la modifier librement.</p>` : ''}`;

@@ -19,7 +19,7 @@ export function cleanGlobal(kind, d) {
     const e = normalizeEx({ ...d, name: d.name || 'Exercice' });
     const name = str(d.name, 80); if (!name) return null;
     return { name, emoji: str(d.emoji, 8) || '💪', mode: e.mode, sets: e.sets, repsMin: e.repsMin, repsMax: e.repsMax, secMin: e.secMin, secMax: e.secMax, rest: e.rest, perSide: e.perSide, unit: e.unit,
-      cues: strs(d.cues, 8, 200), bad: strs(d.bad, 6, 200), why: str(d.why, 240), group: str(d.group, 20), acts: ids(d.acts, 8), needs: ids(d.needs, 8), caps: caps(d.caps), intensity: ['low', 'mod', 'high'].includes(d.intensity) ? d.intensity : '' };
+      cues: strs(d.cues, 8, 200), bad: strs(d.bad, 6, 200), why: str(d.why, 240), what: str(d.what, 240), group: str(d.group, 20), acts: ids(d.acts, 8), needs: ids(d.needs, 8), caps: caps(d.caps), intensity: ['low', 'mod', 'high'].includes(d.intensity) ? d.intensity : '' };
   }
   if (kind === 'catalog') {
     const name = str(d.name, 80); if (!name) return null;

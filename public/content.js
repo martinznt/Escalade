@@ -86,14 +86,15 @@ function exForm(x, isNew = false) {
     <label>Repos (s)<input type="number" name="rest" min="0" max="3600" value="${x.rest ?? 60}"></label>
     <label>Consignes (une par ligne)<textarea name="cues" rows="3">${(x.cues || []).join('\n')}</textarea></label>
     <label>À éviter (une par ligne)<textarea name="bad" rows="2">${(x.bad || []).join('\n')}</textarea></label>
-    <label>Pourquoi cet exercice<textarea name="why" rows="2" maxlength="240">${x.why || ''}</textarea></label>
+    <label>C’est quoi ? <small class="muted">(vide = phrase automatique)</small><textarea name="what" rows="2" maxlength="240" placeholder="Ex. Se suspendre à une réglette de 20 mm, bras tendus, 10 secondes.">${x.what || ''}</textarea></label>
+    <label>À quoi ça sert ?<textarea name="why" rows="2" maxlength="240">${x.why || ''}</textarea></label>
     <button class="btn pri big">Enregistrer</button></form>`;
 }
 ACT.gxEdit = (el) => { const x = byId(el.dataset.id); if (x) openSheet(exForm(x), { wide: true }); };
 ACT.exNewGlobal = () => { if (isAdmin()) openSheet(exForm({ mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, secMin: 30, secMax: 30, rest: 60 }, true), { wide: true }); };
 SUBMIT.exEditGo = async (f) => {
   const d = Object.fromEntries(new FormData(f)), t = d.mode === 'time';
-  const data = { name: d.name.trim(), emoji: d.emoji.trim(), sets: num(d.sets, 3), rest: num(d.rest, 60), cues: lines(d.cues), bad: lines(d.bad), why: d.why.trim(),
+  const data = { name: d.name.trim(), emoji: d.emoji.trim(), sets: num(d.sets, 3), rest: num(d.rest, 60), cues: lines(d.cues), bad: lines(d.bad), why: d.why.trim(), what: String(d.what || '').trim(),
     ...(t ? { secMin: num(d.min, 30), secMax: Math.max(num(d.min, 30), num(d.max, 30)) } : { repsMin: num(d.min, 8), repsMax: Math.max(num(d.min, 8), num(d.max, 8)) }) };
   if (d.isNew) {
     if (!isAdmin()) return;

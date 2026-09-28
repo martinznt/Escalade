@@ -16,7 +16,7 @@ const clone = (x) => JSON.parse(JSON.stringify(x));
 const ORIG = { lib: clone(LIBRARY), cat: clone(CATALOG), intents: clone(SPORT_INTENTS), presets: clone(PRESETS), systems: clone(BUILTIN_SYSTEMS), styles: clone(BUILTIN_STYLES), faq: clone(FAQ), sources: clone(SOURCES) };
 export const isBuiltin = { exercise: (id) => ORIG.lib.some((x) => x.id === id), catalog: (id) => ORIG.cat.some((x) => x.id === id), format: (id) => ORIG.presets.some((x) => x[0] === id) };
 export const original = { exercise: (id) => ORIG.lib.find((x) => x.id === id) || null, catalog: (id) => ORIG.cat.find((x) => x.id === id) || null };
-const EX_FIELDS = ['name', 'emoji', 'mode', 'sets', 'repsMin', 'repsMax', 'secMin', 'secMax', 'rest', 'perSide', 'unit', 'cues', 'bad', 'why', 'group', 'intensity'];
+const EX_FIELDS = ['name', 'emoji', 'mode', 'sets', 'repsMin', 'repsMax', 'secMin', 'secMax', 'rest', 'perSide', 'unit', 'cues', 'bad', 'why', 'what', 'group', 'intensity'];
 const setIf = (x, d, keys) => { for (const k of keys) if (d[k] !== undefined && d[k] !== null && !(Array.isArray(d[k]) && !d[k].length && ['cues', 'bad'].includes(k) === false)) x[k] = clone(d[k]); };
 const newExercise = (id, d) => ({ id, role: 'main', kind: 'skill', group: 'gainage', muscles: [], focus: [], intensity: 'mod', minLevel: 0, needs: [], risk: '', mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, secMin: 30, secMax: 30, rest: 60, perSide: false, unit: '', load: '', cues: [], bad: [], why: '', src: '', caps: {}, prim: [], sec: [], acts: [], pattern: '', diff: 1, emoji: '💪', ...clone(d), global: true });
 
