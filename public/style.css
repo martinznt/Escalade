@@ -395,8 +395,8 @@ header.top .brand .bt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quick .slot.editing{margin:0}
 .editbar{border:2px solid var(--accent)}.editbar .mini{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0 2px}
 .editdock{position:sticky;bottom:calc(84px + env(safe-area-inset-bottom));z-index:12;display:flex;gap:8px;justify-content:space-between;padding:10px;border-radius:18px;background:var(--card);border:1px solid var(--accent);box-shadow:var(--shadow);margin-top:10px}
-.allf{display:grid;gap:14px}.allf h2{margin:0}.allgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:6px}
-.allb{display:flex;align-items:center;gap:8px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-weight:600;text-align:left;cursor:pointer}.allb span{font-size:1.3rem}
+.allf{display:grid;gap:14px}.allf h2{margin:0}.allgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(140px,100%),1fr));gap:8px;margin-top:6px}
+.allb{display:flex;align-items:center;gap:8px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-weight:600;text-align:left;cursor:pointer;min-width:0;overflow-wrap:anywhere}.allb span{font-size:1.3rem}
 
 /* ═════════ Ambiances ═════════
    Chaque ambiance change les couleurs de fond, les formes, la typographie des titres et un décor discret.
@@ -602,3 +602,4 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 @media (max-width:360px){.topicons{gap:2px;margin-right:2px}.topicons .ti{width:34px;height:36px}.brand .bt{display:none}}
 .cpart>*{min-width:0}
 .nowrap{white-space:nowrap}
+.card.journal.row{display:flex;align-items:flex-start;gap:10px}

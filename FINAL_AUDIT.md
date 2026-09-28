@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.24.0
+# FINAL_AUDIT — Séances entraînement v8.25.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -955,3 +955,23 @@ Le brouillon est gardé (« Reprendre ma séance » sur l'accueil). Les anciens 
 - Barre du haut : un mot sous les symboles pas évidents (Coach, Bilan, Carnet, Page…) ; le point vert de synchronisation n'apparaît plus (un mot clair seulement s'il y a quelque chose à dire : « 2 à envoyer », « Hors ligne »…).
 
 **Tests** — nouveau `sportplan.test.mjs` (11 tests) ; E2E : 71 étapes, dont « course 10 km en 50 min ».
+
+## Évolution 8.25.0 : les fonctions qui se ressemblaient sont regroupées ; visite de rattrapage
+
+**Regroupements** (les anciennes adresses mènent à la nouvelle page)
+1. Créer une séance : « Séance du jour », « Que faire aujourd'hui ? », séance pour un objectif ou une capacité, commandes de l'assistant → l'assistant « Créer une séance », déjà rempli, séance prête (étape 5), modifiable en revenant en arrière.
+2. Planning : calendrier, programme et rappels sur une seule page.
+3. Assistant : le coach s'appelle « Assistant » et mène aussi à « Créer un exercice avec mes mots ».
+4. Projets d'escalade rangés avec les objectifs (en cours, réussis, archivés) ; « Nouveau projet » est un type d'objectif.
+5. Test de doigts avec les mesures.
+6. Une seule page « Records et mesures » : records des séances, évolution d'un exercice, mesures, maxima, pyramide, test de doigts.
+7. « À mesurer » n'apparaît plus qu'une fois (Mon analyse y renvoie).
+8. Un seul Journal (séances, blocs et voies, mesures, notes, étapes et records) avec filtres ; Historique et Frise y mènent.
+9. Résumé : bilan du mois en image depuis le résumé ; série et badges une seule fois.
+10. « Mon analyse » : capacités, tendances et diagnostics, pourquoi ces conseils, Lab.
+11. « Mon corps et mes préférences ».
+12. « Mes sports » avec les cotations et les styles d'escalade.
+
+**Visite de rattrapage** (`catchup.js`, sans DOM, testé) : quand plusieurs mises à jour ont été ratées depuis la dernière visite, une seule visite reprend tout (un résumé d'abord, sans doublon — le texte le plus récent gagne —, les pages regroupées suivies). La barre et « Quoi de neuf » disent combien de mises à jour ont été ratées et les listent (connues sans Internet).
+
+**Tests** — nouveau `catchup.test.mjs` (4) ; E2E mis à jour (projets dans Objectifs, pyramide et maxima dans Records et mesures, cotations dans Mes sports, séance du jour → assistant, visite de rattrapage). Vérification de mise en page à 320/390/768/1280 px : aucun problème.

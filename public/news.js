@@ -123,6 +123,14 @@ export const NEWS = [
     ['library', 'climbplan', '.steps', '🎯 Atteindre une performance', 'À l’étape « Pour quoi ? », choisis « Atteindre une performance » et écris ta cible : allures et charges sont calculées depuis tes perfs notées.'],
     ['profile', 'goals', '.kicker', '📋 Objectifs en liste', 'Plus de rangée d’onglets : tes objectifs en cours, puis les réussis et les archivés, rangés en rubriques.'],
   ] },
+  { v: '8.25.0', date: '2026-10-12', title: 'Tout est regroupé, et on rattrape ce qu’on a raté', why: 'Les fonctions qui se ressemblaient sont réunies : les projets d’escalade avec les objectifs, une seule page Records et mesures, un seul Journal, Mon analyse, Mon corps et mes préférences, un Planning, un Assistant, et une seule façon de créer une séance. Si tu as raté plusieurs mises à jour, une seule visite te montre tout.', steps: [
+    ['profile', 'goals', '.kicker', '📌 Projets = objectifs', 'Tes projets d’escalade sont rangés avec tes objectifs, et « Réussi » les met dans tes objectifs réussis.'],
+    ['profile', 'perfs', '#main h1', '🏆 Records et mesures', 'Records des séances, mesures, maxima, pyramide et test de doigts : tout au même endroit.'],
+    ['progress', 'journal', '.chips', '📝 Un seul Journal', 'Séances, blocs et voies, mesures, notes, étapes : un seul fil, avec des filtres.'],
+    ['profile', 'analyse', '.setmenu', '🔎 Mon analyse', 'Capacités, tendances, pourquoi ces conseils et le Lab, réunis.'],
+    ['home', 'cal', '#main h1', '📅 Planning', 'Calendrier, programme et rappels au même endroit.'],
+    ['library', 'climbplan', '.steps', '✨ Une seule façon de créer une séance', '« Séance du jour », « Que faire aujourd’hui » et l’Assistant ouvrent tous cet assistant, déjà rempli.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';
