@@ -80,6 +80,11 @@ export const NEWS = [
     ['settings', 'admin', '.setmenu', '🛠 Modifier l’app sans code', 'Textes, annonces, mise en page pour tous, questions fréquentes et sources : tout se fait ici, sans toucher au code.'],
     ['home', 'dash', '[data-act=notifOpen]', '📣 Annonces', 'Les annonces de l’équipe arrivent dans tes notifications.'],
   ] },
+  { v: '8.15.0', date: '2026-10-02', title: 'Séances multi-sports et fusion', why: 'Une séance peut mélanger plusieurs sports (renfo puis bloc…), deux séances se fusionnent en une nouvelle avec des conseils, et chacun peut demander une modification aux administrateurs.', steps: [
+    ['library', 'generate', '.partrow .partact', '🧗 Un sport par partie', 'Dans le format de séance, choisis le sport de chaque partie : renfo, puis bloc, puis étirements…'],
+    ['library', 'seances', '[data-act=mergeOpen]', '🔀 Fusionner des séances', 'Choisis 2 à 4 séances : l’app note le mélange, conseille l’ordre et crée une nouvelle séance. Tes séances d’origine ne changent pas.'],
+    ['settings', 'main', '[data-act=ideaNew]', '💡 Proposer une amélioration', 'Une idée ou une modification ? Envoie-la : les administrateurs l’acceptent ou non, et tu reçois la réponse.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

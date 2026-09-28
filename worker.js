@@ -14,7 +14,7 @@ import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.14.0';
+const APP_VERSION = '8.15.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -23,7 +23,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -1041,7 +1041,9 @@ async function proposalCreate(request, env, u) {
   const data = GLOBAL_KINDS.includes(kind) && kind !== 'intent' ? cleanGlobal(kind, b?.data) : null;
   if (GLOBAL_KINDS.includes(kind) && kind !== 'intent' && !data) return fail('Proposition incomplète : il manque des informations.');
   if (await limited(env, 'prop:' + u.id, 10, DAY)) return fail('Tu as déjà fait beaucoup de propositions aujourd’hui : merci ! Réessaie demain.', 429);
-  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps), ...(data ? { data } : {}), from: str(b?.from, 40) };
+  // target : l'élément existant à modifier (demande de modification), sinon c'est un ajout.
+  const target = GLOBAL_KINDS.includes(kind) && GLOBAL_ID.test(String(b?.target || '')) ? String(b.target) : '';
+  const payload = { emoji: str(b?.emoji, 8), caps: cleanCaps(b?.caps && !Array.isArray(b.caps) ? Object.entries(b.caps).map(([id, w]) => ({ id, w })) : b?.caps), ...(data ? { data } : {}), from: str(b?.from, 80), ...(target ? { target } : {}) };
   const id = 'pr-' + uid().slice(0, 12), activity = /^[\w:.-]{0,60}$/.test(String(b?.activityId || '')) ? String(b?.activityId || '') : '';
   await db(env, 'INSERT INTO proposals(id,user_id,kind,activity,label,detail,payload_json,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)', id, u.id, kind, activity, label, detail, JSON.stringify(payload), 'open', Date.now()).run();
   // Prévenir les administrateurs (notification sur leurs appareils abonnés ; best effort)
@@ -1062,8 +1064,8 @@ async function proposalReview(request, env, u, id) {
     // L'administrateur peut ajuster la proposition avant de l'ajouter (b.data), sinon elle est ajoutée telle quelle.
     const pl = safeParse(p.payload_json) || {}, data = cleanGlobal(p.kind, b?.data || pl.data);
     if (!data) return fail('Proposition incomplète : impossible de l’ajouter.');
-    added = 'g-' + uid().slice(0, 12);
-    await db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,0,?,?)', p.kind, added, JSON.stringify(data), Date.now(), u.id).run();
+    added = pl.target && GLOBAL_ID.test(pl.target) ? pl.target : 'g-' + uid().slice(0, 12); // demande de modification : on modifie l'élément visé
+    await db(env, 'INSERT INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES(?,?,?,0,?,?) ON CONFLICT(kind,id) DO UPDATE SET data_json=excluded.data_json,hidden=0,updated_at=excluded.updated_at,updated_by=excluded.updated_by', p.kind, added, JSON.stringify(data), Date.now(), u.id).run();
   }
   if (decision === 'accept' && p.kind === 'intent') {
     const pl = safeParse(p.payload_json) || {}, r = await intentCreate(env, u, { label: p.label, emoji: pl.emoji, caps: Object.entries(pl.caps || {}).map(([cid, w]) => ({ id: cid, w })), activityId: p.activity });

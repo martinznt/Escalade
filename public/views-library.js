@@ -6,6 +6,7 @@ import './duo.js';
 import './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, deleteSeance, api, itemsOf, item, putItem, queue, newId, syncSoon, ls } from './state.js';
 import { cleanParts } from './format.js';
+import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
@@ -71,8 +72,9 @@ function vSeances() {
   const f = S.filters.seances || 'active';
   const list = S.seances.items.filter((s) => (f === 'archived' ? s.archived : f === 'templates' ? s.template && !s.archived : !s.archived));
   return h`<button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
+    ${S.seances.items.filter((s) => !s.archived && s.exercises.length).length >= 2 ? h`<button class="btn" data-act="mergeOpen">🔀 Fusionner des séances</button>` : ''}
     <div class="chips">${[['active', 'Actives'], ['templates', 'Modèles'], ['archived', 'Archivées']].map(([k, l]) => chip(f === k, l, `data-act="seanceFilter" data-id="${k}"`))}</div>
-    ${list.length ? list.map((s) => h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : ''}</div></div></div>
+    ${list.length ? list.map((s) => h`<div class="card"><div class="row"><div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div></div></div>
       <div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div></div>`)
       : empty(f === 'active' ? 'Aucune séance pour l’instant. Crée-en une, colle un texte ou génère-la à partir de ton profil.' : 'Rien ici.')}`;
 }
@@ -83,6 +85,44 @@ ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvel
     ['newSeance', '', '✍️', 'À la main', 'Tu choisis chaque exercice toi-même.'], ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
     ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
+/* Fusionner des séances : on en choisit 2 à 4, l'app conseille (note, ordre) et crée une NOUVELLE séance ; les originales ne changent pas. */
+const mergeable = () => S.seances.items.filter((s) => !s.archived && s.exercises.length);
+function mergeSheet() {
+  const m = S.merge ||= { ids: [], name: '' };
+  const chosen = m.ids.map(getSeance).filter(Boolean), a = chosen.length >= 2 ? mergeAdvice(chosen) : null;
+  const tone = a ? (a.score >= 80 ? 'ok' : a.score >= 55 ? 'acc' : 'warn') : '';
+  openSheet(h`<div class="stack"><h2 style="margin:0">🔀 Fusionner des séances</h2>
+    <p class="small muted">Choisis 2 à 4 séances. Une nouvelle séance est créée : tes séances d’origine ne changent pas.</p>
+    <button class="setrow" data-act="mergeBest"><span class="sic">💡</span><span class="grow"><b>Quelles séances fusionner ?</b><small>L’app te propose les meilleures paires.</small></span><span class="chev">›</span></button>
+    <div class="card flat" style="padding:0">${mergeable().map((s) => { const i = m.ids.indexOf(s.id); return h`<button class="setrow" data-act="mergePick" data-id="${s.id}"><span class="sic">${i >= 0 ? String(i + 1) : s.emoji}</span><span class="grow"><b>${s.name}</b><small>${s.activity ? activityLabel(s.activity, ctx()) + ' · ' : ''}~${sessionMinutes(s)} min</small></span><span class="chev">${i >= 0 ? '✓' : '＋'}</span></button>`; })}</div>
+    ${a ? h`<div class="card ${tone}-b"><div class="row between"><b>Conseil</b>${tag(`${a.score}/100`, tone)}</div>
+      ${a.pros.map((t) => h`<div class="small">✓ ${t}</div>`)}${a.cons.map((t) => h`<div class="small">⚠️ ${t}</div>`)}
+      ${a.order.some((s, i) => s.id !== chosen[i]?.id) ? h`<button class="btn sm" data-act="mergeOrder">↕️ Mettre dans l’ordre conseillé</button>` : ''}
+      ${sourcesLine(a.sources)}</div>
+      <label>Nom de la nouvelle séance<input type="text" data-change="mergeName" maxlength="100" value="${m.name}" placeholder="${chosen.map((s) => s.name).join(' + ').slice(0, 100)}"></label>
+      <button class="btn pri big" data-act="mergeGo">Créer la séance fusionnée (~${a.minutes} min)</button>` : h`<p class="tiny muted">${chosen.length ? 'Encore une séance à choisir.' : 'Touche les séances à fusionner, dans l’ordre voulu.'}</p>`}</div>`);
+}
+ACT.mergeOpen = (el) => { S.merge = { ids: el?.dataset?.ids ? el.dataset.ids.split(',') : [], name: '' }; if (S.sub.library !== 'seances') go('library', 'seances'); mergeSheet(); };
+ACT.mergePick = (el) => { const m = S.merge, id = el.dataset.id; m.ids = m.ids.includes(id) ? m.ids.filter((x) => x !== id) : m.ids.length >= 4 ? (toast('4 séances au maximum.'), m.ids) : [...m.ids, id]; mergeSheet(); };
+ACT.mergeOrder = () => { S.merge.ids = orderForMerge(S.merge.ids.map(getSeance).filter(Boolean)).map((s) => s.id); mergeSheet(); };
+CHG.mergeName = (el) => { S.merge.name = el.value.trim(); };
+ACT.mergeGo = () => {
+  const chosen = S.merge.ids.map(getSeance).filter(Boolean); if (chosen.length < 2) return;
+  const s = saveSeance(mergeSessions(chosen, { name: S.merge.name })); S.merge = null; closeSheet();
+  toast('Séance fusionnée créée. Tes séances d’origine n’ont pas changé.', 4000); go('library', 'seance', s.id);
+};
+ACT.mergeBest = () => {
+  const best = bestMerges(mergeable(), 5);
+  openSheet(h`<div class="stack"><div class="row"><button class="btn sm" data-act="mergeBack" aria-label="Retour">‹</button><h2 style="margin:0">💡 Quelles séances fusionner ?</h2></div>
+    ${best.length ? h`<div class="card flat" style="padding:0">${best.map((b) => h`<button class="setrow" data-act="mergeOpen" data-ids="${b.ids.join(',')}"><span class="sic">${b.score}</span><span class="grow"><b>${b.names.join(' + ')}</b><small>${b.pros[0] || b.cons[0] || ''}</small></span><span class="chev">›</span></button>`)}</div>
+      <p class="tiny muted">Note sur 100 : complémentaires, durée raisonnable, doigts ménagés, bon ordre. Touche une paire pour voir le détail.</p>` : empty('Il faut au moins deux séances avec des exercices.')}
+    <button class="btn" data-act="mergeCoach">💬 Demander au coach</button></div>`);
+};
+ACT.mergeBack = () => mergeSheet();
+ACT.mergeCoach = () => {
+  const names = mergeable().slice(0, 12).map((s) => `« ${s.name} »`).join(', ');
+  closeSheet(); ACT.coachOpen?.(); const inp = $('.chat-in input'); if (inp) inp.value = `Parmi mes séances ${names}, lesquelles je peux fusionner en une seule, et dans quel ordre ?`.slice(0, 500);
+};
 ACT.seanceFilter = (el) => { S.filters.seances = el.dataset.id; render(); };
 ACT.newSeance = () => { closeSheet(); const s = saveSeance({ id: uid(), name: 'Nouvelle séance', emoji: '🏋️', exercises: [], source: 'manual', activity: Object.keys(ctx().activities)[0] || '' }); go('library', 'seance', s.id); };
 ACT.openSeance = (el) => go('library', 'seance', el.dataset.id);

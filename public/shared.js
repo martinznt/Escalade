@@ -91,7 +91,7 @@ export function normalizeSession(s = {}) {
     durationMin: clamp(s.durationMin, 0, 600, 0),
     objectives: strList(s.objectives, 8, 120),
     notes,
-    source: ['manual', 'text', 'generated', 'import', 'copy'].includes(s.source) ? s.source : 'manual',
+    source: ['manual', 'text', 'generated', 'import', 'copy', 'merge'].includes(s.source) ? s.source : 'manual',
     exercises: Array.isArray(s.exercises) ? s.exercises.slice(0, 60).map(normalizeEx) : [],
     createdAt: clamp(s.createdAt, 0, 9e15, 0),
     updatedAt: clamp(s.updatedAt, 0, 9e15, 0),

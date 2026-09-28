@@ -29,7 +29,8 @@ export function cleanParts(parts) {
   for (const p of Array.isArray(parts) ? parts.slice(0, 10) : []) {
     if (!PART_TYPES[p?.type]) continue;
     const m = Math.min(int(p.minutes, 1, 180, 5), MAX_TOTAL - total); if (m < 1) break;
-    out.push({ type: p.type, minutes: m }); total += m;
+    const activity = /^[\w-]{1,40}$/.test(String(p.activity || '')) ? String(p.activity) : ''; // sport de la partie (séance multi-sports)
+    out.push(activity ? { type: p.type, minutes: m, activity } : { type: p.type, minutes: m }); total += m;
   }
   return out;
 }
@@ -45,7 +46,7 @@ export function splitMinutes(shares, minutes) {
 }
 export const presetParts = (id, minutes) => { const p = PRESETS.find((x) => x[0] === id); return p ? splitMinutes(p[2], minutes) : []; };
 /** Nouvelle durée totale : chaque partie garde sa proportion. */
-export const scaleParts = (parts, minutes) => splitMinutes(parts.map((p) => [p.type, p.minutes]), minutes);
+export const scaleParts = (parts, minutes) => splitMinutes(parts.map((p) => [p.type, p.minutes]), minutes).map((x, i) => (parts[i]?.activity ? { ...x, activity: parts[i].activity } : x));
 export const partLabel = (type) => `${PART_TYPES[type]?.emoji || ''} ${PART_TYPES[type]?.label || type}`.trim();
 export const formatName = (parts) => [...new Set(parts.map((p) => PART_TYPES[p.type]?.label))].join(' + ');
 /** Étirements placés avant une partie d'effort : on les fait dynamiques (voir la source behm2016). */

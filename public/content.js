@@ -42,12 +42,15 @@ const globalOf = (kind, id) => GL.items.find((g) => g.kind === kind && g.id === 
 /* ───────── « Pour qui ? » ───────── */
 let pending = null;
 /** Un administrateur choisit à chaque changement ; les autres modifient pour eux. */
-export function chooseScope(what) {
-  if (!isAdmin()) return Promise.resolve('me');
+export function chooseScope(what, { propose = false } = {}) {
+  // Sans droit administrateur : pour soi, ou (si c'est possible ici) une demande envoyée aux administrateurs.
+  if (!isAdmin() && (!propose || !S.user || S.user.guest)) return Promise.resolve('me');
+  const all = isAdmin() ? ['scopePick', 'all', '🌍', 'Pour tout le monde', 'Tous les comptes le voient, dès leur prochaine ouverture de l’app.']
+    : ['scopePick', 'propose', '💡', 'Proposer pour tout le monde', 'Ta demande part aux administrateurs ; s’ils acceptent, tout le monde aura ce changement.'];
   return new Promise((res) => {
     pending = res;
     openSheet(h`<div class="stack"><h2 style="margin:0">Pour qui ?</h2><p class="small muted">${what}</p>
-      ${menuList([['scopePick', 'me', '👤', 'Pour moi seulement', 'Seul ton compte voit ce changement.'], ['scopePick', 'all', '🌍', 'Pour tout le monde', 'Tous les comptes le voient, dès leur prochaine ouverture de l’app.']])}
+      ${menuList([['scopePick', 'me', '👤', 'Pour moi seulement', 'Seul ton compte voit ce changement.'], all])}
       <button class="btn ghost" data-act="scopePick" data-id="">Annuler</button></div>`);
   });
 }
@@ -99,8 +102,9 @@ SUBMIT.exEditGo = async (f) => {
     catch (e) { toast(e.message, 4500, 'bad'); }
     return;
   }
-  const scope = await chooseScope(`Modifier « ${data.name} »`); if (!scope) return;
+  const scope = await chooseScope(`Modifier « ${data.name} »`, { propose: true }); if (!scope) return;
   if (scope === 'me') { putItem('exedit', d.id, data); sig = ''; closeSheet(); render(); toast('Modifié pour toi'); return; }
+  if (scope === 'propose') { const x = byId(d.id) || {}; await sendRequest('exercise', d.id, x.name || data.name, { acts: x.acts, caps: x.caps, needs: x.needs, group: x.group, ...data, mode: d.mode }); return; }
   try { await putGlobal('exercise', d.id, { data: { ...data, mode: d.mode } }); closeSheet(); toast('Modifié pour tout le monde'); } catch (e) { toast(e.message, 4500, 'bad'); }
 };
 ACT.exMineReset = (el) => { delItem('exedit', el.dataset.id); sig = ''; closeSheet(); render(); toast('Ta modification est retirée'); };
@@ -138,9 +142,10 @@ SUBMIT.catEditGo = async (f) => {
   const ex = e.ex.map((x, i) => (d[`del${i}`] ? null : { ...x, sets: num(d[`sets${i}`], x.sets), amount: num(d[`amount${i}`], x.amount), rest: num(d[`rest${i}`], x.rest) })).filter(Boolean);
   if (!ex.length) { toast('Garde au moins un exercice.'); return; }
   const data = { name: d.name.trim(), emoji: d.emoji.trim(), minutes: num(d.minutes, e.minutes), why: d.why.trim(), tips: lines(d.tips) };
-  const scope = await chooseScope(`Modifier « ${data.name} »`); if (!scope) return;
+  const scope = await chooseScope(`Modifier « ${data.name} »`, { propose: true }); if (!scope) return;
   if (scope === 'me') { putItem('catedit', e.id, { ...data, exjson: JSON.stringify(ex) }); sig = ''; render(); toast('Modifiée pour toi'); return; }
   const { globalEdit: _g, global: _n, myEdit: _m, ...base } = e;
+  if (scope === 'propose') { await sendRequest('catalog', e.id, e.name || data.name, { ...base, ...data, ex }); return; }
   try { await putGlobal('catalog', e.id, { data: { ...base, ...data, ex } }); toast('Modifiée pour tout le monde'); } catch (err) { toast(err.message, 4500, 'bad'); }
 };
 ACT.catMineReset = (el) => { delItem('catedit', el.dataset.id); sig = ''; closeSheet(); render(); toast('Ta modification est retirée'); };
@@ -277,11 +282,13 @@ ACT.propOpen = async (el) => {
   if (!p) { toast('Proposition introuvable (déjà traitée ?)'); return; }
   if (typeof p.payload_json === 'string' && !p.payload) try { p.payload = JSON.parse(p.payload_json); } catch { p.payload = {}; }
   closeSheet();
-  const [t, sub] = (TARGET[p.kind] || 'settings/admin').split('/'); go(t, sub);
-  setTimeout(() => openSheet(h`<div class="stack"><span class="kicker">💡 Proposition · ${WHAT[p.kind] || 'idée'}</span><h2 style="margin:0">${p.label}</h2>
+  const from = String(p.payload?.from || '');
+  if (from.startsWith('#/') && (p.kind === 'idea' || p.payload?.target)) location.hash = from; // là où la personne était
+  else { const [t, sub] = (TARGET[p.kind] || 'settings/admin').split('/'); go(t, sub); }
+  setTimeout(() => openSheet(h`<div class="stack"><span class="kicker">💡 ${p.payload?.target ? 'Demande de modification' : 'Proposition'} · ${WHAT[p.kind] || 'idée'}</span><h2 style="margin:0">${p.label}</h2>
     <p class="tiny muted">De ${p.username || 'un compte supprimé'} · ${relDate(p.created_at)}</p>${p.detail ? h`<p class="small">« ${p.detail} »</p>` : ''}${preview(p)}
     <form data-submit="propDecide" class="stack"><input type="hidden" name="id" value="${p.id}"><label>Réponse à ${p.username || 'la personne'} (facultatif)<input name="reply" maxlength="300" placeholder="Merci !"></label>
-    <div class="grid2"><button class="btn pri" name="decision" value="accept">✓ Ajouter pour tout le monde</button><button class="btn danger" name="decision" value="refuse">✗ Refuser</button></div></form>
+    <div class="grid2"><button class="btn pri" name="decision" value="accept">${p.kind === 'idea' ? '✓ C’est noté' : p.payload?.target ? '✓ Appliquer pour tout le monde' : '✓ Ajouter pour tout le monde'}</button><button class="btn danger" name="decision" value="refuse">✗ Refuser</button></div></form>
     <p class="tiny muted">Une fois ajouté, tu peux encore le modifier ici avec ✏️, ou l’annuler dans Paramètres › Admin.</p></div>`, { wide: true }), 180);
 };
 SUBMIT.propDecide = async (f, e) => {
@@ -383,4 +390,26 @@ SUBMIT.srcSave = async (f) => {
 ACT.srcHide = async (el) => {
   if (!(await ask('Retirer cette source pour tout le monde ?', { ok: 'Retirer', danger: true, detail: 'Les conseils qui la citent ne l’afficheront plus.' }))) return;
   try { if (el.dataset.id.startsWith('g-')) await resetGlobal('source', el.dataset.id); else await putGlobal('source', el.dataset.id, { hidden: true }); closeSheet(); toast('Source retirée'); } catch (e) { toast(e.message, 4500, 'bad'); }
+};
+
+/* ───────── Demandes de modification (comptes sans droit administrateur) ───────── */
+/** Envoie aux administrateurs une demande de modification d'un élément existant (ils l'acceptent ou la refusent). */
+async function sendRequest(kind, target, label, data) {
+  try { await api('POST', '/api/proposals', { kind, target, label: `Modifier « ${label} »`, data, from: location.hash.slice(0, 80) }); closeSheet(); toast('Demande envoyée aux administrateurs, merci !'); }
+  catch (e) { toast(e.offline ? 'Connexion requise pour envoyer la demande.' : e.message, 4500, 'bad'); }
+}
+/** « Proposer une amélioration » : n'importe quelle idée, rattachée à la page où l'on se trouve. */
+ACT.ideaNew = () => {
+  if (!S.user || S.user.guest) { toast('Crée un compte (gratuit) pour proposer une amélioration.'); return; }
+  const here = location.hash || '#/home/dash';
+  closeSheet();
+  openSheet(h`<form data-submit="ideaGo" class="stack"><input type="hidden" name="from" value="${here}"><h2 style="margin:0">💡 Proposer une amélioration</h2>
+    <p class="small muted">Une idée, un texte à corriger, un exercice à ajouter… Les administrateurs la reçoivent, avec la page où tu étais.</p>
+    <label>Ton idée<textarea name="detail" rows="4" maxlength="1000" required placeholder="Ex. ajouter un exercice pour les pinces"></textarea></label>
+    <button class="btn pri big">Envoyer</button></form>`);
+};
+SUBMIT.ideaGo = async (f) => {
+  const d = Object.fromEntries(new FormData(f)), text = String(d.detail || '').trim(); if (text.length < 3) return;
+  try { await api('POST', '/api/proposals', { kind: 'idea', label: text.slice(0, 70), detail: text, from: d.from }); closeSheet(); toast('Merci ! Ton idée est envoyée aux administrateurs'); }
+  catch (e) { toast(e.offline ? 'Connexion requise pour envoyer.' : e.message, 4500, 'bad'); }
 };

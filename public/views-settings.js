@@ -30,6 +30,7 @@ const MENU = [
   ['help', '❓', 'Aide', 'Visite guidée, questions fréquentes, sources'],
   ['updates', '🆕', 'Toutes les mises à jour', 'L’évolution de l’app depuis le début, avec une visite pour chacune'],
   ['bug', '🐞', 'Signaler un bug', 'Un problème ? Dis-le nous'],
+  ['idea', '💡', 'Proposer une amélioration', 'Une idée, une modification ? Les administrateurs répondent', 'ideaNew'],
   ['admin', '🛡️', 'Admin', 'Réservé aux administrateurs'],
 ];
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
@@ -53,7 +54,7 @@ function vMain() {
   return h`${account}
     <label class="findbox"><span aria-hidden="true">🔍</span><input type="search" data-input="setFind" placeholder="Rechercher un paramètre…" aria-label="Rechercher un paramètre" autocomplete="off"></label>
     <div id="setfindres"></div>
-    <div class="setmenu setmain">${MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin'].includes(k))).map(([k, ic, t, d]) => h`<button class="setrow" data-act="setSub" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
+    <div class="setmenu setmain">${MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin', 'idea'].includes(k))).map(([k, ic, t, d, a]) => h`<button class="setrow" data-act="${a || 'setSub'}" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
     <div class="card"><h3>🧩 Mon profil sportif</h3><p class="small muted">Pour que l’app s’adapte à toi (sports, niveau, temps, matériel, objectif).</p>
       <div class="row wrapf"><button class="btn pri" data-act="setupAgain" data-id="quiz">Répondre aux questions</button><button class="btn" data-act="setupAgain" data-id="form">Remplir la fiche</button><button class="btn ghost" data-act="goProfile" data-id="understand">Voir mon profil</button></div></div>
     ${installCard({ force: true })}

@@ -433,6 +433,22 @@ await step('format de séance : parties au choix, durée libre (2 h 30), séance
   assert.ok(heads[0].includes('Échauffement') && heads.some((t) => t.includes('Technique')) && heads.at(-1).includes('Étirements'), heads.join(' | '));
   await a.click('[data-act=gFmt][data-v=""]'); await a.click('[data-act=gDur][data-v="30"]');
 });
+await step('fusionner deux séances : conseil noté, ordre conseillé, nouvelle séance ; les originales ne changent pas', async () => {
+  await a.tab('library'); await a.sub('libSub', 'seances'); await A.waitForSelector('[data-act=mergeOpen]');
+  const before = await a.api('GET', '/api/sync'); const n0 = before.data.items.filter((s) => !s.deleted).length;
+  await a.click('[data-act=mergeOpen]'); await A.waitForSelector('#sheet [data-act=mergePick]');
+  const picks = A.locator('#sheet [data-act=mergePick]'); await picks.nth(0).click(); await picks.nth(1).click();
+  await A.waitForSelector('#sheet [data-act=mergeGo]'); assert.match(await a.text('#sheet'), /\/100/);
+  await a.click('#sheet [data-act=mergeBest]'); await A.waitForSelector('#sheet [data-act=mergeOpen][data-ids]');
+  await A.locator('#sheet [data-act=mergeOpen][data-ids]').first().click(); await A.waitForSelector('#sheet [data-act=mergeGo]');
+  await A.fill('#sheet input[data-change=mergeName]', 'Ma fusion'); await A.press('#sheet input[data-change=mergeName]', 'Tab');
+  await a.click('#sheet [data-act=mergeGo]'); await A.waitForSelector('input[data-change=sName]');
+  assert.equal(await A.inputValue('input[data-change=sName]'), 'Ma fusion');
+  assert.match(await a.text('#main'), /Échauffement/);
+  await poll(async () => (await a.api('GET', '/api/sync')).data.items.filter((s) => !s.deleted).length === n0 + 1, 12000, 'séance fusionnée synchronisée');
+  const after = (await a.api('GET', '/api/sync')).data.items;
+  for (const o of before.data.items) assert.equal(JSON.stringify(after.find((x) => x.id === o.id)?.exercises), JSON.stringify(o.exercises), 'originale intacte');
+});
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');
@@ -577,6 +593,23 @@ await step('idée d’un utilisateur (système de cotation) → notification de 
   cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset][data-k=grading]'); await c.click('[data-act=glReset][data-k=grading]'); await c.confirm();
   await c.tab('settings'); await c.sub('setSub', 'updates'); await C.waitForSelector('.upd [data-act=notifTour]'); assert.ok(await c.count('.upd') >= 10, 'toutes les mises à jour listées');
   await B.keyboard.press('Escape');
+});
+await step('demande de modification d’un non-administrateur → l’admin l’applique → tout le monde la voit', async () => {
+  cur = B; await b.tab('library'); await b.sub('libSub', 'exercises'); await B.locator('#main [data-act=libInfo]').first().click(); await B.waitForSelector('#sheet [data-act=gxEdit]');
+  await b.click('#sheet [data-act=gxEdit]'); const old = await B.inputValue('#sheet input[name=name]');
+  await B.fill('#sheet input[name=name]', old + ' (demande)'); await b.click('#sheet form[data-submit=exEditGo] button.pri');
+  await B.waitForSelector('#sheet [data-act=scopePick][data-id=propose]'); await b.click('#sheet [data-act=scopePick][data-id=propose]');
+  await B.waitForSelector('#toast.show');
+  let reqId;
+  await poll(async () => { const p = (await c.api('GET', '/api/admin/proposals')).data.proposals.find((x) => x.payload?.target && x.payload?.data?.name === old + ' (demande)'); reqId = p?.id; return p && p.label === `Modifier « ${old} »`; }, 10000, 'demande reçue par les admins, avec le nom d’origine');
+  cur = C; await C.reload(); await C.waitForSelector('nav.tabs'); await c.click('.topicons [data-act=notifOpen]');
+  await C.waitForSelector(`#sheet [data-act=propOpen][data-id="${reqId}"]`, { timeout: 10000 }); await c.click(`#sheet [data-act=propOpen][data-id="${reqId}"]`);
+  await C.waitForSelector('#sheet button[value=accept]'); assert.match(await c.text('#sheet'), /Appliquer pour tout le monde/);
+  await c.click('#sheet button[value=accept]'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
+  cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await b.sub('libSub', 'exercises');
+  await B.waitForSelector(`#main :text("${old} (demande)")`, { timeout: 10000 });
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
+  await C.waitForSelector('text=Rien n’a encore été changé');
 });
 await step('admin sans code : réécrire un texte et envoyer une annonce ; l’autre compte les voit ; tout s’annule', async () => {
   cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=textModeOn]'); await C.waitForSelector('#textbar');

@@ -132,4 +132,27 @@ await ok('tout annulé : on retrouve exactement le contenu d’origine', () => {
   assert.equal(LIBRARY.length, n0); assert.equal(CATALOG.length, c0); assert.equal(byId('g-new'), null); assert.notEqual(byId(first.id).name, 'À moi'); assert.ok(!byId(first.id).hidden);
   assert.equal(PRESETS.find((p) => p[0] === 'classique')[1], 'Classique');
 });
+console.log('Demandes de modification (non-administrateurs)');
+await ok('demander à modifier un élément existant : l’admin accepte → l’élément ciblé change pour tout le monde', async () => {
+  assert.equal((await B.post('/api/proposals', { kind: 'exercise', target: '../evil', label: 'x', data: { name: 'X' } })).status, 400);
+  const r = await B.post('/api/proposals', { kind: 'exercise', target: 'pompes', label: 'Modifier « Pompes »', from: '#/library/exercises', data: { name: 'Pompes (demandé)', sets: 3 } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const p = (await A.get('/api/admin/proposals')).data.proposals.find((x) => x.id === r.data.id);
+  assert.equal(p.payload.target, 'pompes'); assert.equal(p.payload.from, '#/library/exercises');
+  assert.equal((await B.post(`/api/admin/proposals/${p.id}`, { decision: 'accept' })).status, 403);
+  assert.equal((await A.post(`/api/admin/proposals/${p.id}`, { decision: 'accept' })).status, 200);
+  const g = (await V.get('/api/global')).data.items.filter((x) => x.kind === 'exercise' && x.id === 'pompes');
+  assert.equal(g.length, 1); assert.equal(g[0].data.name, 'Pompes (demandé)');
+  const r2 = await B.post('/api/proposals', { kind: 'exercise', target: 'pompes', label: 'Modifier « Pompes »', data: { name: 'Pompes v2' } });
+  await A.post(`/api/admin/proposals/${r2.data.id}`, { decision: 'accept' });
+  const g2 = (await V.get('/api/global')).data.items.filter((x) => x.kind === 'exercise' && x.id === 'pompes');
+  assert.equal(g2.length, 1, 'mise à jour, pas de doublon'); assert.equal(g2[0].data.name, 'Pompes v2');
+});
+await ok('idée libre : envoyée aux admins avec l’endroit d’où elle vient', async () => {
+  const r = await B.post('/api/proposals', { kind: 'idea', label: 'Un bouton pour…', detail: 'ce serait pratique', from: '#/progress' });
+  assert.equal(r.status, 200);
+  const p = (await A.get('/api/admin/proposals')).data.proposals.find((x) => x.id === r.data.id);
+  assert.equal(p.payload.from, '#/progress');
+});
+
 done('tests du contenu global');

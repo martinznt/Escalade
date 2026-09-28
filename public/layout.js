@@ -149,11 +149,12 @@ ACT.layReset = async (el) => {
 
 /* ───────── Toutes les fonctions, triées ───────── */
 const ALL = [
-  ['S’entraîner', [['🎯', 'Séance du jour', 'genOpen'], ['📚', 'Mes séances', 'goLib'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['📆', 'Programme', 'topProgram'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Coach', 'coachOpen']]],
+  ['S’entraîner', [['🎯', 'Séance du jour', 'genOpen'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['📆', 'Programme', 'topProgram'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Coach', 'coachOpen']]],
   ['Escalade', [['🧗', 'Carnet (blocs, voies, projets)', 'goCarnet'], ['✋', 'Test de doigts', 'goCarnet']]],
   ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📋', 'Historique', 'allGo', 'progress/history'], ['🏆', 'Records', 'allGo', 'progress/records'], ['📸', 'Bilan du mois', 'recapOpen']]],
   ['Planifier', [['📅', 'Calendrier', 'topCal'], ['⏰', 'Rappels', 'allGo', 'settings/notifs'], ['🔔', 'Notifications', 'notifOpen']]],
   ['Moi', [['👤', 'Mon profil', 'allGo', 'profile/home'], ['🎯', 'Objectifs', 'allGo', 'profile/goals'], ['🧰', 'Matériel et lieux', 'allGo', 'profile/equipment']]],
+  ['Aider l’app', [['💡', 'Proposer une amélioration', 'ideaNew']]],
   ['Réglages', [['🎨', 'Affichage et ambiance', 'allGo', 'settings/display'], ['▶️', 'Pendant la séance', 'allGo', 'settings/session'], ['✏️', 'Mise en page', 'layEditHome'], ['❓', 'Aide et visite', 'allGo', 'settings/help'], ['💾', 'Mes données', 'allGo', 'settings/data']]],
 ];
 ACT.allOpen = () => openSheet(h`<div class="allf"><h2>Toutes les fonctions</h2>${ALL.map(([cat, list]) => h`<div><span class="kicker">${cat}</span><div class="allgrid">${list.map(([ic, l, act, to]) => h`<button class="allb" data-act="${act}" ${to ? raw(`data-to="${to}"`) : ''}><span>${ic}</span>${l}</button>`)}</div></div>`)}</div>`, { wide: true });

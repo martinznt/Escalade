@@ -52,7 +52,8 @@ function formatBox(g) {
     <div class="chips">${chip(!parts, 'Automatique', 'data-act="gFmt" data-v=""')}${PRESETS.map(([id, name]) => chip(g.fmtId === id, name, `data-act="gFmt" data-v="${id}"`))}${saved.map((f) => chip(g.fmtId === f.id, '⭐ ' + f.name, `data-act="gFmt" data-v="${f.id}"`))}${chip(!!parts && g.fmtId === 'custom', '✏️ Je compose', 'data-act="gFmt" data-v="custom"')}</div>
     ${!parts ? h`<p class="tiny muted">L’app répartit le temps : échauffement, corps de séance, retour au calme.</p>` : h`<div class="card flat parts">
       <div class="blocksbar">${parts.map((p) => h`<i class="${PART_TYPES[p.type].block}" style="flex:${p.minutes}" title="${partLabel(p.type)} ${p.minutes} min"></i>`)}</div>
-      ${parts.map((p, i) => h`<div class="partrow"><span class="grow"><b class="small">${partLabel(p.type)}</b></span>
+      ${parts.map((p, i) => h`<div class="partrow"><span class="grow"><b class="small">${partLabel(p.type)}</b>
+        <select class="partact" data-change="gPartAct" data-i="${i}" aria-label="Sport de cette partie"><option value="">${ACTIVITIES[g.activityId]?.emoji || ''} Même sport</option>${sportsList(g.activityId).map(([id, e, l]) => h`<option value="${id}" ${p.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></span>
         <div class="stepper sm"><button type="button" data-act="gPartMin" data-i="${i}" data-d="-1" aria-label="Moins de temps">−</button><b aria-label="${p.minutes} minutes">${p.minutes}′</b><button type="button" data-act="gPartMin" data-i="${i}" data-d="1" aria-label="Plus de temps">+</button></div>
         <button type="button" class="btn sm ic" data-act="gPartUp" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button type="button" class="btn sm ic" data-act="gPartDel" data-i="${i}" aria-label="Retirer">✕</button></div>`)}
       <div class="row between"><b>Total : ${durLabel(total)}</b>${total >= MAX_TOTAL ? h`<span class="tiny muted">4 h au maximum</span>` : ''}</div>
@@ -61,6 +62,12 @@ function formatBox(g) {
       <div class="row wrapf"><button type="button" class="btn sm" data-act="gFmtSave">💾 Garder ce format</button>${saved.some((f) => f.id === g.fmtId) ? h`${S.user?.isAdmin ? '' : shareButton('format', g.fmtId)}<button type="button" class="btn sm danger" data-act="gFmtDel" data-v="${g.fmtId}">Supprimer ce format</button>` : ''}</div></div>`}`;
 }
 const reset = () => { S.gen.plan = null; S.gen.result = null; };
+/** Sports proposés pour une partie : ceux du profil d'abord, puis les autres. */
+function sportsList(current) {
+  const mine = Object.values(ctx().activities).map((a) => a.id);
+  return [...new Set([...mine, ...Object.keys(ACTIVITIES)])].filter((id) => id !== current).map((id) => [id, ACTIVITIES[id]?.emoji || ctx().activities[id]?.emoji || '🏅', ACTIVITIES[id]?.label || ctx().activities[id]?.label || id]);
+}
+CHG.gPartAct = (el) => editParts((p) => { const x = p[Number(el.dataset.i)]; if (!x) return; if (el.value) x.activity = el.value; else delete x.activity; });
 const setParts = (parts) => { const g = G(); g.parts = cleanParts(parts); g.minutes = Math.max(5, totalMinutes(g.parts)); reset(); render(); };
 ACT.gDur = (el) => { const g = G(), m = Number(el.dataset.v); g.durOther = false; if (g.parts) { setParts(scaleParts(g.parts, m)); return; } g.minutes = m; reset(); render(); };
 ACT.gDurOther = () => { const g = G(); g.durOther = !g.durOther; if (!g.durOther && !DURS.includes(Number(g.minutes))) { g.minutes = 30; if (g.parts) { setParts(scaleParts(g.parts, 30)); return; } reset(); } render(); };

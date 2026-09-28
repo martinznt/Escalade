@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.14.0
+# FINAL_AUDIT — Séances entraînement v8.15.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -657,3 +657,34 @@ Tout se fait depuis Paramètres › Admin › « 🛠 Modifier l'app sans code �
 **Tests** : `global.test.mjs` passe à 15 tests (validation des nouveaux types, rôles, annonces, application puis retrait). E2E à 63 étapes : un texte réécrit et une annonce vus par un autre compte, puis annulés.
 
 **Ce qui demande encore du code** : une fonctionnalité vraiment nouvelle (un nouvel écran, un nouveau calcul), la correction d'un bug, la sécurité et l'hébergement.
+
+## Évolution 8.15.0 : séances multi-sports, fusion, demandes de modification
+
+**Un sport par partie**
+- Dans le format de séance, chaque partie peut avoir son sport (par exemple renfo, puis bloc, puis étirements).
+- `cleanParts` garde `activity`, validée par `/^[\w-]{1,40}$/`.
+- Le générateur prend, pour chaque partie, les exercices de son sport. Le titre de la partie indique le sport quand il diffère du sport principal.
+- Une partie d'escalade dans une séance multi-sports grimpe vraiment : un thème au mur (dalle, dévers, réglettes, résistance) quand le mur est disponible.
+
+**Fusionner des séances** (`public/merge.js`, sans DOM, testé)
+- On choisit 2 à 4 séances dans Bibliothèque › Mes séances › « 🔀 Fusionner ». Une **nouvelle** séance est créée : `source: 'merge'`, nouveaux identifiants. Les séances d'origine ne sont jamais modifiées.
+- La nouvelle séance a un seul échauffement et un seul retour au calme (les plus longs). Les exercices en double ne sont gardés qu'une fois, et une note l'explique.
+- Le conseil est noté sur 100, avec des règles simples et affichées :
+  - complémentarité (recouvrement des capacités travaillées) ;
+  - plusieurs sports ;
+  - durée totale ;
+  - doigts sollicités fort deux fois (Schöffl 2006) ;
+  - ordre conseillé : le plus technique et le plus intense d'abord (ACSM 2009).
+- « 💡 Quelles séances fusionner ? » classe les paires de ses séances actives. « 💬 Demander au coach » prépare la question pour le coach.
+
+**Demandes de modification**
+- Quand quelqu'un qui n'est pas administrateur modifie un exercice ou une séance prête, il choisit entre « Pour moi seulement » et « 💡 Proposer pour tout le monde ».
+- La demande part aux administrateurs avec l'élément visé (`target`, validé) et la page d'origine (`from`).
+- Si l'admin accepte, l'élément visé est mis à jour pour tous (`ON CONFLICT(kind,id) DO UPDATE`, sans doublon).
+- « 💡 Proposer une amélioration » (Paramètres, menu ☰, recherche) envoie une idée libre avec la page où l'on était.
+
+**Tests**
+- Nouveau fichier `merge.test.mjs` (5 tests).
+- `format.test.mjs` : multi-sports.
+- `global.test.mjs` passe à 17 tests : demande ciblée acceptée, idée.
+- E2E : fusion, et demande d'un non-admin appliquée par l'admin.

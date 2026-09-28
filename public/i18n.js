@@ -3,6 +3,10 @@
 // traduit reste en français. Choisir le français recharge simplement l'affichage d'origine.
 
 const EN = {
+  '🔀 Fusionner des séances': '🔀 Merge sessions', 'Fusionner des séances': 'Merge sessions', 'Quelles séances fusionner ?': 'Which sessions to merge?', 'L’app te propose les meilleures paires.': 'The app suggests the best pairs.',
+  'Conseil': 'Advice', '↕️ Mettre dans l’ordre conseillé': '↕️ Use the advised order', 'Nom de la nouvelle séance': 'New session name', '💬 Demander au coach': '💬 Ask the coach',
+  'Proposer une amélioration': 'Suggest an improvement', '💡 Proposer une amélioration': '💡 Suggest an improvement', 'Aider l’app': 'Help the app', 'Envoyer': 'Send', 'Ton idée': 'Your idea',
+  'Pour moi seulement': 'Just for me', 'Proposer pour tout le monde': 'Suggest for everyone', 'Demande de modification': 'Change request', '✓ Appliquer pour tout le monde': '✓ Apply for everyone',
   // Accueil, navigation
   'Séances entraînement': 'Training sessions', 'Accueil': 'Home', 'Progrès': 'Progress', 'Bibliothèque': 'Library', 'Profil': 'Profile', 'Paramètres': 'Settings',
   'Raccourcis': 'Shortcuts', 'Calendrier': 'Calendar', 'Notifications': 'Notifications', 'Toutes les fonctions': 'All features', 'Modifier la mise en page': 'Edit layout',
