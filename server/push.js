@@ -71,14 +71,17 @@ export const wants = (sub, type) => { try { const t = JSON.parse(sub.types || '[
 /** Prévient les abonnés d'un type (et, si donné, seulement ceux de ces comptes). Le texte est lu ensuite par l'appareil. */
 export async function notifyType(env, type, { userIds = null, fetchFn = fetch, limit = 500 } = {}) {
   const rows = (await q(env, 'SELECT endpoint,user_id,types FROM push_subs LIMIT ?', limit).all()).results || [];
-  let sent = 0;
+  let sent = 0, gone = 0, errors = 0, targeted = 0;
   for (const s of rows) {
     // Une annonce de l'administrateur va aux appareils qui veulent les nouveautés.
     if (!wants(s, type === 'announce' ? 'update' : type) || (userIds && !userIds.includes(s.user_id))) continue;
+    targeted++;
     await q(env, 'UPDATE push_subs SET pending=? WHERE endpoint=?', type, s.endpoint).run();
     const r = await sendPush(env, s.endpoint, fetchFn);
-    if (r === 'gone') await q(env, 'DELETE FROM push_subs WHERE endpoint=?', s.endpoint).run(); else if (r === 'ok') sent++;
+    if (r === 'gone') { gone++; await q(env, 'DELETE FROM push_subs WHERE endpoint=?', s.endpoint).run(); } else if (r === 'ok') sent++; else errors++;
   }
+  // Suivi visible par les administrateurs : quand, combien d'appareils joints, combien d'abonnements expirés ou en erreur.
+  if (type === 'update' || type === 'announce') await q(env, "INSERT INTO system_state(key,value) VALUES('last_notify',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", JSON.stringify({ type, at: Date.now(), total: rows.length, targeted, sent, gone, errors })).run().catch(() => {});
   return sent;
 }
 /** À chaque nouveau déploiement (identifiant de version différent) : notification « nouvelle mise à jour ». */

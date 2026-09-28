@@ -27,6 +27,19 @@ async function save(p) {
 }
 
 const TYPE_LABELS = [['reminder', '🏋️', 'Rappels d’entraînement', 'Les jours et à l’heure que tu choisis'], ['update', '🆕', 'Nouvelles mises à jour', 'Quand l’app change, avec ce que ça apporte'], ['reply', '💬', 'Réponses à mes propositions', 'Quand un administrateur répond'], ['admin', '📬', 'Nouvelles propositions', 'Administrateurs seulement']];
+/** Au démarrage : si les notifications sont activées sur cet appareil, on vérifie l'abonnement et on le recrée s'il a disparu
+ * (le navigateur peut le renouveler, ou le serveur l'a retiré car expiré). Une fois par jour au plus. */
+export async function ensurePush() {
+  try {
+    const p = prefs(); if (!p.on || !pushSupported() || Notification.permission !== 'granted' || S.user?.guest) return;
+    const last = Number(ls.get('sea:push-check', 0)) || 0; if (Date.now() - last < 20 * 3600000) return;
+    ls.set('sea:push-check', Date.now());
+    const sub = await subscription(true), st = await api('GET', '/api/push/status?endpoint=' + encodeURIComponent(sub.endpoint));
+    S.pushState = st;
+    if (!st.subscribed || p.types.some((t) => !st.types.includes(t))) { await save(p); S.pushState = { subscribed: true, types: p.types, repaired: true }; }
+  } catch (e) { console.warn('abonnement aux notifications', e?.message || e); }
+}
+ACT.remCheck = async () => { ls.set('sea:push-check', 0); await ensurePush(); toast(S.pushState?.repaired ? 'Abonnement réparé : cet appareil recevra à nouveau les notifications.' : S.pushState?.subscribed ? 'Cet appareil est bien abonné ✓' : 'Impossible de vérifier (connexion ?)', 4500); render(); };
 export function remindersCard() {
   const p = prefs();
   let body;
@@ -39,7 +52,8 @@ export function remindersCard() {
         <label>À quelle heure ?<select data-change="remHour">${Array.from({ length: 33 }, (_, x) => { const m = 6 * 60 + x * 30, v = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; return h`<option value="${v}" ${p.hour === v ? 'selected' : ''}>${v.replace(':', ' h ')}</option>`; })}</select></label>
         <p class="tiny muted">Si un programme est en cours, le rappel te dit quelle séance faire.</p></div>` : ''}`)}</div>
       <label class="chk"><input type="checkbox" data-change="remSilent" ${p.silent ? 'checked' : ''}> 🔕 Silencieuses (sans son ni vibration)</label>
-      <button class="btn sm" data-act="remTest">Envoyer une notification de test</button>` : ''}`;
+      <p class="tiny ${S.pushState?.subscribed === false ? 'warn-t' : 'muted'}">${S.pushState ? (S.pushState.subscribed ? `✓ Cet appareil est abonné${S.pushState.types?.includes('update') ? ' (mises à jour comprises)' : ''}.` : '⚠️ Cet appareil n’est plus abonné.') : 'État de l’abonnement non vérifié.'}</p>
+      <div class="row wrapf"><button class="btn sm" data-act="remTest">Envoyer une notification de test</button><button class="btn sm" data-act="remCheck">🩺 Vérifier cet appareil</button></div>` : ''}`;
   return h`<div class="card"><h3>🔔 Notifications</h3>${body}</div>`;
 }
 CHG.remType = async (el) => {

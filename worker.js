@@ -455,6 +455,12 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/proposals' && m === 'POST') return proposalCreate(request, env, u);
   if (p === '/api/proposals/mine' && m === 'GET') return json({ ok: true, proposals: (await db(env, 'SELECT id,kind,activity,label,detail,status,reply,created_at FROM proposals WHERE user_id=? ORDER BY created_at DESC LIMIT 50', u.id).all()).results || [] });
   if (p === '/api/push/subscribe' && m === 'DELETE') { const b = await readJson(request, 2000); await db(env, 'DELETE FROM push_subs WHERE endpoint=? AND user_id=?', str(b?.endpoint, 800), u.id).run(); return json({ ok: true }); }
+  // État de l'abonnement de cet appareil (pour l'afficher et le réparer tout seul s'il a disparu).
+  if (p === '/api/push/status' && m === 'GET') {
+    const ep = str(url.searchParams.get('endpoint'), 800), row = ep ? await db(env, 'SELECT types,days,hour FROM push_subs WHERE endpoint=? AND user_id=?', ep, u.id).first() : null;
+    let types = []; try { types = JSON.parse(row?.types || '[]'); } catch { types = []; }
+    return json({ ok: true, subscribed: !!row, types });
+  }
   if (p === '/api/push/test' && m === 'POST') {
     if (await limited(env, 'push-t:' + u.id, 5, 3600000)) return fail('Déjà testé plusieurs fois : réessaie plus tard.', 429);
     const subs = (await db(env, 'SELECT endpoint FROM push_subs WHERE user_id=?', u.id).all()).results || [];
@@ -469,6 +475,12 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p.startsWith('/api/admin/')) {
     if (!u.isAdmin) return fail('Droit administrateur requis.', 403);
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
+    if (p === '/api/admin/push-status' && m === 'GET') {
+      const st = async (k) => (await db(env, 'SELECT value FROM system_state WHERE key=?', k).first())?.value || '';
+      let last = null; try { last = JSON.parse(await st('last_notify') || 'null'); } catch { last = null; }
+      const n = await db(env, 'SELECT COUNT(*) c FROM push_subs').first();
+      return json({ ok: true, build: buildId(env), lastBuild: await st('last_build'), last, devices: Number(n?.c) || 0 });
+    }
     if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
     if ((x = p.match(/^\/api\/admin\/users\/([\w-]{1,64})\/role$/)) && m === 'POST') {
       // Nommer ou retirer un administrateur. On ne peut pas retirer le dernier administrateur.

@@ -277,12 +277,21 @@ ACT.hardReload = async () => { if (!(await ask('Recharger l’application ?', { 
 
 /* ═════════ Administration ═════════ */
 async function loadBugs() { try { S.admin.bugs = (await api('GET', '/api/admin/bugs')).reports; } catch (e) { S.admin.error = e.offline ? 'Connexion requise.' : e.message; } render(); }
+/** Suivi des notifications « nouvelle mise à jour » : quand la dernière est partie et vers combien d'appareils. */
+function pushStatusCard() {
+  const p = S.admin.push; if (!p) return '';
+  const l = p.last, when = l?.at ? new Date(l.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  return h`<details class="card how"><summary>🔔 Notifications de mise à jour</summary>
+    <p class="small">${l ? `Dernière envoyée le ${when} : ${l.sent} appareil(s) joint(s) sur ${l.targeted} abonné(s) aux nouveautés${l.gone ? `, ${l.gone} abonnement(s) expiré(s) retiré(s)` : ''}${l.errors ? `, ${l.errors} en erreur` : ''}.` : 'Aucune notification de mise à jour envoyée pour l’instant.'}</p>
+    <p class="tiny muted">${p.devices} appareil(s) abonné(s) en tout. Version en ligne : ${p.build}${p.lastBuild && p.lastBuild !== p.build ? ` (annonce en attente : ${p.lastBuild})` : ''}. Un appareil qui ne reçoit rien : Paramètres › Notifications › « 🩺 Vérifier cet appareil ».</p></details>`;
+}
 function vAdmin() {
   if (!S.user.isAdmin) return h`<form data-submit="adminOn" class="card" autocomplete="off"><h3>🛡️ Administration</h3><p class="small muted">Saisis le mot de passe administrateur pour activer les droits d’administration sur ton compte. Il est vérifié uniquement par le serveur et n’est jamais conservé sur cet appareil.</p>
     <label>Mot de passe administrateur<input type="password" name="password" autocomplete="off" required></label><button class="btn pri" type="submit">Activer</button></form>`;
   const bugs = S.admin.bugs, f = S.admin.filter || 'open';
   if (!bugs && !S.admin.error) setTimeout(loadBugs, 0);
-  return h`<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier presque tout pour tous les comptes : exercices, séances prêtes, intentions par sport, formats de séance et bibliothèque commune. À chaque changement, l’app te demande si c’est pour toi ou pour tout le monde. Tu n’as pas accès aux données privées des autres comptes.</p>
+  if (S.admin.push === undefined) { S.admin.push = null; api('GET', '/api/admin/push-status').then((r) => { S.admin.push = r; render(); }).catch(() => {}); }
+  return h`${pushStatusCard()}<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier presque tout pour tous les comptes : exercices, séances prêtes, intentions par sport, formats de séance et bibliothèque commune. À chaque changement, l’app te demande si c’est pour toi ou pour tout le monde. Tu n’as pas accès aux données privées des autres comptes.</p>
       <div class="row wrapf"><button class="btn" data-act="libSub" data-id="common">📚 Bibliothèque commune</button><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
     ${vAdminContent()}
     ${vAdminProposals()}${vAdminUsers()}

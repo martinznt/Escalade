@@ -129,6 +129,7 @@ async function enter(user, fresh) {
   parseHash();
   if (fresh || !location.hash) go('home', 'dash'); else render();
   syncAll();
+  setTimeout(() => import('./reminders.js').then((m) => m.ensurePush()).catch(() => {}), 4000); // réabonnement aux notifications si besoin
 }
 SUBMIT.login = (f) => authSubmit(f, 'login');
 SUBMIT.register = (f) => authSubmit(f, 'register');
