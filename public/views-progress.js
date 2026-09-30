@@ -7,6 +7,7 @@ import { uid, exKey } from './shared.js';
 import { CAPACITIES, MUSCLES, METRICS } from './model.js';
 import { benchmarks, periodSummary, regularity, loadAnalysis, records, timeline, journal, diagnostics, atypicalSessions, undertrained, forgottenGoals, whyNoProgress, activeGoals, goalLabel, labReport, entryActivity, activityLabel, perfText, muscleVolume, achievements, capacityState, confWord } from './brain.js';
 import { anatomySvg } from './anatomy.js';
+import { compressPhoto } from './views-climb.js';
 import { streakCard, badgesCard } from './views-motiv.js';
 import { composePage } from './layout.js';
 
@@ -87,8 +88,23 @@ function vEntry(e) {
       ${q.felt?.length ? h`<p class="small">Muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}</p>` : ''}${q.hardest ? h`<p class="small">Plus difficile : ${q.hardest}</p>` : ''}${q.easiest ? h`<p class="small">Plus facile : ${q.easiest}</p>` : ''}
       ${d.rpe ? h`<p class="small">Ressenti : ${d.rpe}/5</p>` : ''}${d.note ? h`<p class="small">📝 ${d.note}</p>` : ''}${(q.answers || []).map((a) => h`<p class="small">${a.q} : ${a.a}</p>`)}${(d.swaps || []).length ? h`<p class="small">Remplacements : ${d.swaps.map((s) => `${s.from} → ${s.to}`).join(', ')}</p>` : ''}</div>
     <div class="card">${(d.exercises || []).map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${(x.sets || []).map((s) => s.seconds ? `${s.seconds} s` : `${s.reps}${s.load ? ' × ' + s.load + ' kg' : ''}`).join(' · ')}</div></div></div>`)}</div>
+    ${mediaCard(e)}
     <div class="row wrapf"><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
 }
+/* Journal visuel : photos (réduites, synchronisées), liens vidéo, captures et notes liés à une séance. Privé au compte. */
+function mediaCard(e) {
+  const list = itemsOf('media').filter((m) => m.ref === e.id);
+  return h`<div class="card"><h3>📷 Photos, vidéos et notes</h3>${list.length ? list.map((m) => { const ph = m.hasPhoto ? item('photo', m.id) : null;
+      return h`<div class="item"><div class="grow">${ph?.data ? h`<img src="${ph.data}" alt="${m.note || 'Photo de la séance'}" class="mthumb">` : ''}<b class="small">${m.note || { photo: 'Photo', video: 'Vidéo', capture: 'Capture', note: 'Note' }[m.kind]}</b>${m.url && /^https:\/\//.test(m.url) ? h` <a class="small acc-t" href="${m.url}" target="_blank" rel="noopener noreferrer">Ouvrir la vidéo</a>` : ''}</div><button class="btn sm ic danger" data-act="mediaDel" data-id="${m.id}" aria-label="Retirer">✕</button></div>`; }) : h`<p class="small muted">Rien pour l’instant.</p>`}
+    <div class="row wrapf"><label class="btn sm filebtn">📷 Photo / capture<input type="file" accept="image/*" data-change="mediaPhoto" data-id="${e.id}" class="hidden"></label><button class="btn sm" data-act="mediaLink" data-id="${e.id}">🎬 Lien vidéo</button><button class="btn sm" data-act="mediaNote" data-id="${e.id}">📝 Note</button></div>
+    <p class="tiny muted">Visible seulement par toi. Les vidéos ne sont pas stockées : garde un lien (https).</p></div>`;
+}
+const mediaBase = (ref) => { const e = S.history.find((x) => x.id === ref); return { ref, refType: 'history', activity: e?.data?.activity || e?.data?.context?.phases?.[0]?.activity || '', date: Date.now() }; };
+CHG.mediaPhoto = async (el) => { const id = 'md-' + uid().slice(0, 14); try { const ph = await compressPhoto(el.files?.[0]); putItem('photo', id, ph); putItem('media', id, { ...mediaBase(el.dataset.id), kind: 'photo', hasPhoto: true, note: '' }); toast('Photo ajoutée'); render(); } catch (e) { toast(e.message, 4000, 'bad'); } };
+ACT.mediaLink = (el) => { const url = (prompt('Lien de la vidéo (https://…) :', 'https://') || '').trim(); if (!url || url === 'https://') return; if (!/^https:\/\/[^\s]{4,}$/.test(url)) return toast('Le lien doit commencer par https://', 4000); const note = prompt('Légende (facultatif) :', '') || ''; putItem('media', 'md-' + uid().slice(0, 14), { ...mediaBase(el.dataset.id), kind: 'video', url, note }); render(); };
+ACT.mediaNote = (el) => { const note = (prompt('Ta note :', '') || '').trim(); if (!note) return; putItem('media', 'md-' + uid().slice(0, 14), { ...mediaBase(el.dataset.id), kind: 'note', note }); render(); };
+ACT.mediaDel = async (el) => { if (!(await ask('Retirer cet élément ?', { danger: true, ok: 'Retirer' }))) return; delItem('media', el.dataset.id); if (item('photo', el.dataset.id)) delItem('photo', el.dataset.id); render(); };
+ACT.mediaView = (el) => { const ph = item('photo', el.dataset.id), m = item('media', el.dataset.id); if (ph?.data) openSheet(h`<img src="${ph.data}" alt="${m?.note || 'Photo'}" style="width:100%;border-radius:12px"><button class="btn" data-act="closeSheet">Fermer</button>`); };
 ACT.histEdit = (el) => { const e = S.history.find((x) => x.id === el.dataset.id); if (!e) return; openSheet(h`<h2 style="margin:0">Modifier</h2><form data-submit="histSave" class="stack"><input type="hidden" name="id" value="${e.id}"><label>Ressenti (1–5)<select name="rpe"><option value="0">—</option>${[1, 2, 3, 4, 5].map((v) => h`<option ${e.data?.rpe === v ? 'selected' : ''}>${v}</option>`)}</select></label><label>Note<textarea name="note" maxlength="600">${e.data?.note || ''}</textarea></label><button class="btn pri" type="submit">Enregistrer</button></form>`); };
 SUBMIT.histSave = (f) => { const d = Object.fromEntries(new FormData(f)), e = S.history.find((x) => x.id === d.id); if (!e) return; updateHistory({ ...e, data: { ...e.data, rpe: Number(d.rpe) || 0, note: d.note } }); closeSheet(); toast('Enregistré'); render(); };
 ACT.histDel = async (el) => { if (!(await ask('Supprimer cette séance de l’historique ?', { ok: 'Supprimer', danger: true }))) return; deleteHistory(el.dataset.id); go('progress', 'history'); };
@@ -108,15 +124,17 @@ CHG.progEx = (el) => { S.progressEx = el.value; render(); };
 
 /* ═════════ Timeline et journal ═════════ */
 /** Le journal : tout ce qui s'est passé, au même endroit (séances, blocs et voies, mesures, notes, étapes), avec des filtres. */
-const JF = [['all', 'Tout'], ['session', '🏋️ Séances'], ['ascent', '🧗 Blocs et voies'], ['perf', '📏 Mesures'], ['note', '📝 Notes'], ['step', '🏆 Étapes et records']];
+const JF = [['all', 'Tout'], ['session', '🏋️ Séances'], ['ascent', '🧗 Blocs et voies'], ['perf', '📏 Mesures'], ['note', '📝 Notes'], ['media', '📷 Photos et vidéos'], ['step', '🏆 Étapes et records']];
 function vJournal() {
   const c = ctx(), f = JF.some(([k]) => k === S.jf) ? S.jf : 'all', max = S.jMax || 60;
   const steps = timeline(c).map((e) => ({ t: e.t, kind: 'step', icon: e.icon, title: e.text, text: '', note: '' }));
-  const all = [...journal(c, 2000), ...steps].sort((x, y) => y.t - x.t), list = all.filter((e) => f === 'all' || e.kind === f);
+  const medias = itemsOf('media').map((m) => ({ t: m.date, kind: 'media', icon: { photo: '📷', video: '🎬', capture: '🖼️', note: '📝' }[m.kind] || '📎', title: m.note || { photo: 'Photo', video: 'Vidéo', capture: 'Capture', note: 'Note' }[m.kind], text: [m.activity ? activityLabel(m.activity, c) : '', m.url ? '🔗 lien' : ''].filter(Boolean).join(' · '), note: '', id: m.ref, media: m }));
+  const all = [...journal(c, 2000), ...steps, ...medias].sort((x, y) => y.t - x.t), list = all.filter((e) => f === 'all' || e.kind === f);
   return h`<form data-submit="jnote" class="card"><textarea name="text" maxlength="1000" required rows="2" placeholder="📝 Une note, une sensation…" aria-label="Ajouter une note au journal"></textarea><button class="btn pri" type="submit">＋ Ajouter au journal</button></form>
     ${c.future.length ? h`<div class="card flat warn-b small">${c.future.length} séance(s) datée(s) dans le futur ne sont pas comptées comme réalisées (horloge ou import erroné).</div>` : ''}
     <div class="chips">${JF.map(([k, l]) => chip(f === k, l, `data-act="jFilter" data-id="${k}"`))}</div>
     ${list.length ? list.slice(0, max).map((e) => { const inner = h`<span class="ico sm">${e.icon}</span><div class="grow"><div class="row between wrapf"><b>${e.title}</b><span class="tiny muted">${e.kind === 'step' ? fmtDay(e.t) : fmtDateTime(e.t)}</span></div>${e.text ? h`<div class="small">${e.text}</div>` : ''}${e.note ? h`<div class="small muted">« ${e.note} »</div>` : ''}${e.more?.length ? h`<div class="tiny muted">${e.more.join(' · ')}</div>` : ''}</div>`;
+        if (e.kind === 'media') return h`<div class="card journal media row">${inner}${e.media.hasPhoto ? h`<button class="btn sm" data-act="mediaView" data-id="${e.media.id}">Voir</button>` : ''}${e.media.url && /^https:\/\//.test(e.media.url) ? h`<a class="btn sm" href="${e.media.url}" target="_blank" rel="noopener noreferrer">Ouvrir</a>` : ''}${e.id ? h`<button class="btn sm ghost" data-act="histOpen" data-id="${e.id}">Séance</button>` : ''}</div>`;
         return e.kind === 'session' && e.id ? h`<button class="card pick journal session row" data-act="histOpen" data-id="${e.id}">${inner}<span class="chev">›</span></button>` : h`<div class="card journal ${e.kind} row">${inner}</div>`; })
       : empty(f === 'all' ? 'Ton journal regroupera tes séances, blocs et voies, mesures, notes et étapes.' : 'Rien de ce type pour l’instant.', f === 'all' || f === 'session' ? h`<button class="btn pri" data-act="genOpen">▶ Faire la séance du jour</button> <button class="btn" data-act="cpNew">✨ Créer une séance</button>` : '')}
     ${list.length > max ? h`<button class="btn ghost" data-act="jMore">Voir plus (${list.length - max})</button>` : ''}`;
@@ -143,7 +161,7 @@ function vLab() {
   return h`<p class="muted small">Teste une idée sur quelques semaines : hypothèse, état avant, période, état après, comparaison. Une expérience personnelle ne démontre pas une causalité scientifique.</p>
     <button class="btn pri" data-act="labNew">＋ Nouvelle expérience</button>
     ${labs.length ? labs.map((l) => { const r = labReport(l, c); return h`<div class="card"><div class="row between"><b>🧪 ${l.title}</b>${tag(({ running: 'en cours', done: 'terminée', abandoned: 'abandonnée' })[l.status], l.status === 'done' ? 'ok' : '')}</div>
-      <p class="small">${l.hypothesis}</p><p class="tiny muted">Du ${l.startDate} pendant ${l.weeks} semaine(s)${l.capId ? ' · capacité suivie : ' + (CAPACITIES[l.capId]?.label || l.capId) : ''}${l.metricId ? ' · mesure : ' + (c.metrics[l.metricId]?.label || l.metricId) : ''}</p>
+      <p class="small">${l.hypothesis}</p>${l.criteria ? h`<p class="tiny">Critères observés : ${l.criteria}</p>` : ''}<p class="tiny muted">Du ${l.startDate} pendant ${l.weeks} semaine(s)${l.capId ? ' · capacité suivie : ' + (CAPACITIES[l.capId]?.label || l.capId) : ''}${l.metricId ? ' · mesure : ' + (c.metrics[l.metricId]?.label || l.metricId) : ''}</p>
       ${meter(r.progress * 100)}<p class="small">${r.sessions} séance(s) pendant la période${r.capSets != null ? ` · ${r.capSets} séries pondérées sur la capacité` : ''}.</p><p class="small">${r.text}</p><p class="tiny muted">${r.disclaimer}</p>${l.conclusion ? h`<p class="small"><b>Conclusion :</b> ${l.conclusion}</p>` : ''}
       <div class="row wrapf"><button class="btn sm" data-act="labEdit" data-id="${l.id}">✎ Mettre à jour</button><button class="btn danger sm" data-act="labDel" data-id="${l.id}">Supprimer</button></div></div>`; }) : ''}`;
 }
@@ -152,6 +170,7 @@ function labForm(l) {
   return h`<h2 style="margin:0">${l ? 'Expérience' : 'Nouvelle expérience'}</h2><form data-submit="labSave" class="stack"><input type="hidden" name="id" value="${l?.id || ''}">
     <label>Titre<input name="title" required maxlength="80" value="${l?.title || ''}" placeholder="Ex. 2 séances de gainage par semaine"></label>
     <label>Hypothèse de départ<textarea name="hypothesis" maxlength="500">${l?.hypothesis || ''}</textarea></label>
+    <label>Critères observés <span class="tiny muted">(ce que tu regardes : ressenti, réussites, mesure…)</span><input name="criteria" maxlength="300" value="${l?.criteria || ''}" placeholder="Ex. nombre de voies enchaînées, ressenti des avant-bras"></label>
     <div class="grid2"><label>Début<input type="date" name="startDate" value="${l?.startDate || today}"></label>${numberField('weeks', 'Durée', l?.weeks ?? 4, { min: 1, max: 52, step: 1, unit: 'semaines' })}</div>
     <div class="grid2"><label>Capacité suivie<select name="capId"><option value="">—</option>${Object.entries(CAPACITIES).map(([id, x]) => h`<option value="${id}" ${l?.capId === id ? 'selected' : ''}>${x.label}</option>`)}</select></label>
     <label>Mesure avant / après<select name="metricId"><option value="">—</option>${Object.entries(c.metrics).filter(([, m]) => m.kind !== 'grade').map(([id, m]) => h`<option value="${id}" ${l?.metricId === id ? 'selected' : ''}>${m.label}</option>`)}</select></label></div>
@@ -162,5 +181,5 @@ function labForm(l) {
 }
 ACT.labNew = () => openSheet(labForm(null), { wide: true });
 ACT.labEdit = (el) => { const l = item('lab', el.dataset.id); if (l) openSheet(labForm(l), { wide: true }); };
-SUBMIT.labSave = (f) => { const d = Object.fromEntries(new FormData(f)); putItem('lab', d.id || 'lab-' + uid().slice(0, 12), { title: d.title, hypothesis: d.hypothesis, startDate: d.startDate, weeks: Number(d.weeks) || 4, capId: d.capId, metricId: d.metricId, before: { value: d.before === '' ? null : Number(d.before), date: 0 }, after: { value: d.after === '' ? null : Number(d.after), date: 0 }, status: d.status, conclusion: d.conclusion }); closeSheet(); buzzOk(); toast('Expérience enregistrée'); render(); };
+SUBMIT.labSave = (f) => { const d = Object.fromEntries(new FormData(f)); putItem('lab', d.id || 'lab-' + uid().slice(0, 12), { title: d.title, hypothesis: d.hypothesis, criteria: d.criteria || '', startDate: d.startDate, weeks: Number(d.weeks) || 4, capId: d.capId, metricId: d.metricId, before: { value: d.before === '' ? null : Number(d.before), date: 0 }, after: { value: d.after === '' ? null : Number(d.after), date: 0 }, status: d.status, conclusion: d.conclusion }); closeSheet(); buzzOk(); toast('Expérience enregistrée'); render(); };
 ACT.labDel = async (el) => { if (await ask('Supprimer cette expérience ?', { danger: true, ok: 'Supprimer' })) { delItem('lab', el.dataset.id); render(); } };

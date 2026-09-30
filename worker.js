@@ -5,7 +5,8 @@ import { SCHEMA, ADD_COLUMNS } from './schema.js';
 import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
-import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, DEFAULT_MODEL as AI_MODEL } from './server/ai.js';
+import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, extractJson, DEFAULT_MODEL as AI_MODEL } from './server/ai.js';
+import { cleanOps } from './public/sessionedit.js';
 import { estimateLevel } from './public/estimate.js';
 import { sessionMeta } from './public/sessionmeta.js';
 import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
@@ -25,7 +26,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -437,6 +438,20 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/bugs' && m === 'POST') return bugCreate(request, env, u);
   if (p === '/api/ai/draft' && m === 'POST') return aiDraftRoute(request, env, u);
   if (p === '/api/ai/chat' && m === 'POST') return aiChatRoute(request, env, u);
+  if (p === '/api/ai/session-edit' && m === 'POST') {
+    // Traduit une demande en opérations sur la séance ; le client montre le plan et n'applique rien sans « Appliquer ».
+    const b = await readJson(request, 8000), text = str(b?.text, 400), phases = Array.isArray(b?.phases) ? b.phases.slice(0, 20).map((x, i) => ({ i, name: str(x?.name, 60), role: str(x?.role, 20), minutes: clamp(x?.minutes, 0, 600, 0), intensity: str(x?.intensity, 8) })) : [];
+    if (text.length < 3 || !phases.length) return fail('Demande ou séance manquante.');
+    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (await limited(env, 'ai-e:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
+    try {
+      const out = await env.AI.run(env.AI_MODEL || AI_MODEL, { max_tokens: 400, temperature: 0.1, messages: [
+        { role: 'system', content: 'Tu traduis une demande de modification de séance en opérations JSON strictes : {"ops":[{"op":"total|keep|only|remove|add|intensity|shorten","idx":[indices des phases],"minutes":n,"role":"technique|endurance|force|puissance|mobilite|perf|pause","dir":-1|1}]}. Uniquement du JSON. N’invente aucune phase : utilise les indices fournis.' },
+        { role: 'user', content: `Phases : ${JSON.stringify(phases)}\nDemande : ${text}` }] });
+      const x = extractJson(out);
+      return json({ ok: true, ops: cleanOps(x?.ops, phases.length) });
+    } catch (e) { console.error('ai-edit', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+  }
   if (p === '/api/ai/goal' && m === 'POST') {
     const b = await readJson(request, 4000), text = str(b?.text, 300);
     if (text.length < 3) return fail('Écris ton objectif.');

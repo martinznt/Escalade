@@ -580,7 +580,8 @@ await step('V2 : chaîne de réglages — objectif placé au début puis déplac
   await A.locator('[data-act=cpEdit]').nth(tags2.length - 2).click(); await A.waitForSelector('#sheet .chainlink');
   assert.equal(await a.count('#sheet .chainlink'), 8); assert.match(await a.text('#sheet'), /1 · Type de phase[\s\S]*3 · Précisément[\s\S]*6 · Lieu[\s\S]*8 · Ce que l’app décide/);
   await a.click('#sheet [data-act=cpPhPlace][data-id=other]'); await A.waitForSelector('#sheet select[data-change=cpPhEnv]');
-  await A.selectOption('#sheet select[data-change=cpPhEnv]', { index: 1 }); await A.waitForTimeout(150);
+  const other = await A.evaluate(async () => { const st = await import('/state.js'), def = st.S.cp.envId || st.ctx().defEnv?.id || ''; return [...document.querySelectorAll('#sheet select[data-change=cpPhEnv] option')].map((o) => o.value).find((v) => v && v !== def); });
+  assert.ok(other, 'un autre lieu que celui de la séance'); await A.selectOption('#sheet select[data-change=cpPhEnv]', other); await A.waitForTimeout(150);
   await A.fill('#sheet input[data-change=cpPhTravel]', '15'); await A.press('#sheet input[data-change=cpPhTravel]', 'Tab'); await A.waitForTimeout(150);
   await A.keyboard.press('Escape'); await A.waitForTimeout(150);
   assert.match(await a.text('#main'), /🚗 15 min de déplacement/);

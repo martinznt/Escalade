@@ -626,3 +626,6 @@ pre.txt { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 .trade { display: grid; gap: 2px; margin: 6px 0; }
 .trade input[type=range] { width: 100%; }
 .card.chain .kicker { margin-top: 4px; }
+
+.mthumb { display:block; max-width:100%; max-height:180px; border-radius:10px; margin-bottom:4px; object-fit:cover; }
+.chip.static.on { border-color: var(--accent); color: var(--accent); }

@@ -39,7 +39,7 @@ export function transitions(phases, envs = [], defaultEnvId = '') {
     for (const n of phaseNeeds(p)) if (pl.equipment && !pl.equipment.has(n)) issues.push({ kind: 'material', text: `« ${EQ_LABEL[n] || n} » n’est pas dans le matériel de ${pl.name}.` });
     if (i === 0) { if (issues.length) out.push({ from: -1, to: 0, travel: 0, issues }); return; }
     const a = phases[i - 1], pa = places[i - 1];
-    const moved = pa.envId && pl.envId && pa.envId !== pl.envId;
+    const moved = !!pl.envId && pa.envId !== pl.envId && !pl.free && !pa.free;
     const travel = moved ? Math.max(0, Math.round(Number(p.place?.travelMin) || 0)) : 0;
     if (moved && !p.place?.travelMin) issues.push({ kind: 'travel-missing', text: `Changement de lieu (${pa.name} → ${pl.name}) : temps de déplacement non renseigné.` });
     if (moved) {

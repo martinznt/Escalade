@@ -111,9 +111,17 @@ export const SCHEMAS = {
     title: ['s', 80], hypothesis: ['s', 500], goalId: ['id'], capId: ['id'], metricId: ['id'], startDate: ['day'], weeks: ['n', 1, 52, 4],
     before: ['obj', { value: ['n', -1e7, 1e7, null], note: ['s', 300], date: ['n', 0, 9e15, 0] }],
     after: ['obj', { value: ['n', -1e7, 1e7, null], note: ['s', 300], date: ['n', 0, 9e15, 0] }],
-    status: ['e', ['running', 'done', 'abandoned'], 'running'], conclusion: ['s', 800],
+    status: ['e', ['running', 'done', 'abandoned'], 'running'], conclusion: ['s', 800], criteria: ['s', 300],
   },
   jnote: { date: ['n', 0, 9e15, 0], text: ['s', 1000] },
+  // V2 — mémoire des décisions d'entraînement (décision, contexte, raison, résultat éventuel).
+  decision: { kind: ['e', ['strategy', 'suggestion', 'ignored', 'unusual', 'edit', 'sacrifice'], 'edit'], text: ['s', 200], reason: ['s', 300], ref: ['s', 80], sport: ['s', 40], goal: ['s', 80], date: ['n', 0, 9e15, 0], result: ['s', 300] },
+  // V2 — ADN de séance (structure en %, sans exercices) et module (phases réutilisables). JSON validé à la lecture (dna.js).
+  sdna: { name: ['s', 60], sport: ['s', 40], json: ['s', 12000], summary: ['s', 300] },
+  smodule: { name: ['s', 60], sport: ['s', 40], json: ['s', 12000], minutes: ['n', 0, 600, 0] },
+  // V2 — journal visuel : photo (données dans « photo », même identifiant), lien vidéo ou note liés à une séance / un objectif.
+  media: { kind: ['e', ['photo', 'video', 'capture', 'note'], 'note'], ref: ['s', 80], refType: ['e', ['history', 'goal', 'seance'], 'history'], url: ['s', 400], note: ['s', 600],
+    activity: ['s', 40], goalId: ['id'], styles: ['ids', 12], date: ['n', 0, 9e15, 0], hasPhoto: ['b'] },
   // Remplacement d'exercice effectué (sert à détecter « exercice souvent remplacé »).
   swap: { from: ['s', 80], to: ['s', 80], date: ['n', 0, 9e15, 0], where: ['e', ['generator', 'seance', 'player'], 'seance'] },
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
