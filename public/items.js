@@ -69,6 +69,8 @@ export const SCHEMAS = {
     type: ['e', ['skill', 'metric', 'grade', 'sessions', 'ascents', 'custom'], 'custom'], label: ['s', 80], skillId: ['s', 40], metricId: ['id'],
     target: ['n', -1e7, 1e7, null], current: ['n', -1e7, 1e7, null], unit: ['s', 20], gradeTarget: ['obj', GRADE_SNAPSHOT], activityId: ['id'], caps: ['caps', 8],
     status: ['e', ['active', 'done', 'archived'], 'active'], deadline: ['day'], startedAt: ['n', 0, 9e15, 0], doneAt: ['n', 0, 9e15, 0], note: ['s', 300],
+    // V2 : critères de réussite, exercices liés, origine (fiche relue de l'assistant).
+    criteria: ['strs', 4, 160], exercises: ['ids', 8], source: ['e', ['', 'ia'], ''],
   },
   // Journal d'escalade : un bloc / une voie tenté(e) ou réussi(e), avec la cotation au moment de la saisie.
   ascent: {

@@ -392,9 +392,13 @@ function goalFiche(d) {
     <label>Indicateurs de progrès <span class="tiny muted">(un par ligne)</span><textarea name="indicators" rows="2" maxlength="600">${(d.indicators || []).join('\n')}</textarea></label>
     <label>Étapes <span class="tiny muted">(une par ligne)</span><textarea name="steps" rows="3" maxlength="800">${(d.steps || []).join('\n')}</textarea></label>
     ${numberField('weeks', 'Horizon (semaines, facultatif)', d.weeks || '', { min: 0, max: 52, step: 1 })}
+    <label>Type d’objectif<select name="gtype">${[['custom', 'Personnel'], ['metric', 'Atteindre une mesure'], ['grade', 'Réussir une cotation'], ['sessions', 'Nombre de séances'], ['ascents', 'Nombre de blocs / voies'], ['skill', 'Une figure']].map(([k, l]) => h`<option value="${k}" ${(d.type || 'custom') === k ? 'selected' : ''}>${l}</option>`)}</select></label>
+    ${d.skillId && SKILLS[d.skillId] ? h`<label class="row"><input type="checkbox" name="skillId" value="${d.skillId}" checked><span class="small">Lier à la figure « ${SKILLS[d.skillId].label} » (étapes et critères de l’app)</span></label>` : ''}
+    <label>Critères de réussite <span class="tiny muted">(un par ligne)</span><textarea name="criteria" rows="2" maxlength="600">${(d.criteria || []).join('\n')}</textarea></label>
+    ${d.exercises?.length ? h`<span class="kicker">Exercices liés <span class="tiny muted">(décoche ceux que tu ne veux pas)</span></span><div class="stack tight">${d.exercises.map((id) => h`<label class="row"><input type="checkbox" name="ex" value="${id}" checked><span class="small">${byId(id)?.name || id}</span></label>`)}</div>` : ''}
     ${d.confidence ? h`<p class="tiny muted">Confiance de l’assistant : ${d.confidence}.</p>` : ''}
     ${d.missing?.length ? h`<div class="card flat"><b class="small">❔ Ce qui manque pour être plus précis</b><ul class="clean tight small">${d.missing.map((m) => h`<li>${m}</li>`)}</ul></div>` : ''}
-    <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="clean tight small">${(d.how || []).map((r) => h`<li>${REASON_IC[r.cat] || '•'} ${r.text}</li>`)}</ul></details>
+    <details class="how mini"><summary>Pourquoi cette fiche ? Comment le sais-tu ?</summary>${[['fact', '📊 Informations connues'], ['rule', '🔗 Relations existantes'], ['inference', '🤔 Estimations'], ['missing', '❔ Incertitudes']].map(([k, t]) => { const l = (d.how || []).filter((r) => r.cat === k); return l.length ? h`<b class="tiny">${t}</b><ul class="clean tight small">${l.map((r) => h`<li>${r.text}</li>`)}</ul>` : ''; })}</details>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer l’objectif</button><button class="btn" type="button" data-act="goalWrite" data-text="${d.text || ''}">Reformuler</button></div></form>`;
 }
 /** Sans assistant : mots-clés → capacités (aucune valeur inventée ; les chiffres ne sont repris que s'ils sont écrits). */
@@ -423,7 +427,8 @@ SUBMIT.goalFicheSave = (f) => {
   if (!caps.length && !metricId) return toast('Coche au moins une capacité ou choisis une mesure.', 4000);
   const lines = (k, n, len) => String(fd.get(k) || '').split('\n').map((x) => x.trim().slice(0, len)).filter(Boolean).slice(0, n);
   const id = 'g-' + uid().slice(0, 12), act = ACTIVITIES[fd.get('activityId')] ? String(fd.get('activityId')) : '';
-  putItem('goal', id, { type: metricId ? 'metric' : 'custom', label, metricId, target, current: null, unit: metricId ? ctx().metrics[metricId]?.unit || '' : '', caps, activityId: act, status: 'active', startedAt: Date.now(),
+  const gtype = ['custom', 'metric', 'grade', 'sessions', 'ascents', 'skill'].includes(fd.get('gtype')) ? String(fd.get('gtype')) : 'custom', skillId = SKILLS[fd.get('skillId')] ? String(fd.get('skillId')) : '';
+  putItem('goal', id, { type: skillId ? 'skill' : metricId && gtype === 'custom' ? 'metric' : gtype === 'skill' && !skillId ? 'custom' : gtype, skillId, criteria: lines('criteria', 4, 160), exercises: fd.getAll('ex').map(String).filter((x) => byId(x)).slice(0, 8), source: 'ia', label, metricId, target, current: null, unit: metricId ? ctx().metrics[metricId]?.unit || '' : '', caps, activityId: act, status: 'active', startedAt: Date.now(),
     deadline: weeks ? new Date(Date.now() + weeks * 7 * 86400000).toISOString().slice(0, 10) : '', note: [String(fd.get('summary') || '').trim(), ...lines('indicators', 4, 140).map((x) => `📈 ${x}`), ...lines('steps', 5, 160).map((x, k) => `${k + 1}. ${x}`)].join(' · ').slice(0, 300) });
   const back = S.goalBack; S.goalDraft = null; S.goalBack = ''; closeSheet(); toast('Objectif enregistré');
   if (back === 'cp' && S.cp) { S.cp.intentGoal = id; S.cp.goalIds = [...new Set([...(S.cp.goalIds || []), id])]; go('library', 'climbplan'); } else go('profile', 'goals', id);

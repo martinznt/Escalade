@@ -46,7 +46,9 @@ export function vStudio() {
         ['studioAi', '', '🤖', 'Brouillon avec l’assistant', 'Décris ce que tu veux ; tu relis avant toute publication'],
         ['setSub', 'lab', '🧠', 'Laboratoire', 'Analyser un problème, voir les règles sur des exemples'],
         ['setSub', 'audit', '📜', 'Journal des changements', 'Qui a fait quoi, quand, avant / après'],
-      ])}</div>
+        ...(canRole('intelligence') ? [['setSub', 'health', '🩺', 'Santé des données', 'Doublons, relations incohérentes, anciennes structures']] : []),
+        ...(canRole('technical') ? [['setSub', 'maint', '🛠️', 'Maintenance', 'Signalements regroupés et pistes de l’assistant'], ['setSub', 'code', '💻', 'Propositions de code', 'Diff, impact, validation — jamais de déploiement automatique']] : []),
+      ])}<p class="tiny muted">Tes rôles : ${(S.user.roles || ['super']).map((r) => ROLE_L[r]).join(', ')}.</p></div>
     <div class="card"><div class="row between"><h3>Lots</h3><button class="btn sm" data-act="studioReload" aria-label="Actualiser">↻</button></div>
       <div class="chips">${[['draft', 'Brouillons'], ['published', 'Publiés'], ['rolled_back', 'Annulés'], ['all', 'Tous']].map(([k, l]) => chip(st.filter === k, l, `data-act="studioFilter" data-id="${k}"`))}</div>
       ${st.err ? h`<p class="err small">${st.err}</p>` : !st.sets ? skeleton(2) : st.sets.length ? h`<div class="setmenu">${st.sets.map((c) => h`<button class="setrow" data-act="studioOpen" data-id="${c.id}"><span class="sic">${STATUS[c.status]?.[0] || '•'}</span><span class="grow"><b>${c.title}</b><small>${STATUS[c.status]?.[1]} · ${SOURCE[c.source] || c.source} · ${c.count} modification(s) · ${c.author || '—'} · ${relDate(c.updatedAt)}${c.lastCheck === true ? ' · ✓ vérifié' : c.lastCheck === false ? ' · ✗ vérifications à revoir' : ''}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">Aucun lot ici.</p>`}</div>`;
@@ -94,7 +96,8 @@ ACT.studioRollback = async () => {
 ACT.studioVersions = async (el) => {
   try {
     const { versions } = await api('GET', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}`);
-    openSheet(h`<h2 style="margin:0">🕑 Versions · ${el.dataset.id}</h2>${versions.length ? versions.map((v) => h`<details class="how mini"><summary>v${v.version} · ${fmtDateTime(v.at)} · ${v.by || '—'} ${v.hidden ? '(masqué)' : v.data == null ? '(origine)' : ''}</summary><pre class="txt">${v.data ? JSON.stringify(v.data, null, 1) : '—'}</pre></details>`) : h`<p class="small muted">Pas encore de version publiée.</p>`}<button class="btn" data-act="closeSheet">Fermer</button>`, { wide: true });
+    openSheet(h`<h2 style="margin:0">🕑 Versions · ${el.dataset.id}</h2>${versions.length ? versions.map((v, k) => h`<details class="how mini"><summary>v${v.version} · ${fmtDateTime(v.at)} · ${v.by || '—'} ${v.hidden ? '(masqué)' : v.data == null ? '(origine)' : ''}</summary><pre class="txt">${v.data ? JSON.stringify(v.data, null, 1) : '—'}</pre>
+      <div class="row wrapf">${versions[k + 1] ? h`<button class="btn sm" data-act="verDiff" data-k="${el.dataset.k}" data-id="${el.dataset.id}" data-a="${versions[k + 1].version}" data-b="${v.version}">Comparer avec v${versions[k + 1].version}</button>` : ''}${k ? h`<button class="btn sm" data-act="verRestore" data-k="${el.dataset.k}" data-id="${el.dataset.id}" data-v="${v.version}">↩️ Restaurer (brouillon)</button>` : ''}</div></details>`) : h`<p class="small muted">Pas encore de version publiée.</p>`}<button class="btn" data-act="closeSheet">Fermer</button>`, { wide: true });
   } catch (e) { toast(e.message, 4000, 'bad'); }
 };
 
@@ -182,4 +185,85 @@ ACT.labDraft = async (el) => {
   const s = ST().lab.res?.solutions?.[Number(el.dataset.i)]; if (!s?.change) return;
   try { const r = await api('POST', '/api/admin/studio', { title: 'Lab : ' + s.title, note: 'Issu du Laboratoire : ' + (ST().lab.res.reformulation || ''), source: 'lab', items: [{ kind: s.change.kind, id: 'g-' + uid().slice(0, 12), op: 'put', data: s.change.data }] }); toast('Brouillon créé : relis-le'); ST().sets = null; go('settings', 'studioSet', r.id); loadSet(r.id); }
   catch (e) { toast(e.message, 5000, 'bad'); }
+};
+
+/* ═════════ V2 : santé des données, maintenance (IA), propositions de code, rôles ═════════ */
+export const canRole = (r) => !!S.user?.isAdmin && (S.user.roles || ['super']).some((x) => x === 'super' || x === r);
+const roleNeeded = (r) => h`<div class="card"><p class="small">Rôle « ${ROLE_L[r]} » nécessaire (vérifié par le serveur).</p></div>`;
+export const ROLE_L = { content: 'Contenu', intelligence: 'Intelligence', users: 'Utilisateurs', technical: 'Technique', super: 'Super-administrateur' };
+const SEV_L = { high: ['🔴', 'Important'], mid: ['🟠', 'Moyen'], low: ['🟡', 'Mineur'] };
+const TYPE_L = { 'no-caps': 'Exercices sans capacités', 'bad-relation': 'Relations contradictoires', 'no-metric': 'Capacités sans métrique', 'hard-goal': 'Objectifs difficiles à évaluer', duplicate: 'Doublons', orphan: 'Données orphelines', 'old-structure': 'Anciennes structures' };
+export function vHealth() {
+  if (!canRole('intelligence')) return roleNeeded('intelligence');
+  const st = ST(); if (!st.health) { st.health = { loading: true }; api('GET', '/api/admin/health').then((r) => { st.health = r; render(); }).catch((e) => { st.health = { error: e.message }; render(); }); }
+  const r = st.health;
+  if (r.loading) return skeleton(3);
+  if (r.error) return h`<div class="card"><p class="err small">${r.error}</p></div>`;
+  return h`<div class="card"><div class="row between"><h3>🩺 Santé des données</h3><button class="btn sm" data-act="healthReload" aria-label="Actualiser">↻</button></div>
+      <p class="tiny muted">${r.checked.exercises} exercices, ${r.checked.capacities} capacités, ${r.checked.skills} objectifs-figures et ${r.checked.common} éléments communs vérifiés. Une correction devient un brouillon du Studio : rien n’est appliqué sans ta validation.</p>
+      <div class="chips">${Object.entries(r.counts).map(([k, n]) => h`<span class="chip static">${TYPE_L[k] || k} : ${n}</span>`)}</div></div>
+    ${r.issues.length ? r.issues.slice(0, 80).map((x, k) => h`<div class="card flat"><div class="row between wrapf"><span class="small">${SEV_L[x.severity][0]} <b>${TYPE_L[x.type] || x.type}</b></span><span class="tiny muted">${x.target}</span></div><p class="small">${x.text}</p>
+      ${x.fix ? h`<button class="btn sm" data-act="healthFix" data-id="${k}">📝 Préparer la correction (brouillon)</button>` : ''}</div>`) : h`<div class="card"><p class="small">👍 Aucun problème détecté.</p></div>`}`;
+}
+ACT.healthReload = () => { ST().health = null; render(); };
+ACT.healthFix = async (el) => {
+  const x = ST().health?.issues?.[Number(el.dataset.id)]; if (!x?.fix) return;
+  try { const r = await api('POST', '/api/admin/studio', { title: `Santé : ${TYPE_L[x.type] || x.type} — ${x.target}`, note: x.text, items: [x.fix] }); toast('Brouillon créé : vérifie puis publie.'); ST().sets = null; go('settings', 'studioSet', r.id); }
+  catch (e) { toast(e.message, 5000, 'bad'); }
+};
+export function vMaint() {
+  if (!canRole('technical')) return roleNeeded('technical');
+  const m = ST().maint;
+  return h`<div class="card stack"><h3>🛠️ Maintenance</h3><p class="small">L’app regroupe les signalements ouverts ; l’assistant (s’il est activé) propose des pistes. <b>Rien n’est appliqué</b> : chaque piste peut devenir un brouillon de contenu ou une proposition de code, validés par un administrateur.</p>
+      <button class="btn pri" data-act="maintRun" ${m?.busy ? 'disabled' : ''}>${m?.busy ? 'Analyse…' : 'Analyser les signalements'}</button></div>
+    ${m?.res ? h`<div class="card"><h3>${m.res.open} signalement(s) ouvert(s)</h3>${m.res.groups.map((g) => h`<div class="item"><div class="grow small">${g.text}</div></div>`)}</div>
+      <div class="card"><h3>Pistes de l’assistant</h3>${m.res.findings.length ? m.res.findings.map((f) => h`<div class="card flat"><div class="row between wrapf"><b>${f.title}</b>${tag(f.severity, f.severity === 'élevé' ? 'warn' : '')}</div><p class="small">${f.detail}</p><p class="small">➜ ${f.proposal}</p><p class="tiny muted">Domaine : ${f.area}</p>
+          ${f.area === 'code' ? h`<button class="btn sm" data-act="codeNew" data-t="${f.title}" data-s="${f.proposal}">💻 Préparer une proposition de code</button>` : ''}</div>`) : h`<p class="small muted">${m.res.ai === 'indisponible' ? 'Assistant non activé sur ce serveur : seul le regroupement est disponible.' : 'Aucune piste.'}</p>`}</div>` : ''}`;
+}
+ACT.maintRun = async () => { const st = ST(); st.maint = { busy: true }; render(); try { st.maint = { res: await api('POST', '/api/admin/maintenance', {}, { timeout: 45000 }) }; } catch (e) { st.maint = null; toast(e.message, 5000, 'bad'); } render(); };
+export function vCode() {
+  if (!canRole('technical')) return roleNeeded('technical');
+  const st = ST(); if (!st.code) { st.code = { loading: true }; api('GET', '/api/admin/code').then((r) => { st.code = r; render(); }).catch((e) => { st.code = { error: e.message }; render(); }); }
+  const c = st.code, SL = { draft: ['📝', 'À examiner'], approved: ['✅', 'Validée — à déployer à la main'], rejected: ['✗', 'Refusée'] };
+  return h`<div class="card stack"><h3>💻 Propositions de code</h3><p class="small">Proposition → diff → analyse d’impact → tests → validation par un <b>autre</b> administrateur. <b>L’app ne déploie jamais de code</b> : une proposition validée s’applique à la main (git, tests, déploiement), puis peut être annulée comme n’importe quel commit.</p>
+      <button class="btn" data-act="codeNew">＋ Nouvelle proposition</button></div>
+    ${c.loading ? skeleton(2) : c.error ? h`<p class="err small">${c.error}</p>` : c.items.length ? h`<div class="setmenu">${c.items.map((x) => h`<button class="setrow" data-act="codeOpen" data-id="${x.id}"><span class="sic">${SL[x.status]?.[0]}</span><span class="grow"><b>${x.title}</b><small>${SL[x.status]?.[1]} · ${x.author || '—'} · ${relDate(x.updated_at)} · ${(x.impact.files || []).length} fichier(s)${x.impact.flags?.length ? ' · ⚠️ ' + x.impact.flags.length : ''}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">Aucune proposition.</p>`}`;
+}
+ACT.codeNew = (el) => openSheet(h`<form data-submit="codeGo" class="stack"><h2 style="margin:0">💻 Proposition de code</h2>
+  <label>Titre<input name="title" maxlength="120" required value="${el?.dataset?.t || ''}"></label>
+  <label>Résumé / pourquoi<textarea name="summary" rows="3" maxlength="2000">${el?.dataset?.s || ''}</textarea></label>
+  <label>Diff (format unifié, « git diff »)<textarea name="diff" rows="8" required placeholder="--- a/public/…&#10;+++ b/public/…"></textarea></label>
+  <label>Tests prévus / lancés<textarea name="tests" rows="2" maxlength="2000" placeholder="npm test, npm run test:e2e…"></textarea></label>
+  <p class="tiny muted">L’analyse d’impact est faite par le serveur. Secrets et exécution dynamique (eval, new Function, shell) sont refusés.</p>
+  <button class="btn pri big">Enregistrer la proposition</button></form>`, { wide: true });
+SUBMIT.codeGo = async (f) => { const d = Object.fromEntries(new FormData(f)); try { const r = await api('POST', '/api/admin/code', d); closeSheet(); toast('Proposition enregistrée'); ST().code = null; go('settings', 'codeItem', r.id); } catch (e) { toast(e.message, 6000, 'bad'); } };
+ACT.codeOpen = (el) => { ST().codeItem = null; go('settings', 'codeItem', el.dataset.id); };
+export function vCodeItem() {
+  if (!canRole('technical')) return roleNeeded('technical');
+  const st = ST(), it = st.codeItem;
+  if (!it || it.id !== S.param) { if (!st.codeLoading) { st.codeLoading = true; api('GET', '/api/admin/code/' + encodeURIComponent(S.param)).then((r) => { st.codeItem = r.item; st.codeLoading = false; render(); }).catch((e) => { st.codeLoading = false; toast(e.message); }); } return skeleton(2); }
+  const im = it.impact || {};
+  return h`<div class="card stack"><h2 style="margin:0">${it.title}</h2><p class="tiny muted">Par ${it.author || '—'} · ${fmtDateTime(it.createdAt)} · ${it.status === 'draft' ? 'à examiner' : it.status === 'approved' ? `validée par ${it.reviewer || '—'}` : `refusée par ${it.reviewer || '—'}`}</p>
+      ${it.summary ? h`<p class="small">${it.summary}</p>` : ''}
+      <b class="small">Analyse d’impact</b><ul class="clean tight small"><li>Fichiers : ${(im.files || []).join(', ') || '—'}</li><li>Domaines : ${(im.areas || []).join(', ') || '—'}</li><li>+${im.added || 0} / −${im.removed || 0} lignes${im.migration ? ' · migration D1' : ''}</li>${(im.flags || []).map((x) => h`<li class="warn-t">⚠️ ${x}</li>`)}</ul>
+      ${it.tests ? h`<b class="small">Tests</b><p class="small">${it.tests}</p>` : ''}
+      <details class="how mini"><summary>Voir le diff</summary><pre class="txt">${it.diff}</pre></details>
+      ${it.note ? h`<p class="small">Note de validation : ${it.note}</p>` : ''}
+      <div class="row wrapf"><a class="btn sm" href="/api/admin/code/${it.id}.patch" download>⬇ Télécharger le .patch</a>${it.status === 'draft' ? h`<button class="btn sm pri" data-act="codeReview" data-d="approve">✅ Valider</button><button class="btn sm ghost danger" data-act="codeReview" data-d="reject">Refuser</button>` : ''}</div>
+      <p class="tiny muted">Valider ne déploie rien : le déploiement reste manuel, avec les tests du dépôt.</p></div>`;
+}
+ACT.codeReview = async (el) => {
+  const approve = el.dataset.d === 'approve';
+  if (!(await ask(approve ? 'Valider cette proposition ?' : 'Refuser cette proposition ?', { ok: approve ? 'Valider' : 'Refuser', danger: !approve, detail: approve ? 'Elle sera marquée « à déployer à la main ». L’app ne déploie jamais de code.' : '' }))) return;
+  const note = prompt('Note (facultatif) :', '') || '';
+  try { await api('POST', `/api/admin/code/${encodeURIComponent(ST().codeItem.id)}/review`, { decision: el.dataset.d, note }); toast(approve ? 'Validée (déploiement manuel)' : 'Refusée'); ST().codeItem = null; ST().code = null; render(); }
+  catch (e) { toast(e.message, 5000, 'bad'); }
+};
+ACT.verDiff = async (el) => {
+  try { const r = await api('GET', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}/diff?a=${el.dataset.a}&b=${el.dataset.b}`);
+    toast(r.changes.length ? `v${el.dataset.a} → v${el.dataset.b} : ${r.changes.map((c) => c.path).join(', ')}` : 'Identiques', 6000); } catch (e) { toast(e.message, 4000, 'bad'); }
+};
+ACT.verRestore = async (el) => {
+  if (!(await ask(`Préparer un brouillon qui rétablit la version ${el.dataset.v} ?`, { ok: 'Préparer', detail: 'Rien n’est publié : tu vérifies puis tu publies depuis le Studio.' }))) return;
+  try { const r = await api('POST', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}/restore`, { version: Number(el.dataset.v) }); closeSheet(); ST().sets = null; go('settings', 'studioSet', r.id); } catch (e) { toast(e.message, 4000, 'bad'); }
 };

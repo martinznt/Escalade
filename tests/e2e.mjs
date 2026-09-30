@@ -747,6 +747,10 @@ await step('Studio : brouillon invisible, vérifications, publication confirmée
   await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=lab]'); await C.waitForSelector('[data-act=labEx]');
   await c.click('[data-act=labEx][data-i="1"]'); await C.waitForSelector('main summary:has-text("échauffement")');
   assert.equal(await (await b.api('GET', '/api/admin/studio')).status, 403, 'un membre n’a pas accès au Studio');
+  // V2 : santé des données, maintenance et propositions de code (lecture ; rien n'est appliqué).
+  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=health]'); await C.waitForSelector('text=Santé des données');
+  await C.waitForSelector('[data-act=healthReload]'); assert.match(await c.text('main'), /capacités/);
+  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=code]'); await C.waitForSelector('text=L’app ne déploie jamais de code');
 });
 await step('l’admin modifie puis supprime la contribution ; pas d’accès aux données privées', async () => {
   const d = (await c.api('GET', '/api/shared/' + commonId)).data.item; assert.equal(d.canEdit, true);

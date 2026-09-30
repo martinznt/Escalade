@@ -5,7 +5,8 @@
 //    identifiants connus de capacités, muscles, matériel et activités sont gardés) ;
 //  - le résultat est une PROPOSITION : l'utilisateur la relit et la modifie avant de l'enregistrer ;
 //  - aucune donnée personnelle (performances, historique) n'est envoyée au modèle : seulement le texte tapé.
-import { CAPACITIES, MUSCLES, EQUIPMENT, ACTIVITIES, METRICS } from '../public/model.js';
+import { CAPACITIES, MUSCLES, EQUIPMENT, ACTIVITIES, METRICS, SKILLS } from '../public/model.js';
+import { LIBRARY } from '../public/library.js';
 
 export const DEFAULT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const str = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -117,10 +118,12 @@ export function buildGoal(text, profile) {
   const actList = Object.entries(ACTIVITIES).map(([id, a]) => `${id} (${a.label})`).join(', ');
   return [{ role: 'system', content: `Tu es un entraîneur sportif francophone, précis et prudent. Réponds UNIQUEMENT par un objet JSON valide.
 Transforme l'objectif écrit par l'utilisateur en fiche d'objectif d'entraînement, adaptée à son profil.
-Format : {"label":"nom court (max 70 caractères)","description":"1 à 2 phrases : ce qu'il faut travailler et pourquoi","activityId":"identifiant de sport ou vide","caps":[{"id":"...","w":0.8}],"indicators":["comment voir qu'on progresse"],"metricId":"identifiant de mesure ou vide","target":nombre ou null,"steps":["étape 1","étape 2","étape 3"],"weeks":nombre de semaines réaliste ou 0,"confidence":"haute|moyenne|faible","missing":["information qui manque pour être plus précis"]}
+Format : {"label":"nom court (max 70 caractères)","description":"1 à 2 phrases : ce qu'il faut travailler et pourquoi","activityId":"identifiant de sport ou vide","caps":[{"id":"...","w":0.8}],"indicators":["comment voir qu'on progresse"],"metricId":"identifiant de mesure ou vide","target":nombre ou null,"steps":["étape 1","étape 2","étape 3"],"weeks":nombre de semaines réaliste ou 0,"confidence":"haute|moyenne|faible","missing":["information qui manque pour être plus précis"],"type":"skill|metric|grade|sessions|ascents|custom","criteria":["critère de réussite observable"],"exercises":["identifiant d'exercice"],"skillId":"identifiant de figure ou vide"}
 Capacités autorisées (3 à 5, identifiants exacts, w = importance de 0.1 à 1) : ${capList}.
 Sports autorisés : ${actList}.
 Mesures autorisées : ${metList}.
+Figures autorisées : ${Object.entries(SKILLS).map(([id, k]) => `${id} (${k.label})`).join(', ')}.
+Exercices autorisés (3 au plus, identifiants exacts) : ${LIBRARY.filter((e) => e.role === 'main').slice(0, 120).map((e) => e.id).join(', ')}.
 Ne donne une cible chiffrée QUE si l'utilisateur écrit lui-même ce nombre. Sinon target = null et ajoute dans missing ce qu'il faudrait préciser. Pas de conseil médical. Perte de poids : progressive et raisonnable, sans régime.
 Profil : ${str(profile, 900) || 'non renseigné'}.` }, { role: 'user', content: str(text, 300) }];
 }
@@ -148,7 +151,18 @@ export function cleanGoal(x, text = '', { hadProfile = false } = {}) {
     ...(target != null ? [{ cat: 'fact', text: `Cible ${target} : écrite par toi.` }] : []),
     ...(num(x.weeks, 0, 52, 0) ? [{ cat: 'inference', text: `Durée d’environ ${num(x.weeks, 0, 52, 0)} semaines : estimation, pas une garantie.` }] : []),
   ];
-  return { label, summary: str(x.description ?? x.summary, 300), activityId, caps: Object.entries(c).map(([id, w]) => ({ id, w })), indicators: list(x.indicators, 4, 140), steps: list(x.steps, 5, 160), metricId, target, weeks: num(x.weeks, 0, 52, 0), confidence: ['haute', 'moyenne', 'faible'].includes(x.confidence) ? x.confidence : 'moyenne', missing: missing.slice(0, 5), how };
+  // V2 : type, critères, exercices et figure liés (identifiants connus seulement), et « pourquoi » par catégorie :
+  // connu (fact) · relation existante du modèle (rule) · estimation (inference) · incertitude (missing).
+  const skillId = SKILLS[String(x.skillId || '')] ? String(x.skillId) : '';
+  const exercises = [...new Set((Array.isArray(x.exercises) ? x.exercises : []).map(String).filter((id) => LIBRARY.some((e) => e.id === id)))].slice(0, 3);
+  const type = skillId ? 'skill' : metricId ? 'metric' : ['grade', 'sessions', 'ascents', 'custom'].includes(x.type) ? x.type : 'custom';
+  const actCaps = ACTIVITIES[activityId]?.caps || {}, linked = Object.keys(c).filter((id) => actCaps[id]);
+  if (linked.length) how.push({ cat: 'rule', text: `Relation existante : ${linked.map((id) => CAPACITIES[id].label.toLowerCase()).join(', ')} ${linked.length > 1 ? 'comptent' : 'compte'} pour ${ACTIVITIES[activityId].label} dans le modèle.` });
+  if (exercises.length) how.push({ cat: 'rule', text: `Exercices liés à ces capacités dans la bibliothèque : ${exercises.map((id) => LIBRARY.find((e) => e.id === id).name).join(', ')}.` });
+  if (skillId) how.push({ cat: 'rule', text: `Figure connue de l’app : ${SKILLS[skillId].label} (étapes et critères existants).` });
+  how.push({ cat: 'inference', text: `Poids des capacités et étapes : estimation de l’assistant, à corriger si besoin (confiance ${['haute', 'moyenne', 'faible'].includes(x.confidence) ? x.confidence : 'moyenne'}).` });
+  for (const m of missing.slice(0, 3)) how.push({ cat: 'missing', text: m });
+  return { label, type, skillId, criteria: list(x.criteria, 4, 160), exercises, summary: str(x.description ?? x.summary, 300), activityId, caps: Object.entries(c).map(([id, w]) => ({ id, w })), indicators: list(x.indicators, 4, 140), steps: list(x.steps, 5, 160), metricId, target, weeks: num(x.weeks, 0, 52, 0), confidence: ['haute', 'moyenne', 'faible'].includes(x.confidence) ? x.confidence : 'moyenne', missing: missing.slice(0, 5), how };
 }
 export async function aiGoal(env, { text, profile }) {
   if (!env.AI?.run) { const e = new Error('Assistant non activé sur ce serveur.'); e.status = 503; throw e; }

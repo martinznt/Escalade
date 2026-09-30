@@ -8,6 +8,7 @@ import { capMastery, transfers, relationMap, MASTERY } from '../public/knowledge
 import { parseRequest, planEdit, readMinutes, cleanOps } from '../public/sessionedit.js';
 import { normalizePhases } from '../public/phase.js';
 import { buildContext } from '../public/brain.js';
+import { cleanGoal } from '../server/ai.js';
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓', name); };
 
 const S = () => normalizePhases([{ id: 'w', type: 'warmup', minutes: 15 }, { id: 'b', type: 'climb', kind: 'bloc', minutes: 60, intensity: 'hard', goal: 'Préparation' , role: 'prep' }, { id: 'p', type: 'pause', minutes: 15 }, { id: 'v', type: 'climb', kind: 'voie', minutes: 50, intensity: 'max', role: 'perf' }, { id: 'c', type: 'cool', minutes: 10 }]);
@@ -87,5 +88,11 @@ ok('modifier avec l’IA : plan avant application ; « garde exactement la perfo
   const soft = planEdit(locked, parseRequest('moins intense', locked)); assert.equal(soft.phases.find((p) => p.id === 'v').intensity, 'max', 'verrou respecté');
   assert.equal(planEdit(ph, parseRequest('retire la pause', ph)).phases.length, 4);
   assert.deepEqual(cleanOps([{ op: 'eval', code: 'x' }, { op: 'remove', idx: [99, 1] }, { op: 'total', minutes: 'abc' }], 5), [{ op: 'remove', idx: [1], minutes: 0, role: 'technique', dir: -1 }]);
+});
+ok('objectif avec IA : type, critères, exercices et figure connus seulement ; connu / relation / estimation / incertitude', () => {
+  const g = cleanGoal({ label: 'Réussir 7a en voie', caps: [{ id: 'endurance_doigts', w: 1 }], activityId: 'climbing_route', type: 'grade', criteria: ['Enchaîner une 7a'], exercises: ['n-existe-pas', 'pullup'], skillId: 'inconnu', missing: ['Ton niveau actuel'], extra: 'x' }, 'Réussir 7a en voie');
+  assert.equal(g.type, 'grade'); assert.deepEqual(g.criteria, ['Enchaîner une 7a']); assert.equal(g.skillId, ''); assert.ok(!g.exercises.includes('n-existe-pas')); assert.equal(g.extra, undefined);
+  const cats = new Set(g.how.map((r) => r.cat)); for (const c of ['fact', 'rule', 'inference', 'missing']) assert.ok(cats.has(c), c);
+  assert.equal(g.target, null, 'aucune cible inventée');
 });
 console.log(`${n} tests V2 (simulation, ADN, stratégies, décisions, maîtrise, modification guidée) OK`);

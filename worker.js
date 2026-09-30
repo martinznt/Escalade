@@ -13,6 +13,7 @@ import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server/global.js';
 import { cleanChange, diffState, diffChange, afterOf, runChecks, buildAdminDraft, cleanAdminDraft, buildLab, cleanLab, AI_KINDS } from './server/studio.js';
+import { dataHealth, groupBugs, buildMaintenance, cleanMaintenance, analyzeDiff } from './server/health.js';
 import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo.js';
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
@@ -233,11 +234,25 @@ async function revokePresented(request, env) {
   if (t) await db(env, 'DELETE FROM sessions WHERE token_hash=?', await sha(t)).run();
 }
 const SEEN_EVERY = 10 * 60000;
+/* Rôles d'administration (V2) : contenu, intelligence, utilisateurs, technique, super-administrateur.
+ * Vérifiés côté serveur à chaque appel. Un administrateur sans rôle précisé est super-administrateur (compatibilité). */
+const ADMIN_ROLES = { content: 'Contenu', intelligence: 'Intelligence', users: 'Utilisateurs', technical: 'Technique', super: 'Super-administrateur' };
+const rolesOf = (row) => (!row?.is_admin ? [] : String(row.admin_roles || '').split(',').filter((r) => ADMIN_ROLES[r]).length ? String(row.admin_roles).split(',').filter((r) => ADMIN_ROLES[r]) : ['super']);
+const can = (u, role) => !!u?.isAdmin && (u.roles || []).some((r) => r === 'super' || r === role);
+/** Rôle nécessaire pour une route d'administration (le plus précis d'abord). null = tout administrateur. */
+function roleFor(p, m) {
+  if (/^\/api\/admin\/users\/[\w-]+\/(role|roles)$/.test(p)) return 'super';
+  if (p.startsWith('/api/admin/users')) return 'users';
+  if (p.startsWith('/api/admin/bugs') || p === '/api/admin/push-status' || p.startsWith('/api/admin/code') || p === '/api/admin/maintenance') return 'technical';
+  if (p === '/api/admin/studio/ai' || p === '/api/admin/lab' || p === '/api/admin/health') return 'intelligence';
+  if (p.startsWith('/api/admin/studio') || p.startsWith('/api/admin/versions') || p.startsWith('/api/admin/global') || p.startsWith('/api/admin/proposals') || p.startsWith('/api/admin/intents')) return 'content';
+  return null; // journal : tout administrateur peut le lire
+}
 async function authenticate(request, env) {
   const token = cookiesOf(request).session;
   if (!token) return null;
   const now = Date.now(), hash = await sha(token);
-  const row = await db(env, 'SELECT u.id,u.username,u.email,u.is_admin,u.last_seen,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', hash, now).first();
+  const row = await db(env, 'SELECT u.id,u.username,u.email,u.is_admin,u.admin_roles,u.last_seen,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', hash, now).first();
   if (!row) return null;
   // Dernière visite : au plus une écriture toutes les 10 minutes par compte (pour la liste des comptes de l'admin).
   if (!row.last_seen || now - row.last_seen > SEEN_EVERY) {
@@ -248,7 +263,7 @@ async function authenticate(request, env) {
     await db(env, 'UPDATE sessions SET expires_at=? WHERE token_hash=?', now + SESSION_DAYS * DAY, hash).run();
     renew = true;
   }
-  return { user: { id: row.id, username: row.username, email: row.email, isAdmin: !!row.is_admin }, token, hash, renew };
+  return { user: { id: row.id, username: row.username, email: row.email, isAdmin: !!row.is_admin, roles: rolesOf(row) }, token, hash, renew };
 }
 
 /* ═════════════ Déménagement vers la nouvelle adresse ═════════════ */
@@ -496,6 +511,59 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/admin/deactivate' && m === 'POST') { await db(env, 'UPDATE users SET is_admin=0 WHERE id=?', u.id).run(); return json({ ok: true, admin: false }); }
   if (p.startsWith('/api/admin/')) {
     if (!u.isAdmin) return fail('Droit administrateur requis.', 403);
+    const need = roleFor(p, m);
+    if (need && !can(u, need)) return fail(`Rôle « ${ADMIN_ROLES[need]} » requis.`, 403);
+    if ((x = p.match(/^\/api\/admin\/users\/([\w-]{1,64})\/roles$/)) && m === 'POST') {
+      const b = await readJson(request, 500), roles = [...new Set((Array.isArray(b?.roles) ? b.roles : []).filter((r) => ADMIN_ROLES[r]))];
+      const t = await db(env, 'SELECT id,is_admin,admin_roles FROM users WHERE id=?', x[1]).first(); if (!t) return fail('Compte introuvable.', 404);
+      if (!t.is_admin) return fail('Ce compte n’est pas administrateur.', 409);
+      if (!roles.includes('super')) { const n = (await db(env, "SELECT id,admin_roles FROM users WHERE is_admin=1 AND id<>?", x[1]).all()).results || []; if (!n.some((r) => rolesOf({ is_admin: 1, admin_roles: r.admin_roles }).includes('super'))) return fail('Il faut garder au moins un super-administrateur.', 409); }
+      if (!roles.length) return fail('Choisis au moins un rôle.');
+      await env.DB.batch([db(env, 'UPDATE users SET admin_roles=? WHERE id=?', roles.includes('super') ? '' : roles.join(','), x[1]), auditStmt(env, u, 'roles', { type: 'user', id: x[1], before: { roles: rolesOf(t) }, after: { roles } })]);
+      return json({ ok: true, roles });
+    }
+    if (p === '/api/admin/health' && m === 'GET') {
+      const rows = (await db(env, 'SELECT kind,id,data_json,hidden FROM global_content').all()).results || [];
+      return json({ ok: true, ...dataHealth(rows.map((r) => ({ kind: r.kind, id: r.id, hidden: !!r.hidden, data: r.hidden ? null : safeParse(r.data_json) }))) });
+    }
+    if (p === '/api/admin/maintenance' && m === 'POST') {
+      // Analyse des signalements ouverts : regroupement déterministe toujours ; propositions de l'IA si disponible. Rien n'est appliqué.
+      const bugs = ((await db(env, "SELECT title,description,page,app_version,created_at FROM bug_reports WHERE status='open' ORDER BY created_at DESC LIMIT 60").all()).results || []).map((b) => ({ title: b.title, description: b.description, page: b.page, appVersion: b.app_version, createdAt: b.created_at }));
+      const groups = groupBugs(bugs); let findings = null, ai = 'indisponible';
+      if (env.AI?.run && bugs.length && !(await limited(env, 'ai-mt:' + u.id, 6, 600000))) {
+        try { findings = cleanMaintenance(extractJson(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildMaintenance(bugs), max_tokens: 1200, temperature: 0.2 }))); ai = findings ? 'ok' : 'inutilisable'; } catch (e) { console.error('ai-maint', e?.message); ai = 'erreur'; }
+      }
+      await auditStmt(env, u, 'maintenance', { type: 'bugs', id: String(bugs.length), after: { groups: groups.length, findings: findings?.length || 0 } }).run();
+      return json({ ok: true, open: bugs.length, groups, findings: findings || [], ai });
+    }
+    if (p === '/api/admin/code' && m === 'GET') {
+      const r = (await db(env, 'SELECT c.id,c.title,c.summary,c.status,c.impact_json,c.created_at,c.updated_at,c.reviewed_at,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id ORDER BY c.updated_at DESC LIMIT 100').all()).results || [];
+      return json({ ok: true, items: r.map((c) => ({ ...c, impact: safeParse(c.impact_json) || {}, impact_json: undefined })) });
+    }
+    if (p === '/api/admin/code' && m === 'POST') {
+      const b = await readJson(request, 260000), title = str(b?.title, 120), diff = String(b?.diff ?? '').slice(0, 200000);
+      if (title.length < 3 || diff.length < 10) return fail('Titre et diff requis.');
+      const impact = analyzeDiff(diff), id = uid(), now = Date.now();
+      if (impact.blocked) return fail('Proposition refusée : ' + impact.flags.filter((f) => /refusé|interdit/.test(f)).join(' '), 422, { impact });
+      await env.DB.batch([db(env, 'INSERT INTO code_proposals(id,title,summary,diff,impact_json,tests,status,author_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)', id, title, str(b?.summary, 2000), diff, JSON.stringify(impact), str(b?.tests, 2000), 'draft', u.id, now, now),
+        auditStmt(env, u, 'code_propose', { type: 'code', id, after: { title, files: impact.files, flags: impact.flags } })]);
+      return json({ ok: true, id, impact });
+    }
+    if ((x = p.match(/^\/api\/admin\/code\/([\w-]{1,64})(\.patch)?$/)) && m === 'GET') {
+      const c = await db(env, 'SELECT c.*,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id WHERE c.id=?', x[1]).first(); if (!c) return fail('Proposition introuvable.', 404);
+      if (x[2]) return new Response(`# ${c.title}\n# Statut : ${c.status} — à appliquer et déployer MANUELLEMENT (git, tests, déploiement Cloudflare).\n${c.diff}`, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="proposition-${c.id}.patch"` } });
+      return json({ ok: true, item: { id: c.id, title: c.title, summary: c.summary, diff: c.diff, tests: c.tests, status: c.status, note: c.note, impact: safeParse(c.impact_json) || {}, author: c.author || '', reviewer: c.reviewer || '', createdAt: c.created_at, reviewedAt: c.reviewed_at } });
+    }
+    if ((x = p.match(/^\/api\/admin\/code\/([\w-]{1,64})\/review$/)) && m === 'POST') {
+      const b = await readJson(request, 3000), d = b?.decision === 'approve' ? 'approved' : b?.decision === 'reject' ? 'rejected' : '';
+      if (!d) return fail('Décision invalide.');
+      const c = await db(env, 'SELECT author_id,status FROM code_proposals WHERE id=?', x[1]).first(); if (!c) return fail('Proposition introuvable.', 404);
+      if (c.status !== 'draft') return fail('Déjà examinée.', 409);
+      if (c.author_id === u.id && d === 'approved') return fail('Une proposition doit être validée par un autre administrateur que son auteur.', 409);
+      const now = Date.now();
+      await env.DB.batch([db(env, 'UPDATE code_proposals SET status=?,reviewer_id=?,reviewed_at=?,note=?,updated_at=? WHERE id=?', d, u.id, now, str(b?.note, 600), now, x[1]), auditStmt(env, u, 'code_' + d, { type: 'code', id: x[1], after: { note: str(b?.note, 200) } })]);
+      return json({ ok: true, status: d, deployed: false });
+    }
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
     if (p === '/api/admin/push-status' && m === 'GET') {
       const st = async (k) => (await db(env, 'SELECT value FROM system_state WHERE key=?', k).first())?.value || '';
@@ -1188,6 +1256,23 @@ async function studioRoute(request, env, u, url, p, m) {
     const r = (await db(env, 'SELECT v.version,v.data_json,v.hidden,v.change_set_id,v.created_at,us.username FROM content_versions v LEFT JOIN users us ON us.id=v.created_by WHERE v.kind=? AND v.item_id=? ORDER BY v.version DESC LIMIT 50', x[1], x[2]).all()).results || [];
     return json({ ok: true, versions: r.map((v) => ({ version: v.version, data: v.data_json == null ? null : safeParse(v.data_json), hidden: !!v.hidden, changeSet: v.change_set_id, at: v.created_at, by: v.username || '' })) });
   }
+  if ((x = p.match(/^\/api\/admin\/versions\/(\w{1,20})\/([\w-]{1,64})\/(diff|restore)$/))) {
+    const ver = async (n) => db(env, 'SELECT version,data_json,hidden FROM content_versions WHERE kind=? AND item_id=? AND version=?', x[1], x[2], n).first();
+    const st = (v) => (!v ? null : v.hidden ? { data: null, hidden: true } : v.data_json == null ? null : { data: safeParse(v.data_json), hidden: false });
+    if (x[3] === 'diff' && m === 'GET') {
+      const a = await ver(Number(url.searchParams.get('a'))), b = await ver(Number(url.searchParams.get('b')));
+      if (!a || !b) return fail('Version introuvable.', 404);
+      return json({ ok: true, changes: diffState(st(a), st(b)) });
+    }
+    if (x[3] === 'restore' && m === 'POST') {
+      // Restaurer = préparer un BROUILLON avec l'état de cette version : rien n'est publié sans validation.
+      const b = await readJson(request, 500), v = await ver(Number(b?.version)); if (!v) return fail('Version introuvable.', 404);
+      const s0 = st(v), item = s0 == null ? { kind: x[1], id: x[2], op: 'delete' } : s0.hidden ? { kind: x[1], id: x[2], op: 'hide' } : { kind: x[1], id: x[2], op: 'put', data: s0.data };
+      const { items, errors } = cleanChange([item]); if (errors.length) return fail(errors.join(' '));
+      const id = await csCreate(env, u, { title: `Restaurer ${x[1]}/${x[2]} (version ${v.version})`, note: 'Brouillon créé depuis l’historique des versions : vérifie puis publie.', source: 'admin', items });
+      return json({ ok: true, id });
+    }
+  }
   if (p === '/api/admin/studio/ai' && m === 'POST') {
     const b = await readJson(request, 6000), text = str(b?.text, 1500), kind = String(b?.kind || '');
     if (!AI_KINDS.includes(kind)) return fail('Type non pris en charge par l’assistant.');
@@ -1351,13 +1436,13 @@ async function adminActivate(request, env, u) {
 /** Liste des comptes pour l'administrateur : identité du compte et activité, JAMAIS les données d'entraînement
  * (séances, performances, profil) ; l'e-mail est masqué ; aucun mot de passe ni jeton. */
 async function adminUsers(env) {
-  const r = await db(env, `SELECT us.id,us.username,us.email,us.created_at,us.is_admin,us.last_seen,
+  const r = await db(env, `SELECT us.id,us.username,us.email,us.created_at,us.is_admin,us.admin_roles,us.last_seen,
       (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id=us.id) AS last_login,
       (SELECT COUNT(*) FROM history h WHERE h.user_id=us.id) AS sessions_done,
       (SELECT MAX(h.started_at) FROM history h WHERE h.user_id=us.id) AS last_session
     FROM users us ORDER BY us.created_at DESC LIMIT 2000`).all();
   const mask = (e) => { const [a, d] = String(e || '').split('@'); return d ? `${a.slice(0, 1)}•••@${d}` : ''; };
-  const users = r.results.map((x) => ({ id: x.id, username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, lastLogin: x.last_login || null, lastSeen: Math.max(x.last_seen || 0, x.last_login || 0) || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
+  const users = r.results.map((x) => ({ id: x.id, username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, roles: rolesOf(x), lastLogin: x.last_login || null, lastSeen: Math.max(x.last_seen || 0, x.last_login || 0) || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
   return json({ ok: true, total: users.length, users });
 }
 async function adminBugs(url, env) {
