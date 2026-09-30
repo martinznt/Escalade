@@ -614,3 +614,18 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 .checks li { margin: .2em 0; overflow-wrap: anywhere; }
 pre.txt { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 .urow .grow{flex:1 1 140px;min-width:0;overflow-wrap:anywhere}.urow .ustat{flex:0 1 auto;min-width:0}
+
+/* V2 : création de séance en chaîne de réglages */
+.chainlink { border-left: 3px solid var(--line); padding: 2px 0 6px 10px; display: grid; gap: 6px; min-width: 0; }
+.chainlink.done { border-left-color: color-mix(in srgb, var(--accent) 70%, var(--line)); }
+.chainlink h4 { margin: 4px 0 0; font-size: .92rem; }
+.chainlink.done h4 { color: var(--accent); }
+.fltrow { display: grid; gap: 4px; padding: 6px 0; border-top: 1px dashed var(--line); min-width: 0; }
+.prow { gap: 6px; }
+.chips.tight .chip { padding: 2px 9px; min-height: 30px; }
+.trade { display: grid; gap: 2px; margin: 6px 0; }
+.trade input[type=range] { width: 100%; }
+.card.chain .kicker { margin-top: 4px; }
+
+.mthumb { display:block; max-width:100%; max-height:180px; border-radius:10px; margin-bottom:4px; object-fit:cover; }
+.chip.static.on { border-color: var(--accent); color: var(--accent); }

@@ -11,7 +11,7 @@ import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
 import { NEWS } from './news.js';
 import { filterBugs } from './adminlist.js';
-import { vStudio, vStudioSet, vAudit, vLab } from './views-studio.js';
+import { vStudio, vStudioSet, vAudit, vLab, vHealth, vMaint, vCode, vCodeItem, canRole, ROLE_L } from './views-studio.js';
 import { FAQ } from './help.js';
 import { faqAdminButtons, announcements } from './content.js';
 import { vAdminContent } from './content.js';
@@ -21,7 +21,7 @@ import { CAPACITIES, ACTIVITIES } from './model.js';
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
 export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
-const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire']];
+const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition']];
 /** Rubriques des paramètres : une ligne claire par rubrique, comme les réglages d'un téléphone. */
 const MENU = [
   ['display', '🎨', 'Affichage', 'Thème, ambiance, couleur, taille, langue, mise en page'],
@@ -37,12 +37,12 @@ const MENU = [
 ];
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
 export function vSettings() {
-  const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin', 'studio', 'studioSet', 'audit', 'lab'].includes(k)) : SUBS;
+  const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin', 'studio', 'studioSet', 'audit', 'lab', 'health', 'maint', 'code', 'codeItem'].includes(k)) : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   if (sub === 'main') return h`<h1>Paramètres</h1>${views.main()}`;
   const ic = MENU.find(([k]) => k === sub)?.[1];
-  if (['studio', 'studioSet', 'audit', 'lab'].includes(sub)) return h`${subHead('setSub', sub === 'studio' ? 'admin' : 'studio', sub === 'studio' ? 'Admin' : 'Studio', { studio: '🧪 Studio', studioSet: '🧪 Lot', audit: '📜 Journal', lab: '🧠 Laboratoire' }[sub])}${views[sub]()}`;
+  if (['studio', 'studioSet', 'audit', 'lab', 'health', 'maint', 'code', 'codeItem'].includes(sub)) return h`${subHead('setSub', sub === 'studio' ? 'admin' : sub === 'codeItem' ? 'code' : 'studio', sub === 'studio' ? 'Admin' : sub === 'codeItem' ? 'Propositions de code' : 'Studio', { studio: '🧪 Studio', studioSet: '🧪 Lot', audit: '📜 Journal', lab: '🧠 Laboratoire', health: '🩺 Santé des données', maint: '🛠️ Maintenance', code: '💻 Propositions de code', codeItem: '💻 Proposition' }[sub])}${views[sub]()}`;
   return h`${subHead('setSub', 'main', 'Paramètres', `${ic ? ic + ' ' : ''}${subs.find(([k]) => k === sub)[1]}`)}${views[sub]()}`;
 }
 ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug' && !S.user?.guest) loadMyBugs(); };
@@ -367,7 +367,7 @@ function vAdminUsers() {
       <div class="ulist">${list.slice(0, 200).map((x) => h`<div class="urow"><div class="uav">${x.username.slice(0, 1).toUpperCase()}</div><div class="grow"><b>${x.username}</b> ${x.isAdmin ? tag('admin', 'acc') : ''}
         <div class="tiny muted">inscrit ${relDate(x.createdAt)}${x.email ? ' · ' + x.email : ''}</div></div>
         <div class="ustat"><b>${x.sessionsDone}</b><span>séance${x.sessionsDone > 1 ? 's' : ''}</span></div>
-        <div class="ustat"><span title="${seen(x) ? fmtDateTime(seen(x)) : ''}">${seen(x) ? relDate(seen(x)) : 'jamais'}</span><span class="tiny muted">dernière visite</span><button class="btn sm ${x.isAdmin ? 'ghost' : ''}" data-act="userRole" data-id="${x.id}" data-v="${x.isAdmin ? '0' : '1'}">${x.isAdmin ? 'Retirer admin' : 'Nommer admin'}</button></div></div>`)}
+        <div class="ustat"><span title="${seen(x) ? fmtDateTime(seen(x)) : ''}">${seen(x) ? relDate(seen(x)) : 'jamais'}</span><span class="tiny muted">dernière visite</span>${canRole('super') ? h`<button class="btn sm ${x.isAdmin ? 'ghost' : ''}" data-act="userRole" data-id="${x.id}" data-v="${x.isAdmin ? '0' : '1'}">${x.isAdmin ? 'Retirer admin' : 'Nommer admin'}</button>${x.isAdmin ? h`<button class="btn sm" data-act="userRoles" data-id="${x.id}">Rôles</button>` : ''}` : ''}${x.isAdmin ? h`<span class="tiny muted">${(x.roles || []).map((r) => ROLE_L[r]).join(', ')}</span>` : ''}</div></div>`)}
         ${list.length > 200 ? h`<p class="tiny muted">… ${list.length - 200} autre(s) : affine la recherche.</p>` : ''}${!list.length ? h`<p class="small muted">Aucun compte trouvé.</p>` : ''}</div>
       <details class="how mini"><summary>Ce que tu vois ici</summary><p class="tiny">Pseudo, date d’inscription, e-mail masqué, nombre de séances réalisées et dernière visite (à 10 minutes près). Les séances, performances et profils des membres restent privés.</p></details>`}</div>`;
 }
@@ -410,3 +410,14 @@ ACT.userRole = async (el) => {
   try { await api('POST', `/api/admin/users/${encodeURIComponent(el.dataset.id)}/role`, { admin: make }); toast(make ? 'Administrateur nommé' : 'Droits retirés'); S.admin.users = null; render(); }
   catch (e) { toast(e.message, 4500, 'bad'); }
 };
+/* Rôles d'administration (super-administrateur seulement ; vérifié par le serveur). */
+ACT.userRoles = (el) => {
+  const x = S.admin.users?.users?.find((u) => u.id === el.dataset.id); if (!x) return;
+  S.admin.roleEdit = { id: x.id, roles: [...(x.roles || [])] };
+  const draw = () => openSheet(h`<div class="stack"><h2 style="margin:0">Rôles de ${x.username}</h2><p class="tiny muted">Chaque rôle ouvre une partie de l’administration. Le serveur vérifie chaque action.</p>
+    <div class="chips">${Object.entries(ROLE_L).map(([k, l]) => chip(S.admin.roleEdit.roles.includes(k), l, `data-act="userRoleTog" data-id="${k}"`))}</div>
+    <button class="btn pri" data-act="userRolesSave">Enregistrer</button><button class="btn ghost" data-act="closeSheet">Annuler</button></div>`);
+  S.admin.roleDraw = draw; draw();
+};
+ACT.userRoleTog = (el) => { const r = S.admin.roleEdit; if (!r) return; r.roles = r.roles.includes(el.dataset.id) ? r.roles.filter((x) => x !== el.dataset.id) : [...r.roles, el.dataset.id]; S.admin.roleDraw?.(); };
+ACT.userRolesSave = async () => { const r = S.admin.roleEdit; try { await api('POST', `/api/admin/users/${encodeURIComponent(r.id)}/roles`, { roles: r.roles }); closeSheet(); toast('Rôles enregistrés'); S.admin.users = null; render(); } catch (e) { toast(e.message, 5000, 'bad'); } };

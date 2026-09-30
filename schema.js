@@ -1,7 +1,7 @@
 // schema.js — tables D1. Le worker les crée / complète tout seul au premier appel (CREATE TABLE IF NOT EXISTS
 // + migrations idempotentes de worker.js upgradeSchema) : aucune commande à lancer, compatible avec la base existante.
 // Aucune table existante n'est supprimée ; les colonnes ajoutées ont des valeurs par défaut.
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 export const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, email TEXT UNIQUE, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
@@ -53,12 +53,16 @@ export const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS releases (id TEXT PRIMARY KEY, change_set_id TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, created_by TEXT)",
   "CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, at INTEGER NOT NULL, actor_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL DEFAULT '', target_id TEXT NOT NULL DEFAULT '', change_set_id TEXT, before_json TEXT, after_json TEXT, checks_json TEXT)",
   "CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_events(at)",
+  // V2 : propositions de code (diff, impact, tests déclarés, validation). JAMAIS appliquées ni déployées par l'app.
+  "CREATE TABLE IF NOT EXISTS code_proposals (id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', diff TEXT NOT NULL DEFAULT '', impact_json TEXT NOT NULL DEFAULT '{}', tests TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft', author_id TEXT, reviewer_id TEXT, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, reviewed_at INTEGER)",
 ];
 // Colonnes ajoutées aux tables existantes (migration idempotente : ajoutées seulement si absentes).
 export const ADD_COLUMNS = [
   ['users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0'],
   ['users', 'admin_since', 'INTEGER'],
   ['users', 'last_seen', 'INTEGER'], // dernière visite (compte connecté), pour la liste des comptes de l'admin
+  // V2 : rôles d'administration (liste séparée par des virgules). Vide = super-administrateur (compatibilité : tout admin existant).
+  ['users', 'admin_roles', "TEXT NOT NULL DEFAULT ''"],
   ['user_data', 'v2_migrated', 'INTEGER NOT NULL DEFAULT 0'],
   ['profiles', 'bio', "TEXT NOT NULL DEFAULT ''"],
   ['profiles', 'share_json', "TEXT NOT NULL DEFAULT '{}'"],

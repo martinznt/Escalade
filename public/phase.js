@@ -4,6 +4,8 @@
 // Compatible avec les anciennes « parties » (climb, work, main, warmup…) : les champs manquants reçoivent des valeurs
 // par défaut déterministes, rien n'est réinventé. Sans DOM, testé.
 import { CAPACITIES, ACTIVITIES } from './model.js';
+import { cleanSelection, cleanRules } from './intents.js';
+import { cleanLevel } from './filters.js';
 
 /** Rôles d'une phase : valeurs structurées (et « Autre » avec un nom libre). */
 export const ROLES = {
@@ -15,12 +17,17 @@ export const ROLES = {
 export const INTENSITIES = ['easy', 'mod', 'hard', 'max'];
 export const FATIGUE = { low: 'Peu de fatigue', mod: 'Fatigue modérée', high: 'Fatigue élevée acceptée' };
 /** Paramètres qu'on peut verrouiller, et leurs états. */
-export const LOCKABLE = { minutes: 'Durée', activity: 'Activité', goal: 'But', intensity: 'Intensité', exercises: 'Exercices', order: 'Ordre interne' };
+export const LOCKABLE = { minutes: 'Durée', activity: 'Activité', place: 'Lieu', goal: 'But', intensity: 'Intensité', style: 'Style', exercises: 'Exercices', order: 'Ordre interne', rest: 'Repos' };
 export const LOCK_STATES = { user: ['🔒', 'Verrouillé'], free: ['✏️', 'Modifiable'], app: ['🤖', 'L’app décide'] };
 /** Escalade (phase de performance) : paramètres structurés. */
 export const ATTEMPT_TYPES = { discover: 'Découverte', work: 'Travail', enchain: 'Enchaînement', limit: 'À la limite', perf: 'Performance du jour' };
 export const FOCUS = { perf: 'Performance', tech: 'Technique', resist: 'Résistance' };
 export const VOLUME = { low: 'Peu', mod: 'Moyen', high: 'Beaucoup' };
+/** Curseurs de compromis (−2 … +2) : le côté gauche l'emporte à −2, le droit à +2, 0 = équilibré. */
+export const TRADEOFFS = { perfRecup: ['Performance', 'Récupération'], volInt: ['Volume', 'Intensité'], varRep: ['Variété', 'Répétition'], diffSucc: ['Difficulté', 'Réussite'], specGen: ['Spécificité', 'Généralisation'], fatStim: ['Peu de fatigue', 'Stimulation'] };
+export const PLACE_MODES = { same: 'Même lieu que la phase précédente', other: 'Un autre lieu', free: 'Lieu libre' };
+const cleanTradeoffs = (t) => Object.fromEntries(Object.keys(TRADEOFFS).map((k) => [k, t && t[k] != null ? Math.max(-2, Math.min(2, Math.round(Number(t[k]) || 0))) : 0]).filter(([, v]) => v));
+const cleanPlace = (pl) => ({ mode: PLACE_MODES[pl?.mode] ? pl.mode : 'same', envId: /^[\w:.-]{1,80}$/.test(String(pl?.envId || '')) ? String(pl.envId) : '', travelMin: pl?.travelMin == null || pl.travelMin === '' ? null : Math.max(0, Math.min(180, Math.round(Number(pl.travelMin) || 0))) });
 
 const str = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
 const oneOf = (v, list, def) => (list.includes(v) ? v : def);
@@ -66,8 +73,18 @@ export function normalizePhase(p = {}, i = 0, sport = '') {
     favor: tags(x.favor), avoid: tags(x.avoid),
     constraints: str(x.constraints, 200),
     imposed: ids(x.imposed), forbidden: ids(x.forbidden),
-    locks: Object.fromEntries(Object.keys(LOCKABLE).map((k) => [k, oneOf(x.locks?.[k], Object.keys(LOCK_STATES), k === 'exercises' || k === 'order' ? 'app' : 'free')])),
+    locks: Object.fromEntries(Object.keys(LOCKABLE).map((k) => [k, oneOf(x.locks?.[k], Object.keys(LOCK_STATES), k === 'exercises' || k === 'order' || k === 'rest' ? 'app' : 'free')])),
+    // V2 : lieu propre à la phase, sous-objectifs priorisés + règles, curseurs de compromis, filtres de phase, contraintes.
+    place: cleanPlace(x.place),
+    subIntents: cleanSelection(x.subIntents),
+    rules: [],
+    tradeoffs: cleanTradeoffs(x.tradeoffs),
+    filters: cleanLevel(x.filters),
+    noFailure: !!x.noFailure,
+    maxVolume: oneOf(x.maxVolume, ['', 'low', 'mod'], ''),
+    forbidEquip: ids(x.forbidEquip),
   };
+  out.rules = cleanRules(x.rules, out.subIntents);
   if (type === 'climb') {
     out.kind = x.kind === 'voie' ? 'voie' : 'bloc';
     out.styles = ids(x.styles);
@@ -128,5 +145,9 @@ export function newPhase(type, o = {}, n = Date.now()) {
 }
 /** Intention ponctuelle de la séance : jamais un objectif du compte (sauf action explicite « Enregistrer comme objectif »). */
 export function sessionIntent(x = {}) {
-  return { text: str(x.text, 240), priorities: capList(x.priorities), savedAsGoal: str(x.savedAsGoal, 40) };
+  const subIntents = cleanSelection(x.subIntents);
+  return { text: str(x.text, 240), priorities: capList(x.priorities), savedAsGoal: str(x.savedAsGoal, 40),
+    ...(subIntents.length ? { subIntents, rules: cleanRules(x.rules, subIntents) } : {}),
+    ...(Object.keys(cleanTradeoffs(x.tradeoffs)).length ? { tradeoffs: cleanTradeoffs(x.tradeoffs) } : {}),
+    ...(Object.keys(cleanLevel(x.filters)).length ? { filters: cleanLevel(x.filters) } : {}) };
 }

@@ -565,6 +565,34 @@ await step('tous les sports comme l’escalade : course « 10 km en 50 min » �
   assert.equal(await A.inputValue('input[data-change=sName]'), 'Objectif 10 km en 50 min');
   await cpFresh('auto');
 });
+await step('V2 : chaîne de réglages — objectif placé au début puis déplacé, lieu d’une phase + déplacement, filtres de séance, prévisualisation', async () => {
+  await cpFresh('auto'); await cpTo(2); await a.click('[data-act=cpSport][data-id=climbing_route]'); await a.click('[data-act=cpMin][data-id="150"]');
+  await cpTo(3); await a.click('[data-act=cpAim][data-id=goals]');
+  await a.click('[data-act=cpObjFam][data-id=performance]'); await a.click('[data-act=cpObjSub][data-id="performance.limite"]');
+  await a.click('[data-act=cpObjPrio][data-id="performance.limite"][data-v="4"]'); await a.click('[data-act=cpObjWhen][data-id=start]');
+  await cpTo(4); await A.waitForSelector('.cpart');
+  const tags = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /objectif/.test(x.textContent)));
+  assert.equal(tags.indexOf(true), 1, 'objectif juste après l’échauffement');
+  await A.selectOption('select[data-change=cpObjWhere]', 'end'); await A.waitForTimeout(200);
+  const tags2 = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /objectif/.test(x.textContent)));
+  assert.equal(tags2.indexOf(true), tags2.length - 2, 'objectif déplacé à la fin, avant le retour au calme');
+  // Chaîne de réglages de la phase objectif : 8 maillons numérotés, lieu propre à la phase avec déplacement.
+  await A.locator('[data-act=cpEdit]').nth(tags2.length - 2).click(); await A.waitForSelector('#sheet .chainlink');
+  assert.equal(await a.count('#sheet .chainlink'), 8); assert.match(await a.text('#sheet'), /1 · Type de phase[\s\S]*3 · Précisément[\s\S]*6 · Lieu[\s\S]*8 · Ce que l’app décide/);
+  await a.click('#sheet [data-act=cpPhPlace][data-id=other]'); await A.waitForSelector('#sheet select[data-change=cpPhEnv]');
+  const other = await A.evaluate(async () => { const st = await import('/state.js'), def = st.S.cp.envId || st.ctx().defEnv?.id || ''; return [...document.querySelectorAll('#sheet select[data-change=cpPhEnv] option')].map((o) => o.value).find((v) => v && v !== def); });
+  assert.ok(other, 'un autre lieu que celui de la séance'); await A.selectOption('#sheet select[data-change=cpPhEnv]', other); await A.waitForTimeout(150);
+  await A.fill('#sheet input[data-change=cpPhTravel]', '15'); await A.press('#sheet input[data-change=cpPhTravel]', 'Tab'); await A.waitForTimeout(150);
+  await A.keyboard.press('Escape'); await A.waitForTimeout(150);
+  assert.match(await a.text('#main'), /🚗 15 min de déplacement/);
+  await a.click('[data-act=cpFilters]'); await A.waitForSelector('#sheet [data-act=cpFlt]');
+  await a.click('#sheet [data-act=cpFlt][data-k=intensite][data-id=mod]'); await A.keyboard.press('Escape'); await A.waitForTimeout(150);
+  assert.match(await a.text('#main'), /Intensité : Modérée/);
+  await cpTo(7); const v = await a.text('#main');
+  assert.match(v, /Charge estimée/); assert.match(v, /🎯 Objectif : 🚀 Performance · À la fin/); assert.match(v, /🚗 15 min avant/);
+  await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpPlay]');
+  assert.match(await a.text('#cpresult'), /Déplacement/);
+});
 await step('V1 : séance structurée (bloc → pause → voie), but ponctuel, propositions expliquées, amélioration appliquée, génération, séance faite, journal', async () => {
   const goalsN = async () => (await a.api('GET', '/api/items?since=0')).data.items.filter((i) => i.c === 'goal' && !i.deleted).length;
   const g0 = await goalsN();
@@ -719,6 +747,10 @@ await step('Studio : brouillon invisible, vérifications, publication confirmée
   await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=lab]'); await C.waitForSelector('[data-act=labEx]');
   await c.click('[data-act=labEx][data-i="1"]'); await C.waitForSelector('main summary:has-text("échauffement")');
   assert.equal(await (await b.api('GET', '/api/admin/studio')).status, 403, 'un membre n’a pas accès au Studio');
+  // V2 : santé des données, maintenance et propositions de code (lecture ; rien n'est appliqué).
+  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=health]'); await C.waitForSelector('text=Santé des données');
+  await C.waitForSelector('[data-act=healthReload]'); assert.match(await c.text('main'), /capacités/);
+  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=code]'); await C.waitForSelector('text=L’app ne déploie jamais de code');
 });
 await step('l’admin modifie puis supprime la contribution ; pas d’accès aux données privées', async () => {
   const d = (await c.api('GET', '/api/shared/' + commonId)).data.item; assert.equal(d.canEdit, true);

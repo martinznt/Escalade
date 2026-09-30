@@ -20,6 +20,8 @@ import { byId } from './library.js';
 import { donePerf, nextGoals, doneGoals } from './goaldone.js';
 import { allPlaces, placeStats, kindOfEnv, placesOf, KIND_LABEL } from './places.js';
 import { celebrate } from './fx.js';
+import { capMastery, transfers, relationMap, estimatedFormats, MASTERY } from './knowledge.js';
+import { strategies } from './strategy.js';
 
 const SUBS = [['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
 const TILES = { analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
@@ -113,6 +115,8 @@ ACT.capOpen = (el) => {
   openSheet(h`<h2 style="margin:0">${g.label}</h2><p class="muted small">${g.desc}</p><p>${statusTag(st)} ${st.level != null ? h`<span class="small">niveau ≈ ${Math.round(st.level * 10) / 10} / 2 · confiance ${confWord(st.confidence)}</span>` : ''}</p>
     ${howBox({ facts: st.evidences.map((e) => `[${e.type}] ${e.text}`).concat(st.vol30 ? [`Volume sur 30 jours : ${st.vol30} séries pondérées (pratique, pas un niveau).`] : []), inferences: st.level != null ? [`Niveau estimé en combinant ${st.evidences.filter((e) => e.level != null).length} source(s) pondérée(s).`] : [], missing: st.missing }, { open: true })}
     ${st.trend ? h`<p class="small">${st.trend.dir > 0 ? '📈' : st.trend.dir < 0 ? '📉' : '➖'} ${st.trend.text}</p>` : ''}
+    ${(() => { const m = capMastery(g.capId, c); return h`<b class="small">Maîtrise</b><div class="chips">${MASTERY.map((l, k) => h`<span class="chip static ${m.step === k ? 'on' : ''}">${l}</span>`)}</div><p class="tiny muted">${m.step == null ? m.missing[0] : m.basis.join(' ')}</p>`; })()}
+    ${(() => { const t = transfers(g.capId); return t.length ? h`<details class="how mini"><summary>↔ Aussi utile pour (${t.length})</summary><ul class="clean tight small">${t.map((x) => h`<li>${x.label} · relation ${x.confidence}<div class="tiny muted">${x.why}</div></li>`)}</ul></details>` : ''; })()}
     <b class="small">→ Exercices</b><div class="chips">${g.exercises.map((x) => chip(false, `${x.name} (${x.w})`, `data-act="libInfo" data-id="${x.id}"`))}</div>
     <b class="small">↔ Se mesure avec</b><div class="chips">${g.metrics.map((x) => chip(false, x.label, `data-act="perfAdd" data-id="${x.id}"`))}</div>
     <b class="small">Muscles</b><p class="small">${g.muscles.map((x) => x.label).join(', ') || '—'}</p>
@@ -388,9 +392,13 @@ function goalFiche(d) {
     <label>Indicateurs de progrès <span class="tiny muted">(un par ligne)</span><textarea name="indicators" rows="2" maxlength="600">${(d.indicators || []).join('\n')}</textarea></label>
     <label>Étapes <span class="tiny muted">(une par ligne)</span><textarea name="steps" rows="3" maxlength="800">${(d.steps || []).join('\n')}</textarea></label>
     ${numberField('weeks', 'Horizon (semaines, facultatif)', d.weeks || '', { min: 0, max: 52, step: 1 })}
+    <label>Type d’objectif<select name="gtype">${[['custom', 'Personnel'], ['metric', 'Atteindre une mesure'], ['grade', 'Réussir une cotation'], ['sessions', 'Nombre de séances'], ['ascents', 'Nombre de blocs / voies'], ['skill', 'Une figure']].map(([k, l]) => h`<option value="${k}" ${(d.type || 'custom') === k ? 'selected' : ''}>${l}</option>`)}</select></label>
+    ${d.skillId && SKILLS[d.skillId] ? h`<label class="row"><input type="checkbox" name="skillId" value="${d.skillId}" checked><span class="small">Lier à la figure « ${SKILLS[d.skillId].label} » (étapes et critères de l’app)</span></label>` : ''}
+    <label>Critères de réussite <span class="tiny muted">(un par ligne)</span><textarea name="criteria" rows="2" maxlength="600">${(d.criteria || []).join('\n')}</textarea></label>
+    ${d.exercises?.length ? h`<span class="kicker">Exercices liés <span class="tiny muted">(décoche ceux que tu ne veux pas)</span></span><div class="stack tight">${d.exercises.map((id) => h`<label class="row"><input type="checkbox" name="ex" value="${id}" checked><span class="small">${byId(id)?.name || id}</span></label>`)}</div>` : ''}
     ${d.confidence ? h`<p class="tiny muted">Confiance de l’assistant : ${d.confidence}.</p>` : ''}
     ${d.missing?.length ? h`<div class="card flat"><b class="small">❔ Ce qui manque pour être plus précis</b><ul class="clean tight small">${d.missing.map((m) => h`<li>${m}</li>`)}</ul></div>` : ''}
-    <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="clean tight small">${(d.how || []).map((r) => h`<li>${REASON_IC[r.cat] || '•'} ${r.text}</li>`)}</ul></details>
+    <details class="how mini"><summary>Pourquoi cette fiche ? Comment le sais-tu ?</summary>${[['fact', '📊 Informations connues'], ['rule', '🔗 Relations existantes'], ['inference', '🤔 Estimations'], ['missing', '❔ Incertitudes']].map(([k, t]) => { const l = (d.how || []).filter((r) => r.cat === k); return l.length ? h`<b class="tiny">${t}</b><ul class="clean tight small">${l.map((r) => h`<li>${r.text}</li>`)}</ul>` : ''; })}</details>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer l’objectif</button><button class="btn" type="button" data-act="goalWrite" data-text="${d.text || ''}">Reformuler</button></div></form>`;
 }
 /** Sans assistant : mots-clés → capacités (aucune valeur inventée ; les chiffres ne sont repris que s'ils sont écrits). */
@@ -419,7 +427,8 @@ SUBMIT.goalFicheSave = (f) => {
   if (!caps.length && !metricId) return toast('Coche au moins une capacité ou choisis une mesure.', 4000);
   const lines = (k, n, len) => String(fd.get(k) || '').split('\n').map((x) => x.trim().slice(0, len)).filter(Boolean).slice(0, n);
   const id = 'g-' + uid().slice(0, 12), act = ACTIVITIES[fd.get('activityId')] ? String(fd.get('activityId')) : '';
-  putItem('goal', id, { type: metricId ? 'metric' : 'custom', label, metricId, target, current: null, unit: metricId ? ctx().metrics[metricId]?.unit || '' : '', caps, activityId: act, status: 'active', startedAt: Date.now(),
+  const gtype = ['custom', 'metric', 'grade', 'sessions', 'ascents', 'skill'].includes(fd.get('gtype')) ? String(fd.get('gtype')) : 'custom', skillId = SKILLS[fd.get('skillId')] ? String(fd.get('skillId')) : '';
+  putItem('goal', id, { type: skillId ? 'skill' : metricId && gtype === 'custom' ? 'metric' : gtype === 'skill' && !skillId ? 'custom' : gtype, skillId, criteria: lines('criteria', 4, 160), exercises: fd.getAll('ex').map(String).filter((x) => byId(x)).slice(0, 8), source: 'ia', label, metricId, target, current: null, unit: metricId ? ctx().metrics[metricId]?.unit || '' : '', caps, activityId: act, status: 'active', startedAt: Date.now(),
     deadline: weeks ? new Date(Date.now() + weeks * 7 * 86400000).toISOString().slice(0, 10) : '', note: [String(fd.get('summary') || '').trim(), ...lines('indicators', 4, 140).map((x) => `📈 ${x}`), ...lines('steps', 5, 160).map((x, k) => `${k + 1}. ${x}`)].join(' · ').slice(0, 300) });
   const back = S.goalBack; S.goalDraft = null; S.goalBack = ''; closeSheet(); toast('Objectif enregistré');
   if (back === 'cp' && S.cp) { S.cp.intentGoal = id; S.cp.goalIds = [...new Set([...(S.cp.goalIds || []), id])]; go('library', 'climbplan'); } else go('profile', 'goals', id);
@@ -455,7 +464,7 @@ SUBMIT.goalSave = (f) => {
 };
 function vGoalDetail(g) {
   const c = ctx(), pr = goalProgress(g, c), tab = S.goalTab || 'overview', sk = SKILLS[g.skillId];
-  const secs = [['blockers', '🧱', 'Ce qui bloque', 'Les capacités qui te freinent le plus'], ...(sk ? [['tree', '🪜', 'Progression', 'Les étapes jusqu’à l’objectif'], ['paths', '🛤️', 'Chemins', 'Les façons d’y arriver']] : []), ['graph', '🕸️', 'Graphe', 'Ce qui compte pour cet objectif, en image'], ['whatif', '🔮', 'Et si… ?', 'Ce que ça change si tu progresses sur un point'], ['why', '🤔', 'Pourquoi je stagne ?', 'Les raisons possibles, d’après tes données']];
+  const secs = [['blockers', '🧱', 'Ce qui bloque', 'Les capacités qui te freinent le plus'], ...(sk ? [['tree', '🪜', 'Progression', 'Les étapes jusqu’à l’objectif'], ['paths', '🛤️', 'Chemins', 'Les façons d’y arriver']] : []), ['strats', '🧭', 'Plusieurs chemins', 'Spécifique, mixte ou préparation physique : compare'], ['graph', '🕸️', 'Graphe', 'Ce qui compte pour cet objectif, en image'], ['whatif', '🔮', 'Et si… ?', 'Ce que ça change si tu progresses sur un point'], ['why', '🤔', 'Pourquoi je stagne ?', 'Les raisons possibles, d’après tes données']];
   return h`<button class="btn sm ghost" data-act="goalBack">‹ Objectifs</button><h2 style="margin:.2em 0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2>
     <div class="card hero ghero stack"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
       ${sk ? h`<details class="how mini"><summary>C’est quoi, ${sk.label} ?</summary><p class="small">${sk.desc}</p></details>` : ''}
@@ -464,7 +473,7 @@ function vGoalDetail(g) {
       ${g.status === 'done' ? h`<button class="btn pri" data-act="goalNext" data-id="${g.id}">➡️ Objectif suivant</button>` : h`<button class="btn pri" data-act="goalTrain" data-id="${g.id}">🎯 Séance pour cet objectif</button><button class="btn" data-act="goalDone" data-id="${g.id}">🏆 J’ai réussi</button>`}</div>
     <div class="row wrapf"><button class="btn sm" data-act="goalEdit" data-id="${g.id}">✎ Modifier</button>${g.status === 'active' ? h`<button class="btn sm" data-act="goalStatus" data-id="${g.id}" data-v="archived">📦 Archiver</button>` : h`<button class="btn sm" data-act="goalStatus" data-id="${g.id}" data-v="active">↩️ Réactiver</button>`}<button class="btn sm danger" data-act="goalDel" data-id="${g.id}">🗑 Supprimer</button></div>
     ${goalOverview(g)}
-    <div class="setmenu secs">${secs.map(([k, ic, t, d]) => h`<details class="setsec" data-id="${k}" ${tab === k ? 'open' : ''}><summary class="setrow"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></summary><div class="secbody">${tab === k ? ({ blockers: goalBlockers, tree: goalTree, paths: goalPathsV, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[k](g) : ''}</div></details>`)}</div>`;
+    <div class="setmenu secs">${secs.map(([k, ic, t, d]) => h`<details class="setsec" data-id="${k}" ${tab === k ? 'open' : ''}><summary class="setrow"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></summary><div class="secbody">${tab === k ? ({ blockers: goalBlockers, tree: goalTree, paths: goalPathsV, strats: goalStrats, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[k](g) : ''}</div></details>`)}</div>`;
 }
 ACT.goalBack = () => { S.goalTab = 'overview'; go('profile', 'goals'); };
 ACT.goalTab = (el) => { S.goalTab = el.dataset.id; render(); };
@@ -536,10 +545,23 @@ ACT.pathSeance = async (el) => {
   const s = saveSeance({ id: uid(), name: `${sk.label} — ${p.label}`, emoji: sk.emoji, source: 'generated', activity: sk.activity, exercises: exs, context: { goalId: g.id, plannedMin: p.minutes }, objectives: [p.traits] });
   toast('Séance créée'); go('library', 'seance', s.id);
 };
+function goalStrats(g) {
+  const list = strategies({ label: goalLabel(g), activity: g.activityId || Object.keys(ctx().activities)[0], caps: Object.fromEntries(goalCaps(g, ctx()).map((x) => [x.id, x.w])) });
+  return h`<p class="tiny muted">Plusieurs façons d’avancer vers « ${goalLabel(g)} ». Aucune n’est « la meilleure » : compare selon ton temps, ton matériel et ta fatigue.</p>
+    ${list.map((x) => h`<div class="card flat"><b>${x.title}</b><p class="small">${x.desc}</p><ul class="clean tight tiny"><li>Spécificité : ${x.compare.specificity} · Fatigue : ${x.compare.fatigue} · ${x.compare.minutes}</li><li>Matériel : ${x.compare.equipment.join(', ') || 'aucun particulier'}</li><li>Capacités : ${x.compare.caps.join(', ') || '—'}</li><li>${x.compare.constraints}</li></ul>
+      <button class="btn sm" data-act="goalStratGo" data-id="${g.id}" data-s="${x.id}">Créer une séance avec ce chemin</button></div>`)}`;
+}
+ACT.goalStratGo = (el) => { const g = item('goal', el.dataset.id); if (!g) return; openWizard({ goalIds: [g.id], sport: g.activityId || '', auto: false }); setTimeout(() => { ACT.cpStrat?.(); }, 150); };
+function relationCard(g) {
+  const m = relationMap({ label: goalLabel(g), caps: goalCaps(g, ctx()), source: g.source }, ctx());
+  if (m.empty) return h`<p class="small warn-t">${m.note}</p>`;
+  const lab = (id) => m.nodes.find((n) => n.id === id)?.label || id, ic = { cap: '💪', metric: '📏', exercise: '🏋️', activity: '🏅' };
+  return h`<details class="how mini"><summary>🔗 Pourquoi ces liens ? (${m.links.length})</summary><ul class="clean tight small">${m.links.map((l) => h`<li>${ic[m.nodes.find((n) => n.id === l.from)?.type] || '🎯'} ${lab(l.from)} → ${ic[m.nodes.find((n) => n.id === l.to)?.type] || ''} ${lab(l.to)}<div class="tiny muted">${l.why}</div></li>`)}</ul></details>`;
+}
 function goalGraph(g) {
   const gr = graphFromGoal(g, ctx());
   return h`<div class="card"><h3>Objectif → capacités → exercices → métriques</h3><p class="tiny muted">Touche un élément pour explorer dans l’autre sens.</p>
-    ${gr.map((x) => h`<div class="graphnode"><button class="btn sm" data-act="capOpen" data-id="${x.capId}">${x.label} (${x.w})</button><div class="graphchildren"><div class="tiny muted">Exercices</div><div class="chips">${x.exercises.map((e) => chip(false, e.name, `data-act="libInfo" data-id="${e.id}"`))}</div><div class="tiny muted">Métriques de suivi</div><div class="chips">${x.metrics.map((m) => chip(false, m.label, `data-act="perfAdd" data-id="${m.id}"`))}</div><div class="tiny muted">Muscles : ${x.muscles.map((m) => m.label).join(', ') || '—'}</div></div></div>`)}</div>`;
+    ${gr.map((x) => h`<div class="graphnode"><button class="btn sm" data-act="capOpen" data-id="${x.capId}">${x.label} (${x.w})</button><div class="graphchildren"><div class="tiny muted">Exercices</div><div class="chips">${x.exercises.map((e) => chip(false, e.name, `data-act="libInfo" data-id="${e.id}"`))}</div><div class="tiny muted">Métriques de suivi</div><div class="chips">${x.metrics.map((m) => chip(false, m.label, `data-act="perfAdd" data-id="${m.id}"`))}</div><div class="tiny muted">Muscles : ${x.muscles.map((m) => m.label).join(', ') || '—'}</div></div></div>`)}</div>${relationCard(g)}`;
 }
 function goalWhatIf(g) {
   const caps = goalCaps(g, ctx()), cap = S.whatCap || caps[0]?.id, n = S.whatN || 2;
@@ -663,6 +685,7 @@ function vPrefs() {
   return h`<div class="card"><h3>Mes préférences d’exercices</h3><p class="tiny muted">« Évite » réduit la probabilité qu’un exercice soit proposé, sans jamais supprimer un exercice indispensable à ton objectif (dans ce cas, il est gardé avec une explication).</p>
       ${Object.values(c.prefs).length ? Object.values(c.prefs).map((p) => h`<div class="item"><div class="grow"><b>${p.label || p.key}</b><div class="tiny muted">${p.reason || ({ explicit: 'choix explicite', habit: 'habitude confirmée', questionnaire: 'questionnaire' })[p.source]}</div></div>${prefChips(p.key, p.label, p.value)}</div>`) : h`<p class="muted small">Aucune préférence enregistrée.</p>`}</div>
     <div class="card"><h3>Ce que l’application observe</h3>${learned.length ? learned.map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${x.text || '—'}</div>${x.suggestion ? h`<div class="tiny acc-t">Suggestion : ${x.suggestion === 'evite' ? 'l’éviter' : 'le marquer comme apprécié'} ?</div>` : ''}</div>${prefChips(x.key, x.name, x.explicit)}</div>`) : h`<p class="muted small">Pas encore de données.</p>`}</div>
+    ${(() => { const f = estimatedFormats(c), prefs = Object.fromEntries(itemsOf('pref').map((p) => [p.key, p.value])); return h`<div class="card"><h3>Tes habitudes de séance (estimées)</h3>${f.insufficient ? h`<p class="small muted">⚠️ Données insuffisantes : quelques séances de plus et l’app pourra estimer tes durées, lieux et intensités habituels.</p>` : f.items.length ? f.items.map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">Pourquoi : ${x.why}</div>${prefs[x.key] ? h`<div class="tiny ${prefs[x.key] === 'aime' ? 'ok-t' : 'muted'}">${prefs[x.key] === 'aime' ? '✓ Confirmé par toi' : '✗ Corrigé : ce n’est pas une préférence'}</div>` : ''}</div><button class="btn sm" data-act="prefSet" data-k="${x.key}" data-l="${x.label}" data-v="aime" aria-label="C’est juste">👍</button><button class="btn sm" data-act="prefSet" data-k="${x.key}" data-l="${x.label}" data-v="neutre" aria-label="Pas vraiment">✗</button></div>`) : h`<p class="small muted">Rien de régulier pour l’instant.</p>`}<p class="tiny muted">Corrige ce qui est faux : l’app ne s’en servira pas.</p></div>`; })()}
     <div class="card"><h3>Habitudes détectées</h3>${hb.length ? hb.map((x) => h`<div class="item"><div class="grow small">${x.text}</div>${x.proposal ? h`<button class="btn sm pri" data-act="habitYes" data-k="${x.key}">Oui</button><button class="btn sm" data-act="habitNo" data-k="${x.key}">Non</button>` : ''}</div>`) : h`<p class="muted small">Aucune habitude marquée pour l’instant.</p>`}</div>
     <form data-submit="avoidSave" class="card"><h3>Zones à ménager</h3><p class="tiny muted">Réglage personnel pris en compte par le générateur (pas un diagnostic).</p>${[['fingers', 'Doigts / poulies'], ['shoulders', 'Épaules'], ['elbows', 'Coudes'], ['knees', 'Genoux / chevilles']].map(([k, l]) => h`<label class="chk"><input type="checkbox" name="${k}" ${av[k] ? 'checked' : ''}> ${l}</label>`)}
       ${numberField('years', 'Années de pratique de l’escalade (facultatif)', S.settings.level?.years ?? '', { min: 0, max: 80, step: 0.5 })}<button class="btn pri" type="submit">Enregistrer</button></form>`;
