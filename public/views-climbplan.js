@@ -18,7 +18,11 @@ import { setReturn } from './nav.js';
 import { EQUIPMENT } from './model.js';
 import { ACTIVITIES } from './model.js';
 import { sessionMinutes } from './engine.js';
-import { ROLES, LOCKABLE, LOCK_STATES, FATIGUE, ATTEMPT_TYPES, FOCUS, VOLUME, normalizePhases, normalizePhase, fitDurations, newPhase, totalMinutes as phTotal, sessionActivities, sessionIntent, activityLabel as actLabel } from './phase.js';
+import { INTENT_FAMILIES, PRIO, subIntentsFor, labelOf } from './intents.js';
+import { FILTER_DEFS, filtersFor, effectiveFilters, filterText, MODES } from './filters.js';
+import { resolvePlaces, transitions, budget } from './budget.js';
+import { placeObjective, cleanObjective, objectiveLabel, whenLabel, WHEN, FAMILY_ROLE, LINKS, chainFor, chainStatus, paramsFor } from './sessionchain.js';
+import { ROLES, LOCKABLE, LOCK_STATES, FATIGUE, ATTEMPT_TYPES, FOCUS, VOLUME, TRADEOFFS, PLACE_MODES, normalizePhases, normalizePhase, fitDurations, newPhase, totalMinutes as phTotal, sessionActivities, sessionIntent, activityLabel as actLabel } from './phase.js';
 import { proposeForPhase, analyzeSession, applySuggestion, REASON, phaseName } from './phaseplan.js';
 import { loadAnalysis } from './brain.js';
 import { alternatives } from './generator.js';
@@ -126,7 +130,8 @@ function vWhy() {
   } else if (aim === 'surprise') {
     detail = h`<div class="setmenu">${Object.entries(AIMS).map(([k, [ic, t, d]]) => h`<button class="setrow" data-act="cpSurAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${(c.surAim || 'any') === k ? '✓' : ''}</span></button>`)}</div>`;
   }
-  return h`<div class="setmenu">${AIM.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : ''}</span></button>`)}</div>${detail}
+  return h`<div class="setmenu">${AIM.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : ''}</span></button>`)}</div>
+    ${aim === 'surprise' ? '' : objectiveCard()}${detail}
     <div class="card stack"><label>📝 Mon intention pour aujourd’hui <span class="tiny muted">(facultatif)</span><textarea data-change="cpIntentText" maxlength="240" rows="2" placeholder="Ex. « Aujourd’hui je veux performer le plus possible en voie »">${c.intentText || ''}</textarea></label>
       <p class="tiny muted">Elle sert à cette séance seulement : ce n’est pas un objectif de ton profil.</p>
       ${c.intentText ? (c.intentGoal ? h`<p class="tiny ok-t">✓ Aussi enregistrée comme objectif.</p>` : h`<button class="btn sm" data-act="cpIntentGoal">🎯 Enregistrer aussi comme objectif</button>`) : ''}</div>`;
@@ -137,6 +142,67 @@ ACT.cpIntentGoal = () => { const c = CP(); keep(); ACT.goalFromText?.({ dataset:
 const TARGET_EX = { run: 'Ex. 10 km en 50 min : échauffement, montée, blocs à l’allure visée.', swim: 'Ex. 100 m en 1:40 : éducatifs, montée, séries à l’allure visée.', load: 'Ex. 100 kg au squat : montée en charge, paliers, puis volume.', body: 'Ex. 15 tractions : séries faciles, séries max, pyramide.' };
 CHG.cpTMetric = (el) => { const c = CP(); c.tMetric = el.value; c.tValue = null; keep(); render(); };
 CHG.cpTValue = (el) => { const c = CP(), v = Number(String(el.value).replace(',', '.')); c.tMetric ||= sportTargets(c.sport, ctx())[0]?.id; c.tValue = Number.isFinite(v) && el.value !== '' ? v : null; keep(); render(); };
+/* ───────── Objectif de la séance : quoi → précisément → quand (début, milieu, fin, toute la séance ou une phase) ───────── */
+const prioRows = (list, act, extra = '') => (list?.length ? h`<div class="stack tight">${list.map((x) => h`<div class="row between wrapf prow"><span class="small">${labelOf(x.id)}</span><span class="chips tight">${[1, 2, 3, 4].map((v) => chip(x.prio === v, String(v), `data-act="${act}" data-id="${x.id}" data-v="${v}" ${extra} title="${PRIO[v]}" aria-label="${labelOf(x.id)} : ${PRIO[v]}"`))}</span></div>`)}<p class="tiny muted">1 = secondaire · 2 = important · 3 = prioritaire · 4 = très prioritaire</p></div>` : '');
+function objectiveCard() {
+  const c = CP(), o = c.objective || {}, subs = o.family ? subIntentsFor(c.sport)[o.family] || [] : [], sel = (id) => (o.subIntents || []).some((x) => x.id === id);
+  const hint = { start: 'Juste après l’échauffement, quand tu es encore frais.', middle: 'Au cœur de la séance, après une montée progressive.', end: 'En fin de séance, après la préparation.', all: 'Chaque phase de travail y contribue.' };
+  return h`<div class="card stack chain"><h3 style="margin:0">🎯 Objectif de la séance <span class="tiny muted">(facultatif)</span></h3>
+    <span class="kicker">1 · Quoi ?</span>
+    <div class="chips">${chip(!o.family, 'Aucun en particulier', 'data-act="cpObjFam" data-id=""')}${Object.entries(INTENT_FAMILIES).map(([k, f]) => chip(o.family === k, `${f.emoji} ${f.label}`, `data-act="cpObjFam" data-id="${k}"`))}</div>
+    ${o.family ? h`<span class="kicker">2 · Précisément <span class="tiny muted">(plusieurs possibles)</span></span>
+      <div class="chips">${subs.map((x) => chip(sel(x.id), x.label, `data-act="cpObjSub" data-id="${x.id}"`))}</div>${prioRows(o.subIntents, 'cpObjPrio')}
+      <span class="kicker">3 · À quel moment de la séance ?</span>
+      <div class="chips">${Object.entries(WHEN).map(([k, l]) => chip((o.when || 'end') === k, l, `data-act="cpObjWhen" data-id="${k}"`))}</div>
+      <p class="tiny muted">${hint[o.when] || (o.when?.startsWith('ph:') ? 'Sur la phase que tu as choisie.' : hint.end)} À l’étape suivante, tu peux aussi le poser sur une phase précise.</p>` : ''}</div>`;
+}
+const objSet = (fn) => { const c = CP(); c.objective = c.objective || { family: '', subIntents: [], when: 'end' }; fn(c.objective); if (!c.objective.family) c.objective = null; keep(); render(); };
+ACT.cpObjFam = (el) => objSet((o) => { if (o.family !== el.dataset.id) o.subIntents = []; o.family = el.dataset.id; });
+ACT.cpObjSub = (el) => objSet((o) => { const id = el.dataset.id, l = o.subIntents || []; o.subIntents = l.some((x) => x.id === id) ? l.filter((x) => x.id !== id) : [...l, { id, prio: 3 }]; });
+ACT.cpObjPrio = (el) => objSet((o) => { o.subIntents = (o.subIntents || []).map((x) => (x.id === el.dataset.id ? { ...x, prio: Number(el.dataset.v) } : x)); });
+ACT.cpObjWhen = (el) => objSet((o) => { o.when = el.dataset.id; });
+/** Déplacer l'objectif depuis « Ta structure » (moment ou phase précise) : la structure est réorganisée, rien d'autre. */
+CHG.cpObjWhere = (el) => { const c = CP(); if (!c.objective) return; c.objective.when = el.value; const r = placeObjective(c.parts, c.objective); c.parts = r.phases; c.partsTouched = true; c.result = null; keep(); render(); if (r.notes.length) toast(r.notes[0], 4000); };
+const withObjective = (phases) => { const o = cleanObjective(CP().objective); return o ? placeObjective(phases, o).phases : phases; };
+
+/* ───────── Filtres : séance → phase → exercice, selon l'activité ───────── */
+const levelOfScope = (scope) => (scope === 'g' ? (CP().filters ||= {}) : (CP().parts[Number(scope)].filters ||= {}));
+function filterField(key, scope, inherited) {
+  const d = FILTER_DEFS[key], lvl = levelOfScope(scope), cur = lvl[key], mode = cur?.mode || (inherited !== undefined ? 'keep' : 'replace');
+  const val = cur?.value ?? null;
+  const attrs = (x) => `data-s="${scope}" data-k="${key}" ${x}`;
+  let editor = '';
+  if (mode === 'refine' || mode === 'replace') {
+    if (d.type === 'multi') editor = h`<div class="chips">${d.options.map((o) => chip((val || []).includes(o.id), o.label, `data-act="cpFlt" ${attrs(`data-id="${o.id}"`)}`))}</div>`;
+    else if (d.type === 'enum') editor = h`<div class="chips">${d.options.map((o) => chip(val === o.id, o.label, `data-act="cpFlt" ${attrs(`data-id="${o.id}"`)}`))}</div>`;
+    else if (d.type === 'num') editor = h`<input type="number" min="${d.min}" max="${d.max}" value="${val ?? ''}" data-change="cpFltNum" ${raw(attrs(''))} aria-label="${d.label}" placeholder="—">`;
+    else editor = h`<div class="grid2"><label class="tiny">Min<input type="number" step="any" value="${val?.min ?? ''}" data-change="cpFltRange" data-b="min" ${raw(attrs(''))}></label><label class="tiny">Max<input type="number" step="any" value="${val?.max ?? ''}" data-change="cpFltRange" data-b="max" ${raw(attrs(''))}></label></div>`;
+  }
+  return h`<div class="fltrow"><div class="row between wrapf"><b class="small">${d.label}</b>${inherited !== undefined ? h`<span class="chips tight">${Object.entries(MODES).map(([m, l]) => chip(mode === m, l, `data-act="cpFltMode" data-id="${m}" ${attrs('')}`))}</span>` : cur ? h`<button type="button" class="chip" data-act="cpFltClear" ${raw(attrs(''))} aria-label="Effacer ${d.label}">✕</button>` : ''}</div>
+    ${inherited !== undefined && mode === 'keep' ? h`<p class="tiny muted">Hérité de la séance : ${filterText({ [key]: inherited }).join('') || '—'}</p>` : ''}${mode === 'remove' ? h`<p class="tiny muted">Retiré pour cette phase.</p>` : ''}${editor}</div>`;
+}
+const setFlt = (el, fn) => {
+  const lvl = levelOfScope(el.dataset.s), k = el.dataset.k, cur = { ...(lvl[k] || { mode: 'replace', value: null }) };
+  fn(cur, FILTER_DEFS[k]);
+  if (cur.mode !== 'remove' && cur.mode !== 'keep' && (cur.value == null || (Array.isArray(cur.value) && !cur.value.length)) && !(cur.mode === 'refine' || (cur.mode === 'replace' && el.dataset.act === 'cpFltMode'))) delete lvl[k]; else lvl[k] = cur;
+  if (cur.mode === 'keep') delete lvl[k];
+  const c = CP(); c.result = null; c.partsTouched = true; keep(); render(); if (el.dataset.s === 'g') filtersSheet(); else editPart(Number(el.dataset.s));
+};
+ACT.cpFlt = (el) => setFlt(el, (cur, d) => { const id = el.dataset.id; if (cur.mode === 'keep' || cur.mode === 'remove') cur.mode = 'replace'; if (d.type === 'multi') { const l = cur.value || []; cur.value = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; } else cur.value = cur.value === id ? null : id; });
+CHG.cpFltNum = (el) => setFlt(el, (cur) => { cur.value = el.value === '' ? null : Number(el.value); if (cur.mode === 'keep') cur.mode = 'replace'; });
+CHG.cpFltRange = (el) => setFlt(el, (cur) => { const v = { ...(cur.value || {}) }; v[el.dataset.b] = el.value === '' ? null : Number(el.value); cur.value = v.min == null && v.max == null ? null : v; if (cur.mode === 'keep') cur.mode = 'replace'; });
+ACT.cpFltMode = (el) => setFlt(el, (cur) => { cur.mode = el.dataset.id; if (cur.mode === 'keep' || cur.mode === 'remove') cur.value = null; });
+ACT.cpFltClear = (el) => setFlt(el, (cur) => { cur.value = null; cur.mode = 'replace'; });
+const globalKeys = () => filtersFor(CP().sport).filter((k) => !['exclus', 'duree', 'cotation', 'essais', 'style'].includes(k));
+function filtersSheet() {
+  openSheet(h`<div class="stack"><h2 style="margin:0">🔎 Filtres pour toute la séance</h2><p class="tiny muted">Chaque phase en hérite, et peut les garder, les préciser, les remplacer ou les retirer. Tous les filtres peuvent s’additionner : si rien ne peut y répondre, l’app le dit et propose quoi relâcher.</p>
+    ${globalKeys().map((k) => filterField(k, 'g'))}<button class="btn pri" data-act="closeSheet">OK</button></div>`, { wide: true });
+}
+ACT.cpFilters = () => filtersSheet();
+const globalFilterValues = () => effectiveFilters([CP().filters || {}]).filters;
+const placesNow = (list) => { const c = CP(); return resolvePlaces(list || c.built || c.parts, ctx().envs, c.envId || ctx().defEnv?.id || ''); };
+const eqAt = (i) => placesNow()[i]?.equipment || eqNow();
+
 /* ═════════ Étape 4 : « Ta structure » — l'ossature, visible et modifiable, AVANT tout exercice ═════════ */
 const LIMITS = ['Fatigue excessive', 'Essais max répétés', 'Doigts (réglettes)', 'Sauts et impacts', 'Charges lourdes', 'Épaules'];
 const lockIc = (p, k) => LOCK_STATES[p.locks?.[k] || 'free'][0];
@@ -152,14 +218,31 @@ function vStructure() {
   const compact = (lvl === 'libre' || lvl === 'leger') && !c.editStruct;
   if (c.aim === 'surprise' && !isClimb(c.sport) && compact) return h`<div class="card"><p class="small">🎲 Niveau « ${LEVELS[lvl][0]} » : la surprise choisit la structure. Passe à l’étape suivante pour la découvrir.</p><button class="btn sm" data-act="cpEditStruct">✏️ Construire la structure moi-même</button></div>`;
   const fit = total !== c.minutes ? fitDurations(ph, c.minutes) : null;
-  return h`<div class="card stack"><div class="row between wrapf"><b>${fmtMin(total)} au total</b><span class="tiny muted">${ph.length} phase${ph.length > 1 ? 's' : ''} · ${acts.length > 1 ? `${acts.length} activités` : actLabel(acts[0] || c.sport)}</span></div>
-      ${total !== c.minutes ? h`<p class="tiny ${fit?.ok ? 'muted' : 'warn-t'}">Temps disponible : ${fmtMin(c.minutes)}. ${fit?.ok ? '' : fit?.error || ''}</p>
-        <div class="row wrapf">${fit?.ok ? h`<button class="btn sm" data-act="cpFit">⚖️ Ajuster à ${fmtMin(c.minutes)} (les 🔒 ne bougent pas)</button>` : ''}<button class="btn sm ghost" data-act="cpKeepTotal">Garder ${fmtMin(total)}</button></div>` : ''}
-      ${sessIntent().text ? h`<p class="tiny acc-t">📝 Intention d’aujourd’hui : « ${sessIntent().text} »</p>` : ''}</div>
+  const tr = transitions(ph, ctx().envs, c.envId || ctx().defEnv?.id || ''), bu = budget(ph, c.minutes, tr), obj = cleanObjective(c.objective), nf = Object.keys(c.filters || {}).length;
+  const issues = tr.flatMap((t) => t.issues.map((x) => ({ ...x, to: t.to })));
+  return h`<div class="card stack"><div class="row between wrapf"><b>${fmtMin(bu.needed || total)} au total</b><span class="tiny muted">${ph.length} phase${ph.length > 1 ? 's' : ''} · ${acts.length > 1 ? `${acts.length} activités` : actLabel(acts[0] || c.sport)}${bu.travel ? ` · 🚗 ${bu.travel} min de déplacement` : ''}</span></div>
+      <p class="tiny ${bu.over ? 'warn-t' : 'muted'}">⏱ ${bu.text}</p>
+      ${bu.over ? h`<details class="how mini" open><summary>Ce qui pourrait être sacrifié</summary>${bu.sacrifice.map((x, k) => h`<div class="row between wrapf"><span class="small">${x.text} <span class="tiny muted">— ${x.compromise}</span></span><button class="btn sm" data-act="cpSacrifice" data-id="${k}">Appliquer</button></div>`)}</details>` : ''}
+      ${total !== c.minutes && !bu.travel ? h`<div class="row wrapf">${fit?.ok ? h`<button class="btn sm" data-act="cpFit">⚖️ Ajuster à ${fmtMin(c.minutes)} (les 🔒 ne bougent pas)</button>` : h`<span class="tiny warn-t">${fit?.error || ''}</span>`}<button class="btn sm ghost" data-act="cpKeepTotal">Garder ${fmtMin(total)}</button></div>` : bu.travel && total !== c.minutes ? h`<button class="btn sm ghost" data-act="cpKeepTotal">Garder ${fmtMin(total)} de phases</button>` : ''}
+      ${sessIntent().text ? h`<p class="tiny acc-t">📝 Intention d’aujourd’hui : « ${sessIntent().text} »</p>` : ''}
+      ${obj ? h`<div class="row between wrapf"><span class="small">🎯 <b>${objectiveLabel(obj)}</b>${obj.subIntents.length ? ` : ${obj.subIntents.map((x) => labelOf(x.id)).join(', ')}` : ''}</span>
+        <select data-change="cpObjWhere" aria-label="Moment de l’objectif">${Object.entries(WHEN).map(([k, l]) => h`<option value="${k}" ${obj.when === k ? 'selected' : ''}>${l}</option>`)}${ph.map((p, k) => (p.type === 'pause' ? '' : h`<option value="ph:${p.id}" ${obj.when === 'ph:' + p.id ? 'selected' : ''}>Phase ${k + 1} : ${phaseName(p)}</option>`))}</select></div>` : ''}
+      <button class="btn sm" data-act="cpFilters">🔎 Filtres pour toute la séance${nf ? ` (${nf})` : ''}</button>
+      ${nf ? h`<p class="tiny muted">${filterText(globalFilterValues()).join(' · ')}</p>` : ''}</div>
+    ${issues.length ? h`<div class="card flat warn-b stack"><b class="small">↔️ Transitions entre phases</b>${issues.map((x) => h`<div class="row between wrapf"><span class="small">Phase ${x.to + 1} : ${x.text}</span>${x.proposal ? h`<button class="btn sm" data-act="cpTransPause" data-id="${x.to}">＋ ${x.proposal.minutes} min de récupération</button>` : ''}</div>`)}</div>` : ''}
     ${compact ? h`<div class="setmenu">${ph.map((p) => h`<div class="setrow"><span class="sic">${ROLES[p.role][0]}</span><span class="grow"><b>${phaseName(p)}</b><small>${actLabel(p.activity)} · ${fmtMin(p.minutes)}</small></span></div>`)}</div>
         <button class="btn" data-act="cpEditStruct">✏️ Modifier la structure</button>` : vPhases()}`;
 }
 ACT.cpEditStruct = () => { CP().editStruct = true; keep(); render(); };
+/** Appliquer un sacrifice proposé par le budget (seulement sur ton clic ; les 🔒 ne bougent pas). */
+ACT.cpSacrifice = (el) => {
+  const c = CP(), bu = budget(c.parts, c.minutes, transitions(c.parts, ctx().envs, c.envId || ctx().defEnv?.id || '')), x = bu.sacrifice[Number(el.dataset.id)]; if (!x) return;
+  if (x.travel) c.parts.forEach((p) => { if (p.locks?.place !== 'user') p.place = { mode: 'same', envId: '', travelMin: null }; });
+  else if (x.remove) c.parts.splice(x.index, 1);
+  else { const p = c.parts[x.index]; if (p && p.locks?.minutes !== 'user') p.minutes -= x.minutes; }
+  c.partsTouched = true; c.result = null; keep(); render(); toast(`Fait : ${x.text.toLowerCase()}.`);
+};
+ACT.cpTransPause = (el) => { const c = CP(), at = Number(el.dataset.id); c.parts.splice(at, 0, newPhase('pause', { minutes: 10, goal: 'Récupérer avant la suite' }, Date.now() + at)); c.partsTouched = true; c.result = null; keep(); render(); };
 ACT.cpKeepTotal = () => { const c = CP(); c.minutes = phTotal(c.parts); keep(); render(); };
 ACT.cpFit = () => { const c = CP(), r = fitDurations(c.parts, c.minutes); if (!r.ok) return toast(r.error, 4500); c.parts = r.phases; c.partsTouched = true; keep(); render(); };
 /* ═════════ Étape 5 : propositions classées et expliquées, phase par phase ═════════ */
@@ -180,7 +263,8 @@ function vImprove() {
   return h`<p class="small muted">L’app relit toute ta séance et te propose des améliorations. Rien n’est changé sans ton accord.</p>
     ${(c.hist || []).length ? h`<button class="btn sm" data-act="cpUndo">↶ Revenir à la structure précédente</button>` : ''}
     ${(c.changes || []).length ? h`<div class="card flat ok-b"><b class="small">✓ Déjà appliqué</b><ul class="clean tight small">${c.changes.map((t) => h`<li>${t}</li>`)}</ul></div>` : ''}
-    ${list.length ? list.map((x) => h`<div class="card sugg"><b>${x.title}</b><p class="small">${x.text}</p><details class="how mini"><summary>Pourquoi ?</summary>${whyList(x.why)}</details>
+    ${list.length ? list.map((x) => h`<div class="card sugg"><b>${x.title}</b>${x.problem ? h`<p class="tiny muted">Problème : ${x.problem}</p>` : ''}<p class="small">${x.text}</p>
+        ${x.benefit ? h`<p class="tiny"><span class="ok-t">＋ ${x.benefit}</span>${x.compromise ? h` · <span class="warn-t">− ${x.compromise}</span>` : ''}</p>` : ''}<details class="how mini"><summary>Pourquoi ?</summary>${whyList(x.why)}</details>
         ${x.blocked ? h`<p class="tiny warn-t">🔒 ${x.blocked}</p>` : ''}
         <div class="row wrapf">${x.patch ? h`<button class="btn sm pri" data-act="cpSugApply" data-id="${x.id}" ${x.blocked ? 'disabled' : ''}>Appliquer</button>` : ''}<button class="btn sm" data-act="cpSugEdit" data-id="${x.id}">Modifier</button><button class="btn sm ghost" data-act="cpSugIgnore" data-id="${x.id}">Ignorer</button></div></div>`)
       : h`<div class="card"><p class="small">👍 Rien à signaler : ta séance est cohérente avec ce que tu as choisi.</p></div>`}
@@ -207,6 +291,8 @@ ACT.cpUndo = () => {
   const st = JSON.parse(last); c.parts = st.parts; c.built = st.built; c.changes = st.changes; c.generated = false; rebuild(); keep(); render(); toast('Structure précédente rétablie.');
 };
 /* ═════════ Étape 7 : dernière validation, puis génération ═════════ */
+const INT_W = { easy: 1, mod: 2, hard: 3, max: 4 };
+const loadOf = (ph) => ph.reduce((t, p) => t + (p.type === 'pause' ? 0 : (Number(p.minutes) || 0) * (INT_W[p.intensity] || 2)), 0);
 function vValidate() {
   const c = CP(); if (!c.built && !c.result) buildNow();
   const ph = c.built || [], sug = c.built ? suggestionsNow() : [], intent = sessIntent();
@@ -215,7 +301,11 @@ function vValidate() {
   return h`<div class="card stack"><h3 style="margin:0">📋 Ta séance avant génération</h3>
       <p class="small"><b>${fmtMin(phTotal(ph) || c.minutes)}</b> · ${ph.length} phase${ph.length > 1 ? 's' : ''} · ${sessionActivities(ph).map(actLabel).join(', ') || sportLabel(c.sport)}</p>
       ${intent.text ? h`<p class="small">📝 Intention : « ${intent.text} » <span class="tiny muted">(pour cette séance seulement)</span></p>` : ''}
-      <ol class="small">${ph.map((p) => h`<li><b>${phaseName(p)}</b> — ${actLabel(p.activity)} · ${fmtMin(p.minutes)} · ${ROLES[p.role][1]}${p.priorities.length ? ` · priorités : ${p.priorities.map((k) => CAPACITIES[k]?.label.toLowerCase() || k).join(', ')}` : ''}${p.avoid.length ? ` · limiter : ${p.avoid.join(', ').toLowerCase()}` : ''}${p.constraints ? ` · ${p.constraints}` : ''}${Object.entries(p.locks).filter(([, v]) => v === 'user').length ? ` · 🔒 ${Object.entries(p.locks).filter(([, v]) => v === 'user').map(([k]) => LOCKABLE[k].toLowerCase()).join(', ')}` : ''}</li>`)}</ol>
+      <p class="small">⏱ ${budget(ph, c.minutes, transitions(ph, ctx().envs, c.envId || ctx().defEnv?.id || '')).text}</p>
+      <p class="small">📈 Charge estimée : <b>${loadOf(ph)}</b> <span class="tiny muted">(minutes × intensité, indicatif : ${loadOf(ph) < 150 ? 'légère' : loadOf(ph) < 350 ? 'moyenne' : 'élevée'})</span></p>
+      ${cleanObjective(c.objective) ? h`<p class="small">🎯 Objectif : ${objectiveLabel(cleanObjective(c.objective))} · ${whenLabel(cleanObjective(c.objective), ph)}</p>` : ''}
+      ${Object.keys(c.filters || {}).length ? h`<p class="small">🔎 Filtres : ${filterText(globalFilterValues()).join(' · ')}</p>` : ''}
+      <ol class="small">${ph.map((p, k) => h`<li><b>${phaseName(p)}</b>${p.objective ? ' 🎯' : ''} — ${actLabel(p.activity)} · ${fmtMin(p.minutes)} · ${ROLES[p.role][1]}${p.travelBefore ? ` · 🚗 ${p.travelBefore} min avant` : ''}${p.envName ? ` · 📍 ${p.envName}` : ''}${p.subIntents?.length ? ` · ${p.subIntents.map((x) => `${labelOf(x.id)} (${x.prio})`).join(', ')}` : ''}${Object.keys(p.filters || {}).length ? ` · ${filterText(effectiveFilters([c.filters || {}, p.filters]).filters).join(', ')}` : ''}${p.priorities.length ? ` · priorités : ${p.priorities.map((k) => CAPACITIES[k]?.label.toLowerCase() || k).join(', ')}` : ''}${p.avoid.length ? ` · limiter : ${p.avoid.join(', ').toLowerCase()}` : ''}${p.constraints ? ` · ${p.constraints}` : ''}${Object.entries(p.locks).filter(([, v]) => v === 'user').length ? ` · 🔒 ${Object.entries(p.locks).filter(([, v]) => v === 'user').map(([k]) => LOCKABLE[k].toLowerCase()).join(', ')}` : ''}</li>`)}</ol>
       ${(c.changes || []).length ? h`<p class="small">✓ Changements appliqués : ${c.changes.join(' ; ')}</p>` : ''}
       ${sug.length ? h`<p class="small warn-t">⚠️ Points d’attention : ${sug.map((x) => x.title).join(' ; ')}</p>` : ''}
       ${appDecides.length ? h`<p class="tiny muted">🤖 Laissé à l’app : les exercices de ${appDecides.join(', ')}.</p>` : ''}
@@ -263,7 +353,9 @@ function buildNow() {
   }
   // L'ossature validée devient la base des propositions ; les choix déjà faits sur une phase sont gardés.
   const prev = Object.fromEntries((c.built || []).map((p) => [p.id, p.pick]));
-  c.built = normalizePhases(c.parts, c.sport).map((p) => ({ ...p, styles: [...(p.styles || [])], ...(prev[p.id] !== undefined ? { pick: prev[p.id] } : {}) }));
+  const norm = normalizePhases(c.parts, c.sport), pls = placesNow(norm), tr = transitions(norm, ctx().envs, c.envId || ctx().defEnv?.id || '');
+  c.built = norm.map((p, i) => ({ ...p, styles: [...(p.styles || [])], ...(prev[p.id] !== undefined ? { pick: prev[p.id] } : {}),
+    ...(pls[i]?.envId && pls[i].envId !== (c.envId || ctx().defEnv?.id || '') ? { envId: pls[i].envId, envName: pls[i].name } : {}), travelBefore: tr.find((t) => t.to === i)?.travel || 0 }));
   c.bopts = buildOpts(); rebuild();
 }
 /** Ossature proposée, avec les verrous qui correspondent au niveau de structure choisi. */
@@ -274,16 +366,19 @@ function proposedPhases() {
 ACT.cpStep = (el) => {
   const c = CP(), d = Number(el.dataset.d), next = Math.max(1, Math.min(NSTEPS, c.step + d));
   if (d > 0 && c.step === 3 && (!c.partsTouched || c.partsFor !== partsKey())) { c.parts = proposedPhases(); c.partsFor = partsKey(); c.partsTouched = false; c.hist = []; c.changes = []; c.ignored = []; }
-  if (d > 0 && c.step === 3) c.parts = normalizePhases(c.parts, c.sport);
+  if (d > 0 && c.step === 3) c.parts = withObjective(normalizePhases(c.parts, c.sport));
   if (d > 0 && c.step === 4) { c.result = null; c.generated = false; buildNow(); }
   if (next < NSTEPS) c.generated = false;
   c.step = next; keep(); render(); window.scrollTo(0, 0);
 };
-const partsKey = () => { const c = CP(); return JSON.stringify([c.level || 'modere', c.sport, c.minutes, c.aim, c.aim === 'grade' ? c.targetShown ?? c.target : c.aim === 'target' ? [c.tMetric, c.tValue] : '', c.goalIds, c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme]); };
+const partsKey = () => { const c = CP(); return JSON.stringify([c.objective?.family || '', c.level || 'modere', c.sport, c.minutes, c.aim, c.aim === 'grade' ? c.targetShown ?? c.target : c.aim === 'target' ? [c.tMetric, c.tValue] : '', c.goalIds, c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme]); };
 ACT.cpRestart = () => { const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; render(); window.scrollTo(0, 0); };
 ACT.cpSport = (el) => { const c = CP(); c.sport = el.dataset.id; c.result = null; c.target = null; if ((!isClimb(c.sport) && c.aim === 'grade') || (!sportFamily(c.sport) && c.aim === 'target')) c.aim = 'goals'; keep(); render(); };
 ACT.cpForme = (el) => { CP().forme = el.dataset.id; keep(); render(); };
-ACT.cpAim = (el) => { CP().aim = el.dataset.id; keep(); render(); };
+ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id;
+  // Réussir une cotation = un objectif de performance, à la fin par défaut (déplaçable ensuite).
+  if (c.aim === 'grade' && !c.objective) c.objective = { family: 'performance', subIntents: [{ id: 'performance.reussite', prio: 4 }], when: 'end' };
+  keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };
 ACT.cpIntentWrite = () => { S.gen.activityId = CP().sport; ACT.gWrite?.({ dataset: { k: 'intent' } }); };
@@ -296,7 +391,10 @@ function vPhases() {
   const c = CP(), sports = Object.keys(ctx().activities).filter((id) => !isClimb(id));
   return h`<div class="card stack">
     ${c.parts.map((p, i) => { const L = p.type === 'climb' && p.adapt ? adaptPart(p, priorLoad(c.parts, i), ctx().styles) : null; const st = STRUCTURES[p.kind || 'bloc']?.[p.structure];
-      return h`<div class="cpart"><div><b>${ROLES[p.role]?.[0] || '•'} ${phaseName(p)}</b>
+      const pl = placesNow(c.parts)[i], stt = chainStatus(p);
+      return h`<div class="cpart"><div><b>${ROLES[p.role]?.[0] || '•'} ${phaseName(p)}</b>${p.objective ? h` <span class="tag acc">🎯 objectif</span>` : ''} <span class="tag">${stt.text}</span>
+        ${pl?.envId || (p.place?.mode && p.place.mode !== 'same') ? h`<div class="tiny muted">📍 ${pl?.name || ''}${p.place?.travelMin ? ` · 🚗 ${p.place.travelMin} min` : ''}</div>` : ''}
+        ${p.subIntents?.length ? h`<div class="tiny acc-t">➜ ${p.subIntents.map((x) => `${labelOf(x.id)}${x.prio >= 3 ? ' ★' : ''}`).join(', ')}</div>` : ''}
         <div class="tiny muted">${lockIc(p, 'activity')} ${actLabel(p.activity || CP().sport)} · ${lockIc(p, 'minutes')} ${fmtMin(p.minutes)} · ${ROLES[p.role]?.[1] || ''}${p.role === 'custom' && p.roleLabel ? ` (${p.roleLabel})` : ''} · ${lockIc(p, 'intensity')} ${INTENSITY[p.intensity]?.[1] || ''}</div>
         ${p.goal ? h`<div class="tiny">🎯 ${lockIc(p, 'goal')} ${p.goal}</div>` : ''}
         ${p.priorities?.length ? h`<div class="tiny acc-t">Priorités : ${p.priorities.map((k) => CAPACITIES[k]?.label.toLowerCase() || k).join(', ')}</div>` : ''}
@@ -321,7 +419,7 @@ function currentPick(i) {
 }
 /** Propositions classées et expliquées pour la phase i (moteur phaseplan : raisons catégorisées). */
 const selGoals = () => (CP().goalIds || []).map((id) => ctx().goals.find((g) => g.id === id)).filter(Boolean);
-function propOf(i) { const c = CP(); return proposeForPhase(c.built[i], ctx(), { phases: c.built, index: i, eq: eqNow(), intent: sessIntent(), goals: selGoals() }); }
+function propOf(i) { const c = CP(); return proposeForPhase(c.built[i], ctx(), { phases: c.built, index: i, eq: eqAt(i), filters: c.filters || {}, intent: sessIntent(), goals: selGoals() }); }
 const byRank = (list, r) => { const pos = Object.fromEntries(r.items.map((x, k) => [x.id, k])); return list.sort((a, b) => (pos[a.id] ?? 99) - (pos[b.id] ?? 99)); };
 const withWhy = (o, r) => { const x = r.items.find((y) => y.id === o.id); return x ? { ...o, reasons: x.reasons, fit: x.fit } : o; };
 function optionsFor(i, free) {
@@ -482,25 +580,6 @@ CHG.cpScale = (el) => {
   if (!total) return; let acc = 0; c.parts.forEach((p, i) => { p.minutes = i === c.parts.length - 1 ? Math.max(5, want - acc) : Math.max(5, Math.round((p.minutes * want) / total / 5) * 5); acc += p.minutes; });
   c.result = null; c.partsTouched = true; keep(); render();
 };
-/* Régler une phase : d'abord ce qui est commun à toutes (activité, durée, rôle, but, priorités, limites, verrous),
- * puis les réglages propres au sport (escalade : cotations, styles voulus/exclus, essais… ; sports : structure). */
-const fieldHead = (label, p, i, k, note = '') => h`<div class="row between wrapf fhead"><span class="small"><b>${label}</b>${note ? h` <span class="tiny muted">${note}</span>` : ''}</span>${k ? lockBtn(p, i, k) : ''}</div>`;
-const lockBtn = (p, i, k) => h`<button type="button" class="chip lockc" data-act="cpLock" data-i="${i}" data-k="${k}" title="${LOCK_STATES[p.locks?.[k] || 'free'][1]}" aria-label="${LOCKABLE[k]} : ${LOCK_STATES[p.locks?.[k] || 'free'][1]}">${LOCK_STATES[p.locks?.[k] || 'free'][0]} ${LOCK_STATES[p.locks?.[k] || 'free'][1]}</button>`;
-function phaseCommon(p, i) {
-  const acts = [...new Set([...Object.keys(ctx().activities), ...Object.keys(ACTIVITIES)])], capsOf = Object.keys(ACTIVITIES[p.activity]?.caps || {}).slice(0, 8);
-  const pri = [...new Set([...capsOf, ...(p.priorities || [])])];
-  return h`${fieldHead('Activité', p, i, 'activity')}<select data-change="cpPhAct" data-i="${i}" aria-label="Activité de la phase" ${p.locks?.activity === 'user' ? 'disabled' : ''}>${acts.map((a) => h`<option value="${a}" ${p.activity === a ? 'selected' : ''}>${actLabel(a)}</option>`)}<option value="pause" ${p.type === 'pause' ? 'selected' : ''}>⏸️ Pause</option></select>
-    ${fieldHead('Durée', p, i, 'minutes')}<span class="unitbox"><input type="number" min="${p.type === 'pause' ? 1 : 5}" max="240" step="5" value="${p.minutes}" data-change="cpPartMin" data-i="${i}" aria-label="Durée de la phase" ${p.locks?.minutes === 'user' ? 'disabled' : ''}><em>min</em></span>
-    <span class="kicker">Rôle de la phase</span><div class="chips">${Object.entries(ROLES).map(([k, [e, l]]) => chip(p.role === k, `${e} ${l}`, `data-act="cpPhRole" data-i="${i}" data-id="${k}"`))}</div>
-    ${p.role === 'custom' ? h`<input data-change="cpPhText" data-i="${i}" data-k="roleLabel" maxlength="40" value="${p.roleLabel || ''}" placeholder="Nom du rôle" aria-label="Nom du rôle">` : ''}
-    ${fieldHead('But de cette phase', p, i, 'goal', '(pour cette séance seulement)')}<textarea data-change="cpPhText" data-i="${i}" data-k="goal" maxlength="200" rows="2" aria-label="But de la phase" placeholder="Ex. « Me préparer à la voie sans trop me fatiguer »" ${p.locks?.goal === 'user' ? 'readonly' : ''}>${p.goal || ''}</textarea>
-    ${p.type === 'pause' ? '' : h`${fieldHead('Intensité', p, i, 'intensity')}<div class="chips">${Object.entries(INTENSITY).map(([k, [e, l]]) => chip(p.intensity === k, `${e} ${l}`, `data-act="cpPart" data-i="${i}" data-k="intensity" data-v="${k}" ${p.locks?.intensity === 'user' && p.intensity !== k ? 'disabled' : ''}`))}</div>
-    <span class="kicker">Priorités <span class="tiny muted">(ce que la phase doit surtout travailler)</span></span><div class="chips">${pri.map((k) => chip((p.priorities || []).includes(k), CAPACITIES[k]?.label || k, `data-act="cpPhPrio" data-i="${i}" data-id="${k}"`))}</div>
-    <span class="kicker">À limiter</span><div class="chips">${[...new Set([...LIMITS, ...(p.avoid || [])])].map((k) => chip((p.avoid || []).includes(k), k, `data-act="cpPhAvoid" data-i="${i}" data-id="${k}"`))}<input class="chipin" data-change="cpPhAvoidAdd" data-i="${i}" maxlength="40" placeholder="＋ Autre" aria-label="Autre chose à limiter"></div>
-    <span class="kicker">Fatigue acceptée</span><div class="chips">${Object.entries(FATIGUE).map(([k, l]) => chip(p.fatigue === k, l, `data-act="cpPhFat" data-i="${i}" data-id="${k}"`))}</div>
-    <label>Contraintes <span class="tiny muted">(facultatif)</span><input data-change="cpPhText" data-i="${i}" data-k="constraints" maxlength="200" value="${p.constraints || ''}" placeholder="Ex. « pas de réglettes, doigt sensible »"></label>
-    ${fieldHead('Exercices', p, i, 'exercises')}${fieldHead('Ordre interne', p, i, 'order')}`}`;
-}
 ACT.cpLock = (el) => upd(Number(el.dataset.i), (p) => { const k = el.dataset.k, order = ['free', 'user', 'app'], cur = p.locks?.[k] || 'free'; p.locks = { ...p.locks, [k]: order[(order.indexOf(cur) + 1) % 3] }; });
 ACT.cpPhRole = (el) => upd(Number(el.dataset.i), (p) => { p.role = el.dataset.id; });
 ACT.cpPhFat = (el) => upd(Number(el.dataset.i), (p) => { p.fatigue = el.dataset.id; });
@@ -518,49 +597,126 @@ CHG.cpPhAct = (el) => upd(Number(el.dataset.i), (p) => {
   Object.assign(p, normalizePhase(p, i0(p), a));
 });
 const i0 = (p) => Math.max(0, CP().parts.indexOf(p));
-function editPart(i) {
-  const c = CP(), p = c.parts[i]; if (!p) return;
-  const common = phaseCommon(p, i);
-  if (p.type === 'pause' || (p.type !== 'climb' && p.type !== 'work')) {
-    openSheet(h`<div class="stack"><h2 style="margin:0">${ROLES[p.role]?.[0] || ''} ${phaseName(p)}</h2>${common}${p.type === 'pause' ? '' : h`<p class="tiny muted">Les exercices sont proposés à l’étape suivante, classés et expliqués.</p>`}<button class="btn pri" data-act="closeSheet">OK</button></div>`);
-    return;
-  }
+/* Régler une phase : une CHAÎNE de réglages numérotés, qui dépend du type de phase
+ * (type → objectif → précisément → réglages du type → intensité et durée → lieu → je veux / je ne veux pas → ce que l'app décide).
+ * Tout est facultatif : ce qui n'est pas réglé, l'app le décide. */
+const fieldHead = (label, p, i, k, note = '') => h`<div class="row between wrapf fhead"><span class="small"><b>${label}</b>${note ? h` <span class="tiny muted">${note}</span>` : ''}</span>${k ? lockBtn(p, i, k) : ''}</div>`;
+const lockBtn = (p, i, k) => h`<button type="button" class="chip lockc" data-act="cpLock" data-i="${i}" data-k="${k}" title="${LOCK_STATES[p.locks?.[k] || 'free'][1]}" aria-label="${LOCKABLE[k]} : ${LOCK_STATES[p.locks?.[k] || 'free'][1]}">${LOCK_STATES[p.locks?.[k] || 'free'][0]} ${LOCK_STATES[p.locks?.[k] || 'free'][1]}</button>`;
+const ROLE_FAMILY = { technique: ['technique'], endurance: ['endurance'], force: ['force'], puissance: ['puissance'], perf: ['performance'], mobilite: ['mobilite'], recup: ['mobilite'], prep: ['technique', 'endurance'] };
+function linkType(p, i) {
+  const acts = [...new Set([...Object.keys(ctx().activities), ...Object.keys(ACTIVITIES)])];
+  return h`${fieldHead('Activité', p, i, 'activity')}<select data-change="cpPhAct" data-i="${i}" aria-label="Activité de la phase" ${p.locks?.activity === 'user' ? 'disabled' : ''}>${acts.map((a) => h`<option value="${a}" ${p.activity === a ? 'selected' : ''}>${actLabel(a)}</option>`)}<option value="pause" ${p.type === 'pause' ? 'selected' : ''}>⏸️ Pause</option></select>
+    ${p.type === 'climb' ? h`<div class="chips">${[['bloc', '🪨 Bloc'], ['voie', '🧗 Voie']].map(([k, l]) => chip(p.kind === k, l, `data-act="cpPart" data-i="${i}" data-k="kind" data-v="${k}"`))}</div>` : ''}`;
+}
+function linkGoal(p, i) {
+  return h`<div class="chips">${Object.entries(ROLES).filter(([k]) => k !== 'pause').map(([k, [e, l]]) => chip(p.role === k, `${e} ${l}`, `data-act="cpPhRole" data-i="${i}" data-id="${k}"`))}</div>
+    ${p.role === 'custom' ? h`<input data-change="cpPhText" data-i="${i}" data-k="roleLabel" maxlength="40" value="${p.roleLabel || ''}" placeholder="Nom du rôle" aria-label="Nom du rôle">` : ''}
+    ${fieldHead('But de cette phase', p, i, 'goal', '(pour cette séance seulement)')}<textarea data-change="cpPhText" data-i="${i}" data-k="goal" maxlength="200" rows="2" aria-label="But de la phase" placeholder="Ex. « Me préparer à la voie sans trop me fatiguer »" ${p.locks?.goal === 'user' ? 'readonly' : ''}>${p.goal || ''}</textarea>`;
+}
+function linkSubs(p, i) {
+  const all = paramsFor(p).subs, first = ROLE_FAMILY[p.role] || [], sel = (id) => (p.subIntents || []).some((x) => x.id === id);
+  const fams = [...first.filter((f) => all[f]), ...Object.keys(all).filter((f) => !first.includes(f))];
+  const famChips = (f) => h`<span class="tiny muted">${INTENT_FAMILIES[f].emoji} ${INTENT_FAMILIES[f].label}</span><div class="chips">${all[f].map((x) => chip(sel(x.id), x.label, `data-act="cpPhSub" data-i="${i}" data-id="${x.id}"`))}</div>`;
+  const chosenFams = [...new Set((p.subIntents || []).map((x) => x.id.split('.')[0]))];
+  const pri = [...new Set([...Object.keys(ACTIVITIES[p.activity]?.caps || {}).slice(0, 8), ...(p.priorities || [])])];
+  return h`${fams.slice(0, first.length || 1).map(famChips)}
+    ${fams.length > (first.length || 1) ? h`<details class="how mini"><summary>Autres familles (${fams.length - (first.length || 1)})</summary>${fams.slice(first.length || 1).map(famChips)}</details>` : ''}
+    ${prioRows(p.subIntents, 'cpPhSubPrio', `data-i="${i}"`)}
+    ${chosenFams.length > 1 ? h`<span class="kicker">Règles entre priorités</span>
+      ${(p.rules || []).map((r, k) => h`<div class="row between"><span class="small">« ${labelOf(r.under)} » ne prend jamais le dessus sur « ${labelOf(r.over)} »</span><button type="button" class="chip" data-act="cpPhRuleDel" data-i="${i}" data-id="${k}" aria-label="Retirer la règle">✕</button></div>`)}
+      <div class="row wrapf tight"><select data-change="cpPhRuleUnder" data-i="${i}" aria-label="Ce qui ne doit pas dominer">${chosenFams.map((f) => h`<option value="${f}" ${S.cpRuleUnder === f ? 'selected' : ''}>${INTENT_FAMILIES[f].label}</option>`)}</select><span class="small">ne prend jamais le dessus sur</span><select data-change="cpPhRuleOver" data-i="${i}" aria-label="Ce qui reste prioritaire">${chosenFams.map((f) => h`<option value="${f}" ${S.cpRuleOver === f ? 'selected' : ''}>${INTENT_FAMILIES[f].label}</option>`)}</select><button class="btn sm" data-act="cpPhRuleAdd" data-i="${i}">＋ Règle</button></div>` : ''}
+    <details class="how mini"><summary>Capacités précises${p.priorities?.length ? ` (${p.priorities.length})` : ''}</summary><div class="chips">${pri.map((k) => chip((p.priorities || []).includes(k), CAPACITIES[k]?.label || k, `data-act="cpPhPrio" data-i="${i}" data-id="${k}"`))}</div></details>`;
+}
+function linkParams(p, i) {
+  const c = CP(), g = globalFilterValues(), pf = paramsFor(p), extraKeys = pf.filters.filter((k) => !(p.type === 'climb' && ['style', 'cotation', 'essais', 'volume'].includes(k)) && k !== 'exclus');
+  const filtersHtml = extraKeys.length ? h`<span class="kicker">Filtres de la phase</span>${extraKeys.map((k) => filterField(k, String(i), g[k]))}
+    ${Object.keys(g).filter((k) => !extraKeys.includes(k) && FILTER_DEFS[k]).map((k) => filterField(k, String(i), g[k]))}` : '';
   if (p.type === 'work') {
     const x = ctx(), fam = sportFamily(p.activity), props = sportProposals(fam, p.intensity || 'mod'), cur = p.structure || props[0]?.id, moves = fam === 'load' || fam === 'body' ? sportMoves(p.activity, x) : [];
     const mv = p.move || moves[0]?.id || '', known = mv ? bestPerf(x, mv) : null, u = moves.find((m) => m.id === mv)?.unit;
-    openSheet(h`<div class="stack"><h2 style="margin:0">${partTitle(p)}</h2>${common}
-      ${moves.length ? h`<label>Mouvement<select data-change="cpPartMove" data-i="${i}" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure">${moves.map((m) => h`<option value="${m.id}" ${m.id === mv ? 'selected' : ''}>${moveName(m.id, x)}</option>`)}</select></label>
-        <p class="tiny muted">${known != null ? `Ta meilleure perf notée : ${known} ${u === 'reps' ? 'rép.' : u}. Les ${u === 'kg' ? 'charges' : 'séries'} en découlent.` : `Aucune perf notée : ${u === 'kg' ? 'charges' : 'séries'} au ressenti. <button class="linkish acc-t" data-act="allGo" data-to="profile/perfs">Noter ma perf</button>`}</p>` : ''}
+    return h`${moves.length ? h`<label>Mouvement<select data-change="cpPartMove" data-i="${i}" data-pick="yes" data-add="metricNew" data-add-label="Créer une mesure">${moves.map((m) => h`<option value="${m.id}" ${m.id === mv ? 'selected' : ''}>${moveName(m.id, x)}</option>`)}</select></label>
+        <p class="tiny muted">${known != null ? `Ta meilleure perf notée : ${known} ${u === 'reps' ? 'rép.' : u}. Les ${u === 'kg' ? 'charges' : 'séries'} en découlent.` : `Aucune perf notée : ${u === 'kg' ? 'charges' : 'séries'} au ressenti. `}${known == null ? h`<button class="linkish acc-t" data-act="allGo" data-to="profile/perfs">Noter ma perf</button>` : ''}</p>` : ''}
       <span class="kicker">Comment structurer cette partie ?</span>
-      <div class="setmenu">${props.map((st) => h`<button class="setrow ${st.fit ? '' : 'dim'}" data-act="cpPart" data-i="${i}" data-k="structure" data-v="${st.id}"><span class="sic">${st.emoji}</span><span class="grow"><b>${st.name}</b><small>${st.desc}${st.fit ? '' : ' (moins adapté à cette intensité)'}</small><small class="tip">💡 ${st.when}</small></span><span class="chev">${cur === st.id ? '✓' : ''}</span></button>`)}</div>
-      <button class="btn pri" data-act="closeSheet">OK</button></div>`);
-    return;
+      <div class="setmenu">${props.map((st) => h`<button class="setrow ${st.fit ? '' : 'dim'}" data-act="cpPart" data-i="${i}" data-k="structure" data-v="${st.id}"><span class="sic">${st.emoji}</span><span class="grow"><b>${st.name}</b><small>${st.desc}${st.fit ? '' : ' (moins adapté à cette intensité)'}</small><small class="tip">💡 ${st.when}</small></span><span class="chev">${cur === st.id ? '✓' : ''}</span></button>`)}</div>${filtersHtml}`;
   }
+  if (p.type !== 'climb') return filtersHtml || h`<p class="tiny muted">Les exercices sont proposés à l’étape suivante, classés et expliqués.</p>`;
   const sys = phSys(p), levels = sortedLevels(sys), max = sys ? knownMax(ctx(), sys, p.kind) : null, [lo, hi] = partRange(p, levels, max);
   const L = adaptPart(p, priorLoad(c.parts, i), ctx().styles), props = proposals(p.kind, p.intensity), cur = p.structure || props[0].id;
   const opt = (sel) => levels.map((l, k) => h`<option value="${k}" ${k === sel ? 'selected' : ''}>${l.label}</option>`);
   const sysList = systemsFor(p.kind), styl = climbStyles().sort((a, b) => a.label.localeCompare(b.label, 'fr'));
-  openSheet(h`<div class="stack"><h2 style="margin:0">${partTitle(p)}</h2>${common}
-    <span class="kicker">🧗 Escalade</span>
-    <div class="chips">${[['bloc', '🪨 Bloc'], ['voie', '🧗 Voie']].map(([k, l]) => chip(p.kind === k, l, `data-act="cpPart" data-i="${i}" data-k="kind" data-v="${k}"`))}</div>
-    ${sysList.length > 1 ? h`<label>Système de cotation<select data-change="cpPhSys" data-i="${i}">${sysList.map((y) => h`<option value="${y.id}" ${(p.systemId || sys?.id) === y.id ? 'selected' : ''}>${y.name}</option>`)}</select></label>` : ''}
+  return h`${sysList.length > 1 ? h`<label>Système de cotation<select data-change="cpPhSys" data-i="${i}">${sysList.map((y) => h`<option value="${y.id}" ${(p.systemId || sys?.id) === y.id ? 'selected' : ''}>${y.name}</option>`)}</select></label>` : ''}
+    <span class="kicker">Cotations ${p.from == null ? h`<span class="tiny muted">(auto selon l’intensité${max == null ? '' : ' et ton max'})</span>` : ''}</span>
+    <div class="grid2"><label>De<select data-change="cpPartLv" data-i="${i}" data-k="from">${opt(lo)}</select></label><label>À<select data-change="cpPartLv" data-i="${i}" data-k="to">${opt(hi)}</select></label></div>
+    ${p.from != null ? h`<button class="btn sm ghost" data-act="cpPartAuto" data-i="${i}">↺ Cotations automatiques</button>` : ''}
+    ${fieldHead('Styles voulus', p, i, 'style', '(plusieurs possibles)')}
+    <div class="chips">${styl.map((s) => chip((p.styles || []).includes(s.id), s.label, `data-act="cpPartStyle" data-i="${i}" data-id="${s.id}"`))}<input class="chipin" data-change="styleQuick" data-target="cpPart" data-i="${i}" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
+    <span class="kicker">Styles exclus</span>
+    <div class="chips">${styl.filter((s) => !(p.styles || []).includes(s.id)).map((s) => chip((p.stylesOut || []).includes(s.id), `🚫 ${s.label}`, `data-act="cpPhStyleOut" data-i="${i}" data-id="${s.id}"`))}</div>
     <span class="kicker">Type d’essais</span><div class="chips">${Object.entries(ATTEMPT_TYPES).map(([k, l]) => chip(p.attemptType === k, l, `data-act="cpPhSet" data-i="${i}" data-k="attemptType" data-id="${k}"`))}</div>
     <span class="kicker">Priorité</span><div class="chips">${Object.entries(FOCUS).map(([k, l]) => chip(p.focus === k, l, `data-act="cpPhSet" data-i="${i}" data-k="focus" data-id="${k}"`))}</div>
     <span class="kicker">Volume</span><div class="chips">${Object.entries(VOLUME).map(([k, l]) => chip(p.volume === k, l, `data-act="cpPhSet" data-i="${i}" data-k="volume" data-id="${k}"`))}</div>
     <label>Essais au maximum <span class="tiny muted">(facultatif)</span><input type="number" min="1" max="99" inputmode="numeric" value="${p.attemptsMax ?? ''}" data-change="cpPhAttempts" data-i="${i}" placeholder="—"></label>
-    <span class="kicker">Cotations ${p.from == null ? h`<span class="tiny muted">(auto selon l’intensité${max == null ? '' : ' et ton max'})</span>` : ''}</span>
-    <div class="grid2"><label>De<select data-change="cpPartLv" data-i="${i}" data-k="from">${opt(lo)}</select></label><label>À<select data-change="cpPartLv" data-i="${i}" data-k="to">${opt(hi)}</select></label></div>
-    ${p.from != null ? h`<button class="btn sm ghost" data-act="cpPartAuto" data-i="${i}">↺ Cotations automatiques</button>` : ''}
-    <span class="kicker">Styles voulus <span class="tiny muted">(plusieurs possibles)</span></span>
-    <div class="chips">${styl.map((s) => chip((p.styles || []).includes(s.id), s.label, `data-act="cpPartStyle" data-i="${i}" data-id="${s.id}"`))}<input class="chipin" data-change="styleQuick" data-target="cpPart" data-i="${i}" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
-    <span class="kicker">Styles exclus</span>
-    <div class="chips">${styl.filter((s) => !(p.styles || []).includes(s.id)).map((s) => chip((p.stylesOut || []).includes(s.id), `🚫 ${s.label}`, `data-act="cpPhStyleOut" data-i="${i}" data-id="${s.id}"`))}</div>
     <span class="kicker">Comment structurer cette partie ?</span>
     <div class="setmenu">${props.map((s) => h`<button class="setrow ${s.fit ? '' : 'dim'}" data-act="cpPart" data-i="${i}" data-k="structure" data-v="${s.id}"><span class="sic">${s.emoji}</span><span class="grow"><b>${s.name}</b><small>${s.desc}${s.fit ? '' : ' (moins adapté à cette intensité)'}</small></span><span class="chev">${cur === s.id ? '✓' : ''}</span></button>`)}</div>
     ${i > 0 ? h`<label class="row"><input type="checkbox" data-change="cpPartAdapt" data-i="${i}" ${p.adapt ? 'checked' : ''}><span class="grow"><b>Adapter à ce que j’ai fait avant</b><small class="muted"> Moins de doigts ou de puissance si les parties d’avant en ont beaucoup demandé.</small></span></label>
       ${p.adapt ? h`<p class="tiny ${L.notes.length ? 'acc-t' : 'muted'}">${L.notes.length ? L.notes.join(' ') : 'Rien à adapter : ce qui précède reste léger.'}</p>` : ''}` : ''}
+    ${filtersHtml}`;
+}
+function linkIntensity(p, i) {
+  return h`${fieldHead('Durée', p, i, 'minutes')}<span class="unitbox"><input type="number" min="${p.type === 'pause' ? 1 : 5}" max="240" step="5" value="${p.minutes}" data-change="cpPartMin" data-i="${i}" aria-label="Durée de la phase" ${p.locks?.minutes === 'user' ? 'disabled' : ''}><em>min</em></span>
+    ${p.type === 'pause' ? '' : h`${fieldHead('Intensité', p, i, 'intensity')}<div class="chips">${Object.entries(INTENSITY).map(([k, [e, l]]) => chip(p.intensity === k, `${e} ${l}`, `data-act="cpPart" data-i="${i}" data-k="intensity" data-v="${k}" ${p.locks?.intensity === 'user' && p.intensity !== k ? 'disabled' : ''}`))}</div>
+    <span class="kicker">Fatigue acceptée</span><div class="chips">${Object.entries(FATIGUE).map(([k, l]) => chip(p.fatigue === k, l, `data-act="cpPhFat" data-i="${i}" data-id="${k}"`))}</div>
+    <details class="how mini" ${Object.keys(p.tradeoffs || {}).length ? 'open' : ''}><summary>⚖️ Curseurs de compromis${Object.keys(p.tradeoffs || {}).length ? ` (${Object.keys(p.tradeoffs).length})` : ''}</summary>
+      ${Object.entries(TRADEOFFS).map(([k, [a, b]]) => h`<label class="trade"><span class="row between tiny"><span>${a}</span><span>${b}</span></span><input type="range" min="-2" max="2" step="1" value="${p.tradeoffs?.[k] || 0}" data-change="cpPhTrade" data-i="${i}" data-k="${k}" aria-label="${a} ou ${b}"></label>`)}
+      <p class="tiny muted">Au centre : équilibré. Ces curseurs changent le classement des exercices proposés.</p></details>`}`;
+}
+function linkPlace(p, i) {
+  const envs = ctx().envs, pl = placesNow(CP().parts)[i], mode = p.place?.mode || 'same';
+  return h`${fieldHead('Où ?', p, i, 'place', `→ ${pl?.name || ''}`)}
+    <div class="chips">${Object.entries(PLACE_MODES).map(([k, l]) => chip(mode === k, i === 0 ? { same: 'Lieu de la séance', other: 'Un lieu précis', free: 'Lieu libre' }[k] : l, `data-act="cpPhPlace" data-i="${i}" data-id="${k}" ${p.locks?.place === 'user' ? 'disabled' : ''}`))}</div>
+    ${mode === 'other' ? h`<select data-change="cpPhEnv" data-i="${i}" aria-label="Lieu de la phase" ${p.locks?.place === 'user' ? 'disabled' : ''}><option value="">Choisir un lieu…</option>${envs.map((e) => h`<option value="${e.id}" ${p.place?.envId === e.id ? 'selected' : ''}>${e.name}</option>`)}</select>
+      ${i > 0 ? h`<label>Temps de déplacement depuis la phase d’avant<span class="unitbox"><input type="number" min="0" max="180" step="5" value="${p.place?.travelMin ?? ''}" data-change="cpPhTravel" data-i="${i}" placeholder="?" aria-label="Minutes de déplacement"><em>min</em></span></label>` : ''}` : ''}
+    ${pl?.equipment ? h`<p class="tiny muted">🧰 ${[...pl.equipment].map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() || 'aucun matériel déclaré'}</p>` : ''}`;
+}
+function linkConstraints(p, i) {
+  return h`<span class="kicker">Je ne veux pas</span>
+    <label class="row"><input type="checkbox" data-change="cpPhNoFail" data-i="${i}" ${p.noFailure ? 'checked' : ''}><span class="grow small">Aller à l’échec</span></label>
+    <div class="chips">${chip(!p.maxVolume, 'Volume libre', `data-act="cpPhMaxVol" data-i="${i}" data-id=""`)}${chip(p.maxVolume === 'mod', 'Pas de volume élevé', `data-act="cpPhMaxVol" data-i="${i}" data-id="mod"`)}${chip(p.maxVolume === 'low', 'Peu de volume', `data-act="cpPhMaxVol" data-i="${i}" data-id="low"`)}</div>
+    <div class="chips">${[...new Set([...LIMITS, ...(p.avoid || [])])].map((k) => chip((p.avoid || []).includes(k), k, `data-act="cpPhAvoid" data-i="${i}" data-id="${k}"`))}<input class="chipin" data-change="cpPhAvoidAdd" data-i="${i}" maxlength="40" placeholder="＋ Autre" aria-label="Autre chose à limiter"></div>
+    <details class="how mini"><summary>Matériel interdit${p.forbidEquip?.length ? ` (${p.forbidEquip.length})` : ''}</summary><div class="chips">${Object.entries(EQUIPMENT).map(([k, l]) => chip((p.forbidEquip || []).includes(k), `🚫 ${l}`, `data-act="cpPhForbidEq" data-i="${i}" data-id="${k}"`))}</div></details>
+    <label>Autre contrainte <span class="tiny muted">(facultatif)</span><input data-change="cpPhText" data-i="${i}" data-k="constraints" maxlength="200" value="${p.constraints || ''}" placeholder="Ex. « pas de réglettes, doigt sensible »"></label>`;
+}
+function linkLocks(p, i) {
+  return h`<p class="tiny muted">🤖 = l’app décide · 🔒 = imposé par toi · ✏️ = modifiable. Touche pour changer.</p>
+    ${fieldHead('Exercices', p, i, 'exercises')}${fieldHead('Ordre interne', p, i, 'order')}${fieldHead('Repos', p, i, 'rest')}`;
+}
+const LINK_VIEW = { type: linkType, objectif: linkGoal, sous: linkSubs, params: linkParams, intensite: linkIntensity, lieu: linkPlace, contraintes: linkConstraints, verrous: linkLocks };
+function editPart(i) {
+  const c = CP(), p = c.parts[i]; if (!p) return;
+  const st = chainStatus(p);
+  openSheet(h`<div class="stack"><div class="row between wrapf"><h2 style="margin:0">${ROLES[p.role]?.[0] || ''} ${phaseName(p)}</h2><span class="tag">${st.text}</span></div>
+    ${p.objective ? h`<p class="tiny acc-t">🎯 Cette phase porte l’objectif de la séance.</p>` : ''}
+    <p class="tiny muted">Règle dans l’ordre ce qui compte pour toi : tout le reste, l’app le décide.${st.next ? ` Prochain réglage : ${LINKS[st.next].replace(/^\d · /, '').toLowerCase()}.` : ''}</p>
+    ${st.links.map((k) => h`<section class="chainlink ${st.done.includes(k) ? 'done' : ''}"><h4>${st.done.includes(k) ? '✓ ' : ''}${LINKS[k]}</h4>${LINK_VIEW[k](p, i)}</section>`)}
     <button class="btn pri" data-act="closeSheet">OK</button></div>`);
 }
+ACT.cpPhSub = (el) => upd(Number(el.dataset.i), (p) => { const id = el.dataset.id, l = p.subIntents || []; p.subIntents = l.some((x) => x.id === id) ? l.filter((x) => x.id !== id) : [...l, { id, prio: 2 }]; p.rules = (p.rules || []).filter((r) => p.subIntents.some((x) => x.id.startsWith(r.over + '.') || x.id === r.over) && p.subIntents.some((x) => x.id.startsWith(r.under + '.') || x.id === r.under)); });
+ACT.cpPhSubPrio = (el) => upd(Number(el.dataset.i), (p) => { p.subIntents = (p.subIntents || []).map((x) => (x.id === el.dataset.id ? { ...x, prio: Number(el.dataset.v) } : x)); });
+CHG.cpPhRuleUnder = (el) => { S.cpRuleUnder = el.value; };
+CHG.cpPhRuleOver = (el) => { S.cpRuleOver = el.value; };
+ACT.cpPhRuleAdd = (el) => upd(Number(el.dataset.i), (p) => {
+  const fams = [...new Set((p.subIntents || []).map((x) => x.id.split('.')[0]))], under = S.cpRuleUnder && fams.includes(S.cpRuleUnder) ? S.cpRuleUnder : fams[0], over = S.cpRuleOver && fams.includes(S.cpRuleOver) ? S.cpRuleOver : fams[1];
+  if (!under || !over || under === over) { toast('Choisis deux priorités différentes.'); return; }
+  p.rules = [...(p.rules || []).filter((r) => !(r.under === under && r.over === over)), { over, under }].slice(0, 6);
+});
+ACT.cpPhRuleDel = (el) => upd(Number(el.dataset.i), (p) => { p.rules = (p.rules || []).filter((_, k) => k !== Number(el.dataset.id)); });
+CHG.cpPhTrade = (el) => upd(Number(el.dataset.i), (p) => { const v = Math.max(-2, Math.min(2, Math.round(Number(el.value) || 0))); p.tradeoffs = { ...(p.tradeoffs || {}), [el.dataset.k]: v }; if (!v) delete p.tradeoffs[el.dataset.k]; });
+ACT.cpPhPlace = (el) => upd(Number(el.dataset.i), (p) => { if (p.locks?.place === 'user') return; p.place = { ...(p.place || {}), mode: el.dataset.id }; });
+CHG.cpPhEnv = (el) => upd(Number(el.dataset.i), (p) => { if (p.locks?.place === 'user') return; p.place = { ...(p.place || {}), mode: 'other', envId: el.value }; });
+CHG.cpPhTravel = (el) => upd(Number(el.dataset.i), (p) => { p.place = { ...(p.place || {}), travelMin: el.value === '' ? null : Math.max(0, Math.min(180, Math.round(Number(el.value) || 0))) }; });
+CHG.cpPhNoFail = (el) => upd(Number(el.dataset.i), (p) => { p.noFailure = el.checked; });
+ACT.cpPhMaxVol = (el) => upd(Number(el.dataset.i), (p) => { p.maxVolume = el.dataset.id; });
+ACT.cpPhForbidEq = (el) => upd(Number(el.dataset.i), (p) => { const l = p.forbidEquip || [], id = el.dataset.id; p.forbidEquip = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; });
 ACT.cpEdit = (el) => editPart(Number(el.dataset.i));
 const upd = (i, fn) => { const p = CP().parts[i]; if (!p) return; fn(p); CP().result = null; CP().partsTouched = true; keep(); render(); editPart(i); };
 ACT.cpPart = (el) => upd(Number(el.dataset.i), (p) => { p[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'kind' || el.dataset.k === 'intensity') { delete p.structure; if (el.dataset.k === 'kind') { delete p.from; delete p.to; } } });

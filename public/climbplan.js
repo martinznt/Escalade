@@ -2,6 +2,7 @@
 // cotations, styles), plusieurs structures proposées par partie, adaptation à ce qui a été fait avant (au choix),
 // et mode « objectif de fin de séance » (ex. réussir un U8 en dévers-réglettes) qui construit toute la séance.
 // Sans DOM, testé. Les temps sont des estimations simples et affichées ; aucune performance n'est inventée.
+import { intentCaps } from './intents.js';
 import { sortedLevels, bestReferenceLevel, fromReference, REFERENCE } from './grading.js';
 import { normalizeEx, normalizeSession, uid } from './shared.js';
 import { sessionMinutes } from './engine.js';
@@ -167,6 +168,8 @@ function bodyPart(p, ctx, act, label, seed, o = {}) {
     // Le lieu choisi décide du matériel ; les objectifs, intentions et zones à ménager orientent le choix des exercices.
     // Le but, les priorités et l'intensité de la phase orientent aussi le choix (sans créer d'objectif).
     const caps = Object.fromEntries((p.priorities || []).map((c) => [c, 1]));
+    // Sous-objectifs structurés de la phase (priorités 1–4, règles appliquées) : ajoutés aux capacités visées.
+    if (p.subIntents?.length) for (const [c, w] of Object.entries(intentCaps(p.subIntents, p.rules || []).caps)) caps[c] = Math.max(caps[c] || 0, Math.min(1, w / 4));
     const intents = [...(o.intents || []), ...(Object.keys(caps).length ? [{ label: p.goal || 'Priorités de la phase', caps }] : [])];
     const plan = G.planSession({ activityId: p.activity || act, parts: [{ type, minutes: p.minutes }], seed, envId: o.envId, goalIds: o.goalIds, intents, avoidZones: o.avoidZones, light: o.light || p.intensity === 'easy' }, ctx);
     return G.generateFromPlan(plan, ctx).session.exercises.map((e) => normalizeEx({ ...e, id: uid(), part: label }));
@@ -189,8 +192,14 @@ export const partLabel = (p, i, parts) => {
  */
 export function buildFromParts(parts, ctx, opts = {}) {
   const out = [], why = [], seed = opts.seed || 1;
+  const base = opts;
   parts.forEach((p, i) => {
-    const label = partLabel(p, i, parts), n0 = out.length;
+    const label = partLabel(p, i, parts);
+    // Changement de lieu : le déplacement est un vrai temps de la séance (décompté par le lecteur).
+    if (p.travelBefore > 0) out.push(normalizeEx({ id: uid(), name: `Déplacement${p.envName ? ' vers ' + p.envName : ''}`, emoji: '🚗', mode: 'time', sets: 1, secMin: p.travelBefore * 60, secMax: p.travelBefore * 60, rest: 0, block: 'main', part: label, intensity: 'low', note: 'Changement de lieu entre deux phases.', phase: p.id || '' }));
+    const n0 = out.length;
+    // Lieu propre à la phase : son matériel décide des exercices possibles.
+    opts = p.envId ? { ...base, envId: p.envId, envName: p.envName || base.envName } : base;
     buildOne(p, i, label);
     for (const e of out.slice(n0)) e.phase = p.id || ''; // chaque exercice sait de quelle phase il vient
   });
@@ -227,11 +236,12 @@ export function buildFromParts(parts, ctx, opts = {}) {
       if (!k) why.push(...r.notes); out.push(...r.exercises);
     });
   }
+  opts = base;
   const acts = [...new Set([...parts.filter((p) => p.type === 'climb').map((p) => (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder')), ...parts.map((p) => p.activity).filter((a) => a && a !== 'pause'), ...(opts.sport && !parts.some((p) => p.type === 'climb') ? [opts.sport] : [])])];
   const now = Date.now();
   return normalizeSession({
     id: uid(), name: opts.name || 'Ma séance', emoji: opts.emoji || (acts[0]?.startsWith('climbing') ? '🧗' : '🏋️'), source: 'generated', activity: acts[0] || opts.sport || 'climbing_boulder', sports: acts.slice(1),
-    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: opts.envId || '', envName: opts.envName || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0), intent: opts.intent || null, phases: parts.map((p) => ({ id: p.id, type: p.type, activity: p.activity || (p.type === 'climb' ? (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder') : ''), role: p.role, goal: p.goal, minutes: p.minutes, intensity: p.intensity, priorities: p.priorities })) },
+    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: opts.envId || '', envName: opts.envName || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0), intent: opts.intent || null, phases: parts.map((p) => ({ id: p.id, type: p.type, activity: p.activity || (p.type === 'climb' ? (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder') : ''), role: p.role, goal: p.goal, minutes: p.minutes, intensity: p.intensity, priorities: p.priorities, envId: p.envId || '', travelMin: p.travelBefore || 0, subIntents: (p.subIntents || []).map((x) => x.id), objective: !!p.objective })) },
     objectives: opts.goal ? [opts.goal] : [],
     notes: [{ title: 'Pourquoi cette séance', text: [opts.goal || 'Séance structurée par toi, partie par partie.', ...why].join('\n') }],
     createdAt: now, updatedAt: now,

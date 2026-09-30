@@ -147,7 +147,8 @@ export function normalizeContext(c) {
     plannedMin: clamp(c.plannedMin, 0, 600, 0), goalId: ID_RE.test(String(c.goalId || '')) ? String(c.goalId) : '', place: str(c.place, 80),
     // V1 : intention ponctuelle de la séance (jamais un objectif du compte) et ossature validée, phase par phase.
     ...(c.intent && typeof c.intent === 'object' && (c.intent.text || c.intent.priorities?.length) ? { intent: { text: str(c.intent.text, 240), priorities: idList(c.intent.priorities, 6) } } : {}),
-    ...(Array.isArray(c.phases) && c.phases.length ? { phases: c.phases.slice(0, 20).filter((p) => p && typeof p === 'object').map((p) => ({ id: str(p.id, 40), type: str(p.type, 20), activity: str(p.activity, 60), role: str(p.role, 20), goal: str(p.goal, 200), minutes: clamp(p.minutes, 0, 600, 0), intensity: str(p.intensity, 8), priorities: idList(p.priorities, 6) })) } : {}),
+    ...(Array.isArray(c.phases) && c.phases.length ? { phases: c.phases.slice(0, 20).filter((p) => p && typeof p === 'object').map((p) => ({ id: str(p.id, 40), type: str(p.type, 20), activity: str(p.activity, 60), role: str(p.role, 20), goal: str(p.goal, 200), minutes: clamp(p.minutes, 0, 600, 0), intensity: str(p.intensity, 8), priorities: idList(p.priorities, 6),
+      ...(p.envId ? { envId: str(p.envId, 80) } : {}), ...(p.travelMin ? { travelMin: clamp(p.travelMin, 0, 180, 0) } : {}), ...(Array.isArray(p.subIntents) && p.subIntents.length ? { subIntents: p.subIntents.map((x) => str(x, 60)).filter((x) => /^[\w.-]+$/.test(x)).slice(0, 12) } : {}), ...(p.objective ? { objective: true } : {}) })) } : {}),
   };
 }
 function normalizeExplain(e) {

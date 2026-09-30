@@ -8,6 +8,8 @@ import { exKey } from './shared.js';
 import { proposals, STRUCT_TIPS, STRUCT_WHEN } from './climbplan.js';
 import { sportFamily, sportProposals } from './sportplan.js';
 import { ROLES, normalizePhase, totalMinutes } from './phase.js';
+import { intentCaps, labelOf } from './intents.js';
+import { effectiveFilters, failing, intersect, FILTER_DEFS } from './filters.js';
 
 export const REASON = { fact: ['📊', 'Donnée connue'], rule: ['📐', 'Règle du modèle'], inference: ['🤔', 'Déduction'], missing: ['❔', 'Information manquante'] };
 const R = (cat, text) => ({ cat, text });
@@ -30,6 +32,7 @@ const nextPerf = (phases, i) => phases.slice(i + 1).find((p) => p.role === 'perf
 export function phaseTargets(phase, { intent = null, goals = [] } = {}) {
   const t = {}, src = [];
   const add = (caps, w, why) => { const got = []; for (const [c, v] of Object.entries(caps)) if (CAPACITIES[c]) { t[c] = Math.max(t[c] || 0, v * w); got.push(c); } if (got.length) src.push({ ...why, caps: got }); };
+  if (phase.subIntents?.length) { const ic = intentCaps(phase.subIntents, phase.rules || []); add(ic.caps, 0.6, R('fact', `Tes sous-objectifs : ${phase.subIntents.map((x) => labelOf(x.id)).join(', ')}`)); }
   if (phase.priorities?.length) add(Object.fromEntries(phase.priorities.map((c) => [c, 1])), 2, R('fact', `Tes priorités pour cette phase : ${phase.priorities.map(capName).join(', ')}`));
   if (intent?.priorities?.length) add(Object.fromEntries(intent.priorities.map((c) => [c, 1])), 1, R('fact', `Ton intention d’aujourd’hui : ${intent.priorities.map(capName).join(', ')}`));
   for (const g of goals) if (g.caps?.length) add(Object.fromEntries(g.caps.map((c) => [c.id, c.w || 0.6])), 0.8, R('fact', `Ton objectif « ${g.label} »`));
@@ -78,12 +81,19 @@ export function proposeForPhase(phase, ctx = {}, o = {}) {
     const { targets, sources } = phaseTargets(phase, o);
     if (!Object.keys(targets).length) missing.push(R('missing', 'Pas de priorité ni d’objectif pour cette phase : classement selon le rôle et le matériel seulement.'));
     const eq = o.eq || null, role = libRole(phase), now = o.now || Date.now(), used = recentUse(ctx, now);
-    let excluded = 0;
+    // Filtres de la séance, précisés par la phase (garder / préciser / remplacer / retirer).
+    const ef = effectiveFilters([o.filters || {}, phase.filters || {}]), filters = ef.filters, tr = phase.tradeoffs || {};
+    for (const c of ef.conflicts) missing.push(R('rule', c.text));
+    if (phase.forbidEquip?.length) filters.materiel = (filters.materiel || Object.keys(EQUIPMENT)).filter((n) => !phase.forbidEquip.includes(n));
+    let excluded = 0, filtered = 0;
+    const pool = [];
     for (const x of LIBRARY) {
       if (phase.forbidden?.includes(x.id)) continue;
       if (x.role && x.role !== role && !phase.imposed?.includes(x.id)) continue;
       if (phase.activity && x.acts?.length && !x.acts.includes(phase.activity) && !(phase.activity.startsWith('climbing') && x.acts.some((a) => a.startsWith('climbing')))) continue;
       if (eq && !(x.needs || []).every((n) => eq.has(n))) { excluded++; continue; }
+      pool.push(x);
+      if (failing(x, filters).length && !phase.imposed?.includes(x.id)) { filtered++; continue; }
       const reasons = []; let score = 0;
       for (const [c, w] of Object.entries(targets)) score += (x.caps?.[c] || 0) * w;
       const top = Object.entries(x.caps || {}).sort((a, b) => b[1] - a[1])[0];
@@ -100,14 +110,35 @@ export function proposeForPhase(phase, ctx = {}, o = {}) {
       const pref = ctx.prefs?.[exKey(x.name)]?.value;
       if (pref === 'avoid') { score -= 1.5; reasons.push(R('fact', 'Tu as indiqué l’éviter')); }
       if (pref === 'like') { score += 0.3; reasons.push(R('fact', 'Tu as indiqué l’aimer')); }
+      // Curseurs de compromis et contraintes de la phase.
+      if (tr.volInt > 0 && x.intensity === 'high') { score += 0.2 * tr.volInt; reasons.push(R('fact', 'Tu privilégies l’intensité')); }
+      if (tr.volInt < 0 && x.intensity === 'low') { score += 0.2 * -tr.volInt; reasons.push(R('fact', 'Tu privilégies le volume')); }
+      if ((tr.fatStim < 0 || phase.fatigue === 'low' || phase.noFailure) && x.intensity === 'high') { score -= 0.3; reasons.push(R('fact', phase.noFailure ? 'Tu ne veux pas aller à l’échec' : 'Tu veux limiter la fatigue')); }
+      if (tr.diffSucc > 0 && (x.diff || 2) >= 4) { score -= 0.2 * tr.diffSucc; reasons.push(R('fact', 'Tu privilégies la réussite : exercice difficile')); }
+      if (tr.specGen < 0 && x.acts?.includes(phase.activity)) { score += 0.2 * -tr.specGen; reasons.push(R('fact', 'Spécifique à cette activité, comme tu le veux')); }
+      if (tr.varRep < 0 && d != null) score -= 0.3;
       if (phase.imposed?.includes(x.id)) { score += 10; reasons.unshift(R('fact', 'Imposé par toi')); }
-      items.push({ id: x.id, name: `${x.emoji || '💪'} ${x.name}`, score, reasons, kind: 'exercise' });
+      items.push({ id: x.id, name: `${x.emoji || '💪'} ${x.name}`, score, reasons, kind: 'exercise', ex: x });
     }
     if (excluded) missing.push(R('fact', `${excluded} exercice(s) écarté(s) : matériel absent de ce lieu.`));
+    if (filtered) missing.push(R('fact', `${filtered} exercice(s) écarté(s) par tes filtres (${Object.keys(filters).filter((k) => FILTER_DEFS[k]?.apply === 'match').map((k) => FILTER_DEFS[k].label.toLowerCase()).join(', ')}).`));
+    if (!items.length && pool.length) {
+      const it = intersect(pool, filters, { subIntents: phase.subIntents, constraints: { noFailure: phase.noFailure } });
+      missing.push(R('missing', `Aucun exercice ne respecte toutes tes contraintes à la fois.${it.relax.length ? ' ' + it.relax.slice(0, 2).map((x) => x.text).join(' ') : ''}`));
+    }
   }
   items.sort((a, b) => b.score - a.score);
   const best = items[0]?.score ?? 0;
-  const out = items.slice(0, 8).map((x, k) => ({ ...x, score: Math.round(x.score * 100) / 100, rank: k + 1, fit: k === 0 ? 'Le plus adapté à tes contraintes actuelles' : x.score >= best * 0.7 && k < 3 ? 'Adapté' : 'Alternative' }));
+  // Jamais « le meilleur exercice » : une pertinence POUR CETTE PHASE, avec son compromis.
+  const tired = phase.fatigue === 'low' || phase.noFailure || (phase.tradeoffs?.fatStim || 0) < 0 || !!perfAfter;
+  const fitOf = (x, k) => {
+    if (k === 0) return 'Le plus adapté à tes contraintes actuelles';
+    if (x.score < best * 0.7 || k >= 4) return 'Alternative';
+    if (x.ex?.intensity === 'high' && tired) return 'Adapté mais plus fatigant';
+    if (x.ex && phase.activity && !(x.ex.acts || []).includes(phase.activity)) return 'Bon pour la capacité mais moins spécifique';
+    return 'Adapté';
+  };
+  const out = items.slice(0, 8).map((x, k) => { const { ex, ...y } = x; return { ...y, score: Math.round(x.score * 100) / 100, rank: k + 1, fit: fitOf(x, k) }; });
   return { items: out, missing };
 }
 
@@ -119,7 +150,21 @@ const locked = (p, field) => p.locks?.[field] === 'user';
  */
 export function analyzeSession(phasesIn, ctx = {}, o = {}) {
   const phases = phasesIn.map((p, i) => normalizePhase(p, i)), out = [];
-  const add = (s) => { const blk = (s.patch || []).find((op) => op.op === 'set' && locked(phases.find((p) => p.id === op.id) || {}, op.field === 'minutes' ? 'minutes' : op.field)); out.push({ ...s, blocked: blk ? `Tu as verrouillé ce réglage (${blk.field === 'minutes' ? 'durée' : blk.field}).` : '' }); };
+  // Chaque suggestion : problème → proposition → bénéfice → compromis (rien n'est gratuit, et on le dit).
+  const TRADE = {
+    'fatigue-intensity': ['Plus de fraîcheur pour la phase de performance', 'Moins de stimulation sur la phase allégée'],
+    'fatigue-minutes': ['Plus de ressources pour performer, et 20 min de plus pour la performance', 'Moins de volume sur la phase raccourcie'],
+    'pause-before-perf': ['Récupération juste avant l’effort principal', 'Le temps de la pause est pris sur la plus longue phase'],
+    short: ['La phase a le temps de remplir son rôle', 'Ce temps est pris sur les autres phases'],
+    warmup: ['Corps prêt avant l’effort intense', 'Un peu moins de temps pour le reste'],
+    repeat: ['Moins de fatigue accumulée sur la même capacité', 'Cette capacité est un peu moins travaillée'],
+    'no-wall': ['Une séance réalisable là où tu vas', 'Changer de lieu ou de contenu'],
+    'recent-load': ['Plus prudent vu tes dernières semaines', 'Stimulation plus faible aujourd’hui'],
+    cool: ['Meilleure récupération après l’effort', '10 min de plus ou prises ailleurs'],
+    missing: ['Ton intention d’aujourd’hui est vraiment travaillée', 'La phase partage son temps avec une priorité de plus'],
+    'too-long': ['Séance plus soutenable', 'Rien n’est retiré : à toi de voir'],
+  };
+  const add = (s) => { const [benefit, compromise] = TRADE[s.id] || TRADE[s.id.replace(/-.*$/, '')] || ['', '']; s = { problem: s.why?.[0]?.text || '', benefit, compromise, ...s }; const blk = (s.patch || []).find((op) => op.op === 'set' && locked(phases.find((p) => p.id === op.id) || {}, op.field === 'minutes' ? 'minutes' : op.field)); out.push({ ...s, blocked: blk ? `Tu as verrouillé ce réglage (${blk.field === 'minutes' ? 'durée' : blk.field}).` : '' }); };
   const perfIdx = phases.findIndex((p) => p.role === 'perf');
   // 1. Trop de fatigue avant une phase de performance.
   if (perfIdx > 0) {
@@ -162,7 +207,7 @@ export function analyzeSession(phasesIn, ctx = {}, o = {}) {
   if (last && HARD.has(last.intensity) && last.type !== 'cool' && last.role !== 'cool') add({ id: 'cool', title: 'Ajouter un retour au calme', text: 'La séance finit sur une phase intense : 10 min de retour au calme aident à récupérer.', why: [R('rule', 'Un retour au calme après un effort intense aide la récupération')], patch: [{ op: 'insert', at: phases.length, phase: { type: 'cool', minutes: 10, role: 'cool' } }] });
   // 8. Priorité importante totalement absente.
   for (const c of o.intent?.priorities || []) {
-    if (!phases.some((p) => p.priorities.includes(c) || ROLE_CAPS[p.role]?.[c])) {
+    if (!phases.some((p) => p.priorities.includes(c) || ROLE_CAPS[p.role]?.[c] || (intentCaps(p.subIntents || []).caps[c] || 0) >= 0.5)) {
       const t = phases.find((p) => !['warmup', 'cool', 'pause'].includes(p.role));
       if (t) add({ id: 'missing-' + c, title: `Ajouter « ${capName(c)} » à « ${phaseName(t)} »`, text: `Tu veux travailler ${capName(c)} aujourd’hui, mais aucune phase ne s’en occupe.`, why: [R('fact', `Ton intention d’aujourd’hui : ${capName(c)}`), R('fact', 'Aucune phase ne l’a en priorité')], patch: [{ op: 'set', id: t.id, field: 'priorities', value: [...new Set([...t.priorities, c])] }] });
     }
