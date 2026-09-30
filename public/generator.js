@@ -93,7 +93,25 @@ function customPool(activityId, ctx) {
 export function fingerComplaint(ctx) {
   return ctx.history.some((h) => ctx.now - h.startedAt < 3 * DAY && (h.data?.questionnaire?.answers || []).some((a) => a.q === 'doigts' && /douleur|gêne/i.test(a.a)));
 }
-export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, zones = [] }) {
+/**
+ * 8.28 : niveau pris en compte POUR CET EXERCICE — celui de sa capacité principale quand elle est connue
+ * (mesure ou déclaration, confiance suffisante), sinon le niveau de l'activité. Quelqu'un de très fort en tirage
+ * mais débutant en poussée reçoit des tractions avancées et des pompes accessibles, au lieu d'une moyenne.
+ * Jamais au-dessus du plafond de forme (levelCap) ; en mode léger, le niveau de l'activité seul.
+ */
+const capLvl = new WeakMap();
+export function exerciseLevel(x, ctx, level, { light = false, levelCap = null } = {}) {
+  const main = Object.entries(x.caps || {}).sort((a, b) => b[1] - a[1])[0];
+  if (light || !main || main[1] < 0.6 || !ctx) return { level, cap: '' };
+  let m = capLvl.get(ctx); if (!m) { m = new Map(); capLvl.set(ctx, m); }
+  if (!m.has(main[0])) { const st = capacityState(main[0], ctx); m.set(main[0], st.level != null && st.confidence >= 0.3 ? st : null); }
+  const st = m.get(main[0]);
+  if (!st) return { level, cap: '' };
+  let lv = Math.max(0, Math.min(2, Math.floor(st.level + 0.34)));
+  if (levelCap != null) lv = Math.min(lv, levelCap);
+  return { level: lv, cap: st.label };
+}
+export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, zones = [], levelCap = null }) {
   const A = analyze(ctx.history, ctx.now), avoid = { ...(ctx.settings?.avoid || {}) };
   for (const z of zones) if (['fingers', 'shoulders', 'elbows', 'knees'].includes(z)) avoid[z] = true;
   const complaint = fingerComplaint(ctx);
@@ -103,7 +121,8 @@ export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, 
     const why = [];
     const miss = (x.needs || []).filter((n) => !eq.has(n));
     if (miss.length) why.push(`matériel indisponible (${miss.map((n) => EQUIPMENT[n] || n).join(', ')})`);
-    if ((x.minLevel || 0) > level) why.push('niveau conseillé supérieur au tien');
+    const xl = exerciseLevel(x, ctx, level, { light, levelCap });
+    if ((x.minLevel || 0) > xl.level) why.push(xl.cap ? `niveau conseillé supérieur à ton niveau en ${xl.cap.toLowerCase()}` : 'niveau conseillé supérieur au tien');
     if (light && (x.intensity !== 'low' || (x.diff || 1) > 2)) why.push('mode léger : intensité trop élevée');
     if (x.risk === 'finger' && x.intensity === 'high' && A.hoursSinceHighFinger < 48) why.push(`doigts sollicités intensément il y a ${Math.round(A.hoursSinceHighFinger)} h (48 h conseillées)`);
     if (['plyo', 'legs', 'run'].includes(x.kind) && x.intensity === 'high' && A.hoursSinceHighLegs < 36) why.push(`jambes sollicitées intensément il y a ${Math.round(A.hoursSinceHighLegs)} h`);
@@ -172,7 +191,7 @@ export function planSession(opts = {}, ctx) {
   if (light) { add('mobilite_hanches', 0.6, 'mode léger / récupération'); add('mobilite_epaules', 0.5, 'mode léger / récupération'); }
   for (const [id, p] of Object.entries(opts.priorities || {})) { if (Number(p) <= 0) delete targets[id]; else targets[id] = Number(p); if (!reasons[id]) reasons[id] = ['priorité choisie']; else reasons[id].push('priorité modifiée par toi'); }
 
-  const { ok, excluded } = isClimbing(activityId) ? { ok: [], excluded: [] } : candidates(activityId, ctx, { eq, level, light, noPlyo: bodyAdj.noPlyo, zones: opts.avoidZones || [] });
+  const { ok, excluded } = isClimbing(activityId) ? { ok: [], excluded: [] } : candidates(activityId, ctx, { eq, level, light, noPlyo: bodyAdj.noPlyo, zones: opts.avoidZones || [], levelCap: bodyAdj.levelCap ?? null });
   const trainable = (id) => isClimbing(activityId) || ok.some((x) => (x.caps?.[id] || 0) >= 0.3);
   const missing = [];
   for (const id of Object.keys(targets)) if (!trainable(id)) { missing.push(`${capName(id, ctx)} : aucun exercice compatible avec ton matériel ou ton niveau aujourd’hui.`); delete targets[id]; }
@@ -192,7 +211,7 @@ export function planSession(opts = {}, ctx) {
   const seed = Number.isFinite(opts.seed) ? opts.seed : Math.floor((ctx.now || Date.now()) % 2147483647);
   const plan = {
     activityId, activityLabel: ctx.activities[activityId]?.label || ACTIVITIES[activityId]?.label || activityId, minutes, light, mode, goalId: goal?.id || '', goalLabel: goal ? goalLabel(goal) : '',
-    intentions: opts.intentions || [], priorities: opts.priorities || {}, envId: env?.id || '', envName: env?.name || '', equipment: [...eq], level, levelHow,
+    intentions: opts.intentions || [], priorities: opts.priorities || {}, envId: env?.id || '', envName: env?.name || '', equipment: [...eq], level, levelHow, levelCap: bodyAdj.levelCap ?? null,
     distribution, blocks, difficulty: { value: est, text: `${est}/5 — intensité ${intensityWord} (niveau pris en compte : ${['débutant', 'intermédiaire', 'avancé'][level]}, ${levelHow})` },
     parts, avoidZones: opts.avoidZones || [], noPlyo: !!bodyAdj.noPlyo,
     constraints, missing, seed, capId: opts.capId || '', bodyReasons: bodyAdj.reasons, restFactor: bodyAdj.restFactor, circuit: !!bodyAdj.circuit,
@@ -305,7 +324,7 @@ const MOBILITY = ['mob-hips', 'mob-thoracic', 'mob-shoulders', 'mob-ankles', 'mo
 /** Séance au format choisi : chaque partie est construite pour son temps, dans l'ordre voulu. */
 function generateParts(plan, ctx, eq) {
   const why = [], excluded = [], out = [], used = new Set();
-  const pools = {}, pool = (act) => (pools[act] ||= candidates(act, ctx, { eq, level: plan.level, light: plan.light, noPlyo: plan.noPlyo, zones: plan.avoidZones || [] }));
+  const pools = {}, pool = (act) => (pools[act] ||= candidates(act, ctx, { eq, level: plan.level, light: plan.light, noPlyo: plan.noPlyo, zones: plan.avoidZones || [], levelCap: plan.levelCap ?? null }));
   const planTargets = Object.fromEntries(plan.distribution.map((d) => [d.capId, d.weight]));
   const has = (id) => byId(id) && byId(id).needs.every((n) => eq.has(n));
   // Évite de refaire les mêmes exercices d'une partie à l'autre (sauf s'il n'y a rien d'autre).
@@ -390,7 +409,7 @@ export function generateFromPlan(plan, ctx) {
     }
     exercises = s.exercises;
   } else {
-    const { ok, excluded } = candidates(plan.activityId, ctx, { eq, level: plan.level, light: plan.light, noPlyo: plan.noPlyo, zones: plan.avoidZones || [] });
+    const { ok, excluded } = candidates(plan.activityId, ctx, { eq, level: plan.level, light: plan.light, noPlyo: plan.noPlyo, zones: plan.avoidZones || [], levelCap: plan.levelCap ?? null });
     for (const e of excluded.filter((e) => Object.keys(e.x.caps || {}).some((c) => plan.distribution.some((d) => d.capId === c && (e.x.caps[c] || 0) >= 0.6))).slice(0, 6)) excludedTxt.push(`${e.x.name} : ${e.why.join(', ')}.`);
     const { items, targets } = selectMain(plan, ctx, ok);
     if (!items.length) missing.push('Aucun exercice compatible trouvé : ajoute du matériel, un exercice personnel pour cette activité ou change les priorités.');

@@ -2,7 +2,7 @@
 // (brouillon → vérifications → publication confirmée → retour arrière possible), avec versions, différences
 // avant/après et journal. Laboratoire : analyser un problème (assistant) et voir les règles actuelles sur des exemples.
 // Rien n'est exécuté : l'assistant ne rédige que des brouillons validés par le serveur, publiés seulement sur confirmation.
-import { h, toast, openSheet, closeSheet, ask, chip, tag, fmtDateTime, relDate, skeleton, menuList } from './ui.js';
+import { h, toast, openSheet, closeSheet, ask, askText, chip, tag, fmtDateTime, relDate, skeleton, menuList } from './ui.js';
 import { S, ACT, SUBMIT, INPUT, CHG, go, render, api } from './state.js';
 import { uid } from './shared.js';
 import { loadGlobal } from './content.js';
@@ -255,7 +255,7 @@ export function vCodeItem() {
 ACT.codeReview = async (el) => {
   const approve = el.dataset.d === 'approve';
   if (!(await ask(approve ? 'Valider cette proposition ?' : 'Refuser cette proposition ?', { ok: approve ? 'Valider' : 'Refuser', danger: !approve, detail: approve ? 'Elle sera marquée « à déployer à la main ». L’app ne déploie jamais de code.' : '' }))) return;
-  const note = prompt('Note (facultatif) :', '') || '';
+  const note = (await askText('Note (facultatif)', { ok: 'Envoyer', cancel: 'Sans note', max: 300 })) || '';
   try { await api('POST', `/api/admin/code/${encodeURIComponent(ST().codeItem.id)}/review`, { decision: el.dataset.d, note }); toast(approve ? 'Validée (déploiement manuel)' : 'Refusée'); ST().codeItem = null; ST().code = null; render(); }
   catch (e) { toast(e.message, 5000, 'bad'); }
 };

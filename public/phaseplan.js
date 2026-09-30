@@ -10,6 +10,8 @@ import { sportFamily, sportProposals } from './sportplan.js';
 import { ROLES, normalizePhase, totalMinutes } from './phase.js';
 import { intentCaps, labelOf } from './intents.js';
 import { effectiveFilters, failing, intersect, FILTER_DEFS } from './filters.js';
+import { exerciseLevel, levelFor } from './generator.js';
+const LV_WORD = ['débutant', 'intermédiaire', 'avancé'];
 
 export const REASON = { fact: ['📊', 'Donnée connue'], rule: ['📐', 'Règle du modèle'], inference: ['🤔', 'Déduction'], missing: ['❔', 'Information manquante'] };
 const R = (cat, text) => ({ cat, text });
@@ -85,8 +87,10 @@ export function proposeForPhase(phase, ctx = {}, o = {}) {
     const ef = effectiveFilters([o.filters || {}, phase.filters || {}]), filters = ef.filters, tr = phase.tradeoffs || {};
     for (const c of ef.conflicts) missing.push(R('rule', c.text));
     if (phase.forbidEquip?.length) filters.materiel = (filters.materiel || Object.keys(EQUIPMENT)).filter((n) => !phase.forbidEquip.includes(n));
-    let excluded = 0, filtered = 0;
+    let excluded = 0, filtered = 0, tooHard = 0;
     const pool = [];
+    // 8.28 : niveau de la personne (celui de la capacité principale de l'exercice quand il est connu).
+    const known = !!(ctx && ctx.activities && ctx.perfs), actLv = known ? levelFor(phase.activity || Object.keys(ctx.activities)[0] || 'conditioning', ctx) : null;
     for (const x of LIBRARY) {
       if (phase.forbidden?.includes(x.id)) continue;
       if (x.role && x.role !== role && !phase.imposed?.includes(x.id)) continue;
@@ -94,7 +98,10 @@ export function proposeForPhase(phase, ctx = {}, o = {}) {
       if (eq && !(x.needs || []).every((n) => eq.has(n))) { excluded++; continue; }
       pool.push(x);
       if (failing(x, filters).length && !phase.imposed?.includes(x.id)) { filtered++; continue; }
+      const xl = actLv ? exerciseLevel(x, ctx, actLv.level) : null;
+      if (xl && (x.minLevel || 0) > xl.level && !phase.imposed?.includes(x.id)) { tooHard++; continue; }
       const reasons = []; let score = 0;
+      if (xl?.cap && (x.minLevel || 0) === xl.level && xl.level > 0) { score += 0.2; reasons.push(R('fact', `À ton niveau en ${xl.cap.toLowerCase()} (${LV_WORD[xl.level]}, d’après tes mesures)`)); }
       for (const [c, w] of Object.entries(targets)) score += (x.caps?.[c] || 0) * w;
       const top = Object.entries(x.caps || {}).sort((a, b) => b[1] - a[1])[0];
       if (top) reasons.push(R('rule', `Travaille surtout : ${capName(top[0])}`));
@@ -121,6 +128,7 @@ export function proposeForPhase(phase, ctx = {}, o = {}) {
       items.push({ id: x.id, name: `${x.emoji || '💪'} ${x.name}`, score, reasons, kind: 'exercise', ex: x });
     }
     if (excluded) missing.push(R('fact', `${excluded} exercice(s) écarté(s) : matériel absent de ce lieu.`));
+    if (tooHard) missing.push(R('fact', `${tooHard} exercice(s) écarté(s) : niveau conseillé au-dessus du tien (${actLv?.how || 'ton profil'}).`));
     if (filtered) missing.push(R('fact', `${filtered} exercice(s) écarté(s) par tes filtres (${Object.keys(filters).filter((k) => FILTER_DEFS[k]?.apply === 'match').map((k) => FILTER_DEFS[k].label.toLowerCase()).join(', ')}).`));
     if (!items.length && pool.length) {
       const it = intersect(pool, filters, { subIntents: phase.subIntents, constraints: { noFailure: phase.noFailure } });

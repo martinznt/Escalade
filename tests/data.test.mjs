@@ -70,11 +70,29 @@ ok('intention reconnue sans résultat : groupe conservé (réponse « aucun rés
 });
 
 console.log('Estimation de niveau');
-ok('séance facile → débutant ; séance exigeante → avancé ; critères expliqués', () => {
+ok('séance facile → débutant ; séance exigeante → avancé ; critères expliqués et catégorisés', () => {
   const easy = estimateLevel({ exercises: [{ name: 'Planche', libId: 'plank', block: 'main', sets: 2, mode: 'time', secMin: 20, secMax: 30 }] });
-  assert.equal(easy.level, 'debutant'); assert.ok(easy.criteria.length >= 7);
-  const hard = estimateLevel({ exercises: ['oap', 'fl-full', 'hang-max'].map((id) => ({ name: id, libId: id, block: 'main', sets: 5, intensity: 'high', diff: 5 })) });
-  assert.equal(hard.level, 'avance'); assert.match(hard.text, /pas une vérité/);
+  assert.equal(easy.level, 'debutant'); assert.equal(easy.confidence, 'haute'); assert.ok(easy.criteria.every((c) => ['connu', 'estimé', 'inconnu'].includes(c.cat)));
+  const hard = estimateLevel({ exercises: ['oap', 'fl-full', 'hang-max'].map((id) => ({ name: id, libId: id, block: 'main', sets: 5, intensity: 'high' })) });
+  assert.equal(hard.level, 'avance'); assert.match(hard.text, /pas une vérité/); assert.ok(!('score' in hard), 'plus de score décimal');
+});
+ok('niveau factuel : un seul exercice avancé suffit, et il est nommé', () => {
+  const easyEx = ['plank', 'plank', 'plank', 'plank'].map((id) => ({ name: 'Planche', libId: id, block: 'main', sets: 3, mode: 'time', secMin: 30, secMax: 30 }));
+  const r = estimateLevel({ exercises: [...easyEx, { name: 'Traction à un bras', libId: 'oap', block: 'main', sets: 1, repsMin: 1, repsMax: 1 }] });
+  assert.equal(r.level, 'avance'); assert.match(r.criteria[0].value, /Traction à un bras/);
+});
+ok('niveau factuel : aucune donnée manquante n’est remplie ; exercice inconnu signalé, fiabilité baissée', () => {
+  const r = estimateLevel({ exercises: [{ name: 'Truc inventé', block: 'main' }, { name: 'Planche', libId: 'plank', block: 'main', sets: 2, mode: 'time', secMin: 30, secMax: 30 }] });
+  assert.equal(r.confidence, 'faible');
+  assert.ok(r.unknown.some((u) => /Truc inventé/.test(u) && /absent/.test(u)));
+  assert.ok(r.unknown.some((u) => /Truc inventé/.test(u) && /non renseignées/.test(u)), 'pas de 8 répétitions inventées');
+  assert.ok(r.minutes < 5, 'la durée ne compte que ce qui est écrit');
+});
+ok('niveau factuel : cotation d’une partie de grimpe lue et convertie (6C en bloc → avancé ; 5+ → débutant)', () => {
+  assert.equal(estimateLevel({ exercises: [{ name: 'Blocs 5+', unit: 'blocs', block: 'main', sets: 6, repsMin: 1, repsMax: 1 }] }).level, 'debutant');
+  const r = estimateLevel({ exercises: [{ name: 'Essais sur blocs 6B+–6C', unit: 'blocs', block: 'main', sets: 4, repsMin: 1, repsMax: 1 }] });
+  assert.equal(r.level, 'avance'); assert.match(r.text, /6C/);
+  assert.ok(estimateLevel({ exercises: [{ name: 'Blocs U5', unit: 'blocs', block: 'main', sets: 4 }] }).unknown.some((u) => /non reconnue/.test(u)));
 });
 
 console.log('Items');

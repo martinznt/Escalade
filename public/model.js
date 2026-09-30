@@ -182,6 +182,12 @@ export const METRICS = {
   nage_100: M('100 m nage libre : temps', 's', 'time', { vitesse: 0.6, technique_nage: 0.5 }, ['swimming'], { dir: -1, tiers: [120, 85] }),
   nage_400: M('400 m nage libre : temps', 's', 'time', { endurance_aerobie: 0.6, technique_nage: 0.6 }, ['swimming'], { dir: -1, tiers: [540, 390] }),
   nage_continue: M('Distance nagée sans arrêt', 'm', 'distance', { endurance_aerobie: 0.9, technique_nage: 0.3 }, ['swimming'], { tiers: [400, 1500] }),
+  // 8.28 : repères de santé et de forme générale, pour les objectifs endurance, forme, santé, poids et mobilité.
+  // Sans repère de niveau (varient trop selon l'âge, le sexe, les traitements) : ils servent à suivre SA progression.
+  fc_repos: M('Fréquence cardiaque au repos', 'bpm', 'other', { endurance_aerobie: 0.3 }, ['running', 'swimming', 'conditioning'], { dir: -1, test: 'Le matin au réveil, encore allongé : compte tes battements pendant 60 s (poignet ou cou, ou montre). Fais-le 3 matins et note la moyenne. Ce n’est pas un examen médical.' }),
+  cooper_12: M('Test de 12 minutes (distance)', 'm', 'distance', { endurance_aerobie: 0.9, seuil: 0.4 }, ['running', 'conditioning'], { test: 'Après 10 min d’échauffement, cours (ou marche vite) 12 min à l’allure la plus élevée que tu peux tenir, sur un parcours plat mesuré ou avec une montre. Note la distance. Arrête-toi en cas de douleur ou de malaise.' }),
+  tour_taille: M('Tour de taille', 'cm', 'distance', {}, ['conditioning', 'running', 'strength'], { dir: -1, test: 'Debout, à jeun si possible, mètre ruban à mi-distance entre la dernière côte et le haut de la hanche, sans serrer, en fin d’expiration. Même heure à chaque fois.' }),
+  mains_dos: M('Mains dans le dos : écart entre les doigts', 'cm', 'distance', { mobilite_epaules: 1 }, ['conditioning', 'climbing_boulder', 'climbing_route', 'swimming'], { dir: -1, test: 'Une main passe par-dessus l’épaule, l’autre par le bas du dos ; rapproche les doigts sans forcer. Mesure l’écart (0 si les doigts se touchent). Note le côté le moins souple.' }),
   body_weight: M('Poids du corps', 'kg', 'load', {}, ['strength', 'conditioning', 'running', 'swimming', 'climbing_boulder', 'climbing_route'], { dir: -1 }),
   max_bloc: M('Niveau max en bloc', '', 'grade', { force_doigts: 0.5, technique_escalade: 0.5, puissance_haut: 0.4 }, ['climbing_boulder'], { gradeActivity: 'bloc' }),
   max_voie: M('Niveau max en voie', '', 'grade', { endurance_doigts: 0.6, technique_escalade: 0.6 }, ['climbing_route'], { gradeActivity: 'voie' }),

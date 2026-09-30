@@ -111,7 +111,9 @@ export function proposals(kind, intensity) {
 export function partRange(p, levels, max) {
   const n = levels.length, ref = levels.findIndex((l) => l.label === (p.kind === 'voie' ? '6a' : '5+')), m = max ?? (ref >= 0 ? ref : Math.round(n * 0.6));
   if (p.from != null && p.to != null) return [clampI(Math.min(p.from, p.to), n), clampI(Math.max(p.from, p.to), n)];
-  const step = n > 10 ? 2 : 1, off = { easy: [-4, -3], mod: [-3, -2], hard: [-2, 0], max: [-1, 0] }[p.intensity] || [-3, -1];
+  // 8.28 : un cran = un niveau de la cotation (6A → 6A+). Avant, l'écart était doublé pour les longues échelles :
+  // un grimpeur 6A se voyait proposer des blocs en 3 et une « force » en 4.
+  const step = 1, off = { easy: [-4, -3], mod: [-3, -2], hard: [-2, 0], max: [-1, 0] }[p.intensity] || [-3, -1];
   return [clampI(m + off[0] * step, n), clampI(m + off[1] * step, n)];
 }
 /** Construit les exercices d'une partie de grimpe (liste d'« étapes » : cotation, style, nombre, repos, consigne). */

@@ -12,9 +12,9 @@ ok('accueil : lieu, objectif, niveau max proposés seulement s’ils manquent (2
   assert.deepEqual(hintsFor('home/dash', { ...full, draft: true }).map((x) => x.id), ['home-draft']);
 });
 ok('création de séance : « ajoute tes objectifs ici » à l’étape 3 s’il n’y en a pas ; « Exercices » à l’étape 5', () => {
-  assert.deepEqual(hintsFor('library/climbplan', { ...empty, cp: { step: 3 } }).map((x) => x.id), ['cp-goals']);
-  assert.deepEqual(hintsFor('library/climbplan', { ...full, cp: { step: 3 } }), []);
-  const h5 = hintsFor('library/climbplan', { ...full, cp: { step: 5 } }); assert.equal(h5[0].go, 'library/exercises'); assert.match(h5[0].back, /Retour à ma séance/);
+  assert.deepEqual(hintsFor('library/climbplan', { ...empty, cp: { step: 2 } }).map((x) => x.id), ['cp-goals']);
+  assert.deepEqual(hintsFor('library/climbplan', { ...full, cp: { step: 2 } }), []);
+  const h5 = hintsFor('library/climbplan', { ...full, cp: { step: 4 } }); assert.equal(h5[0].go, 'library/exercises'); assert.match(h5[0].back, /Retour à ma séance/);
 });
 ok('pages proches non confondues (séance ≠ séances) ; masqués ; ajoutés par un admin', () => {
   assert.equal(hintsFor('library/seances', { ...full, seances: 10 }).length, 0);
