@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.26.0
+# FINAL_AUDIT — Séances entraînement v8.27.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -1003,3 +1003,22 @@ Détail complet, architecture du Studio et limites : `CHANGELOG.md`. Audit préa
 | Script Playwright de mise en page (pages admin, Studio, Lot, Journal, Laboratoire, Bibliothèque commune) | aucun débordement à 320 / 390 / 768 / 1280 px après correction |
 
 Non vérifiable ici : la qualité des réponses de Workers AI en production (tests avec un modèle simulé), le rendu sur de vrais téléphones. Voir les limites dans `CHANGELOG.md`.
+
+## Évolution 8.27.0 : V2 — construire une séance en chaîne de réglages
+
+Détail complet (fonctionnalités, fichiers, migrations, fonctions réutilisées / nouvelles, déploiement, retour arrière, limites et risques) : `CHANGELOG.md`. Audit préalable : `docs/V2_AUDIT.md`.
+
+- **Créateur** : objectif de séance (quoi → précisément → quand : début, milieu, fin, toute la séance ou une phase précise) ; chaque phase se règle en chaîne numérotée (type → objectif → précisément → réglages du type → intensité et compromis → lieu → contraintes → ce que l'app décide) ; filtres à plusieurs niveaux (garder / préciser / remplacer / retirer) ; budget temps avec déplacements et sacrifices proposés ; transitions ; « Et si… ? » ; « Modifier avec l'IA » (plan affiché avant application, verrous respectés) ; ADN, modules, stratégies, mémoire des décisions, séance inhabituelle.
+- **Comprendre** : maîtrise des capacités, transferts, carte des relations, objectif IA enrichi (identifiants connus seulement), préférences estimées, journal visuel (photos réduites, liens vidéo https).
+- **Admin** : rôles vérifiés par le serveur, santé des données (corrections = brouillons), maintenance, propositions de code (validation par un autre admin, jamais de déploiement), comparer / restaurer une version (restauration = brouillon).
+
+### Vérification 8.27.0 (commandes réellement lancées)
+
+| Commande | Résultat |
+|---|---|
+| `npm run check` | OK |
+| `npm test` | 50 fichiers, tous OK — dont `v2chain.test.mjs` (9), `v2engine.test.mjs` (11), `adminv2.test.mjs` (8), `model.test.mjs` avec les nouvelles collections |
+| `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` | **74 étapes OK**, aucune erreur JavaScript — dont le nouveau scénario « chaîne de réglages » (objectif placé puis déplacé, lieu d'une phase + déplacement, filtres de séance, prévisualisation) et l'étape Studio (santé des données, propositions de code) |
+| Scripts Playwright de mise en page (créateur à chaque étape, santé des données, maintenance, code, Studio, préférences, objectif, journal, admin) | aucun débordement à 320 / 390 / 768 px |
+
+Non vérifiable ici : la qualité réelle de Workers AI (réponses simulées dans les tests), le rendu sur de vrais téléphones. L'E2E a été lancé avant le changement de numéro de version (8.26.0 → 8.27.0, sans autre modification du code).
