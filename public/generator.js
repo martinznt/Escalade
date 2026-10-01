@@ -46,10 +46,10 @@ export function budget(minutes, light = false) {
   return { warm, main: m - warm - cool, cool, maxN: m <= 50 ? 5 : m <= 75 ? 6 : m <= 100 ? 7 : Math.min(12, Math.round(m / 14)), light };
 }
 const WARM = {
-  strength: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'], conditioning: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'],
+  strength: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'], conditioning: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'], calisthenics: ['wu-pulse', 'wu-wrists', 'wu-mob-upper', 'wu-scap-bar', 'wu-core'],
   running: ['run-short', 'mob-ankles', 'run-drills'], swimming: ['swim-warm'], custom: ['wu-pulse', 'wu-mob-lower', 'wu-mob-upper'],
 };
-const COOL = { strength: ['cd-shoulders', 'cd-hips', 'cd-breath'], conditioning: ['cd-hips', 'cd-shoulders', 'cd-breath'], running: ['mob-hamstrings', 'cd-hips', 'cd-breath'], swimming: ['cd-shoulders', 'cd-breath'], custom: ['cd-hips', 'cd-breath'] };
+const COOL = { strength: ['cd-shoulders', 'cd-hips', 'cd-breath'], calisthenics: ['cd-shoulders', 'cd-forearm', 'cd-hips', 'cd-breath'], conditioning: ['cd-hips', 'cd-shoulders', 'cd-breath'], running: ['mob-hamstrings', 'cd-hips', 'cd-breath'], swimming: ['cd-shoulders', 'cd-breath'], custom: ['cd-hips', 'cd-breath'] };
 const toEx = (lib, block, over = {}) => normalizeEx({ ...lib, id: uid(), block, libId: lib.id, ok: lib.cues, bad: lib.bad, note: '', ...over });
 
 /* ───────── Niveau et réglages dérivés du profil ───────── */

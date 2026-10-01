@@ -134,9 +134,14 @@ export const ACTIVITIES = {
     categories: [['tirage', 'Tirage', ['tirage_vertical', 'tirage_horizontal']], ['poussee', 'Poussée', ['poussee_horizontale', 'poussee_verticale']], ['jambes', 'Jambes', ['force_jambes', 'chaine_posterieure']], ['gainage', 'Gainage', ['gainage_anterieur', 'gainage_lateral']]],
   },
   conditioning: {
-    label: 'Renforcement / préparation physique', emoji: '💪', aliases: ['renfo', 'renforcement', 'prepa', 'préparation physique', 'poids du corps', 'street workout', 'calisthenics'],
+    label: 'Renforcement / préparation physique', emoji: '💪', aliases: ['renfo', 'renforcement', 'prepa', 'préparation physique', 'poids du corps'],
     caps: { gainage_anterieur: 0.9, stabilite_epaules: 0.8, gainage_lateral: 0.7, controle_scapulaire: 0.6, chaine_posterieure: 0.6, force_jambes: 0.6, equilibre: 0.6, mobilite_hanches: 0.6, mobilite_epaules: 0.6, explosivite: 0.5, poussee_horizontale: 0.5, tirage_horizontal: 0.5, tirage_vertical: 0.5 },
     categories: [['gainage', 'Gainage', ['gainage_anterieur', 'gainage_lateral']], ['prevention', 'Prévention', ['stabilite_epaules']], ['mobilite', 'Mobilité', ['mobilite_hanches', 'mobilite_epaules']], ['figures', 'Figures', ['controle_scapulaire', 'tirage_unilateral']], ['explosivite', 'Explosivité', ['explosivite']]],
+  },
+  calisthenics: {
+    label: 'Calisthenics (street workout)', emoji: '🤸', aliases: ['calisthenics', 'callisthénie', 'street workout', 'streetworkout', 'barres', 'figures', 'poids du corps avancé'],
+    caps: { tirage_vertical: 1, controle_scapulaire: 0.9, gainage_anterieur: 0.9, poussee_verticale: 0.8, poussee_horizontale: 0.8, blocage: 0.6, tirage_unilateral: 0.6, puissance_haut: 0.6, stabilite_epaules: 0.7, equilibre: 0.5, mobilite_epaules: 0.6, mobilite_hanches: 0.4, force_jambes: 0.4, tirage_horizontal: 0.5 },
+    categories: [['figures', 'Figures', ['controle_scapulaire', 'tirage_unilateral', 'equilibre']], ['tirage', 'Tirage', ['tirage_vertical', 'tirage_horizontal', 'blocage']], ['poussee', 'Poussée', ['poussee_verticale', 'poussee_horizontale']], ['gainage', 'Gainage', ['gainage_anterieur']], ['explosivite', 'Explosivité', ['puissance_haut']], ['mobilite', 'Mobilité', ['mobilite_epaules', 'mobilite_hanches']]],
   },
   running: {
     label: 'Course à pied', emoji: '🏃', aliases: ['course', 'running', 'jogging', 'run', 'trail'],
@@ -222,6 +227,8 @@ export const METRICS = {
   max_bloc: M('Niveau max en bloc', '', 'grade', { force_doigts: 0.5, technique_escalade: 0.5, puissance_haut: 0.4 }, ['climbing_boulder'], { gradeActivity: 'bloc' }),
   max_voie: M('Niveau max en voie', '', 'grade', { endurance_doigts: 0.6, technique_escalade: 0.6 }, ['climbing_route'], { gradeActivity: 'voie' }),
 };
+// 8.30 : la calisthenics suit les mêmes tests que le renforcement au poids du corps.
+for (const m of Object.values(METRICS)) if (m.acts?.includes('conditioning') && !m.acts.includes('calisthenics')) m.acts.push('calisthenics');
 export const metricTierText = (m) => {
   if (!m?.tiers) return '';
   const [a, b] = m.tiers, u = m.unit ? ' ' + m.unit : '';

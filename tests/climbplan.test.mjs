@@ -85,8 +85,9 @@ ok('autre sport : le corps de séance suit le sport choisi, le matériel du lieu
   assert.equal(atHome.activity, 'conditioning'); assert.equal(atHome.context.env, maison.id);
   assert.ok(atHome.exercises.filter((e) => e.block === 'main').length >= 2);
   for (const e of atHome.exercises) assert.ok((byIdLib(e.libId)?.needs || []).every((n) => n === 'mat'), `${e.name} demande du matériel absent à la maison`);
-  const gym = C.buildFromParts(parts, c, { sport: 'conditioning', envId: salle.id });
-  assert.ok(gym.exercises.some((e) => (byIdLib(e.libId)?.needs || []).includes('bar')), 'à la salle, la barre peut servir');
+  const gyms = [1, 2, 3, 4, 5].map((seed) => C.buildFromParts(parts, c, { sport: 'conditioning', envId: salle.id, seed }));
+  for (const g of gyms) for (const e of g.exercises) assert.ok((byIdLib(e.libId)?.needs || []).every((n) => ['bar', 'mat', 'band'].includes(n)), `${e.name} : matériel de la salle seulement`);
+  assert.ok(gyms.some((g) => g.exercises.some((e) => (byIdLib(e.libId)?.needs || []).includes('bar'))), 'à la salle, la barre peut servir');
   const noWall = C.buildFromParts([{ type: 'climb', kind: 'bloc', intensity: 'mod', minutes: 20 }], c, { envId: maison.id, envName: 'Maison' });
   assert.match(noWall.notes[0].text, /Maison n’a pas de mur/);
 });

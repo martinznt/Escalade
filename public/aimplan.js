@@ -36,7 +36,7 @@ const FAMILY_ROLE = { technique: 'technique', endurance: 'endurance', force: 'fo
 const FAM_INTENSITY = { performance: 'max', force: 'hard', puissance: 'hard', endurance: 'mod', technique: 'easy', mobilite: 'easy', equilibre: 'mod' };
 const CAP_FAMILY = { force: 'force', puissance: 'puissance', endurance: 'endurance', technique: 'technique', mobilite: 'mobilite', prevention: 'mobilite', gainage: 'force' };
 export const FAM_TITLE = { performance: 'Performer', force: 'Force', puissance: 'Puissance', endurance: 'Endurance', technique: 'Technique', mobilite: 'Mobilité', equilibre: 'Séance équilibrée' };
-const SPORT_SHORT = { climbing_route: 'Voie', climbing_boulder: 'Bloc', running: 'Course', swimming: 'Natation', strength: 'Muscu', conditioning: 'Renfo' };
+const SPORT_SHORT = { climbing_route: 'Voie', climbing_boulder: 'Bloc', running: 'Course', swimming: 'Natation', strength: 'Muscu', conditioning: 'Renfo', calisthenics: 'Calisthenics' };
 const FAM_HELP = {
   performance: 'Réussir le plus dur possible aujourd’hui : essais à ta limite, longs repos.',
   force: 'Devenir plus fort : efforts courts et lourds, bien reposés.',
@@ -52,6 +52,7 @@ const PERF_HELP = {
   swimming: 'Nager à l’allure de ton objectif.',
   strength: 'Monter vers ta charge maximale (ou ton objectif).',
   conditioning: 'Battre ton record de répétitions.',
+  calisthenics: 'Battre ton record (répétitions ou temps tenu sur une figure).',
 };
 /* Comment chaque famille se traduit, sport par sport : [intensité, structure]. */
 const CLIMB_PLAN = {

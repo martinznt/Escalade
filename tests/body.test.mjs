@@ -35,7 +35,8 @@ ok('séance générée : niveau plafonné, pas de sauts, repos plus longs, raiso
   assert.ok(r.meta.why.some((w) => /essouffl/.test(w)), 'la raison est expliquée');
   const s0 = G.generateFromPlan(base, ctxWith({})).session, main0 = s0.exercises.filter((e) => e.block === 'main'), main1 = s.exercises.filter((e) => e.block === 'main');
   assert.ok(main1.length && main0.length);
-  const avg = (l) => l.reduce((t, e) => t + (e.rest || 0), 0) / l.length; assert.ok(avg(main1) > avg(main0) * 0.9, 'repos au moins aussi longs');
+  const same = main1.filter((e) => main0.some((x) => x.name === e.name)); assert.ok(same.length, 'des exercices communs à comparer');
+  for (const e of same) assert.ok((e.rest || 0) >= (main0.find((x) => x.name === e.name).rest || 0), `repos au moins aussi long : ${e.name}`);
 });
 ok('objectif « perte de poids » : repos courts (circuit)', () => {
   const c = ctxWith({ shape: 'moyen' }, ['poids']), s = G.generateFromPlan(G.planSession({ activityId: 'conditioning', minutes: 40, seed: 5 }, c), c).session;

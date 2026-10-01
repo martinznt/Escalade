@@ -233,7 +233,7 @@ E('cd-breath', 'Respiration lente', '🌬️', { role: 'cool', kind: 'cool', gro
    - acts  : activités compatibles ; pattern : famille de mouvement (sert au remplacement intelligent) ;
    - diff  : difficulté intrinsèque 1–5 (sert à l'estimation du niveau des séances communes).
    Les nouveaux exercices portent climb:false : le générateur escalade historique (engine.js) ne les utilise pas. */
-const ACT_CODES = { B: 'climbing_boulder', V: 'climbing_route', S: 'strength', C: 'conditioning', R: 'running', N: 'swimming' };
+const ACT_CODES = { B: 'climbing_boulder', V: 'climbing_route', S: 'strength', C: 'conditioning', R: 'running', N: 'swimming', K: 'calisthenics' };
 const acts = (codes) => [...codes].map((c) => ACT_CODES[c]).filter(Boolean);
 const cp = (t) => Object.fromEntries(t.split(/\s+/).filter(Boolean).map((p) => { const [k, v] = p.split(':'); return [k, Number(v)]; }));
 const X = (id, name, emoji, o) => E(id, name, emoji, { climb: false, ...o });
@@ -549,6 +549,10 @@ for (const x of L) {
   if (a) { x.caps = cp(a[0]); x.prim = a[1]; x.sec = a[2]; x.acts = acts(a[3]); x.pattern = a[4]; x.diff = a[5]; }
   x.caps ||= {}; x.prim ||= []; x.sec ||= []; x.acts ||= []; x.pattern ||= ''; x.diff ||= (x.minLevel || 0) + 1;
 }
+// 8.30 : calisthenics (street workout) = tout ce qui se fait au poids du corps, avec barre, barres parallèles, anneaux,
+// élastique ou tapis ; les figures (front lever, drapeau, équilibre sur les mains…) en font partie.
+const BODY_EQ = new Set(['bar', 'dips', 'rings', 'mat', 'band', 'box', 'pole']);
+for (const x of L) if ((x.acts.includes('conditioning') || x.kind === 'skill') && !['run', 'swim'].includes(x.kind) && !/^(run-|shuttle)/.test(x.id) && (x.needs || []).every((n) => BODY_EQ.has(n)) && !x.acts.includes('calisthenics')) x.acts.push('calisthenics');
 
 export const LIBRARY = L;
 export const LIB_BY_ID = new Map(L.map((x) => [x.id, x]));

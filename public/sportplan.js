@@ -7,7 +7,7 @@ import { normalizeEx, uid } from './shared.js';
 import { METRICS, ACTIVITIES } from './model.js';
 
 /** Famille de chaque sport natif (les sports sans famille gardent le format par exercices). */
-export const FAMILY = { running: 'run', swimming: 'swim', strength: 'load', conditioning: 'body' };
+export const FAMILY = { running: 'run', swimming: 'swim', strength: 'load', conditioning: 'body', calisthenics: 'body' };
 export const sportFamily = (sport) => FAMILY[sport] || '';
 const EMOJI = { run: '🏃', swim: '🏊', load: '🏋️', body: '💪' };
 

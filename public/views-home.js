@@ -291,7 +291,7 @@ export async function runCommand(c, raw) {
 ACT.cmdPick = (el) => { const o = S.cmdOptions?.[Number(el.dataset.i)]; closeSheet(); if (o) runCommand(o, S.cmdRaw); };
 
 /* ═════════ Calendrier visuel ═════════ */
-const ACT_COLORS = { climbing_boulder: '#c8914d', climbing_route: '#d7a86e', strength: '#b0674a', conditioning: '#8c9a6b', running: '#6f97a8', swimming: '#5c8fbf' };
+const ACT_COLORS = { climbing_boulder: '#c8914d', climbing_route: '#d7a86e', strength: '#b0674a', conditioning: '#8c9a6b', calisthenics: '#9a7bb0', running: '#6f97a8', swimming: '#5c8fbf' };
 function miniMonth() { return monthGrid(true); }
 function monthGrid(mini = false) {
   if (!S.cal) { const d = new Date(); S.cal = { y: d.getFullYear(), m: d.getMonth() }; }

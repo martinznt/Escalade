@@ -6,8 +6,8 @@ import { SCHEMAS, COLLECTIONS, cleanItem } from '../public/items.js';
 import { ok, done } from './helpers.mjs';
 
 console.log('Modèle sémantique');
-await ok('activités natives V1 exactes : bloc, voie, musculation, renforcement, course, natation (pas de basket ni vélo)', () => {
-  assert.deepEqual(Object.keys(ACTIVITIES).sort(), ['climbing_boulder', 'climbing_route', 'conditioning', 'running', 'strength', 'swimming']);
+await ok('activités natives exactes : bloc, voie, musculation, renforcement, calisthenics, course, natation (pas de basket ni vélo)', () => {
+  assert.deepEqual(Object.keys(ACTIVITIES).sort(), ['calisthenics', 'climbing_boulder', 'climbing_route', 'conditioning', 'running', 'strength', 'swimming']);
   assert.ok(!Object.values(ACTIVITIES).some((a) => /basket|cycl|vélo/i.test(a.label)));
 });
 await ok('toutes les relations pointent vers des capacités existantes', () => {
