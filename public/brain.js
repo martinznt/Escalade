@@ -6,6 +6,7 @@
 //  - une séance datée dans le futur n'est jamais traitée comme réalisée.
 // Pur JavaScript, sans DOM : testé avec Node (tests/brain.test.mjs).
 
+import { batteryFor, profileInputs, ENVIES, PROTOCOL } from './assess.js';
 import { CAPACITIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, BUILTIN_STYLES, metricTierText, skillCaps } from './model.js';
 import { LIBRARY, byId } from './library.js';
 import { allSystems, toReference, levelFromReference, bestReferenceLevel, LEVEL_WORDS } from './grading.js';
@@ -474,16 +475,15 @@ export function testReminders(ctx, maxAgeDays = 42) {
     if (g.metricId && ctx.metrics[g.metricId]) wanted.set(g.metricId, `objectif « ${goalLabel(g)} »`);
     if (g.type === 'skill') for (const c of SKILLS[g.skillId]?.criteria || []) if (!wanted.has(c.metric)) wanted.set(c.metric, `figure « ${SKILLS[g.skillId].label} »`);
   }
-  for (const a of Object.keys(ctx.activities)) {
-    const best = Object.entries(METRICS).filter(([, m]) => m.acts.includes(a) && m.tiers).slice(0, 2);
-    for (const [id] of best) if (!wanted.has(id)) wanted.set(id, `activité ${ACTIVITIES[a]?.label || a}`);
-  }
+  // 8.28 : les tests utiles viennent des objectifs (envies du profil) et respectent les zones à ménager,
+  // au lieu des deux premières métriques de chaque sport.
+  for (const t of batteryFor(profileInputs(ctx))) if (!wanted.has(t.metricId) && ctx.metrics[t.metricId]) wanted.set(t.metricId, `${ENVIES[t.envie]?.label.toLowerCase() || 'ton objectif'} : ${t.why}`);
   const out = [];
   for (const [id, why] of wanted) {
     const m = ctx.metrics[id], all = perfsOf(id, ctx), last = latestPerf(id, ctx), unknown = all[0]?.unknown;
-    const age = last ? Math.floor((ctx.now - last.date) / DAY) : null;
+    const age = last ? Math.max(0, Math.floor((ctx.now - last.date) / DAY)) : null;
     if (last && age < maxAgeDays && !unknown) continue;
-    out.push({ metricId: id, label: m.label, why, age, unknown: !!unknown, test: m.test || '', text: unknown ? `${m.label} : tu ne sais pas encore` : last ? `${m.label} : dernière mesure il y a ${age} j` : `${m.label} : jamais mesuré` });
+    out.push({ metricId: id, label: m.label, why, age, unknown: !!unknown, test: m.test || PROTOCOL[id] || '', text: unknown ? `${m.label} : tu ne sais pas encore` : last ? `${m.label} : dernière mesure il y a ${age} j` : `${m.label} : jamais mesuré` });
   }
   return out.slice(0, 6);
 }
@@ -753,7 +753,7 @@ export function todayOptions(ctx, { todayEvents = [], minutes = null } = {}) {
   if (fg) opts.push({ kind: 'generate', id: 'goal:' + fg.goal.id, title: `Reprendre « ${fg.label} »`, reason: fg.days != null ? `Pas travaillé depuis ${fg.days} jours.` : 'Objectif configuré mais pas encore travaillé.', mode: 'goal', goalId: fg.goal.id, minutes: dur, how: [...how, `objectif actif : ${fg.label}`] });
   else if (activeGoals(ctx)[0]) { const g = activeGoals(ctx)[0]; opts.push({ kind: 'generate', id: 'goal:' + g.id, title: `Avancer vers « ${goalLabel(g)} »`, reason: 'Ton objectif actif principal.', mode: 'goal', goalId: g.id, minutes: dur, how: [...how, `objectif actif : ${goalLabel(g)}`] }); }
   if (under.items[0]) opts.push({ kind: 'generate', id: 'weak:' + under.items[0].id, title: `Travailler ${under.items[0].label.toLowerCase()}`, reason: under.items[0].text, mode: 'weaknesses', capId: under.items[0].id, minutes: dur, how: [...how, under.text] });
-  if (!opts.some((o) => o.kind === 'generate')) opts.push({ kind: 'generate', id: 'gen:decouverte', title: ctx.history.length ? 'Séance du jour' : 'Séance découverte', reason: ctx.history.length ? 'Équilibrée selon ce que tu as le moins travaillé récemment.' : 'Pas encore d’historique : une séance courte pour commencer, sans présumer de ton niveau.', mode: 'weaknesses', minutes: ctx.history.length ? dur : 20, how });
+  if (!opts.some((o) => o.kind === 'generate')) opts.push({ kind: 'generate', id: 'gen:decouverte', title: ctx.history.length ? 'Séance du jour' : 'Séance découverte', reason: ctx.history.length ? 'Équilibrée selon ce que tu as le moins travaillé récemment.' : (ctx.perfs.some((p) => !p.unknown) || Object.keys(ctx.capdecl).length ? 'Première séance : courte, calée sur le niveau et les repères que tu as indiqués.' : 'Pas encore d’historique : une séance courte pour commencer, sans présumer de ton niveau.'), mode: 'weaknesses', minutes: ctx.history.length ? dur : 20, how });
   if (last?.data?.rpe >= 4 && hoursSince < 48 && !opts.some((o) => o.light)) opts.push({ kind: 'generate', id: 'gen:leger', title: 'Version légère (technique / mobilité)', reason: `Ta dernière séance était ressentie comme dure (${last.data.rpe}/5) il y a ${Math.round(hoursSince)} h : une alternative plus douce si tu ne te sens pas frais.`, light: true, mode: 'weaknesses', minutes: Math.min(dur, 25), how });
   opts.push({ kind: 'express', id: 'express', title: 'Express 10 minutes', reason: 'Peu de temps ? Une séance courte reconstruite pour 10 minutes.', minutes: 10, mode: 'weaknesses', how: ['Durée choisie : 10 min'] });
   return { options: opts.slice(0, 4), note: 'Je ne connais pas ta forme du jour : choisis l’option qui te correspond.' };

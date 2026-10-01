@@ -49,6 +49,22 @@ export function closeSheet() { const s = $('#sheet'); s.classList.remove('open')
 export const sheetOpen = () => $('#sheet')?.classList.contains('open');
 
 /** Confirmation dans une feuille (testable, accessible). Résout true / false. */
+/** Saisie d'un texte court dans la boîte de dialogue de l'app (à la place du prompt() du navigateur). Renvoie le texte, ou null. */
+export function askText(message, { value = '', placeholder = '', ok = 'Valider', cancel = 'Annuler', max = 120, detail = '' } = {}) {
+  return new Promise((resolve) => {
+    const d = $('#dialog');
+    d.innerHTML = h`<div class="back"></div><div class="panel" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><h2 id="dlg-t" style="margin:0">${message}</h2>${detail ? h`<p class="muted small">${detail}</p>` : ''}
+      <input id="dlg-in" type="text" maxlength="${max}" value="${value}" placeholder="${placeholder}" aria-label="${message}">
+      <div class="row wrapf end"><button class="btn" data-dlg="0">${cancel}</button><button class="btn pri" data-dlg="1">${ok}</button></div></div>`.s;
+    d.classList.add('open');
+    const input = d.querySelector('#dlg-in');
+    const done = (v) => { const t = v ? String(input.value || '').trim() : null; d.classList.remove('open'); d.innerHTML = ''; d.removeEventListener('click', onClick); resolve(t); };
+    const onClick = (e) => { const b = e.target.closest('[data-dlg]'); if (b) done(b.dataset.dlg === '1'); else if (e.target.classList.contains('back')) done(false); };
+    d.addEventListener('click', onClick);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); done(true); } else if (e.key === 'Escape') done(false); });
+    setTimeout(() => { input.focus(); input.select(); }, 20);
+  });
+}
 export function ask(message, { ok = 'Confirmer', cancel = 'Annuler', danger = false, detail = '' } = {}) {
   return new Promise((resolve) => {
     const d = $('#dialog');

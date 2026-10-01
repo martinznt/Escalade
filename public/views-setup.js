@@ -9,6 +9,8 @@ import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
 import { nextQuestion, pendingQuestions, bucketValue } from './questions.js';
 import { startTour } from './tour.js';
 import { bodyFields, bodyToggle, cleanBody } from './body.js';
+import { batteryFor } from './assess.js';
+import { METRICS as ALL_METRICS } from './model.js';
 import { canPrompt, isIOS, isInstalled, shouldOffer, dismissInstall, promptInstall, onInstallChange } from './install.js';
 
 /* ═════════ Configuration personnelle (item config « main ») ═════════ */
@@ -34,17 +36,25 @@ const STEPS = [
   { id: 'skill', q: 'Quelle figure veux-tu réussir ?', when: (a) => (a.goals || []).includes('figure'), opts: () => Object.entries(SKILLS).map(([id, s]) => [id, `${s.emoji} ${s.label}`]) },
   { id: 'avoid', multi: true, q: 'Y a-t-il une zone à ménager ?', help: 'L’app évitera les exercices qui la sollicitent fortement. Ce n’est pas un avis médical : en cas de douleur, consulte un professionnel.', opts: () => AVOID },
   { id: 'body', q: 'Parle-nous un peu de toi', help: 'Facultatif : ça aide à doser l’intensité, les repos et le type d’exercices.' },
-  { id: 'marks', q: 'Quelques repères (facultatif)', help: 'Si tu ne sais pas, touche « Je ne sais pas » ou passe : rien ne sera inventé.' },
+  { id: 'marks', q: 'Quelques repères pour tes objectifs (facultatif)', help: 'Choisis selon tes objectifs. Si tu ne sais pas, touche « Je ne sais pas » ou passe : rien ne sera inventé. Tu pourras faire les tests guidés plus tard (Profil › Mon bilan physique).' },
 ];
 const visibleSteps = (a) => STEPS.filter((s) => !s.when || s.when(a));
 
+/** Repères demandés : ceux qui comptent pour les objectifs choisis (4 au plus, sans cotation ni poids déjà demandés ailleurs). */
+const AVOID_KEYS = { fingers: 'fingers', shoulders: 'shoulders', elbows: 'elbows', knees: 'knees' };
+export function markKeys(a) {
+  const avoid = Object.fromEntries((a.avoid || []).filter((x) => AVOID_KEYS[x]).map((x) => [x, true]));
+  const list = batteryFor({ envies: a.goals || [], acts: a.acts || [], avoid, skillIds: a.skill ? [a.skill] : [] })
+    .filter((t) => ALL_METRICS[t.metricId].kind !== 'grade' && t.metricId !== 'body_weight').slice(0, 4);
+  return list.length ? list : [{ metricId: 'max_tractions', why: 'ton tirage' }, { metricId: 'max_pompes', why: 'ta poussée' }];
+}
 function markFields(a) {
   const m = a.marks || {};
-  const num = (k, label, unit) => h`<div class="card flat"><b class="small">${label}</b><div class="row wrapf">
-    <span class="unitbox"><input type="number" inputmode="numeric" min="0" max="500" value="${m[k] ?? ''}" data-input="setMark" data-k="${k}" aria-label="${label}" ${m[k + '_nsp'] ? 'disabled' : ''}><em>${unit}</em></span>
-    ${chip(!!m[k + '_nsp'], '🤷 Je ne sais pas', `data-act="setNsp" data-k="${k}"`)}</div></div>`;
+  const num = ({ metricId: k, why }) => { const M0 = ALL_METRICS[k], unit = M0.unit === 'reps' ? 'rép.' : M0.unit; return h`<div class="card flat"><b class="small">${M0.label}</b><div class="tiny muted">Pour savoir : ${why}</div><div class="row wrapf">
+    <span class="unitbox"><input type="number" inputmode="decimal" step="any" min="0" max="100000" value="${m[k] ?? ''}" data-input="setMark" data-k="${k}" aria-label="${M0.label}" ${m[k + '_nsp'] ? 'disabled' : ''}><em>${unit}</em></span>
+    ${chip(!!m[k + '_nsp'], '🤷 Je ne sais pas', `data-act="setNsp" data-k="${k}"`)}</div></div>`; };
   const climbing = (a.acts || []).some((x) => x.startsWith('climbing'));
-  return h`${num('max_tractions', 'Combien de tractions d’affilée peux-tu faire ?', 'tractions')}${num('max_pompes', 'Combien de pompes d’affilée ?', 'pompes')}
+  return h`${markKeys(a).map(num)}
     ${climbing ? h`<div class="card flat"><b class="small">Ton meilleur bloc réussi (cotation Font)</b><div class="chips">${BLOC_CHOICES.map((g) => chip(m.bloc === g, g, `data-act="setBloc" data-v="${g}"`))}${chip(m.bloc === 'nsp', '🤷 Je ne sais pas', 'data-act="setBloc" data-v="nsp"')}</div>
       <p class="tiny muted">Ta salle utilise des couleurs ou U1–U8 ? Tu pourras créer ton propre système dans Profil › Escalade.</p></div>` : ''}`;
 }
@@ -99,7 +109,7 @@ ACT.setPick = (el) => {
   a[q] = v; render();
   if (S.setup.mode === 'quiz') setTimeout(() => ACT.setupNext(), 180); // réponse unique : on avance tout seul
 };
-INPUT.setMark = (el) => { const m = (S.setup.a.marks ||= {}); m[el.dataset.k] = el.value === '' ? undefined : Math.max(0, Math.min(500, Math.round(Number(el.value)))); };
+INPUT.setMark = (el) => { const m = (S.setup.a.marks ||= {}), v = Number(String(el.value).replace(',', '.')); m[el.dataset.k] = el.value === '' || !Number.isFinite(v) ? undefined : Math.max(0, Math.min(100000, Math.round(v * 10) / 10)); };
 ACT.setNsp = (el) => { const m = (S.setup.a.marks ||= {}), k = el.dataset.k; m[k + '_nsp'] = !m[k + '_nsp']; if (m[k + '_nsp']) m[k] = undefined; render(); };
 ACT.setBloc = (el) => { const m = (S.setup.a.marks ||= {}); m.bloc = m.bloc === el.dataset.v ? undefined : el.dataset.v; render(); };
 ACT.setBody = (el) => { S.setup.a.body = bodyToggle(S.setup.a.body || {}, el.dataset.k, el.dataset.v); render(); };
@@ -123,9 +133,10 @@ ACT.setupFinish = () => {
   go('home', 'dash');
   setTimeout(() => openSheet(h`<h2 style="margin:0">✓ Profil enregistré</h2><p class="small">Voici ce que l’app a retenu (déclaré par toi) :</p><ul class="small">${summaryLines(a).map((l) => h`<li>${l}</li>`)}</ul>
     <p class="tiny muted">Les séances proposées tiendront compte de ces réponses. Tout est modifiable dans l’onglet Profil.</p>
-    <button class="btn pri" data-act="setupThanks">Découvrir l’app</button>`), 120);
+    <button class="btn pri" data-act="setupThanks">Découvrir l’app</button><button class="btn" data-act="setupBilan">🩺 Voir ce que l’app sait de ma condition</button>`), 120);
 };
 ACT.setupThanks = () => { closeSheet(); maybeTour(true); };
+ACT.setupBilan = () => { closeSheet(); go('profile', 'bilan'); };
 
 function summaryLines(a) {
   const out = [];
@@ -139,8 +150,7 @@ function summaryLines(a) {
   const av = (a.avoid || []).filter((x) => x !== 'none');
   if (av.length) out.push('À ménager : ' + av.map((x) => AVOID.find(([k]) => k === x)[1].replace(/^\S+\s/, '')).join(', '));
   const m = a.marks || {};
-  if (m.max_tractions != null) out.push(`Tractions : ${m.max_tractions}`);
-  if (m.max_pompes != null) out.push(`Pompes : ${m.max_pompes}`);
+  for (const k of Object.keys(m).filter((x) => ALL_METRICS[x] && m[x] != null)) out.push(`${ALL_METRICS[k].label} : ${m[k]} ${ALL_METRICS[k].unit === 'reps' ? 'rép.' : ALL_METRICS[k].unit}`);
   if (m.bloc && m.bloc !== 'nsp') out.push(`Meilleur bloc : ${m.bloc}`);
   if (!out.length) out.push('Rien pour l’instant : l’app restera prudente et apprendra avec tes séances.');
   return out;
@@ -186,8 +196,8 @@ export function applyAnswers(a) {
   }
   if (a.avoid?.length) { const av = new Set(a.avoid); S.settings.avoid = Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, av.has(k)])); n++; }
   const m = a.marks || {};
-  for (const k of ['max_tractions', 'max_pompes']) {
-    if (m[k] != null) { putItem('perf', 'setup-' + k, { metricId: k, value: m[k], date: now, source: 'declared', note: 'Indiqué au questionnaire de départ' }); n++; }
+  for (const k of [...new Set(Object.keys(m).map((x) => x.replace(/_nsp$/, '')))].filter((x) => ALL_METRICS[x] && ALL_METRICS[x].kind !== 'grade')) {
+    if (m[k] != null) { putItem('perf', 'setup-' + k, { metricId: k, value: m[k], unit: ALL_METRICS[k].unit, date: now, source: 'declared', note: 'Indiqué au questionnaire de départ' }); n++; }
     else if (m[k + '_nsp']) putItem('perf', 'setup-' + k, { metricId: k, unknown: true, date: now, source: 'declared', note: 'Je ne sais pas (questionnaire de départ)' });
   }
   if (m.bloc && m.bloc !== 'nsp') {

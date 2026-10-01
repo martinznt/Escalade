@@ -14,11 +14,15 @@ import { sanitizeForPublication } from './server/publish.js';
 import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server/global.js';
 import { cleanChange, diffState, diffChange, afterOf, runChecks, buildAdminDraft, cleanAdminDraft, buildLab, cleanLab, AI_KINDS } from './server/studio.js';
 import { dataHealth, groupBugs, buildMaintenance, cleanMaintenance, analyzeDiff } from './server/health.js';
+import { findContext, buildAssistant, cleanAssistant, mergeItems, ASSIST_KINDS } from './server/assistant.js';
+import { LIBRARY } from './public/library.js';
+import { FAQ } from './public/help.js';
+import { SPORT_INTENTS } from './public/intentions.js';
 import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo.js';
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
-const APP_VERSION = '8.27.0';
+const APP_VERSION = '8.28.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -27,7 +31,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -245,6 +249,7 @@ function roleFor(p, m) {
   if (p.startsWith('/api/admin/users')) return 'users';
   if (p.startsWith('/api/admin/bugs') || p === '/api/admin/push-status' || p.startsWith('/api/admin/code') || p === '/api/admin/maintenance') return 'technical';
   if (p === '/api/admin/studio/ai' || p === '/api/admin/lab' || p === '/api/admin/health') return 'intelligence';
+  if (p === '/api/admin/assistant') return 'content';
   if (p.startsWith('/api/admin/studio') || p.startsWith('/api/admin/versions') || p.startsWith('/api/admin/global') || p.startsWith('/api/admin/proposals') || p.startsWith('/api/admin/intents')) return 'content';
   return null; // journal : tout administrateur peut le lire
 }
@@ -582,7 +587,7 @@ async function routeAuthed(request, env, url, auth, secure) {
     }
     if (p === '/api/admin/proposals' && m === 'GET') return json({ ok: true, proposals: ((await db(env, `SELECT p.id,p.kind,p.activity,p.label,p.detail,p.payload_json,p.status,p.reply,p.created_at,p.reviewed_at,u.username,r.username AS reviewer FROM proposals p LEFT JOIN users u ON u.id=p.user_id LEFT JOIN users r ON r.id=p.reviewed_by WHERE p.status=? ORDER BY COALESCE(p.reviewed_at,p.created_at) DESC LIMIT 100`, url.searchParams.get('status') === 'done' ? 'done' : 'open').all()).results || []).map((r) => ({ ...r, payload: safeParse(r.payload_json) || {}, payload_json: undefined })) });
     if ((x = p.match(/^\/api\/admin\/proposals\/([\w-]{1,64})$/)) && m === 'POST') return proposalReview(request, env, u, x[1]);
-    if (p.startsWith('/api/admin/studio') || p === '/api/admin/audit' || p === '/api/admin/lab' || p.startsWith('/api/admin/versions/')) { const r = await studioRoute(request, env, u, url, p, m); if (r) return r; }
+    if (p.startsWith('/api/admin/studio') || p === '/api/admin/audit' || p === '/api/admin/lab' || p === '/api/admin/assistant' || p.startsWith('/api/admin/versions/')) { const r = await studioRoute(request, env, u, url, p, m); if (r) return r; }
     if ((x = p.match(/^\/api\/admin\/global\/(\w{1,20})\/([\w-]{1,64})$/))) {
       if (!GLOBAL_KINDS.includes(x[1])) return fail('Type inconnu.', 400);
       if (m === 'PUT') {
@@ -1286,6 +1291,46 @@ async function studioRoute(request, env, u, url, p, m) {
     const itemId = GLOBAL_ID.test(String(b?.target || '')) ? b.target : 'g-' + uid().slice(0, 12);
     const id = await csCreate(env, u, { title: 'IA : ' + text.slice(0, 80), note: 'Brouillon rédigé par l’assistant à partir de : « ' + text.slice(0, 400) + ' ». À relire avant toute publication.', source: 'ai', items: [{ kind, id: itemId, op: 'put', data }] });
     return json({ ok: true, id, data });
+  }
+  // Discuter avec l'assistant du site : réponse + propositions validées, rangées dans UN brouillon (jamais publiées).
+  if (p === '/api/admin/assistant' && m === 'POST') {
+    const b = await readJson(request, 30000);
+    const msgs = (Array.isArray(b?.messages) ? b.messages : []).slice(-12);
+    const last = [...msgs].reverse().find((x) => x?.role === 'user');
+    if (!last || str(last.content, 1500).length < 2) return fail('Écris ta demande.');
+    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur (Workers AI).', unavailable: true }, 503);
+    if (await limited(env, 'ai-as:' + u.id, 20, 600000)) return fail('Beaucoup de messages : réessaie dans quelques minutes.', 429);
+    const rows = ((await db(env, 'SELECT kind,id,data_json,hidden FROM global_content LIMIT 600').all()).results || []).map((r) => ({ kind: r.kind, id: r.id, hidden: !!r.hidden, data: r.hidden ? null : safeParse(r.data_json) }));
+    const faq = FAQ.map((f, i) => [f[0], f[1], 'f' + i]);
+    const convo = msgs.filter((x) => x?.role === 'user').slice(-3).map((x) => str(x.content, 600)).join(' ');
+    const context = findContext(convo, { library: LIBRARY, faq, intents: SPORT_INTENTS, globals: rows.filter((r) => !r.hidden && ASSIST_KINDS[r.kind]) });
+    const base = (kind, id) => {
+      const g = rows.find((r) => r.kind === kind && r.id === id); if (g) return g.hidden ? {} : g.data;
+      if (kind === 'exercise') return LIBRARY.find((x) => x.id === id) || null;
+      if (kind === 'faq') { const f = faq.find((x) => x[2] === id); return f ? { q: f[0], a: f[1] } : null; }
+      if (kind === 'intent') { const [act, iid] = id.split('__'); const i = (SPORT_INTENTS[act] || []).find((x) => x.id === iid); return i ? { label: i.label, emoji: i.emoji, activityId: act, caps: i.caps } : null; }
+      return null;
+    };
+    let out;
+    try { out = cleanAssistant(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildAssistant(msgs, context), max_tokens: 1400, temperature: 0.3 }), { base }); }
+    catch (e) { console.error('ai-assistant', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+    if (!out) return fail('Réponse de l’assistant inutilisable : reformule ta demande.', 422);
+    let draftId = /^[\w-]{1,64}$/.test(String(b?.draftId || '')) ? String(b.draftId) : '', added = 0;
+    if (out.items.length) {
+      const L = draftId ? await csLoad(env, draftId) : null;
+      if (L && L.cs.status === 'draft' && L.cs.author_id === u.id) {
+        const items = mergeItems(L.items.map(({ before, ...i }) => i), out.items).slice(0, 50), now = Date.now();
+        await env.DB.batch([
+          db(env, 'DELETE FROM change_items WHERE change_set_id=?', draftId),
+          ...items.map((it, k) => db(env, 'INSERT INTO change_items(id,change_set_id,kind,item_id,op,data_json,position) VALUES(?,?,?,?,?,?,?)', uid(), draftId, it.kind, it.id, it.op, JSON.stringify(it.data), k)),
+          db(env, 'UPDATE change_sets SET updated_at=? WHERE id=?', now, draftId),
+          auditStmt(env, u, 'draft_edit', { type: 'change_set', id: draftId, cs: draftId, after: out.items.map((i) => `${i.op} ${i.kind}/${i.id} (assistant)`) }),
+        ]);
+      } else draftId = await csCreate(env, u, { title: 'Assistant : ' + str(last.content, 80), note: 'Brouillon préparé en discutant avec l’assistant du site. À relire avant toute publication.', source: 'ai', items: out.items });
+      added = out.items.length;
+    }
+    const diff = out.items.length ? diffChange(out.items, await currentOf(env, out.items)) : [];
+    return json({ ok: true, reply: out.reply, questions: out.questions, needsCode: out.needsCode, rejected: out.rejected, explain: out.explain, added, draftId: added ? draftId : (draftId || ''), diff });
   }
   if (p === '/api/admin/lab' && m === 'POST') {
     const b = await readJson(request, 6000), text = str(b?.text, 2000);

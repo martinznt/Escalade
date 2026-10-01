@@ -24,7 +24,7 @@ const EN = {
   'Objectif de la semaine atteint. Le repos compte aussi 🎉': 'Weekly goal reached. Rest counts too 🎉',
   'Ton profil n’est pas encore complet : les séances proposées restent prudentes.': 'Your profile isn’t complete yet: suggested sessions stay on the safe side.', 'Compléter': 'Complete',
   'Invité': 'Guest', 'D’accord ! Tu pourras compléter ton profil quand tu veux, depuis l’Accueil ou le Profil.': 'OK! You can complete your profile any time from Home or Profile.',
-  'Pas encore d’historique : une séance courte pour commencer, sans présumer de ton niveau.': 'No history yet: a short session to start, without guessing your level.',
+  'Pas encore d’historique : une séance courte pour commencer, sans présumer de ton niveau.': 'No history yet: a short session to start, without guessing your level.', 'Première séance : courte, calée sur le niveau et les repères que tu as indiqués.': 'First session: short, based on the level and marks you gave.',
   'Mes progrès': 'My progress', 'Historique et records': 'History and records',
   // Authentification
   'Ton coach d’entraînement personnel, gratuit.': 'Your personal training coach, free.', 'Des séances faites pour toi': 'Sessions made for you', 'Guidé pendant l’effort': 'Guided while you train',

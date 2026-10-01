@@ -1,5 +1,5 @@
 // views-climbplan.js — « Structurer ma séance d'escalade » : par objectif de fin de séance, ou partie par partie.
-import { h, raw, chip, openSheet, closeSheet, toast, ask } from './ui.js';
+import { h, raw, chip, openSheet, closeSheet, toast, ask, askText } from './ui.js';
 import { S, ACT, CHG, INPUT, ctx, render, go, saveSeance, ls, putItem, itemsOf, api } from './state.js';
 import { uid } from './shared.js';
 import { simulate } from './whatif.js';
@@ -30,7 +30,8 @@ import { placeObjective, cleanObjective, objectiveLabel, whenLabel, WHEN, FAMILY
 import { ROLES, LOCKABLE, LOCK_STATES, FATIGUE, ATTEMPT_TYPES, FOCUS, VOLUME, TRADEOFFS, PLACE_MODES, normalizePhases, normalizePhase, fitDurations, newPhase, totalMinutes as phTotal, sessionActivities, sessionIntent, activityLabel as actLabel } from './phase.js';
 import { proposeForPhase, analyzeSession, applySuggestion, REASON, phaseName } from './phaseplan.js';
 import { loadAnalysis } from './brain.js';
-import { alternatives } from './generator.js';
+import { alternatives, levelFor } from './generator.js';
+import { assessment } from './assess.js';
 import { sportFamily, SPORT_STRUCTS, sportProposals, sportTargets, sportMoves, bestPerf, targetAdvice, targetParts, targetLabel, defaultWorkParts, workTitle, moveName, paceOf, fmtPace } from './sportplan.js';
 
 const KEY = 'sea:climbplan';
@@ -39,7 +40,37 @@ const DEFAULT_PARTS = [
   { type: 'climb', kind: 'bloc', intensity: 'easy', minutes: 30, styles: [] }, { type: 'climb', kind: 'voie', intensity: 'max', minutes: 40, styles: [], adapt: true },
   { type: 'cool', minutes: 10 },
 ];
-const CP = () => (S.cp ||= { mode: 'goal', kind: 'bloc', envId: '', sys: {}, target: null, styles: [], minutes: 120, parts: DEFAULT_PARTS.map((p) => ({ ...p })), result: null, ...(ls.get(KEY, {}) || {}), result: null, reasons: [] });
+const CP = () => (S.cp ||= fresh());
+/** Nouveau brouillon (ou brouillon repris). 8.28 : pré-rempli d'après le profil (durée habituelle, lieu adapté au sport,
+ * zones à ménager, objectif de séance tiré des envies) ; les anciens brouillons à 7 étapes sont renumérotés. */
+function fresh() {
+  const saved = ls.get(KEY, {}) || {};
+  const c = { mode: 'goal', kind: 'bloc', envId: '', sys: {}, target: null, styles: [], minutes: 120, parts: DEFAULT_PARTS.map((p) => ({ ...p })), result: null, ...saved, result: null, reasons: [] };
+  if (saved.step && saved.v !== 2) c.step = Math.max(1, saved.step - 1);
+  c.v = 2;
+  if (!saved.step) prefill(c);
+  return c;
+}
+const ENVIE_FAMILY = { force: 'force', endurance: 'endurance', mobilite: 'mobilite', figure: 'force', poids: 'endurance' };
+function prefill(c) {
+  const x = ctx(), main = x.config?.main || {};
+  c.sport ||= Object.keys(x.activities)[0] || 'conditioning';
+  const mins = Number(S.settings.defaultMinutes) || Number(main.durations?.[0]) || 0;
+  if (mins) c.minutes = Math.max(10, Math.min(240, mins));
+  c.zones = Object.entries(S.settings.avoid || {}).filter(([, v]) => v).map(([k]) => k);
+  const fam = (main.goals || []).map((g) => ENVIE_FAMILY[g]).find(Boolean);
+  // Moment par défaut : force et puissance quand on est frais (début), endurance et mobilité en fin de séance.
+  if (fam && !c.objective) { c.objective = { family: fam, subIntents: [], when: ['force', 'puissance', 'technique'].includes(fam) ? 'start' : 'end' }; c.objFromProfile = true; }
+  placeFor(c);
+  c.prefilled = true;
+}
+/** Lieu cohérent avec le sport : pour l'escalade, un lieu qui a un mur (sinon on garde le lieu et on le dit). */
+function placeFor(c) {
+  if (c.envPicked) return;
+  const x = ctx();
+  if (isClimb(c.sport)) { const e = x.envs.find((v) => availableEquipment(x, v.id).has('wall')); c.envId = e ? e.id : ''; }
+  else if (c.envId && !x.envs.some((v) => v.id === c.envId)) c.envId = '';
+}
 // Le brouillon est gardé sur l'appareil (fermeture accidentelle, hors ligne) : ossature, choix, changements appliqués.
 const keep = () => { const { result, reasons, aimDone, bopts, ...rest } = CP(); ls.set(KEY, rest); };
 const climbStyles = () => Object.values(ctx().styles || {}).filter((s) => !s.archived && (s.activity === 'climbing' || !s.activity));
@@ -57,7 +88,8 @@ function sysSelect(kind) {
 /* ═════════ Créer une séance : un seul assistant, pour tous les sports, en 7 étapes ═════════
  * Structure d'abord (phases, verrous), puis propositions expliquées, améliorations au choix, et génération
  * seulement après la validation finale. */
-const STEPS = [['how', 'Comment ?'], ['where', 'Sport, lieu et temps'], ['why', 'Pour quoi ?'], ['structure', 'Ta structure'], ['content', 'Propositions par phase'], ['improve', 'Améliorations'], ['validate', 'Valider et générer']];
+const STEPS = [['base', 'L’essentiel'], ['why', 'Préciser (facultatif)'], ['structure', 'Ta structure'], ['content', 'Propositions par phase'], ['improve', 'Améliorations'], ['validate', 'Valider et générer']];
+const SI = { base: 1, why: 2, structure: 3, content: 4, improve: 5, validate: 6 };
 const NSTEPS = STEPS.length;
 /** Niveau de structure : combien l'utilisateur décide de l'ossature (valable aussi pour « Surprends-moi »). */
 export const LEVELS = { libre: ['Libre', 'L’app choisit presque toute la structure.'], leger: ['Léger', 'Tu donnes quelques grandes contraintes (durée, sport).'], modere: ['Modéré', 'L’app propose une ossature visible que tu modifies.'], precis: ['Précis', 'Tu contrôles les phases et leurs durées.'], tres: ['Très précis', 'Tu verrouilles tout ce qui compte ; l’app remplit le reste.'] };
@@ -70,14 +102,14 @@ export function vClimbPlan() {
   const c = CP(); c.step ||= 1; c.sport ||= Object.keys(ctx().activities)[0] || 'conditioning';
   c.step = Math.max(1, Math.min(NSTEPS, c.step));
   const st = c.step, [, title] = STEPS[st - 1];
-  const body = [vHow, vWhere, vWhy, vStructure, vContent, vImprove, vValidate][st - 1]();
-  const NEXT = { 4: 'Analyser et proposer le contenu ›', 5: 'Chercher des améliorations ›', 6: 'Dernière vérification ›' };
+  const body = [vBase, vWhy, vStructure, vContent, vImprove, vValidate][st - 1]();
+  const NEXT = { 1: 'Préciser ›', 2: 'Voir la structure ›', 3: 'Analyser et proposer le contenu ›', 4: 'Chercher des améliorations ›', 5: 'Dernière vérification ›' };
   return h`<div class="steps"><div class="row between"><b>Étape ${st}/${NSTEPS} · ${title}</b>${st > 1 ? h`<button class="btn sm ghost" data-act="cpRestart">Recommencer</button>` : ''}</div>
       <div class="meter"><i style="width:${Math.round((st / NSTEPS) * 100)}%"></i></div></div>
     ${body}
     <div class="stepdock">${st > 1 ? h`<button class="btn" data-act="cpStep" data-d="-1">‹ Retour</button>` : h`<span></span>`}${st < NSTEPS ? h`<button class="btn pri" data-act="cpStep" data-d="1">${NEXT[st] || 'Suivant ›'}</button>` : ''}</div>`;
 }
-/* Étape 1 : combien l'app aide. */
+/* « Plus de contrôle » (dans L'essentiel) : combien l'app aide, et qui décide de l'ossature. */
 function vHow() {
   const c = CP();
   return h`<span class="kicker">Qui choisit les exercices ?</span>
@@ -87,7 +119,17 @@ function vHow() {
     <p class="tiny muted">${LEVELS[c.level || 'modere'][1]}</p>`;
 }
 ACT.cpLevel = (el) => { const c = CP(); c.level = el.dataset.id; c.partsTouched = false; keep(); render(); };
-/* Étape 2 : sport, lieu (avec son matériel et sa cotation), forme, temps. */
+/* Étape 1 · L'essentiel : sport, lieu, temps, forme et objectif de la séance — pré-remplis d'après le profil.
+ * « ⚡ Proposer ma séance » construit tout de suite la structure et les exercices ; les étapes suivantes servent à affiner. */
+function vBase() {
+  const c = CP(), x = ctx(), env = envOf(), noWall = isClimb(c.sport) && !availableEquipment(x, c.envId).has('wall');
+  return h`${c.prefilled ? h`<p class="tiny muted">✓ Pré-rempli d’après ton profil (durée habituelle, lieu, zones à ménager${c.objFromProfile ? ', objectif' : ''}). Tout se change ici.</p>` : ''}
+    ${vWhere()}
+    ${objectiveCard()}
+    ${noWall ? h`<button class="btn pri big" disabled>⚡ Proposer ma séance</button><p class="tiny warn-t center">Choisis d’abord un lieu avec un mur d’escalade (voir « Lieu » plus haut).</p>`
+      : h`<button class="btn pri big" data-act="cpQuick">⚡ Proposer ma séance</button><p class="tiny muted center">L’app construit la structure et choisit les exercices pour ${fmtMin(c.minutes)}. Tu pourras tout ajuster ensuite, ou continuer étape par étape pour préciser.</p>`}
+    <details class="card fold" ${c.level && c.level !== 'modere' || c.help && c.help !== 'auto' ? 'open' : ''}><summary><span>🎛️ Plus de contrôle</span></summary>${vHow()}</details>`;
+}
 function vWhere() {
   const c = CP(), x = ctx(), env = envOf(), eq = [...availableEquipment(x, c.envId)];
   const sports = [...new Set([...Object.keys(x.activities), ...Object.keys(ACTIVITIES)])].filter((id) => x.activities[id] || ACTIVITIES[id]); // tous les sports, même pas encore dans le profil
@@ -95,6 +137,8 @@ function vWhere() {
     <span class="kicker">Sport</span><div class="chips">${sports.map((id) => chip(c.sport === id, sportLabel(id), `data-act="cpSport" data-id="${id}"`))}<button type="button" class="chip add" data-act="allGo" data-to="profile/activities">＋ Ajouter un sport</button></div>
     <label>Lieu<select data-change="cpEnv"><option value="">${x.defEnv ? 'Par défaut : ' + x.defEnv.name : 'Aucun lieu décrit'}</option>${x.envs.map((e) => h`<option value="${e.id}" ${c.envId === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label>
     <p class="tiny ${eq.length ? 'muted' : 'warn-t'}">🧰 ${env ? `Matériel de ${env.name}` : 'Matériel'} : ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun déclaré (séance sans matériel)'} · <button class="linkish acc-t" data-act="allGo" data-to="profile/equipment">modifier</button></p>
+    ${isClimb(c.sport) && !eq.includes('wall') ? h`<div class="card flat warn-b stack"><p class="small">⚠️ ${env ? `« ${env.name} » n’a pas de mur d’escalade dans son matériel` : 'Aucun lieu avec un mur d’escalade'} : une séance d’escalade y serait impossible.</p>
+      <div class="row wrapf">${x.envs.filter((v) => availableEquipment(x, v.id).has('wall')).map((v) => h`<button class="btn sm" data-act="cpEnvPick" data-id="${v.id}">📍 ${v.name}</button>`)}<button class="btn sm" data-act="cpEnvNew">＋ Ajouter ma salle</button>${x.activities.conditioning || ACTIVITIES.conditioning ? h`<button class="btn sm" data-act="cpSport" data-id="conditioning">💪 Plutôt du renforcement ici</button>` : ''}</div></div>` : ''}
     ${isClimb(c.sport) ? sysSelect(kindOf(c.sport)) : ''}
     <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>
     <span class="kicker">Temps disponible</span>
@@ -136,7 +180,7 @@ function vWhy() {
     detail = h`<div class="setmenu">${Object.entries(AIMS).map(([k, [ic, t, d]]) => h`<button class="setrow" data-act="cpSurAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${(c.surAim || 'any') === k ? '✓' : ''}</span></button>`)}</div>`;
   }
   return h`<div class="setmenu">${AIM.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : ''}</span></button>`)}</div>
-    ${aim === 'surprise' ? '' : objectiveCard()}${detail}
+    ${detail}
     <div class="card stack"><label>📝 Mon intention pour aujourd’hui <span class="tiny muted">(facultatif)</span><textarea data-change="cpIntentText" maxlength="240" rows="2" placeholder="Ex. « Aujourd’hui je veux performer le plus possible en voie »">${c.intentText || ''}</textarea></label>
       <p class="tiny muted">Elle sert à cette séance seulement : ce n’est pas un objectif de ton profil.</p>
       ${c.intentText ? (c.intentGoal ? h`<p class="tiny ok-t">✓ Aussi enregistrée comme objectif.</p>` : h`<button class="btn sm" data-act="cpIntentGoal">🎯 Enregistrer aussi comme objectif</button>`) : ''}</div>`;
@@ -159,10 +203,10 @@ function objectiveCard() {
       <div class="chips">${subs.map((x) => chip(sel(x.id), x.label, `data-act="cpObjSub" data-id="${x.id}"`))}</div>${prioRows(o.subIntents, 'cpObjPrio')}
       <span class="kicker">3 · À quel moment de la séance ?</span>
       <div class="chips">${Object.entries(WHEN).map(([k, l]) => chip((o.when || 'end') === k, l, `data-act="cpObjWhen" data-id="${k}"`))}</div>
-      <p class="tiny muted">${hint[o.when] || (o.when?.startsWith('ph:') ? 'Sur la phase que tu as choisie.' : hint.end)} À l’étape suivante, tu peux aussi le poser sur une phase précise.</p>` : ''}
+      <p class="tiny muted">${hint[o.when] || (o.when?.startsWith('ph:') ? 'Sur la phase que tu as choisie.' : hint.end)} Dans « Ta structure », tu peux aussi le poser sur une phase précise.</p>` : ''}
     ${o.family || (c.goalIds || []).length ? h`<button class="btn sm" data-act="cpStrat">🧭 Voir plusieurs chemins pour y arriver</button>` : ''}</div>`;
 }
-const objSet = (fn) => { const c = CP(); c.objective = c.objective || { family: '', subIntents: [], when: 'end' }; fn(c.objective); if (!c.objective.family) c.objective = null; keep(); render(); };
+const objSet = (fn) => { const c = CP(); c.objective = c.objective || { family: '', subIntents: [], when: 'end' }; fn(c.objective); c.objFromProfile = false; if (!c.objective.family) c.objective = null; keep(); render(); };
 ACT.cpObjFam = (el) => objSet((o) => { if (o.family !== el.dataset.id) o.subIntents = []; o.family = el.dataset.id; });
 ACT.cpObjSub = (el) => objSet((o) => { const id = el.dataset.id, l = o.subIntents || []; o.subIntents = l.some((x) => x.id === id) ? l.filter((x) => x.id !== id) : [...l, { id, prio: 3 }]; });
 ACT.cpObjPrio = (el) => objSet((o) => { o.subIntents = (o.subIntents || []).map((x) => (x.id === el.dataset.id ? { ...x, prio: Number(el.dataset.v) } : x)); });
@@ -254,7 +298,8 @@ ACT.cpFit = () => { const c = CP(), r = fitDurations(c.parts, c.minutes); if (!r
 /* ═════════ Étape 5 : propositions classées et expliquées, phase par phase ═════════ */
 function vContent() {
   const c = CP(); if (!c.result) buildNow();
-  return c.result ? vResult() : h`<div class="card"><p class="small warn-t">Impossible de préparer les propositions. Reviens à l’étape d’avant.</p></div>`;
+  const quick = c.quick && c.result ? h`<div class="card flat row wrapf"><span class="grow small">⚡ Voici ta séance. Change une partie si tu veux, ou :</span><button class="btn pri sm" data-act="cpQuickGo">✅ C’est bon, générer</button></div>` : '';
+  return c.result ? h`${quick}${vResult()}` : h`<div class="card"><p class="small warn-t">Impossible de préparer les propositions. Reviens à l’étape d’avant.</p></div>`;
 }
 /* ═════════ Étape 6 : améliorations proposées (jamais appliquées sans toi) ═════════ */
 function suggestionsNow() {
@@ -291,7 +336,7 @@ ACT.cpSugReset = () => { CP().ignored = []; keep(); render(); };
 ACT.cpSugEdit = (el) => {
   // Modifier : on ouvre la phase concernée dans l'éditeur de la structure.
   const c = CP(), x = suggestionsNow().find((y) => y.id === el.dataset.id), id = x?.patch?.find((o) => o.id)?.id;
-  c.step = 4; keep(); render(); window.scrollTo(0, 0);
+  c.step = SI.structure; keep(); render(); window.scrollTo(0, 0);
   const i = c.parts.findIndex((p) => p.id === id); if (i >= 0) setTimeout(() => editPart(i), 60);
 };
 ACT.cpUndo = () => {
@@ -375,19 +420,32 @@ function proposedPhases() {
 }
 ACT.cpStep = (el) => {
   const c = CP(), d = Number(el.dataset.d), next = Math.max(1, Math.min(NSTEPS, c.step + d));
-  if (d > 0 && c.step === 3 && (!c.partsTouched || c.partsFor !== partsKey())) { c.parts = proposedPhases(); c.partsFor = partsKey(); c.partsTouched = false; c.hist = []; c.changes = []; c.ignored = []; }
-  if (d > 0 && c.step === 3) c.parts = withObjective(normalizePhases(c.parts, c.sport));
-  if (d > 0 && c.step === 4) { c.result = null; c.generated = false; buildNow(); }
+  if (d > 0 && c.step <= SI.why && next >= SI.structure) freshStructure();
+  if (d > 0 && c.step === SI.structure) { c.result = null; c.generated = false; buildNow(); }
   if (next < NSTEPS) c.generated = false;
   c.step = next; keep(); render(); window.scrollTo(0, 0);
 };
+/** Ossature recalculée si les choix d'avant ont changé (jamais par-dessus une structure modifiée à la main). */
+function freshStructure() {
+  const c = CP();
+  if (!c.partsTouched || c.partsFor !== partsKey()) { c.parts = proposedPhases(); c.partsFor = partsKey(); c.partsTouched = false; c.hist = []; c.changes = []; c.ignored = []; }
+  c.parts = withObjective(normalizePhases(c.parts, c.sport));
+}
+/** ⚡ Proposer ma séance : structure + exercices tout de suite, affichés à l'étape « Propositions ». */
+ACT.cpQuick = () => {
+  const c = CP(); freshStructure(); c.result = null; c.generated = false; buildNow(); c.quick = true;
+  c.step = SI.content; keep(); render(); window.scrollTo(0, 0);
+};
+ACT.cpQuickGo = () => { const c = CP(); c.step = NSTEPS; keep(); window.scrollTo(0, 0); ACT.cpGenerate(); };
+ACT.cpEnvPick = (el) => { const c = CP(); c.envId = el.dataset.id; c.envPicked = true; c.sys = {}; keep(); render(); };
+ACT.cpEnvNew = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); };
 const partsKey = () => { const c = CP(); return JSON.stringify([c.objective?.family || '', c.level || 'modere', c.sport, c.minutes, c.aim, c.aim === 'grade' ? c.targetShown ?? c.target : c.aim === 'target' ? [c.tMetric, c.tValue] : '', c.goalIds, c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme]); };
-ACT.cpRestart = () => { const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; render(); window.scrollTo(0, 0); };
-ACT.cpSport = (el) => { const c = CP(); c.sport = el.dataset.id; c.result = null; c.target = null; if ((!isClimb(c.sport) && c.aim === 'grade') || (!sportFamily(c.sport) && c.aim === 'target')) c.aim = 'goals'; keep(); render(); };
+ACT.cpRestart = () => { const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; keep(); render(); window.scrollTo(0, 0); };
+ACT.cpSport = (el) => { const c = CP(); c.sport = el.dataset.id; c.result = null; c.target = null; placeFor(c); if ((!isClimb(c.sport) && c.aim === 'grade') || (!sportFamily(c.sport) && c.aim === 'target')) c.aim = 'goals'; keep(); render(); };
 ACT.cpForme = (el) => { CP().forme = el.dataset.id; keep(); render(); };
 ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id;
   // Réussir une cotation = un objectif de performance, à la fin par défaut (déplaçable ensuite).
-  if (c.aim === 'grade' && !c.objective) c.objective = { family: 'performance', subIntents: [{ id: 'performance.reussite', prio: 4 }], when: 'end' };
+  if (c.aim === 'grade' && (!c.objective || c.objFromProfile)) { c.objective = { family: 'performance', subIntents: [{ id: 'performance.reussite', prio: 4 }], when: 'end' }; c.objFromProfile = false; }
   keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };
@@ -489,7 +547,15 @@ ACT.cpWant = (el) => { const c = CP(), i = Number(el.dataset.i); c.want = { ...(
 INPUT.cpQ = (el) => { const c = CP(), i = Number(el.dataset.i); c.q = { ...(c.q || {}), [i]: el.value }; const pos = el.selectionStart; setTimeout(() => { optsSheet(i); const x = document.querySelector('#sheet input[data-input=cpQ]'); if (x) { x.focus(); try { x.setSelectionRange(pos, pos); } catch { /* rien */ } } }, 200); };
 CHG.cpAll = (el) => { const c = CP(), i = Number(el.dataset.i); c.freeAll = { ...(c.freeAll || {}), [i]: el.checked }; optsSheet(i); };
 CHG.cpBMin = (el) => { const c = CP(), p = c.built?.[Number(el.dataset.i)]; if (!p) return; p.minutes = Math.max(5, Math.min(180, Number(el.value) || p.minutes)); rebuild(); render(); };
-ACT.cpHelp = (el) => { const c = CP(); c.help = el.dataset.id; c.result = null; keep(); render(); };
+// Changer qui choisit les exercices repart de zéro pour les choix d'exercices : « Je compose » commence vide,
+// « L'app choisit » remet ses propositions (on le dit, rien n'est perdu en silence).
+ACT.cpHelp = (el) => {
+  const c = CP(), was = c.help || 'auto', now = el.dataset.id;
+  const had = was !== now && (c.built || []).some((p) => Array.isArray(p.pick));
+  if (was !== now) for (const p of c.built || []) delete p.pick;
+  c.help = now; c.result = null; keep(); render();
+  if (had) toast('Mode changé : les exercices choisis dans les parties repartent de zéro.', 4000);
+};
 ACT.cpExInfo = (el) => { const s = CP().result, e = s?.exercises.find((x) => x.id === el.dataset.id); if (e) openSheet(exerciseSheet(e, '', s)); };
 ACT.cpOptInfo = (el) => { const x = byId(el.dataset.id); if (x) openSheet(exerciseSheet({ ...x, libId: x.id }, h`<button class="btn" data-act="cpOpts" data-i="${el.dataset.i}">‹ Retour aux options</button>`), { wide: true }); };
 /** Résumé d'une partie « travail » : intensité, mouvement, cible. */
@@ -507,12 +573,28 @@ const dose = (e) => {
   const d = e.mode === 'time' ? (e.secMax > e.secMin ? `${t(e.secMin)}–${t(e.secMax)}` : t(e.secMin)) : e.repsMax > e.repsMin ? `${e.repsMin}–${e.repsMax}${u}` : `${e.repsMin}${u}`;
   return [e.group?.startsWith('cp-') ? '' : d, e.load, e.rest ? `repos ${t(e.rest)}` : ''].filter(Boolean).join(' · ');
 };
+/** « Faite pour toi » : ce qui, dans cette séance, vient vraiment de ton profil (faits seulement, rien d'inventé). */
+function forYou() {
+  const c = CP(), x = ctx(), env = envOf(), lv = levelFor(c.sport, x), a = assessment(x), out = [];
+  const usual = Number(S.settings.defaultMinutes) || 0;
+  out.push(`⏱ ${fmtMin(c.minutes)}${usual && usual === c.minutes ? ' : ta durée habituelle' : ''}.`);
+  const o = cleanObjective(c.objective); if (o) out.push(`🎯 Objectif : ${objectiveLabel(o)} · ${whenLabel(o, c.built || c.parts).toLowerCase()}.`);
+  const eq = [...availableEquipment(x, c.envId)];
+  out.push(`📍 ${env ? env.name : 'Sans lieu décrit'} : seulement des exercices faisables avec ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun matériel'}.`);
+  const zones = (c.zones || []).map((z) => AVOID_ZONES.find(([k]) => k === z)?.[1]?.replace(/^\S+\s/, '').toLowerCase()).filter(Boolean);
+  if (zones.length) out.push(`🛡️ À ménager : ${zones.join(', ')} — les exercices qui les chargent fort sont écartés.`);
+  out.push(`📊 Niveau : ${['débutant', 'intermédiaire', 'avancé'][lv.level] || 'débutant'} — ${lv.how}.`);
+  if (c.forme && c.forme !== 'ok') out.push(`💡 Ta forme du jour (${FORMES.find(([k]) => k === c.forme)?.[2]?.toLowerCase() || c.forme}) est prise en compte.`);
+  return h`<details class="card flat acc-b" open><summary><b class="small">✨ Faite pour toi</b></summary><ul class="clean tight small">${out.map((t) => h`<li>${t}</li>`)}</ul>
+    ${a.total && a.coverage < 50 ? h`<p class="tiny muted">L’app ne connaît que ${a.known} des ${a.total} repères utiles ${a.envies.length ? 'pour tes objectifs' : 'pour toi'} : <button class="linkish acc-t" data-act="allGo" data-to="profile/bilan">quelques tests</button> rendront tes séances plus justes.</p>` : ''}</details>`;
+}
 function vResult(final = false) {
   const c = CP(), s = c.result, sp = c.aim === 'surprise' && c.reasons?.length && c.help !== 'free', help = c.help || 'auto';
   const exLi = (e, i) => h`<li><button class="linkish" data-act="cpExInfo" data-id="${e.id}"><b>${e.name}</b> <span class="tiny muted">ⓘ</span></button>${e.sets > 1 ? ` × ${e.sets}` : ''}${!final && e.libId && i >= 0 ? h` <button class="btn sm ghost" data-act="cpAlt" data-i="${i}" data-id="${e.libId}" aria-label="Alternatives à ${e.name}">↔ Alternatives</button>` : ''}${dose(e) ? h`<div class="tiny acc-t">${dose(e)}</div>` : ''}${e.note ? h`<div class="tiny muted">${e.note}</div>` : ''}</li>`;
   const byPart = c.built ? c.built.map((p, i) => ({ p, i, label: partLabel(p, i, c.built), title: `${ROLES[p.role]?.[0] || ''} ${phaseName(p)}`, sub: actLabel(p.activity) })) : [...new Set(s.exercises.map((e) => e.part))].map((label) => ({ p: null, i: -1, label, title: label }));
   return h`<div class="card stack" id="cpresult"><h2 style="margin:0">${s.emoji} ${s.name}</h2>
     ${sp ? h`<div class="card flat acc-b"><b class="small">${AIMS[c.aimDone]?.[0] || '🎲'} Pourquoi cette surprise</b><ul class="clean tight small">${c.reasons.map((r) => h`<li>${r}</li>`)}</ul></div>` : ''}
+    ${forYou()}
     <p class="muted small">~${fmtMin(sessionMinutes(s))} · ${byPart.length} parties · ${help === 'guide' ? 'coche ce que tu veux dans chaque partie' : help === 'free' ? 'ajoute tes exercices dans chaque partie' : 'change le temps ou les exercices de chaque partie si tu veux'}</p>
     ${byPart.map(({ p, i, label, title, sub }) => { const ex = s.exercises.filter((e) => (p?.id && e.phase ? e.phase === p.id : e.part === label));
       return h`<div class="rpart"><div class="row"><b class="grow">${title}${sub ? h`<small class="tiny muted"> · ${sub}</small>` : ''}</b>${p ? h`<span class="unitbox"><input type="number" min="5" max="180" step="5" value="${p.minutes}" data-change="cpBMin" data-i="${i}" style="width:64px" aria-label="Durée de la partie"><em>min</em></span>` : ''}</div>
@@ -539,7 +621,7 @@ ACT.cpAltPick = (el) => {
   p.pick = [...new Set(cur.map((x) => (x === el.dataset.from ? el.dataset.id : x)))];
   closeSheet(); rebuild(); keep(); render(); toast('Exercice remplacé.');
 };
-ACT.cpSurprise = () => { closeSheet(); const c = CP(); c.aim = 'surprise'; c.result = null; c.step = Math.max(2, c.step || 1); keep(); go('library', 'climbplan'); };
+ACT.cpSurprise = () => { closeSheet(); const c = CP(); c.aim = 'surprise'; c.result = null; c.step = Math.max(SI.why, c.step || 1); keep(); go('library', 'climbplan'); };
 ACT.cpNew = () => { closeSheet(); const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; go('library', 'climbplan'); };
 ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
 /**
@@ -550,13 +632,13 @@ ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
 export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true } = {}) {
   closeSheet();
   const help = CP().help || 'auto'; S.cp = null; ls.set(KEY, {}); const c = CP(), x = ctx();
-  c.help = help; c.sport = sport || Object.keys(x.activities)[0] || 'conditioning'; c.minutes = Math.max(10, Math.min(240, minutes || S.settings.defaultMinutes || 45));
+  c.help = help; c.sport = sport || c.sport || Object.keys(x.activities)[0] || 'conditioning'; placeFor(c); c.minutes = Math.max(10, Math.min(240, minutes || S.settings.defaultMinutes || 45));
   c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = c.goalIds.length || intents.length || c.focus ? 'goals' : 'none'; if (forme) c.forme = forme;
-  if (auto) { c.parts = proposedPhases(); c.partsFor = partsKey(); c.partsTouched = false; c.result = null; c.built = null; buildNow(); c.step = NSTEPS; c.generated = false; } else c.step = 2;
+  if (auto) { c.parts = proposedPhases(); c.partsFor = partsKey(); c.partsTouched = false; c.result = null; c.built = null; buildNow(); c.step = NSTEPS; c.generated = false; } else c.step = SI.base;
   keep(); go('library', 'climbplan'); window.scrollTo(0, 0);
 }
 ACT.cpAgain = () => { const c = CP(); c.seed = (c.seed || 1) + 1; if (isClimb(c.sport)) { c.parts = proposeParts(); c.partsFor = partsKey(); } c.result = null; buildNow(); keep(); render(); };
-CHG.cpEnv = (el) => { if (el.value === '__new') { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); return; } CP().envId = el.value; CP().sys = {}; keep(); render(); };
+CHG.cpEnv = (el) => { if (el.value === '__new') { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); return; } CP().envId = el.value; CP().envPicked = true; CP().sys = {}; keep(); render(); };
 CHG.cpSys = (el) => { CP().sys = { ...CP().sys, [el.dataset.k]: el.value }; CP().target = null; keep(); render(); };
 ACT.cpKind = (el) => { CP().kind = el.dataset.id; CP().target = null; keep(); render(); };
 ACT.cpTarget = (el) => { CP().target = Number(el.dataset.id); keep(); render(); };
@@ -787,7 +869,7 @@ const dnaList = () => { try { return itemsOf('sdna').filter((x) => !x.deleted); 
 const modList = () => { try { return itemsOf('smodule').filter((x) => !x.deleted); } catch { return []; } };
 const parseJson = (t) => { try { return JSON.parse(t || '{}'); } catch { return null; } };
 ACT.cpDnaSave = async () => {
-  const c = CP(), name = prompt('Nom de cette structure (ex. « Préparation voie ») :', objectiveLabel(cleanObjective(c.objective)).replace(/^\S+\s/, '') || 'Ma structure'); if (!name) return;
+  const c = CP(), name = await askText('Nom de cette structure', { value: objectiveLabel(cleanObjective(c.objective)).replace(/^\S+\s/, '') || 'Ma structure', placeholder: 'Ex. « Préparation voie »', ok: 'Enregistrer', max: 60 }); if (!name) return;
   const d = dnaFromPhases(c.parts, name); putItem('sdna', uid(), { name: d.name, sport: c.sport, json: JSON.stringify(d), summary: d.summary }); toast(`Structure « ${d.name} » enregistrée (${d.summary}).`, 4000);
 };
 ACT.cpDnaOpen = () => {
@@ -801,9 +883,9 @@ ACT.cpDnaUse = (el) => {
   const r = phasesFromDna(d, c.minutes); if (!r.ok) return toast(r.error, 4500);
   pushHist(); c.parts = withObjective(r.phases); c.partsTouched = true; c.result = null; keep(); closeSheet(); render(); toast(`Structure « ${x.name} » générée pour ${fmtMin(c.minutes)}.`);
 };
-ACT.cpModSave = (el) => {
+ACT.cpModSave = async (el) => {
   const c = CP(), p = c.parts[Number(el.dataset.i)]; if (!p) return;
-  const name = prompt('Nom du module (ex. « Bloc technique dalle — 25 min ») :', `${phaseName(p)} — ${fmtMin(p.minutes)}`); if (!name) return;
+  const name = await askText('Nom du module', { value: `${phaseName(p)} — ${fmtMin(p.minutes)}`, placeholder: 'Ex. « Bloc technique dalle — 25 min »', ok: 'Enregistrer', max: 60 }); if (!name) return;
   const m = moduleFromPhases([p], name); putItem('smodule', uid(), { name: m.name, sport: c.sport, json: JSON.stringify(m), minutes: m.minutes }); toast(`Module « ${m.name} » enregistré.`);
 };
 ACT.cpModOpen = () => {
@@ -832,13 +914,13 @@ ACT.cpStrat = () => {
       <button class="btn sm pri" data-act="cpStratUse" data-id="${s.id}">Choisir ce chemin</button></div>`)}
     <button class="btn" data-act="closeSheet">Fermer</button></div>`, { wide: true });
 };
-ACT.cpStratUse = (el) => {
+ACT.cpStratUse = async (el) => {
   const c = CP(), s = (S.cpStrats || []).find((x) => x.id === el.dataset.id); if (!s) return;
   const r = phasesFromDna(s.dna, c.minutes); if (!r.ok) return toast(r.error, 4500);
-  const why = prompt('Pourquoi ce chemin ? (facultatif, sert à tes futures recommandations)', '') || '';
+  const why = (await askText('Pourquoi ce chemin ?', { detail: 'Facultatif : ça sert à tes futures recommandations.', ok: 'Continuer', cancel: 'Passer', max: 160 })) || '';
   c.parts = withObjective(r.phases); c.partsTouched = true; c.partsFor = partsKey(); c.result = null; c.strategy = s.id;
   remember('strategy', `Chemin « ${s.title} »`, { reason: why, ref: s.id }); keep(); closeSheet();
-  c.step = 4; keep(); render(); window.scrollTo(0, 0); toast(`Chemin « ${s.title} » : structure prête à régler.`);
+  c.step = SI.structure; keep(); render(); window.scrollTo(0, 0); toast(`Chemin « ${s.title} » : structure prête à régler.`);
 };
 
 /* Séance inhabituelle (avant génération) */
@@ -882,5 +964,5 @@ ACT.cpEditApply = () => {
   pushHist(); const picks = Object.fromEntries((c.built || []).map((p) => [p.id, p.pick]));
   c.parts = pl.phases.map(({ pick, ...p }) => p); c.built = pl.phases.map((p) => ({ ...p, pick: picks[p.id] })); c.partsTouched = true;
   c.changes = [...(c.changes || []), ...pl.changes]; remember('edit', pl.changes.join(' ; ').slice(0, 200), { reason: S.cpEdit.text });
-  c.generated = false; if (c.step >= 5) rebuild(); keep(); closeSheet(); render(); toast('Modifications appliquées. « ↶ Revenir » annule.');
+  c.generated = false; if (c.step >= SI.content) rebuild(); keep(); closeSheet(); render(); toast('Modifications appliquées. « ↶ Revenir » annule.');
 };

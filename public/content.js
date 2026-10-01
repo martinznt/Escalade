@@ -178,25 +178,40 @@ export async function seanceToCatalog(s) {
 ACT.seanceToCatalog = (el) => { const s = S.seances.items.find((x) => x.id === el.dataset.id); if (s) seanceToCatalog(s); };
 
 /* ───────── Intentions et formats (écran administrateur) ───────── */
+// Admin › Modifier l'app sans code : trois pages claires (contenu, textes et apparence, ce qui a été modifié).
+const CHANGE_KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', hint: '💡 Raccourci', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
+export const globalChanges = () => GL.items.slice().sort((a, b) => b.updatedAt - a.updatedAt);
+/** Contenu de l'app : où modifier chaque type, et les intentions par sport. */
 export function vAdminContent() {
   const act = (S.admAct ||= Object.keys(SPORT_INTENTS)[0]);
   const list = SPORT_INTENTS[act] || [];
-  const changes = GL.items.slice().sort((a, b) => b.updatedAt - a.updatedAt);
-  const title = (g) => g.hidden ? `Masqué : ${g.id}` : g.data?.name || g.data?.label || g.data?.title || g.data?.q || (g.data?.to ? `« ${g.data.from} » → « ${g.data.to} »` : '') || (g.kind === 'layout' ? 'Mise en page de base' : g.id);
-  const KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', hint: '💡 Raccourci', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
-  return h`<div class="card"><h3>🌍 Contenu pour tout le monde</h3><p class="small muted">Sur chaque exercice ou séance prête, « ✏️ Modifier » te demande si c’est pour toi ou pour tout le monde. Ici : les intentions par sport, et tout ce qui a été changé.</p>
-      <div class="row wrapf"><button class="btn sm" data-act="exNewGlobal">＋ Exercice pour tout le monde</button><button class="btn sm" data-act="allGo" data-to="library/catalog">🗂 Séances prêtes</button></div></div>
-    <div class="card"><h3>🛠 Modifier l’app sans code</h3>${menuList([
-      ['textModeOn', '', '✏️', 'Modifier les textes', 'Touche n’importe quel texte de l’app et réécris-le pour tout le monde.'],
-      ['announceNew', '', '📣', 'Écrire une annonce', 'Un message ou une note de mise à jour, envoyé en notification à tout le monde.'],
-      ['layEditAt', '', '🧩', 'Mise en page pour tous', 'Sur chaque page, ✏️ en haut puis « Pour tout le monde ». Ce que tu masques est masqué pour tous.', 'home/dash'],
-      ['allGo', '', '❓', 'Questions fréquentes et sources', 'Dans Aide : ✏️ sur chaque question et chaque source, ou ＋ pour en ajouter.', 'settings/help'],
-      ['hintNew', '', '💡', 'Ajouter un raccourci', 'Une indication cliquable sur une page, qui mène à une autre (ex. « Note ton max ici »).'],
-    ])}</div>
-    <div class="card"><h3>🧭 Intentions par sport</h3><div class="chips">${Object.keys(SPORT_INTENTS).map((k) => h`<button type="button" class="chip ${k === act ? 'on' : ''}" data-act="admAct" data-v="${k}">${ACTIVITIES[k]?.emoji || ''} ${ACTIVITIES[k]?.label || k}</button>`)}</div>
+  return h`<p class="small muted">Chaque modification « pour tout le monde » est versionnée et annulable. Sur une fiche, ✏️ Modifier te demande si c’est pour toi ou pour tout le monde.</p>
+    ${menuList([
+      ['allGo', '', '💪', 'Exercices', 'Ouvre un exercice puis ✏️ Modifier ; ou crée-en un pour tout le monde', 'library/exercises'],
+      ['exNewGlobal', '', '＋', 'Nouvel exercice pour tout le monde', 'Fiche complète : consignes, erreurs, matériel, capacités'],
+      ['allGo', '', '🗂', 'Séances prêtes', 'Ouvre une séance du catalogue puis ✏️ Modifier', 'library/catalog'],
+      ['allGo', '', '❓', 'Questions fréquentes et sources', 'Dans Aide : ✏️ sur chaque question et chaque source, ＋ pour en ajouter', 'settings/help'],
+      ['allGo', '', '🧗', 'Cotations et styles', 'Dans Profil › Mes sports : crée un système ou un style, puis « 🌍 Pour tout le monde »', 'profile/activities'],
+    ])}
+    <div class="card"><h3>🧭 Intentions par sport</h3><p class="tiny muted">Ce que les membres peuvent choisir de travailler dans « Créer une séance ».</p><div class="chips">${Object.keys(SPORT_INTENTS).map((k) => h`<button type="button" class="chip ${k === act ? 'on' : ''}" data-act="admAct" data-v="${k}">${ACTIVITIES[k]?.emoji || ''} ${ACTIVITIES[k]?.label || k}</button>`)}</div>
       ${list.map((x) => h`<div class="item"><div class="grow"><b>${x.emoji} ${x.label}</b>${x.globalEdit ? h` <span class="tag">🌍 modifiée</span>` : ''}</div><button class="btn sm ic" data-act="intEdit" data-id="${x.id}" aria-label="Modifier">✏️</button><button class="btn sm ic danger" data-act="intHide" data-id="${x.id}" aria-label="Masquer">🙈</button></div>`)}
-      <button class="btn sm" data-act="intEdit" data-id="">＋ Ajouter une intention</button></div>
-    <div class="card"><h3>📝 Changements pour tout le monde (${changes.length})</h3>${changes.length ? changes.slice(0, 60).map((g) => h`<div class="item"><div class="grow"><b class="small">${title(g)}</b><div class="tiny muted">${KIND[g.kind]} · ${new Date(g.updatedAt).toLocaleDateString('fr-FR')}${g.by ? ` · ${g.by}` : ''}</div></div><button class="btn sm ghost" data-act="glReset" data-k="${g.kind}" data-id="${g.id}">↺ Annuler</button></div>`) : h`<p class="small muted">Rien n’a encore été changé.</p>`}</div>`;
+      <button class="btn sm" data-act="intEdit" data-id="">＋ Ajouter une intention</button></div>`;
+}
+/** Textes et apparence : ce qui se change directement à l'écran. */
+export function vAdminLook() {
+  return h`<p class="small muted">Ces changements s’appliquent à tout le monde. Chacun reste annulable dans « Tout ce qui a été modifié ».</p>${menuList([
+    ['textModeOn', '', '✏️', 'Modifier les textes', 'Touche n’importe quel texte de l’app et réécris-le pour tout le monde'],
+    ['layEditAt', '', '🧩', 'Mise en page pour tous', 'Sur chaque page, ✏️ en haut puis « Pour tout le monde » : ordre, taille, blocs masqués', 'home/dash'],
+    ['hintNew', '', '💡', 'Ajouter un raccourci', 'Une indication cliquable sur une page, qui mène à une autre'],
+    ['announceNew', '', '📣', 'Écrire une annonce', 'Un message à tous, envoyé en notification'],
+  ])}`;
+}
+/** Tout ce qui a été modifié pour tout le monde, avec « Annuler » ligne par ligne. */
+export function vAdminChanges() {
+  const changes = globalChanges();
+  const title = (g) => g.hidden ? `Masqué : ${g.id}` : g.data?.name || g.data?.label || g.data?.title || g.data?.q || (g.data?.to ? `« ${g.data.from} » → « ${g.data.to} »` : '') || (g.kind === 'layout' ? 'Mise en page de base' : g.id);
+  return h`<p class="small muted">${changes.length} élément${changes.length > 1 ? 's' : ''} différent${changes.length > 1 ? 's' : ''} du contenu d’origine. « Annuler » remet l’élément comme à l’origine (versionné, visible dans le Journal).</p>
+    <div class="card">${changes.length ? changes.slice(0, 200).map((g) => h`<div class="item"><div class="grow"><b class="small">${title(g)}</b><div class="tiny muted">${CHANGE_KIND[g.kind] || g.kind} · ${new Date(g.updatedAt).toLocaleDateString('fr-FR')}${g.by ? ` · ${g.by}` : ''}</div></div><button class="btn sm ghost" data-act="glReset" data-k="${g.kind}" data-id="${g.id}">↺ Annuler</button></div>`) : h`<p class="small muted">Rien n’a encore été changé.</p>`}</div>`;
 }
 ACT.admAct = (el) => { S.admAct = el.dataset.v; render(); };
 /* Raccourcis ajoutés par un administrateur : sur une page, une indication qui mène à une autre (pour tout le monde). */

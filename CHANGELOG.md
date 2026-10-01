@@ -1,5 +1,85 @@
 # CHANGELOG — Séances entraînement
 
+## 8.28.0 — Simple mais précis : l'essentiel d'abord, un bilan physique selon tes objectifs, un niveau de séance factuel
+
+Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures relues écran par écran) : `docs/AUDIT_8_28.md` (19 défauts relevés). Plan du niveau factuel : `docs/PLAN_NIVEAU_SEANCE.md`.
+
+### Créer une séance : simple par défaut, précise quand tu veux
+- **Étape 1 « L'essentiel »** (6 étapes au lieu de 7) : sport, lieu, temps, forme et **objectif de la séance** (quoi → précisément → quand) sur un seul écran, **pré-remplis d'après ton profil** : durée habituelle (avant : 2 h quel que soit le profil), lieu qui a un mur pour l'escalade, zones à ménager, objectif tiré de tes envies (force → au début, endurance → à la fin). Tout reste modifiable.
+- **⚡ Proposer ma séance** : structure et exercices tout de suite ; « ✅ C'est bon, générer » ou ajuster. Les étapes suivantes (préciser, structure, propositions, améliorations, validation) restent là pour qui veut tout régler.
+- « Qui choisit ? » et « Niveau de structure » passent dans **🎛️ Plus de contrôle** (replié).
+- **Lieu incohérent signalé tout de suite** : séance d'escalade à un lieu sans mur → alerte sous « Lieu », avec tes lieux qui ont un mur, « Ajouter ma salle » ou « Plutôt du renforcement ici » ; le bouton ⚡ attend un lieu possible.
+- **Cotations proposées corrigées** : l'écart au maximum était compté en double sur les échelles à « + » (un grimpeur 6A recevait 19 blocs en 3 et une « force » à partir du 4). Un cran = un niveau : facile 4–4+, intense 5 → 6A.
+- **Propositions par phase selon ton niveau** : un exercice dont le niveau conseillé dépasse le tien n'est plus proposé, et le nombre écarté est indiqué.
+
+### Profil : un bilan physique selon TES objectifs
+- **🩺 Mon bilan physique** (Profil) : pour chaque envie (progresser en escalade, force, endurance, souplesse, forme, figure, poids, santé), les repères utiles, ce que l'app sait déjà (valeur, source, ancienneté, repère indicatif s'il existe), ce qui manque, et **comment faire chaque test**.
+- **Zones à ménager respectées** : doigts à ménager → le test sur réglette est remplacé par une suspension sur barre (et c'est dit) ; épaules → pas de test de dips ; genoux → pas de pistol squat.
+- **Tests guidés** : un test par écran (protocole, échauffement conseillé, valeur, « je ne sais pas » ou passer) ; les valeurs sont enregistrées comme **mesurées**.
+- **Ce que l'app en déduit** : uniquement depuis les repères connus ; et le niveau réellement utilisé pour tes séances, sport par sport, avec sa raison.
+- **Objectifs précis proposés** depuis ta dernière valeur (ex. 8 tractions → 10 ; 6A → 6A+) ; jamais de cible de poids, de tour de taille ou de cœur au repos proposée d'office.
+- **Questionnaire** : les repères demandés dépendent des objectifs choisis (4 au plus), au lieu de toujours tractions et pompes.
+- **Nouvelles mesures** : cœur au repos, test de 12 minutes, tour de taille, mains dans le dos (souplesse des épaules) — sans repère de niveau inventé.
+- **« À mesurer »** suit tes objectifs (avant : les deux premières mesures de chaque sport, ex. « tractions archer »), avec le protocole.
+
+### Administration : discuter avec l'assistant du site, et « Modifier l'app sans code » réorganisé
+- **💬 Discuter avec l'assistant du site** (Admin) : une conversation en français avec l'IA du serveur (Workers AI — aucun abonnement extérieur nécessaire). Elle répond, pose ses questions s'il manque une information, et **range ses propositions dans un brouillon du Studio** : différences champ par champ, « pourquoi », puis « Relire et publier ». La suite de la conversation complète le même brouillon.
+  - Elle peut : exercices, intentions de séance, questions fréquentes, annonces, raccourcis, styles, textes de l'app (avec le texte exact). Une modification partielle (« 4 séries aux tractions ») garde le reste de la fiche.
+  - Elle ne peut pas : publier, lire les données des membres, ni changer le code. Ce qui demande du code est dit clairement, avec une **demande prête à copier** pour un développeur (ou Claude).
+  - Tout passe par la validation du serveur (types, identifiants, champs, contenu actif refusé à la publication) ; ce qui est refusé est listé.
+- **Admin en 3 groupes clairs**, une ligne par outil, chacun sur sa page :
+  - *Modifier l'app sans code* : Contenu de l'app (où modifier chaque type + intentions par sport) · Textes et apparence (textes, mise en page pour tous, raccourcis, annonces) · Brouillons et publication (Studio) · Tout ce qui a été modifié (annulable ligne par ligne).
+  - *Les membres* : Propositions · Signalements · Comptes et rôles · Bibliothèque commune.
+  - *Surveiller et comprendre* : Santé des données · Laboratoire · Maintenance · Propositions de code · Notifications de mise à jour · Journal.
+  - Avant : une seule longue page qui empilait tout. Les outils affichés dépendent des rôles (vérifiés par le serveur).
+
+### Créer une séance : utile tout de suite
+- **✨ Faite pour toi**, en tête de la séance proposée : ce qui vient réellement de ton profil (durée habituelle, objectif et son moment, lieu et matériel, zones ménagées, niveau pris en compte et sa raison, forme du jour) ; et, si l'app te connaît mal, le lien vers les tests du bilan.
+- Correction : passer de « L'app choisit » à « Je compose moi-même » gardait les exercices choisis avant ; changer qui choisit repart maintenant de zéro (et le dit).
+
+### Exercices vraiment adaptés
+- **Niveau par capacité** : le niveau pris en compte pour un exercice est celui de sa capacité principale quand il est connu (fort en tirage mais débutant en poussée → tractions avancées et pompes accessibles), au lieu d'une moyenne ; jamais au-dessus du plafond de forme, pas en mode léger.
+
+### Niveau d'une séance : factuel
+- Niveau conseillé = **le prérequis le plus élevé** (fiches d'exercices, cotations écrites, repère de l'auteur), nommé : « Avancé, parce que « Traction à un bras » … ». Un seul exercice avancé suffit.
+- Chaque critère est marqué **connu / estimé / inconnu** ; « Ce que l'app ne sait pas » est listé ; **fiabilité** haute / moyenne / faible.
+- Plus aucune valeur manquante remplie par défaut (avant : difficulté 2/5, 8 répétitions, 30 s) ; plus de « score » décimal.
+- Parties de grimpe : cotation lue dans le nom et convertie (échelle de référence) ; une cotation personnelle sans correspondance est dite « non reconnue ».
+
+### Cohérence
+- Envies du questionnaire reconnues partout : plus de « 🎯 Fixe-toi un objectif » ni « 0 objectif » quand tu en as choisi ; à la place, « 🩺 Quelques tests simples ».
+- Plus de raccourcis par-dessus le questionnaire.
+- « Séance découverte… sans présumer de ton niveau » seulement si l'app ne sait vraiment rien.
+- Profil : plus de « Ajoute une ou deux mesures » quand il y en a ; message juste quand tes capacités connues sont au même niveau.
+- Date de l'accueil : « Mercredi 30 septembre » (plus de majuscule au mois).
+- Même nombre d'exercices partout (exercices de travail).
+- Les 6 fenêtres natives du navigateur (`prompt`) sont remplacées par la boîte de dialogue de l'app.
+- Brouillon « En cours : étape x/5 » faux → numéro réel ; anciens brouillons (7 étapes) renumérotés.
+
+### Fichiers
+- **Ajoutés** : `public/assess.js`, `public/views-assistant.js`, `server/assistant.js`, `tests/profile828.test.mjs`, `tests/assistant.test.mjs`, `docs/AUDIT_8_28.md`, `docs/PLAN_NIVEAU_SEANCE.md`.
+- **Modifiés** : `public/estimate.js` (réécrit), `public/views-climbplan.js`, `public/views-profile.js`, `public/views-setup.js`, `public/views-library.js`, `public/views-progress.js`, `public/views-studio.js`, `public/views-settings.js`, `public/content.js`, `public/news.js`, `public/state.js`, `public/generator.js`, `public/phaseplan.js`, `public/climbplan.js`, `public/brain.js`, `public/hints.js`, `public/model.js`, `public/ui.js`, `public/style.css`, `public/i18n.js`, `public/sw.js`, `worker.js`, `tests/e2e.mjs`, `tests/data.test.mjs`, `tests/hints.test.mjs`.
+
+### Migrations
+- **Aucune** migration D1. Nouvelles mesures = nouvelles métriques natives ; les valeurs vont dans `user_items` (collection `perf`) comme avant. Les anciens brouillons de création sont renumérotés à l'ouverture.
+
+### Fonctions réutilisées / nouvelles
+- **Réutilisées** : Studio (`csCreate`, `csLoad`, `cleanChange`, `cleanGlobal`, `diffChange`, `currentOf`), `extractJson`, limites de débit, journal d'audit ; `capacityState`, `levelFor`, `candidates`, `proposeForPhase`, `placeObjective`, `toReference`, `levelFromReference`, `availableEquipment`, `putItem` / outbox, `testReminders` (rebranché), `METRICS` (tests existants).
+- **Nouvelles** : `findContext`, `buildAssistant`, `cleanAssistant`, `mergeItems` (server/assistant.js), route `POST /api/admin/assistant` (rôle contenu) ; `vAssistant`, `vAdminLook`, `vAdminChanges`, `vAdminBugs`, `vAdminPush`, `forYou` ; `batteryFor`, `assessment`, `conditionFacts`, `nextStep`, `suggestedGoals`, `guidedTests` (assess.js) ; `exerciseLevel` (generator.js) ; `askText` (ui.js) ; `prefill`, `placeFor`, `freshStructure`, `vBase` (créateur) ; `vBilan` (profil).
+
+### Déploiement / retour arrière
+- Déployer comme d'habitude ; aucune étape de base de données.
+- Retour arrière : redéployer 8.27.0. Les mesures enregistrées (cœur au repos, 12 minutes, tour de taille, mains dans le dos) restent en base ; l'ancienne version les garde sans les afficher dans ses listes natives. Un brouillon ouvert en 8.28 puis relu en 8.27 garde son numéro d'étape 8.28 (décalé d'un cran) : « Recommencer » le remet à zéro.
+
+### Limites et risques
+- L'assistant du site utilise le modèle de Workers AI (Llama 3.3 70B par défaut) : moins capable que Claude, il peut mal comprendre ou proposer une modification inutile. C'est pourquoi rien n'est publié sans ta relecture. Testé ici avec des réponses simulées ; sa qualité réelle n'est pas vérifiable dans ce dépôt.
+- Il ne modifie pas encore les séances prêtes, les formats, les cotations ni la mise en page (formats trop complexes pour une proposition fiable) : ces types restent modifiables à la main.
+- Niveau de séance : une charge ajoutée écrite dans un exercice (« +10 kg ») n'est pas encore lue ; seule la cotation l'est.
+- Les repères de niveau (tiers) restent des repères indicatifs courants, pas des normes scientifiques par âge ou sexe ; les nouvelles mesures de santé n'en ont pas, volontairement.
+- Le pré-remplissage de l'objectif part de la première envie qui correspond ; il est signalé et modifiable.
+- La comparaison au ressenti des autres membres (bibliothèque commune) n'est **pas** faite : elle demande ta décision (données partagées, même anonymes).
+- Tests sur Chromium (320 / 390 / 768 px) ; pas sur de vrais téléphones.
+
 ## 8.27.0 — V2 : construire une séance en chaîne de réglages, intelligence explicable, administration outillée
 
 Base : 8.26.0. Audit préalable (existant / à étendre / nouveau) : `docs/V2_AUDIT.md`. Aucune fonction existante n'a été remplacée : le créateur, le modèle de phase, le moteur de propositions et le Studio de 8.26 ont été étendus.

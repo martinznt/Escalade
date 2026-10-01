@@ -22,31 +22,34 @@ import { allPlaces, placeStats, kindOfEnv, placesOf, KIND_LABEL } from './places
 import { celebrate } from './fx.js';
 import { capMastery, transfers, relationMap, estimatedFormats, MASTERY } from './knowledge.js';
 import { strategies } from './strategy.js';
+import { assessment, conditionFacts, suggestedGoals, guidedTests, ENVIES, ZONE_WORD } from './assess.js';
+import { levelFor } from './generator.js';
 
-const SUBS = [['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
-const TILES = { analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
+const SUBS = [['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const TILES = { bilan: ['🩺', 'Mon bilan physique', 'ce que l’app sait de ta condition, tests à faire'], analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
   climbing: ['🧗', 'Carnet', 'blocs, voies, pyramide'], goals: ['🎯', 'Objectifs', 'figures, projets d’escalade'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 /** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
-const GROUPS = [['Moi', ['body', 'activities', 'goals', 'equipment']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['analyse']], ['Partager', ['public']]];
+const GROUPS = [['Moi', ['bilan', 'body', 'activities', 'goals', 'equipment']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['analyse']], ['Partager', ['public']]];
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
   if (sub === 'home') return vHub();
   // Préférences : avec « Mon corps » ; capacités et « pourquoi » : dans « Mon analyse ».
   if (sub === 'prefs') { setTimeout(() => go('profile', 'body'), 0); return ''; }
   if (sub === 'map' || sub === 'understand') { const [ic, title] = TILES[sub]; return h`${subHead('profSub', 'analyse', 'Mon analyse', `${ic} ${title}`)}${(sub === 'map' ? vMap : vUnderstand)()}`; }
-  const views = { analyse: vAnalyseHub, body: () => h`${vBody()}<span class="kicker">❤️ Mes préférences</span>${vPrefs()}`, understand: vUnderstand, map: vMap, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
+  const views = { analyse: vAnalyseHub, body: () => h`${vBody()}<span class="kicker">❤️ Mes préférences</span>${vPrefs()}`, understand: vUnderstand, map: vMap, bilan: vBilan, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
   const [ic, title] = TILES[sub];
   return h`${subHead('profSub', 'home', 'Profil', `${ic} ${title}`)}${views[sub]()}`;
 }
 /* ═════════ Accueil du profil : l'essentiel en un coup d'œil, puis des tuiles ═════════ */
 /** Profil à compléter : ce qui rend les séances plus justes, chaque ligne mène à l'endroit où le faire. Disparaît une fois complet. */
 function completeCard(c, acts, goals, climbing) {
+  const envies = assessment(c).envies;
   const items = [
     [!acts.length, '🏅', 'Tes sports', 'profile/activities'],
     [!c.envs.length, '📍', 'Ton lieu (salle, falaise, maison…)', 'profile/equipment'],
     [c.envs.length && !c.envs.some((e) => e.equipment?.length), '🧰', 'Le matériel de ton lieu', 'profile/equipment'],
     [climbing && !c.perfs.some((p) => ['max_bloc', 'max_voie'].includes(p.metricId) && !p.unknown), '📏', 'Ton niveau max en escalade', 'profile/perfs'],
-    [!goals.length, '🎯', 'Un objectif', 'profile/goals'],
+    [!goals.length && !envies.length, '🎯', 'Un objectif', 'profile/goals'],
     [!item('config', 'body')?.age && !item('config', 'body')?.weight, '🫀', 'Ton corps (âge, forme)', 'profile/body'],
   ], left = items.filter((x) => x[0]), done = items.length - left.length;
   if (!left.length) return '';
@@ -56,17 +59,19 @@ function completeCard(c, acts, goals, climbing) {
 function vHub() {
   const c = ctx(), acts = Object.values(c.activities), st = profileCapacities(c), sw = strengthsWeaknesses(st), goals = activeGoals(c);
   const known = st.filter((x) => x.level != null).length;
-  const counts = { understand: known ? `${known} capacité${known > 1 ? 's' : ''}` : '', activities: acts.length || '', perfs: c.perfs.filter((p) => !p.unknown).length || '', goals: `${goals.length || 0} en cours${doneGoals(c.goals).length ? ` · 🏆 ${doneGoals(c.goals).length}` : ''}`, equipment: c.envs.length || '' };
+  const bil = assessment(c), envies = bil.envies;
+  const counts = { bilan: bil.total ? `${bil.known}/${bil.total} repères` : '', understand: known ? `${known} capacité${known > 1 ? 's' : ''}` : '', activities: acts.length || '', perfs: c.perfs.filter((p) => !p.unknown).length || '', goals: `${goals.length || 0} en cours${doneGoals(c.goals).length ? ` · 🏆 ${doneGoals(c.goals).length}` : ''}`, equipment: c.envs.length || '' };
   const climbing = acts.some((a) => a.id.startsWith('climbing'));
   const tiles = Object.entries(TILES).filter(([k]) => k !== 'climbing' || climbing);
   const pill = (x, cls) => h`<button class="chip ${cls}" data-act="capOpen" data-id="${x.capId}">${x.label}</button>`;
   return h`<section class="card hero phero"><div class="row"><div class="avatar">${acts[0]?.emoji || '🙂'}</div><div class="grow"><h1>${S.user.guest ? 'Mon profil' : S.user.username}</h1>
       <div class="chips">${acts.length ? acts.map((a) => h`<span class="chip static">${a.emoji} ${a.label}</span>`) : h`<button class="chip" data-act="setupStart" data-id="quiz">＋ Choisir mes sports</button>`}</div></div></div>
-    <div class="stats"><span>🏋️ ${c.history.length} séance${c.history.length > 1 ? 's' : ''}</span><span>🎯 ${goals.length} objectif${goals.length > 1 ? 's' : ''}</span><span>📏 ${c.perfs.filter((p) => !p.unknown).length} mesure(s)</span></div></section>
+    <div class="stats"><span>🏋️ ${c.history.length} séance${c.history.length > 1 ? 's' : ''}</span><span>🎯 ${goals.length ? `${goals.length} objectif${goals.length > 1 ? 's' : ''}` : envies.length ? `${envies.length} envie${envies.length > 1 ? 's' : ''}` : '0 objectif'}</span><span>📏 ${c.perfs.filter((p) => !p.unknown).length} mesure(s)</span></div></section>
     ${sw.strengths.length || sw.weaknesses.length ? h`<div class="grid2 sw2">
       <section class="card ok-b"><span class="kicker ok-t">💪 Tes points forts</span><div class="chips">${sw.strengths.length ? sw.strengths.slice(0, 3).map((x) => pill(x, 'okc')) : h`<span class="small muted">Bientôt…</span>`}</div></section>
       <section class="card warn-b"><span class="kicker warn-t">🌱 À travailler</span><div class="chips">${sw.weaknesses.length ? sw.weaknesses.slice(0, 3).map((x) => pill(x, 'warnc')) : h`<span class="small muted">Rien de flagrant</span>`}</div></section></div>`
-      : h`<section class="card flat row"><span class="grow small">🧩 Ajoute une ou deux mesures pour voir tes points forts.</span><button class="btn sm pri" data-act="profSub" data-id="perfs">Ajouter</button></section>`}
+      : known ? h`<section class="card flat row"><span class="grow small">🧩 Tes capacités connues sont au même niveau : pas de point fort ni faible marqué pour l’instant. Chaque test en plus affine l’image.</span></section>` : ''}
+    ${bilanCard(bil)}
     ${completeCard(c, acts, goals, climbing)}
     ${GROUPS.map(([title, ids]) => { const list = tiles.filter(([k]) => ids.includes(k)); return list.length ? h`<span class="kicker">${title}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; })}`;
 }
@@ -760,3 +765,69 @@ ACT.pubCopy = async (el) => {
     toast('Copie indépendante enregistrée'); go('library', 'seance', s.id);
   } catch (e) { toast(e.offline ? 'Connexion requise.' : e.message); }
 };
+
+/* ═════════ Mon bilan physique : ce que l'app sait de ta condition, selon TES objectifs ═════════ */
+const STATE_TXT = (r) => (r.state === 'known' ? `${r.value} · ${r.source}${r.age ? ` · il y a ${r.age} j` : ''}` : r.state === 'old' ? `${r.value} · il y a ${r.age} j (à refaire)` : r.state === 'unknown' ? 'tu ne sais pas encore' : 'jamais mesuré');
+/** Carte d'accueil du profil : part des repères utiles connus, et un accès direct aux tests. */
+function bilanCard(a) {
+  if (!a.total) return h`<section class="card flat row"><span class="grow small">🩺 Choisis ce que tu veux (progresser, être plus fort, plus endurant…) : l’app te dira quoi mesurer.</span><button class="btn sm pri" data-act="profSub" data-id="goals">Choisir</button></section>`;
+  if (a.known === a.total) return '';
+  return h`<button class="card pick" data-act="profSub" data-id="bilan"><div class="row between"><b>🩺 Mon bilan physique</b><span class="tiny muted">${a.known}/${a.total}</span></div>${meter(a.coverage)}
+    <small class="tiny muted" style="display:block">L’app connaît ${a.known} des ${a.total} repères utiles pour tes objectifs. ${a.todo.length} test${a.todo.length > 1 ? 's' : ''} simple${a.todo.length > 1 ? 's' : ''} pour des séances plus justes ›</small></button>`;
+}
+function vBilan() {
+  const c = ctx(), a = assessment(c), f = conditionFacts(a), sugg = suggestedGoals(c), guided = guidedTests(c);
+  if (!a.envies.length && !a.total) return h`<div class="card stack"><p class="small">Dis d’abord ce que tu veux : l’app en déduit quoi mesurer.</p><button class="btn pri" data-act="profSub" data-id="goals">🎯 Choisir mes objectifs</button></div>`;
+  const acts = Object.keys(c.activities);
+  const used = acts.map((id) => ({ id, ...levelFor(id, c) }));
+  const row = (r) => h`<div class="item"><div class="grow"><b class="small">${r.label}</b>
+      <div class="tiny ${r.state === 'known' ? '' : 'muted'}">${STATE_TXT(r)}${r.tierText ? h` · <span class="muted">${r.tierText}</span>` : ''}</div>
+      <div class="tiny muted">Pour savoir : ${r.why}</div>
+      ${r.test ? h`<details class="how mini"><summary>Comment faire le test ?</summary><p class="tiny">${r.test}</p></details>` : ''}</div>
+    <button class="btn sm ${r.state === 'known' ? '' : 'pri'}" data-act="perfAdd" data-id="${r.metricId}">${r.state === 'known' ? 'Mettre à jour' : 'Saisir'}</button></div>`;
+  return h`<section class="card stack"><h3 style="margin:0">Ce que l’app sait de toi</h3><p class="small">${f.text}</p>${meter(a.coverage)}
+      ${a.zones.length ? h`<p class="tiny muted">🛡️ ${a.zones.map((z) => ZONE_WORD[z]).join(', ')} à ménager : les tests qui les sollicitent fortement sont remplacés ou retirés.</p>` : ''}
+      ${guided.length ? h`<button class="btn pri" data-act="bilanRun">▶ Faire les tests guidés (${guided.length})</button><p class="tiny muted">Un test à la fois : comment le faire, puis ta valeur. Tu peux passer ou répondre « je ne sais pas ».</p>` : ''}</section>
+    ${Object.entries(a.byEnvie).map(([e, rows]) => h`<section class="card"><h3>${ENVIES[e]?.emoji || '🎯'} ${ENVIES[e]?.label || e}</h3><p class="tiny muted">Pour connaître ${ENVIES[e]?.know || 'ton point de départ'}.</p>${rows.map(row)}</section>`)}
+    <section class="card stack"><h3 style="margin:0">💡 Ce que l’app en déduit</h3>
+      ${f.lines.length ? h`<ul class="clean small">${f.lines.map((l) => h`<li class="${l.kind === 'strong' ? 'ok-t' : l.kind === 'weak' ? 'warn-t' : ''}">${l.text}</li>`)}</ul>` : h`<p class="small muted">Rien encore : aucune de ces mesures n’a de valeur connue. L’app reste prudente (niveau débutant) tant qu’elle ne sait pas.</p>`}
+      <span class="kicker">Utilisé pour tes séances</span>
+      <ul class="clean small">${used.map((u) => h`<li><b>${c.activities[u.id]?.label || u.id}</b> : exercices de niveau ${LEVEL_WORDS[u.level] || 'débutant'} <span class="muted">— ${u.how}</span></li>`)}</ul>
+      <p class="tiny muted">Repères indicatifs, pas un diagnostic médical. En cas de douleur, arrête le test.</p></section>
+    ${sugg.length ? h`<section class="card"><h3>🎯 Objectifs précis possibles</h3><p class="tiny muted">Calculés depuis ta dernière valeur : rien n’est ajouté sans ton choix.</p>${sugg.map((g, i) => h`<div class="item"><div class="grow"><b class="small">${g.label}</b><div class="tiny muted">${g.why}</div></div><button class="btn sm" data-act="bilanGoal" data-i="${i}">＋ Ajouter</button></div>`)}</section>` : ''}`;
+}
+ACT.bilanGoal = (el) => {
+  const g = suggestedGoals(ctx())[Number(el.dataset.i)]; if (!g) return;
+  const id = 'g-' + uid().slice(0, 12), m = ctx().metrics[g.metricId];
+  putItem('goal', id, g.type === 'grade'
+    ? { type: 'grade', metricId: g.metricId, gradeTarget: g.gradeTarget, label: g.label, activityId: m?.gradeActivity === 'voie' ? 'climbing_route' : 'climbing_boulder', status: 'active', startedAt: Date.now(), note: g.why }
+    : { type: 'metric', metricId: g.metricId, target: g.target, unit: g.unit, label: g.label, status: 'active', startedAt: Date.now(), note: g.why });
+  buzzOk(); toast('Objectif ajouté'); render();
+};
+/* Tests guidés : un test par écran (protocole, valeur, « je ne sais pas » ou passer). Valeurs enregistrées comme MESURÉES. */
+const bilanStep = () => {
+  const r = S.bilan, t = r.list[r.i];
+  if (!t) { closeSheet(); toast(r.saved ? `${r.saved} mesure${r.saved > 1 ? 's' : ''} enregistrée${r.saved > 1 ? 's' : ''} : ton bilan est à jour.` : 'Bilan terminé.', 4500); S.bilan = null; render(); return; }
+  const unit = t.unit === 'reps' ? 'rép.' : t.unit;
+  openSheet(h`<div class="stack"><span class="tiny muted">Test ${r.i + 1} sur ${r.list.length}</span><h2 style="margin:0">${t.label}</h2>
+    <p class="small muted">Pour savoir : ${t.why}</p>
+    ${r.i === 0 ? h`<p class="small warn-t">Échauffe-toi une dizaine de minutes avant les tests d’effort. Arrête en cas de douleur.</p>` : ''}
+    ${t.test ? h`<div class="card flat"><b class="small">Comment faire</b><p class="small">${t.test}</p></div>` : ''}
+    <label>Ta valeur<span class="unitbox"><input id="bilanVal" type="number" inputmode="decimal" step="any" aria-label="${t.label}"><em>${unit}</em></span></label>
+    <button class="btn pri" data-act="bilanSave">Enregistrer et continuer</button>
+    <div class="row wrapf"><button class="btn" data-act="bilanSkip" data-v="nsp">🤷 Je ne sais pas</button><button class="btn ghost" data-act="bilanSkip">Passer</button><button class="btn ghost" data-act="bilanStop">Arrêter</button></div></div>`);
+};
+ACT.bilanRun = () => { S.bilan = { list: guidedTests(ctx()), i: 0, saved: 0 }; bilanStep(); };
+ACT.bilanSave = () => {
+  const r = S.bilan, t = r?.list[r.i]; if (!t) return;
+  const raw0 = document.getElementById('bilanVal')?.value ?? '', v = Number(String(raw0).replace(',', '.'));
+  if (raw0 === '' || !Number.isFinite(v)) { toast('Écris une valeur, ou touche « Je ne sais pas » / « Passer ».'); return; }
+  putItem('perf', 'p-' + uid().slice(0, 14), { metricId: t.metricId, value: v, unit: t.unit, date: Date.now(), source: 'measured', note: 'Bilan guidé' });
+  r.saved++; r.i++; bilanStep();
+};
+ACT.bilanSkip = (el) => {
+  const r = S.bilan, t = r?.list[r.i]; if (!t) return;
+  if (el.dataset.v === 'nsp') putItem('perf', 'p-' + uid().slice(0, 14), { metricId: t.metricId, value: null, unknown: true, unit: t.unit, date: Date.now(), source: 'declared', note: 'Bilan guidé : je ne sais pas' });
+  r.i++; bilanStep();
+};
+ACT.bilanStop = () => { const n = S.bilan?.saved || 0; S.bilan = null; closeSheet(); if (n) toast(`${n} mesure${n > 1 ? 's' : ''} enregistrée${n > 1 ? 's' : ''}.`); render(); };

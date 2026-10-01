@@ -14,14 +14,15 @@ import { filterBugs } from './adminlist.js';
 import { vStudio, vStudioSet, vAudit, vLab, vHealth, vMaint, vCode, vCodeItem, canRole, ROLE_L } from './views-studio.js';
 import { FAQ } from './help.js';
 import { faqAdminButtons, announcements } from './content.js';
-import { vAdminContent } from './content.js';
+import { vAdminContent, vAdminLook, vAdminChanges, globalChanges } from './content.js';
+import { vAssistant } from './views-assistant.js';
 import { vSources } from './views-catalog.js';
 import { CAPACITIES, ACTIVITIES } from './model.js';
 
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
 export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
-const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition']];
+const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition'], ['assistant', 'Assistant du site'], ['content', 'Contenu de l’app'], ['look', 'Textes et apparence'], ['changes', 'Tout ce qui a été modifié'], ['members', 'Propositions des membres'], ['bugs', 'Signalements'], ['users', 'Comptes et rôles'], ['push', 'Notifications de mise à jour']];
 /** Rubriques des paramètres : une ligne claire par rubrique, comme les réglages d'un téléphone. */
 const MENU = [
   ['display', '🎨', 'Affichage', 'Thème, ambiance, couleur, taille, langue, mise en page'],
@@ -36,13 +37,19 @@ const MENU = [
   ['admin', '🛡️', 'Admin', 'Réservé aux administrateurs'],
 ];
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
+/* Pages de l'administration : d'où l'on vient (retour) et leur titre. */
+const ADMIN_PARENT = { assistant: ['admin', 'Admin'], content: ['admin', 'Admin'], look: ['admin', 'Admin'], changes: ['admin', 'Admin'], members: ['admin', 'Admin'], bugs: ['admin', 'Admin'], users: ['admin', 'Admin'], push: ['admin', 'Admin'],
+  studio: ['admin', 'Admin'], studioSet: ['studio', 'Studio'], audit: ['admin', 'Admin'], lab: ['admin', 'Admin'], health: ['admin', 'Admin'], maint: ['admin', 'Admin'], code: ['admin', 'Admin'], codeItem: ['code', 'Propositions de code'] };
+const ADMIN_TITLE = { assistant: '💬 Assistant du site', content: '🧩 Contenu de l’app', look: '✏️ Textes et apparence', changes: '📝 Tout ce qui a été modifié', members: '📬 Propositions des membres', bugs: '🐞 Signalements', users: '👥 Comptes et rôles', push: '🔔 Notifications de mise à jour',
+  studio: '🧪 Brouillons et publication', studioSet: '🧪 Lot', audit: '📜 Journal', lab: '🧠 Laboratoire', health: '🩺 Santé des données', maint: '🛠️ Maintenance', code: '💻 Propositions de code', codeItem: '💻 Proposition' };
+const adminOnly = (fn) => () => (S.user?.isAdmin ? fn() : h`<p class="small muted">Réservé aux administrateurs.</p>`);
 export function vSettings() {
-  const subs = S.user.guest ? SUBS.filter(([k]) => !['sync', 'admin', 'studio', 'studioSet', 'audit', 'lab', 'health', 'maint', 'code', 'codeItem'].includes(k)) : SUBS;
+  const subs = S.user.guest ? SUBS.filter(([k]) => k !== 'sync' && !ADMIN_PARENT[k] && k !== 'admin') : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant), content: adminOnly(vAdminContent), look: adminOnly(vAdminLook), changes: adminOnly(vAdminChanges), members: adminOnly(vAdminProposals), bugs: adminOnly(vAdminBugs), users: adminOnly(vAdminUsers), push: adminOnly(vAdminPush), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   if (sub === 'main') return h`<h1>Paramètres</h1>${views.main()}`;
   const ic = MENU.find(([k]) => k === sub)?.[1];
-  if (['studio', 'studioSet', 'audit', 'lab', 'health', 'maint', 'code', 'codeItem'].includes(sub)) return h`${subHead('setSub', sub === 'studio' ? 'admin' : sub === 'codeItem' ? 'code' : 'studio', sub === 'studio' ? 'Admin' : sub === 'codeItem' ? 'Propositions de code' : 'Studio', { studio: '🧪 Studio', studioSet: '🧪 Lot', audit: '📜 Journal', lab: '🧠 Laboratoire', health: '🩺 Santé des données', maint: '🛠️ Maintenance', code: '💻 Propositions de code', codeItem: '💻 Proposition' }[sub])}${views[sub]()}`;
+  if (ADMIN_PARENT[sub]) { const [pk, pl] = ADMIN_PARENT[sub]; return h`${subHead('setSub', pk, pl, ADMIN_TITLE[sub] || sub)}${views[sub]()}`; }
   return h`${subHead('setSub', 'main', 'Paramètres', `${ic ? ic + ' ' : ''}${subs.find(([k]) => k === sub)[1]}`)}${views[sub]()}`;
 }
 ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug' && !S.user?.guest) loadMyBugs(); };
@@ -281,32 +288,57 @@ ACT.hardReload = async () => { if (!(await ask('Recharger l’application ?', { 
 /* ═════════ Administration ═════════ */
 async function loadBugs() { try { S.admin.bugs = (await api('GET', '/api/admin/bugs')).reports; } catch (e) { S.admin.error = e.offline ? 'Connexion requise.' : e.message; } render(); }
 /** Suivi des notifications « nouvelle mise à jour » : quand la dernière est partie et vers combien d'appareils. */
-function pushStatusCard() {
+function pushStatusCard(open = false) {
   const p = S.admin.push; if (!p) return '';
   const l = p.last, when = l?.at ? new Date(l.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
-  return h`<details class="card how"><summary>🔔 Notifications de mise à jour</summary>
+  return h`<details class="card how" ${open ? 'open' : ''}><summary>🔔 Notifications de mise à jour</summary>
     <p class="small">${l ? `Dernière envoyée le ${when} : ${l.sent} appareil(s) joint(s) sur ${l.targeted} abonné(s) aux nouveautés${l.gone ? `, ${l.gone} abonnement(s) expiré(s) retiré(s)` : ''}${l.errors ? `, ${l.errors} en erreur` : ''}.` : 'Aucune notification de mise à jour envoyée pour l’instant.'}</p>
     <p class="tiny muted">${p.devices} appareil(s) abonné(s) en tout. Version en ligne : ${p.build}${p.lastBuild && p.lastBuild !== p.build ? ` (annonce en attente : ${p.lastBuild})` : ''}. Un appareil qui ne reçoit rien : Paramètres › Notifications › « 🩺 Vérifier cet appareil ».</p></details>`;
 }
 function vAdmin() {
-  if (!S.user.isAdmin) return h`<form data-submit="adminOn" class="card" autocomplete="off"><h3>🛡️ Administration</h3><p class="small muted">Saisis le mot de passe administrateur pour activer les droits d’administration sur ton compte. Il est vérifié uniquement par le serveur et n’est jamais conservé sur cet appareil.</p>
+  if (!S.user.isAdmin) return h`<form data-submit="adminOn" class="card" autocomplete="off"><h3>🛡️ Administration</h3><p class="small muted">Saisis le mot de passe administrateur pour activer les droits d’administration sur ton compte. Il est vérifié uniquement par le serveur.</p>
     <label>Mot de passe administrateur<input type="password" name="password" autocomplete="off" required></label><button class="btn pri" type="submit">Activer</button></form>`;
+  if (!S.admin.bugs && !S.admin.error && canRole('technical')) setTimeout(loadBugs, 0);
+  if (!S.admin.props && !S.admin.propErr && canRole('content')) setTimeout(loadProps, 0);
+  const openBugs = (S.admin.bugs || []).filter((b) => b.status === 'open').length, props = (S.admin.propF || 'open') === 'open' ? (S.admin.props || []).length : 0, changed = globalChanges().length;
+  const row = (role, r) => (canRole(role) ? [r] : []);
+  return h`<div class="card acc-b"><div class="row between wrapf"><h3>🛡️ Tu es administrateur</h3><button class="btn sm ghost" data-act="adminOff">Quitter ce rôle</button></div>
+      <p class="tiny muted">Tes rôles : ${(S.user.roles || ['super']).map((r) => ROLE_L[r]).join(', ')}. Chaque action est vérifiée par le serveur et notée dans le Journal.</p></div>
+    ${canRole('content') ? h`<button class="card pick ai-cta" data-act="setSub" data-id="assistant"><span>💬</span><div><b>Discuter avec l’assistant du site</b><small>Écris ce que tu veux changer, comme à une personne : il prépare les modifications dans un brouillon que tu relis et publies. Sans abonnement extérieur.</small></div></button>` : ''}
+    <span class="kicker">Modifier l’app sans code</span>
+    ${menuList([
+      ...row('content', ['setSub', 'content', '🧩', 'Contenu de l’app', 'Exercices, séances prêtes, intentions par sport, aide, cotations']),
+      ...row('content', ['setSub', 'look', '✏️', 'Textes et apparence', 'Réécrire un texte, mise en page pour tous, raccourcis, annonces']),
+      ...row('content', ['setSub', 'studio', '🧪', 'Brouillons et publication', 'Relire les différences, vérifier, publier, revenir en arrière']),
+      ...row('content', ['setSub', 'changes', '📝', 'Tout ce qui a été modifié', changed ? `${changed} élément${changed > 1 ? 's' : ''} différent${changed > 1 ? 's' : ''} de l’origine · annulable` : 'Rien pour l’instant']),
+    ])}
+    <span class="kicker">Les membres</span>
+    ${menuList([
+      ...row('content', ['setSub', 'members', '📬', 'Propositions des membres', props ? `${props} à traiter` : 'Idées, intentions, demandes de modification']),
+      ...row('technical', ['setSub', 'bugs', '🐞', 'Signalements', openBugs ? `${openBugs} ouvert${openBugs > 1 ? 's' : ''}` : 'Problèmes signalés par les membres']),
+      ...row('users', ['setSub', 'users', '👥', 'Comptes et rôles', 'Dernières connexions, droits d’administration']),
+      ['libSub', 'common', '🌍', 'Bibliothèque commune', 'Séances partagées par les membres'],
+    ])}
+    <span class="kicker">Surveiller et comprendre</span>
+    ${menuList([
+      ...row('intelligence', ['setSub', 'health', '🩺', 'Santé des données', 'Doublons, relations incohérentes, textes orphelins']),
+      ...row('intelligence', ['setSub', 'lab', '🧠', 'Laboratoire', 'Analyser un problème, simuler une règle sur des exemples']),
+      ...row('technical', ['setSub', 'maint', '🛠️', 'Maintenance', 'Signalements regroupés et pistes de l’assistant']),
+      ...row('technical', ['setSub', 'code', '💻', 'Propositions de code', 'Ce qui demande du code : relu, validé, jamais déployé par l’app']),
+      ...row('technical', ['setSub', 'push', '🔔', 'Notifications de mise à jour', 'Envoyées, reçues, appareils abonnés']),
+      ['setSub', 'audit', '📜', 'Journal', 'Qui a fait quoi, quand, avant / après'],
+    ])}`;
+}
+function vAdminBugs() {
   const bugs = S.admin.bugs, f = S.admin.filter || 'open';
   if (!bugs && !S.admin.error) setTimeout(loadBugs, 0);
-  if (S.admin.push === undefined) { S.admin.push = null; api('GET', '/api/admin/push-status').then((r) => { S.admin.push = r; render(); }).catch(() => {}); }
-  return h`${pushStatusCard()}<div class="card acc-b"><h3>🛡️ Tu es administrateur</h3><p class="small">Tu peux modifier presque tout pour tous les comptes : exercices, séances prêtes, intentions par sport, formats de séance et bibliothèque commune. À chaque changement, l’app te demande si c’est pour toi ou pour tout le monde. Tu n’as pas accès aux données privées des autres comptes.</p>
-      ${menuList([
-        ['setSub', 'studio', '🧪', 'Studio', 'Brouillons, vérifications, publication, retour arrière'],
-        ['setSub', 'lab', '🧠', 'Laboratoire', 'Analyser un problème, simuler les règles sur des exemples'],
-        ['setSub', 'audit', '📜', 'Journal des changements', 'Qui a fait quoi, quand, avant / après'],
-        ['libSub', 'common', '🌍', 'Bibliothèque commune', 'Séances partagées par les membres'],
-      ])}
-      <div class="row wrapf"><button class="btn" data-act="adminOff">Quitter le rôle administrateur</button></div></div>
-    ${vAdminContent()}
-    ${vAdminProposals()}${vAdminUsers()}
-    <div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload" aria-label="Actualiser">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['done', 'Traités'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>
+  return h`<div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload" aria-label="Actualiser">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['done', 'Traités'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>
       <input id="bugq" type="search" aria-label="Rechercher un signalement" placeholder="🔎 Rechercher (titre, texte, page, auteur)" value="${S.admin.bugQ || ''}" data-input="bugQ">
       <div id="bugres">${S.admin.error ? h`<p class="err small">${S.admin.error}</p>` : !bugs ? skeleton(2) : bugList()}</div></div>`;
+}
+function vAdminPush() {
+  if (S.admin.push === undefined) { S.admin.push = null; api('GET', '/api/admin/push-status').then((r) => { S.admin.push = r; render(); }).catch(() => {}); }
+  return S.admin.push ? pushStatusCard(true) : skeleton(1);
 }
 function bugList() {
   const list = filterBugs(S.admin.bugs, S.admin.filter || 'open', S.admin.bugQ || '');

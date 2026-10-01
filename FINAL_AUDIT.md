@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.27.0
+# FINAL_AUDIT — Séances entraînement v8.28.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -1022,3 +1022,23 @@ Détail complet (fonctionnalités, fichiers, migrations, fonctions réutilisées
 | Scripts Playwright de mise en page (créateur à chaque étape, santé des données, maintenance, code, Studio, préférences, objectif, journal, admin) | aucun débordement à 320 / 390 / 768 px |
 
 Non vérifiable ici : la qualité réelle de Workers AI (réponses simulées dans les tests), le rendu sur de vrais téléphones. L'E2E a été lancé avant le changement de numéro de version (8.26.0 → 8.27.0, sans autre modification du code).
+
+## Évolution 8.28.0 : simple mais précis, bilan physique, niveau factuel, assistant du site
+
+Détail complet (fonctionnalités, fichiers, migrations — aucune —, fonctions, déploiement, retour arrière, limites) : `CHANGELOG.md`. Audit préalable fait comme un vrai nouvel utilisateur : `docs/AUDIT_8_28.md` ; plan du niveau factuel : `docs/PLAN_NIVEAU_SEANCE.md`.
+
+- **Créer une séance** : étape 1 « L'essentiel » pré-remplie d'après le profil, « ⚡ Proposer ma séance », « ✨ Faite pour toi » ; lieu sans mur signalé tout de suite ; cotations corrigées ; propositions selon le niveau ; correctif « Je compose ».
+- **Profil** : « 🩺 Mon bilan physique » selon les objectifs (zones à ménager respectées, tests guidés, déductions seulement depuis des valeurs connues, objectifs précis proposés) ; questionnaire adapté aux objectifs.
+- **Exercices** : niveau pris par capacité principale. **Niveau de séance** : prérequis le plus élevé, connu / estimé / inconnu, fiabilité.
+- **Admin** : « 💬 Discuter avec l'assistant du site » (Workers AI, propositions validées par le serveur → brouillon) ; Admin réorganisé en 3 groupes.
+
+### Vérification 8.28.0 (commandes réellement lancées)
+
+| Commande | Résultat |
+|---|---|
+| `npm run check` | OK |
+| `npm test` | 52 fichiers, tous OK — dont `profile828.test.mjs` (11) et `assistant.test.mjs` (9), `data.test.mjs` (niveau factuel) |
+| `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` | **76 étapes OK**, aucune erreur JavaScript, sur la version 8.28.0 — dont « L'essentiel + ⚡ + bilan guidé » et « Admin en 3 groupes + assistant du site ». Deux lancements précédents avaient échoué (« Je compose » gardait des exercices ; âge « il y a -1 j ») : corrigés avant ce lancement. |
+| Scripts Playwright de mise en page (créateur, bilan, Admin et ses 8 pages, assistant, « Faite pour toi ») | aucun débordement à 320 / 390 / 768 px après correction (objectif de séance et assistant débordaient à 320 px) |
+
+Non vérifiable ici : la qualité réelle des réponses de Workers AI (réponses simulées dans les tests), le rendu sur de vrais téléphones.

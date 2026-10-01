@@ -47,7 +47,11 @@ function metaWhy(m) {
 }
 function levelDetails(lv) {
   if (!lv?.criteria) return '';
-  return h`<details class="how"><summary>🔎 Pourquoi ce niveau ?</summary><p class="small">${lv.text}</p><ul>${lv.criteria.map((c) => h`<li><b>${c.label}</b> : ${c.value} <span class="muted">— ${c.effect}</span></li>`)}</ul><p class="tiny muted">Estimation automatique et approximative, jamais un classement de personnes.</p></details>`;
+  const CAT = { connu: ['✓', 'connu'], estimé: ['≈', 'estimé'], inconnu: ['?', 'inconnu'] };
+  return h`<details class="how"><summary>🔎 Pourquoi ce niveau ?</summary><p class="small">${lv.text}</p>
+    <ul>${lv.criteria.map((c) => h`<li><span class="tag ${c.cat === 'connu' ? 'ok' : c.cat === 'estimé' ? 'warn' : ''}" title="${CAT[c.cat]?.[1] || ''}">${CAT[c.cat]?.[0] || ''} ${CAT[c.cat]?.[1] || ''}</span> <b>${c.label}</b> : ${c.value} <span class="muted">— ${c.effect}</span></li>`)}</ul>
+    ${lv.unknown?.length ? h`<p class="tiny"><b>Ce que l’app ne sait pas :</b></p><ul class="tiny muted">${lv.unknown.slice(0, 6).map((u) => h`<li>${u}</li>`)}</ul>` : ''}
+    <p class="tiny muted">Le niveau conseillé est le prérequis le plus élevé de la séance (fiches d’exercices, cotations écrites) : un seul exercice avancé suffit. Rien n’est rempli au hasard. Jamais un classement de personnes.</p></details>`;
 }
 
 export function vLibrary() {
@@ -68,7 +72,7 @@ const LIB_INFO = {
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
   climbplan: ['✨', 'Créer une séance', () => draftText() || 'Tous sports : l’app choisit, te guide, ou tu composes'],
   catalog: ['🗂', 'Séances prêtes', () => `Catalogue officiel : ${CATALOG.length} séances expliquées et sourcées`],
-  exercises: ['💪', 'Exercices', () => `${LIBRARY.length} exercices, et le top pour toi`],
+  exercises: ['💪', 'Exercices', () => `${LIBRARY.filter((x) => x.role === 'main').length} exercices, et le top pour toi`],
   common: ['🌍', 'Bibliothèque commune', () => 'Séances partagées par les membres (non vérifiées)'],
   search: ['🔍', 'Rechercher', () => 'Une séance, un exercice, une capacité…'],
 };
@@ -196,7 +200,7 @@ ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvel
     ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
 /** Séance en cours de création (brouillon gardé) : on peut la reprendre où on en était. */
-function draftText() { const d = S.cp || ls.get('sea:climbplan', null); return d && (d.step || 1) > 1 ? `En cours : étape ${d.step}/5` : ''; }
+function draftText() { const d = S.cp || ls.get('sea:climbplan', null); return d && (d.step || 1) > 1 ? `En cours : étape ${d.v === 2 ? d.step : Math.max(1, d.step - 1)}/6` : ''; }
 function draftBanner() { const t = draftText(); return t ? h`<button class="card flat acc-b row" data-act="cpResume"><span class="grow small">📝 <b>Reprendre ma séance en cours</b> · ${t.replace('En cours : ', '')}</span><span class="chev">›</span></button>` : ''; }
 /* Fusionner des séances : on en choisit 2 à 4, l'app conseille (note, ordre) et crée une NOUVELLE séance ; les originales ne changent pas. */
 const mergeable = () => S.seances.items.filter((s) => !s.archived && s.exercises.length);
