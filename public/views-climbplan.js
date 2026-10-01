@@ -30,7 +30,8 @@ import { placeObjective, cleanObjective, objectiveLabel, whenLabel, WHEN, FAMILY
 import { ROLES, LOCKABLE, LOCK_STATES, FATIGUE, ATTEMPT_TYPES, FOCUS, VOLUME, TRADEOFFS, PLACE_MODES, normalizePhases, normalizePhase, fitDurations, newPhase, totalMinutes as phTotal, sessionActivities, sessionIntent, activityLabel as actLabel } from './phase.js';
 import { proposeForPhase, analyzeSession, applySuggestion, REASON, phaseName } from './phaseplan.js';
 import { loadAnalysis } from './brain.js';
-import { alternatives } from './generator.js';
+import { alternatives, levelFor } from './generator.js';
+import { assessment } from './assess.js';
 import { sportFamily, SPORT_STRUCTS, sportProposals, sportTargets, sportMoves, bestPerf, targetAdvice, targetParts, targetLabel, defaultWorkParts, workTitle, moveName, paceOf, fmtPace } from './sportplan.js';
 
 const KEY = 'sea:climbplan';
@@ -546,7 +547,15 @@ ACT.cpWant = (el) => { const c = CP(), i = Number(el.dataset.i); c.want = { ...(
 INPUT.cpQ = (el) => { const c = CP(), i = Number(el.dataset.i); c.q = { ...(c.q || {}), [i]: el.value }; const pos = el.selectionStart; setTimeout(() => { optsSheet(i); const x = document.querySelector('#sheet input[data-input=cpQ]'); if (x) { x.focus(); try { x.setSelectionRange(pos, pos); } catch { /* rien */ } } }, 200); };
 CHG.cpAll = (el) => { const c = CP(), i = Number(el.dataset.i); c.freeAll = { ...(c.freeAll || {}), [i]: el.checked }; optsSheet(i); };
 CHG.cpBMin = (el) => { const c = CP(), p = c.built?.[Number(el.dataset.i)]; if (!p) return; p.minutes = Math.max(5, Math.min(180, Number(el.value) || p.minutes)); rebuild(); render(); };
-ACT.cpHelp = (el) => { const c = CP(); c.help = el.dataset.id; c.result = null; keep(); render(); };
+// Changer qui choisit les exercices repart de zéro pour les choix d'exercices : « Je compose » commence vide,
+// « L'app choisit » remet ses propositions (on le dit, rien n'est perdu en silence).
+ACT.cpHelp = (el) => {
+  const c = CP(), was = c.help || 'auto', now = el.dataset.id;
+  const had = was !== now && (c.built || []).some((p) => Array.isArray(p.pick));
+  if (was !== now) for (const p of c.built || []) delete p.pick;
+  c.help = now; c.result = null; keep(); render();
+  if (had) toast('Mode changé : les exercices choisis dans les parties repartent de zéro.', 4000);
+};
 ACT.cpExInfo = (el) => { const s = CP().result, e = s?.exercises.find((x) => x.id === el.dataset.id); if (e) openSheet(exerciseSheet(e, '', s)); };
 ACT.cpOptInfo = (el) => { const x = byId(el.dataset.id); if (x) openSheet(exerciseSheet({ ...x, libId: x.id }, h`<button class="btn" data-act="cpOpts" data-i="${el.dataset.i}">‹ Retour aux options</button>`), { wide: true }); };
 /** Résumé d'une partie « travail » : intensité, mouvement, cible. */
@@ -564,12 +573,28 @@ const dose = (e) => {
   const d = e.mode === 'time' ? (e.secMax > e.secMin ? `${t(e.secMin)}–${t(e.secMax)}` : t(e.secMin)) : e.repsMax > e.repsMin ? `${e.repsMin}–${e.repsMax}${u}` : `${e.repsMin}${u}`;
   return [e.group?.startsWith('cp-') ? '' : d, e.load, e.rest ? `repos ${t(e.rest)}` : ''].filter(Boolean).join(' · ');
 };
+/** « Faite pour toi » : ce qui, dans cette séance, vient vraiment de ton profil (faits seulement, rien d'inventé). */
+function forYou() {
+  const c = CP(), x = ctx(), env = envOf(), lv = levelFor(c.sport, x), a = assessment(x), out = [];
+  const usual = Number(S.settings.defaultMinutes) || 0;
+  out.push(`⏱ ${fmtMin(c.minutes)}${usual && usual === c.minutes ? ' : ta durée habituelle' : ''}.`);
+  const o = cleanObjective(c.objective); if (o) out.push(`🎯 Objectif : ${objectiveLabel(o)} · ${whenLabel(o, c.built || c.parts).toLowerCase()}.`);
+  const eq = [...availableEquipment(x, c.envId)];
+  out.push(`📍 ${env ? env.name : 'Sans lieu décrit'} : seulement des exercices faisables avec ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun matériel'}.`);
+  const zones = (c.zones || []).map((z) => AVOID_ZONES.find(([k]) => k === z)?.[1]?.replace(/^\S+\s/, '').toLowerCase()).filter(Boolean);
+  if (zones.length) out.push(`🛡️ À ménager : ${zones.join(', ')} — les exercices qui les chargent fort sont écartés.`);
+  out.push(`📊 Niveau : ${['débutant', 'intermédiaire', 'avancé'][lv.level] || 'débutant'} — ${lv.how}.`);
+  if (c.forme && c.forme !== 'ok') out.push(`💡 Ta forme du jour (${FORMES.find(([k]) => k === c.forme)?.[2]?.toLowerCase() || c.forme}) est prise en compte.`);
+  return h`<details class="card flat acc-b" open><summary><b class="small">✨ Faite pour toi</b></summary><ul class="clean tight small">${out.map((t) => h`<li>${t}</li>`)}</ul>
+    ${a.total && a.coverage < 50 ? h`<p class="tiny muted">L’app ne connaît que ${a.known} des ${a.total} repères utiles ${a.envies.length ? 'pour tes objectifs' : 'pour toi'} : <button class="linkish acc-t" data-act="allGo" data-to="profile/bilan">quelques tests</button> rendront tes séances plus justes.</p>` : ''}</details>`;
+}
 function vResult(final = false) {
   const c = CP(), s = c.result, sp = c.aim === 'surprise' && c.reasons?.length && c.help !== 'free', help = c.help || 'auto';
   const exLi = (e, i) => h`<li><button class="linkish" data-act="cpExInfo" data-id="${e.id}"><b>${e.name}</b> <span class="tiny muted">ⓘ</span></button>${e.sets > 1 ? ` × ${e.sets}` : ''}${!final && e.libId && i >= 0 ? h` <button class="btn sm ghost" data-act="cpAlt" data-i="${i}" data-id="${e.libId}" aria-label="Alternatives à ${e.name}">↔ Alternatives</button>` : ''}${dose(e) ? h`<div class="tiny acc-t">${dose(e)}</div>` : ''}${e.note ? h`<div class="tiny muted">${e.note}</div>` : ''}</li>`;
   const byPart = c.built ? c.built.map((p, i) => ({ p, i, label: partLabel(p, i, c.built), title: `${ROLES[p.role]?.[0] || ''} ${phaseName(p)}`, sub: actLabel(p.activity) })) : [...new Set(s.exercises.map((e) => e.part))].map((label) => ({ p: null, i: -1, label, title: label }));
   return h`<div class="card stack" id="cpresult"><h2 style="margin:0">${s.emoji} ${s.name}</h2>
     ${sp ? h`<div class="card flat acc-b"><b class="small">${AIMS[c.aimDone]?.[0] || '🎲'} Pourquoi cette surprise</b><ul class="clean tight small">${c.reasons.map((r) => h`<li>${r}</li>`)}</ul></div>` : ''}
+    ${forYou()}
     <p class="muted small">~${fmtMin(sessionMinutes(s))} · ${byPart.length} parties · ${help === 'guide' ? 'coche ce que tu veux dans chaque partie' : help === 'free' ? 'ajoute tes exercices dans chaque partie' : 'change le temps ou les exercices de chaque partie si tu veux'}</p>
     ${byPart.map(({ p, i, label, title, sub }) => { const ex = s.exercises.filter((e) => (p?.id && e.phase ? e.phase === p.id : e.part === label));
       return h`<div class="rpart"><div class="row"><b class="grow">${title}${sub ? h`<small class="tiny muted"> · ${sub}</small>` : ''}</b>${p ? h`<span class="unitbox"><input type="number" min="5" max="180" step="5" value="${p.minutes}" data-change="cpBMin" data-i="${i}" style="width:64px" aria-label="Durée de la partie"><em>min</em></span>` : ''}</div>

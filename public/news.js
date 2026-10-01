@@ -137,11 +137,17 @@ export const NEWS = [
     ['profile', 'goals', '#main h1', '🎯 Objectif avec l’IA', 'Une fiche à relire et corriger avant d’enregistrer. Aucune cible n’est inventée ; « Comment le sais-tu ? » explique chaque point.'],
     ['library', 'common', '#main h1', '🌍 Bibliothèque commune', 'Les séances des membres sont classées automatiquement, avec « Classée ainsi parce que… ». Le catalogue officiel reste dans 🗂 Séances prêtes.'],
   ] },
-  { v: '8.27.0', date: '2026-10-14', title: 'Construire ta séance, réglage par réglage', why: 'Choisis l’objectif de ta séance et le moment où il arrive, puis règle chaque phase dans l’ordre : type, objectif, précisément, réglages du type, intensité, lieu, ce que tu ne veux pas. Tout le reste, l’app le décide et l’explique.', steps: [
+  { v: '8.27.0', date: '2026-09-30', title: 'Construire ta séance, réglage par réglage', why: 'Choisis l’objectif de ta séance et le moment où il arrive, puis règle chaque phase dans l’ordre : type, objectif, précisément, réglages du type, intensité, lieu, ce que tu ne veux pas. Tout le reste, l’app le décide et l’explique.', steps: [
     ['library', 'climbplan', '.steps', '🎯 Objectif à n’importe quel moment', 'Dans « Pour quoi ? » : quoi, précisément, et quand (début, milieu, fin, toute la séance). Tu peux ensuite le poser sur une phase précise.'],
     ['', '', '', '🔗 Une chaîne de réglages', 'Chaque phase se règle dans l’ordre, avec seulement ce qui a du sens pour son type : lieu propre, déplacement, filtres, curseurs de compromis, contraintes.'],
     ['', '', '', '🔮 Et si… ? et ✍️ Modifier avec l’IA', 'Teste un changement (moins de temps, moins intense, autre lieu) et vois ses conséquences ; ou écris « J’ai seulement 1 h 20 » : l’app montre le plan avant d’appliquer.'],
     ['profile', 'goals', '#main h1', '🧭 Plusieurs chemins', 'Pour un objectif : très spécifique, mixte ou préparation physique, comparés. La carte des relations explique chaque lien.'],
+  ] },
+  { v: '8.28.0', date: '2026-10-01', title: 'Simple d’abord, précis si tu veux', why: 'Créer une séance commence par l’essentiel, déjà rempli d’après ton profil : un toucher sur « ⚡ Proposer ma séance » suffit. Ton profil comprend mieux ta condition grâce à un bilan selon tes objectifs, et le niveau d’une séance est expliqué avec des faits.', steps: [
+    ['library', 'climbplan', '.steps', '⚡ L’essentiel, puis Proposer ma séance', 'Sport, lieu, temps, forme et objectif sur un seul écran, pré-remplis d’après ton profil. « ⚡ Proposer ma séance » : la séance tout de suite, avec « ✨ Faite pour toi ».'],
+    ['profile', 'bilan', '#main h1', '🩺 Mon bilan physique', 'Les repères utiles pour TES objectifs, comment faire chaque test, ce que l’app en déduit, et des objectifs précis proposés depuis ta dernière valeur.'],
+    ['', '', '', '🔎 Un niveau de séance factuel', 'Le niveau conseillé vient du prérequis le plus exigeant, nommé ; ce qui est connu, estimé ou inconnu est dit.'],
+    ['', '', '', '💪 Des exercices à ton niveau, capacité par capacité', 'Fort en tirage mais débutant en poussée ? Chaque exercice suit ton niveau dans ce qu’il travaille.'],
   ] },
 ];
 

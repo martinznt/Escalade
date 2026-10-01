@@ -632,3 +632,7 @@ pre.txt { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 
 /* 8.28 : dans les cartes étroites (objectif de séance, alerte de lieu), un bouton long passe à la ligne au lieu de déborder à 320 px. */
 .chain .btn.sm,.warn-b .btn.sm{white-space:normal;max-width:100%;text-align:center}
+
+/* 8.28 : assistant du site (admin) — la page défile, pas de boîte à défilement ; espaces du gabarit ignorés. */
+.aslog{display:grid;gap:8px;align-content:start}.aslog .msg{white-space:normal;overflow-wrap:anywhere}.aslog .msg.assistant{max-width:100%}.aslog .msg .t{white-space:pre-wrap}
+.aslog,.chat{grid-template-columns:minmax(0,1fr)}.aslog .btn.sm,.aslog .chip{white-space:normal;max-width:100%;text-align:left}

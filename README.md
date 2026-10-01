@@ -1,4 +1,4 @@
-# Séances entraînement — v8.27.0
+# Séances entraînement — v8.28.0
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
@@ -62,7 +62,7 @@ dans Cloudflare (vide pour désactiver).
 ```bash
 npm ci             # dépendances exactes (package-lock.json) ; Node 22 ou plus
 npm run check      # syntaxe de tous les fichiers JS + validation JSON
-npm test           # 50 fichiers : unitaires, intégration Worker-D1, sécurité, synchronisation, Studio, V2, migrations
+npm test           # 52 fichiers : unitaires, intégration Worker-D1, sécurité, synchronisation, Studio, V2, bilan, assistant du site, migrations
 npm run test:e2e   # navigateur réel (Playwright + Chromium) : 2 comptes, admin, Studio, hors ligne, mode invité (73 étapes)
 ```
 

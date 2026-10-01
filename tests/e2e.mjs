@@ -739,13 +739,14 @@ await step('mauvais mot de passe admin refusé ; bon EDIT_PASSWORD → compte ad
   await C.reload(); await C.waitForSelector('nav.tabs'); await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('text=Tu es administrateur');
 });
 await step('l’admin voit le signalement (texte échappé, auteur) et le marque traité', async () => {
+  await c.click('[data-act=setSub][data-id=bugs]');
   await C.waitForSelector('text=Le bouton ne répond pas');
   assert.equal(await c.count('.card script'), 0); assert.match(await c.text('main'), /par Bob/);
   await C.locator('[data-act=bugStatus]').first().click(); await C.waitForTimeout(300);
   const r = (await c.api('GET', '/api/admin/bugs')).data.reports; assert.equal(r[0].status, 'done');
 });
 await step('l’admin voit la liste de tous les comptes (sans leurs données privées)', async () => {
-  await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('.ulist .urow');
+  await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=users]'); await C.waitForSelector('.ulist .urow');
   const txt = await c.text('.ulist'); for (const name of ['Alice', 'Bob']) assert.match(txt, new RegExp(name));
   assert.ok(await c.count('.ulist .urow') >= 3);
 });
@@ -796,7 +797,7 @@ await step('admin : modifier un exercice « pour tout le monde » (au choix), un
   await B.locator('#main [data-act=libInfo]').first().click(); await B.waitForSelector('#sheet [data-act=gxEdit]');
   assert.equal(await b.count('#sheet [data-act=exHide]'), 0, 'un compte normal ne voit pas « Masquer pour tout le monde »');
   await B.keyboard.press('Escape');
-  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]');
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=changes]'); await C.waitForSelector('[data-act=glReset]');
   await c.click('[data-act=glReset]'); await c.confirm(); await C.waitForSelector('text=Rien n’a encore été changé');
   cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await b.sub('libSub', 'exercises');
   await B.waitForSelector(`#main :text-is("${old}")`, { timeout: 10000 });
@@ -816,7 +817,7 @@ await step('idée d’un utilisateur (système de cotation) → notification de 
   await B.evaluate(() => { for (const d of document.querySelectorAll('#main details')) if (d.querySelector('[data-act=sysNew]')) d.open = true; }); await B.waitForTimeout(400);
   await B.waitForSelector('#main .tag:has-text("pour tous")', { timeout: 10000 });
   await b.click('[data-act=ascNew]').catch(() => {});
-  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset][data-k=grading]'); await c.click('[data-act=glReset][data-k=grading]'); await c.confirm();
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=changes]'); await C.waitForSelector('[data-act=glReset][data-k=grading]'); await c.click('[data-act=glReset][data-k=grading]'); await c.confirm();
   await c.tab('settings'); await c.sub('setSub', 'updates'); await C.waitForSelector('.upd [data-act=notifTour]'); assert.ok(await c.count('.upd') >= 10, 'toutes les mises à jour listées');
   await B.keyboard.press('Escape');
 });
@@ -834,7 +835,7 @@ await step('demande de modification d’un non-administrateur → l’admin l’
   await c.click('#sheet button[value=accept]'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
   cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await b.sub('libSub', 'exercises');
   await B.waitForSelector(`#main :text("${old} (demande)")`, { timeout: 10000 });
-  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=changes]'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
   await C.waitForSelector('text=Rien n’a encore été changé');
 });
 await step('idée avec l’endroit : B vise un élément, l’admin y est emmené et le modifie pour tout le monde', async () => {
@@ -854,19 +855,28 @@ await step('idée avec l’endroit : B vise un élément, l’admin y est emmen�
   await c.click('#sheet form[data-submit=textSave] button.pri'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
   await c.click('.topicons [data-act=notifOpen]'); await c.click(`#sheet [data-act=propOpen][data-id="${id}"]`); await C.waitForSelector('#sheet button[value=accept]'); await c.click('#sheet button[value=accept]');
   cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('library'); await B.waitForSelector('#main h1:has-text("Ma bibliothèque")', { timeout: 10000 });
-  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=changes]'); await C.waitForSelector('[data-act=glReset]'); await c.click('[data-act=glReset]'); await c.confirm();
+});
+await step('Admin organisé en 3 groupes ; assistant du site : on lui écrit, il répond, rien n’est publié sans relecture', async () => {
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin');
+  const t = await c.text('#main'); assert.match(t, /Modifier l’app sans code[\s\S]*Les membres[\s\S]*Surveiller et comprendre/i);
+  await c.click('[data-act=setSub][data-id=assistant]'); await C.waitForSelector('form[data-submit=asSend]');
+  assert.match(await c.text('#main'), /tu relis puis tu publies/);
+  await C.fill('textarea[name=t]', 'Ajoute une question sur les doigts'); await c.click('form[data-submit=asSend] button.pri');
+  await C.waitForSelector('.msg.assistant:has-text("Ajoute une question sur les doigts")', { timeout: 15000 });
+  assert.equal(await c.count('.msg.user'), 1);
 });
 await step('admin sans code : réécrire un texte et envoyer une annonce ; l’autre compte les voit ; tout s’annule', async () => {
-  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=textModeOn]'); await C.waitForSelector('#textbar');
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=look]'); await c.click('[data-act=textModeOn]'); await C.waitForSelector('#textbar');
   await C.locator('.quick .qa.pri b').first().click(); await C.waitForSelector('#sheet textarea[name=to]');
   await C.fill('#sheet textarea[name=to]', 'Ma séance du jour'); await c.click('#sheet form[data-submit=textSave] button.pri'); await C.waitForSelector('#toast.show:has-text("tout le monde")');
   await c.click('#textbar [data-act=textModeOff]');
-  await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=announceNew]');
+  await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=look]'); await c.click('[data-act=announceNew]');
   await C.fill('#sheet input[name=title]', 'Salle Bloc Club ajoutée'); await c.click('#sheet form[data-submit=announceGo] button.pri'); await c.confirm(); await C.waitForSelector('#toast.show:has-text("Annonce")');
   cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('home');
   await B.waitForSelector('#main :text("Ma séance du jour")', { timeout: 10000 });
   await b.click('.topicons [data-act=notifOpen]'); await B.waitForSelector('#sheet :text("Salle Bloc Club ajoutée")', { timeout: 10000 }); await B.keyboard.press('Escape');
-  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin');
+  cur = C; await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=changes]');
   for (let k = 0; k < 2; k++) { await C.locator('[data-act=glReset]').first().click(); await c.confirm(); await C.waitForTimeout(400); }
   cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('home'); await B.waitForSelector('#main :text-is("Séance du jour")', { timeout: 10000 });
 });

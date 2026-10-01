@@ -1,6 +1,6 @@
 # Plan — rendre factuelle l'analyse du niveau d'une séance
 
-Statut : **à faire** (validé par l'utilisateur, pas encore implémenté). À appliquer à la prochaine demande de modification du dépôt.
+Statut (8.28.0) : **A, B et D faits, sauf la charge relative au poids du corps (le lest écrit n'est pas encore lu — point 4)** (`public/estimate.js` réécrit, tests dans `tests/data.test.mjs`). **C non fait** : comparaison à ton historique et ressenti agrégé des membres (ce dernier attend ta décision : données partagées, même anonymes).
 Code concerné : `public/estimate.js` (`estimateLevel`), utilisé par `generator.js`, `sessionmeta.js`, `views-library.js` (« 🔎 Pourquoi ce niveau ? »), serveur (bibliothèque commune).
 
 ## Problèmes constatés (non factuels aujourd'hui)

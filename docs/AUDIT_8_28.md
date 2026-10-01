@@ -30,4 +30,6 @@ de la bibliothèque et les 7 étapes de « Créer une séance ». Captures et te
 | 19 | Questionnaire | Les bandeaux d'aide (« Ajoute ton lieu… », « Fixe-toi un objectif ») s'affichent **par-dessus le questionnaire**. | Distrayant, et demandent ce que le questionnaire est justement en train de demander. |
 
 ## Ce qui est fait en 8.28.0
-Voir `CHANGELOG.md` (section 8.28.0) : chaque ligne ci-dessus y a sa correction ou sa limite.
+Défauts 1 à 15 et 17 à 19 corrigés ; 16 corrigé en partie (détail dans `CHANGELOG.md`, section 8.28.0). Restent ouverts :
+- 16 (niveau factuel) : la charge relative au poids du corps n'est pas lue ; « comparer au réel » attend ta décision (voir `docs/PLAN_NIVEAU_SEANCE.md`).
+- Trouvé en cours de route et corrigé : passer de « L'app choisit » à « Je compose moi-même » gardait les exercices choisis avant (test navigateur en échec, reproduit puis corrigé).
