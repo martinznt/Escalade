@@ -65,7 +65,7 @@ function vSummary() {
     work: () => (b.capDiff.length ? WORK() : ''),
     regularity: () => REG(),
     load: () => LOAD(),
-    muscles: () => h`<section class="card"><div class="row between"><h3>🫀 Muscles travaillés</h3>${seg('muscleDays', String(S.muscleDays || 7), [['7', '7 j'], ['30', '30 j']])}</div>${raw(anatomySvg({ heat: muscleVolume(c, S.muscleDays || 7) }))}</section>`,
+    muscles: () => h`<section class="card"><div class="row between"><h3>🫀 Muscles travaillés</h3>${seg('muscleDays', String(S.muscleDays || 7), [['7', '7 j'], ['30', '30 j']])}</div>${raw(anatomySvg({ heat: muscleVolume(c, S.muscleDays || 7) }))}${menuList([['allGo', '', '🪞', 'Séries par muscle et mensurations', 'Repère de la semaine, silhouette visée (dans Mon corps et mes préférences)', 'profile/body']])}</section>`,
     badges: () => badgesCard(),
     weeksum: () => SUM(),
   });

@@ -14,7 +14,7 @@ import { catalogEditButtons, sourceAdminButtons } from './content.js';
 import { sessionBrief, exerciseSheet } from './views-library.js';
 export { sourcesLine };
 
-const GOAL_L = { endurance: 'Endurance', force: 'Force', poids: 'Perte de poids', forme: 'Forme', sante: 'Santé', climb: 'Escalade', mobilite: 'Mobilité' };
+const GOAL_L = { endurance: 'Endurance', force: 'Force', poids: 'Perte de poids', muscle: 'Prise de muscle', forme: 'Forme', sante: 'Santé', climb: 'Escalade', mobilite: 'Mobilité' };
 /** Ce que le profil dit, pour trier : sports, objectifs, points faibles, niveau, matériel. */
 function profileNeeds() {
   const c = ctx(), acts = Object.keys(c.activities), cfg = item('config', 'main') || {};

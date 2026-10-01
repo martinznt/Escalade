@@ -20,9 +20,9 @@ export const setupDone = () => !!mainConfig().setupDone;
 
 /* ═════════ Questions ═════════ */
 const LEVELS = [['0', '🌱 Je débute'], ['1', '🙂 Je pratique régulièrement'], ['2', '💪 Je suis confirmé(e)'], ['nsp', '🤷 Je ne sais pas']];
-export const GOALS = [['climb', '🧗 Progresser en escalade'], ['force', '💪 Devenir plus fort(e)'], ['endurance', '🔋 Avoir plus d’endurance / de cardio'], ['mobilite', '🧘 Être plus souple, bouger mieux'], ['forme', '🙂 Rester en forme'], ['figure', '🤸 Réussir une figure (front lever, drapeau…)'], ['poids', '⚖️ Perdre du poids'], ['sante', '❤️ Être en meilleure santé']];
+export const GOALS = [['climb', '🧗 Progresser en escalade'], ['force', '💪 Devenir plus fort(e)'], ['endurance', '🔋 Avoir plus d’endurance / de cardio'], ['mobilite', '🧘 Être plus souple, bouger mieux'], ['forme', '🙂 Rester en forme'], ['figure', '🤸 Réussir une figure (front lever, drapeau…)'], ['poids', '⚖️ Perdre du poids'], ['muscle', '🏋️ Prendre du muscle'], ['physique', '🪞 Changer ma silhouette (V, abdos…)'], ['sante', '❤️ Être en meilleure santé']];
 const AVOID = [['fingers', '✋ Doigts'], ['shoulders', '🦾 Épaules'], ['elbows', '💪 Coudes'], ['knees', '🦵 Genoux'], ['none', '👍 Rien de particulier']];
-export const INTENT_OF = { climb: 'specifique', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: '', figure: 'force', poids: 'endurance', sante: 'endurance' };
+export const INTENT_OF = { climb: 'specifique', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: '', figure: 'force', poids: 'endurance', muscle: 'force', physique: 'force', sante: 'endurance' };
 const BLOC_CHOICES = ['4', '5', '5+', '6A', '6A+', '6B', '6B+', '6C', '7A', '7A+', '7B', '7C', '8A'];
 
 const STEPS = [
@@ -295,6 +295,7 @@ ACT.qAnswer = (el) => {
     case 'climbPerWeek': case 'perWeek': done({ [id]: Number(v) }); break;
     case 'minutes': S.settings.defaultMinutes = Number(v); S.gen.minutes = Number(v); saveSettings(); done({ durations: [v] }); break;
     case 'goal': done({ goal: v, intent: INTENT_OF[v] || '' }); break;
+    case 'physique': { const b = item('config', 'body') || {}; if (v !== 'nsp') putItem('config', 'body', { ...b, physique: [...new Set([...(b.physique || []), v])] }); done(); break; }
     case 'place': if (ENV_TYPES[v]) putItem('env', 'env-' + v, { name: ENV_TYPES[v], type: v, equipment: ENV_TEMPLATES[v] || [], isDefault: !itemsOf('env').length }); done(); break;
     case 'bloc': {
       const sys = BUILTIN_SYSTEMS.font, lv = sys.levels.find((l) => l.label === v);

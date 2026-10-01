@@ -3,6 +3,7 @@
 // l'enregistrement des réponses sont dans views-setup.js. Une question déjà répondue (ou « je ne sais pas ») n'est
 // plus posée ; « plus tard » la met en pause quelques jours sur cet appareil.
 import { ACTIVITIES, ENV_TYPES } from './model.js';
+import { PHYSIQUE } from './physique.js';
 
 const BLOC = ['4', '5', '5+', '6A', '6A+', '6B', '6B+', '6C', '7A', '7A+', '7B', '7C', '8A'];
 const REPS = (unit) => [['0', '0'], ['1', `1 à 4 ${unit}`], ['5', `5 à 9`], ['10', '10 à 14'], ['15', '15 à 19'], ['20', '20 ou plus']];
@@ -28,7 +29,9 @@ export function pendingQuestions(ctx) {
   const pullGoal = (ctx.goals || []).some((g) => (g.status || 'active') === 'active' && NEEDS_PULL.has(g.skillId));
   if ((pullGoal || climbing || acts.includes('strength') || acts.includes('conditioning')) && !hasPerf('max_tractions')) add({ id: 'tractions', emoji: '💪', text: 'Combien de tractions d’affilée peux-tu faire ?', why: 'Un bon repère de ta force de tirage (réponse approximative, tu pourras la préciser).', options: REPS('tractions'), nsp: true });
   if ((acts.includes('strength') || acts.includes('conditioning')) && !hasPerf('max_pompes')) add({ id: 'pompes', emoji: '🙌', text: 'Combien de pompes d’affilée peux-tu faire ?', why: 'Un repère de ta force de poussée (approximatif).', options: REPS('pompes'), nsp: true });
-  if (!cfg.goal) add({ id: 'goal', emoji: '🎯', text: 'Qu’est-ce qui te motive le plus ?', why: 'Pour orienter les séances proposées.', options: [['climb', '🧗 Progresser en escalade'], ['force', '💪 Être plus fort(e)'], ['endurance', '🔋 Plus d’endurance'], ['mobilite', '🧘 Être plus souple'], ['forme', '🙂 Rester en forme']] });
+  if (!cfg.goal) add({ id: 'goal', emoji: '🎯', text: 'Qu’est-ce qui te motive le plus ?', why: 'Pour orienter les séances proposées.', options: [['climb', '🧗 Progresser en escalade'], ['force', '💪 Être plus fort(e)'], ['endurance', '🔋 Plus d’endurance'], ['mobilite', '🧘 Être plus souple'], ['forme', '🙂 Rester en forme'], ['muscle', '🏋️ Prendre du muscle'], ['physique', '🪞 Changer ma silhouette'], ['poids', '⚖️ Perdre du poids']] });
+  const goals = cfg.goals?.length ? cfg.goals : cfg.goal ? [cfg.goal] : [];
+  if ((goals.includes('physique') || goals.includes('muscle')) && !(ctx.config?.body?.physique || []).length) add({ id: 'physique', emoji: '🪞', text: 'Qu’aimerais-tu changer en priorité ?', why: 'Pour cibler les bons muscles et te proposer les bonnes mensurations (tu pourras en choisir d’autres dans ton profil).', options: Object.entries(PHYSIQUE).map(([k, p]) => [k, `${p.emoji} ${p.label}`]) });
   if (!Object.values(ctx.settings?.avoid || {}).some(Boolean)) add({ id: 'avoid', emoji: '🩹', text: 'Une zone du corps à ménager en ce moment ?', why: 'L’app évitera les exercices qui la sollicitent fortement (ce n’est pas un avis médical).', options: [['none', '👍 Non, rien'], ['fingers', '✋ Doigts'], ['shoulders', '🦾 Épaules'], ['elbows', '💪 Coudes'], ['knees', '🦵 Genoux']] });
   return q;
 }

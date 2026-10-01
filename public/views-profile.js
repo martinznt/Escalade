@@ -25,6 +25,7 @@ import { capMastery, transfers, relationMap, estimatedFormats, MASTERY } from '.
 import { strategies } from './strategy.js';
 import { assessment, conditionFacts, suggestedGoals, guidedTests, ENVIES, ZONE_WORD } from './assess.js';
 import { levelFor } from './generator.js';
+import { PHYSIQUE, PHYSIQUE_SOURCES, physiqueGroups, physiqueMeasures, physiqueTrack, weeklySets, SETS_RANGE } from './physique.js';
 
 const SUBS = [['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
 const TILES = { bilan: ['🩺', 'Mon bilan physique', 'ce que l’app sait de ta condition, tests à faire'], analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
@@ -345,7 +346,27 @@ function vBody() {
     <section class="card"><div class="row between"><h3>⚖️ Mon poids</h3><button class="btn sm pri" data-act="weighIn">＋ Pesée</button></div>
       ${weights.length >= 2 ? lineChart(weights.slice(-30).map((p) => ({ v: p.value, t: p.date })), 'kg') : ''}
       ${weights.length ? h`<p class="small">Dernière pesée : <b>${weights.at(-1).value} kg</b> (${fmtDay(weights.at(-1).date)})${weights.length >= 2 ? h` · ${(() => { const d = Math.round((weights.at(-1).value - weights[0].value) * 10) / 10; return d > 0 ? `+${d} kg` : `${d} kg`; })()} depuis le ${fmtDay(weights[0].date)}` : ''}</p>` : h`<p class="small muted">Note ton poids de temps en temps (même heure, même conditions) pour voir la tendance.</p>`}</section>
+    ${silhouetteCard(b, goals)}
     <section class="card"><h3>Ce que ça change dans tes séances</h3>${adj.reasons.length ? h`<ul class="small">${adj.reasons.map((r) => h`<li>${r}</li>`)}</ul>` : h`<p class="small muted">Rien de spécial : les séances suivent ton niveau et tes objectifs.</p>`}${sourcesLine(adj.sources)}</section>`;
+}
+/** Silhouette visée : ce que chaque choix veut dire, mensurations (avec évolution), séries de la semaine par muscle. */
+export function silhouetteCard(b = item('config', 'body') || {}, goals = item('config', 'main')?.goals || []) {
+  const ch = (b.physique || []).filter((k) => PHYSIQUE[k]), muscle = goals.includes('muscle') || goals.includes('physique');
+  if (!ch.length && !muscle) return '';
+  const c = ctx(), measures = ch.length ? physiqueMeasures(ch) : [['tour_bras', ''], ['tour_poitrine', ''], ['tour_cuisse', ''], ['tour_taille', '']];
+  const tr = physiqueTrack(c, ch.length ? ch : ['bras', 'pecs', 'jambes']), byId2 = Object.fromEntries(tr.rows.map((r) => [r.metricId, r]));
+  const groups = physiqueGroups(ch), sets = weeklySets(c, groups.length ? groups : ['dos', 'pecs', 'epaules', 'bras', 'cuisses', 'fessiers']);
+  const cm = (v) => `${String(Math.round(v * 10) / 10).replace('.', ',')}`;
+  return h`<section class="card stack"><h3 style="margin:0">🪞 Ma silhouette</h3>
+    ${ch.length ? h`<ul class="clean tight small">${ch.map((k) => h`<li><b>${PHYSIQUE[k].emoji} ${PHYSIQUE[k].label}</b> — ${PHYSIQUE[k].tip}</li>`)}</ul>` : h`<p class="small muted">Choisis plus haut ce que tu aimerais changer (forme en V, abdos visibles, bras…) pour des conseils et des mensurations précis.</p>`}
+    <b class="small">📏 Mes mensurations</b>
+    <div class="setmenu">${measures.map(([id]) => { const m = METRICS[id], r = byId2[id]; const v = r?.value ?? c.perfs.filter((p) => p.metricId === id && Number.isFinite(Number(p.value))).sort((x, y) => y.date - x.date)[0]?.value; return m ? h`<button class="setrow" data-act="perfAdd" data-id="${id}"><span class="sic">📏</span><span class="grow"><b>${m.label}</b><small>${v != null ? `${cm(v)} ${m.unit}${r?.delta ? ` · ${r.delta > 0 ? '+' : ''}${cm(r.delta)} depuis le ${fmtDay(r.since)}` : ''}` : 'pas encore mesuré — touche pour noter'}</small></span><span class="chev">＋</span></button>` : ''; })}</div>
+    ${tr.ratioText ? h`<p class="tiny">${tr.ratioText}</p>` : ''}
+    <p class="tiny muted">Mesure toujours dans les mêmes conditions (le matin, même mètre ruban) : l’évolution compte plus que le chiffre.</p>
+    <b class="small">📊 Séries cette semaine (7 jours)</b>
+    <div class="stack tight">${sets.map((x) => h`<div class="small"><div class="row between"><span>${x.label}</span><span class="tiny ${x.state === 'ok' ? 'ok-t' : x.state === 'high' ? 'warn-t' : 'muted'}">${x.text}</span></div>${meter(Math.min(100, (x.sets / SETS_RANGE[1]) * 100), x.state === 'ok' ? 'ok' : '')}</div>`)}</div>
+    <p class="tiny muted">Repère tiré des études : environ ${SETS_RANGE[0]} à ${SETS_RANGE[1]} séries difficiles par muscle et par semaine pour prendre du muscle. L’alimentation, le sommeil et la génétique comptent aussi : rien n’est garanti.</p>
+    ${sourcesLine(PHYSIQUE_SOURCES)}</section>`;
 }
 const saveBody = (b) => { const clean = cleanBody(b); putItem('config', 'body', Object.fromEntries(Object.entries({ ...(item('config', 'body') || {}), ...clean }).filter(([k, v]) => v !== undefined || !(k in clean)).map(([k, v]) => [k, v ?? null]).filter(([, v]) => v !== null))); };
 ACT.bodySet = (el) => { saveBody(bodyToggle(item('config', 'body') || {}, el.dataset.k, el.dataset.v)); render(); };

@@ -138,6 +138,13 @@ export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, 
   return { ok, excluded };
 }
 
+/** Prise de muscle : séries de 8 à 12 répétitions, 3 séries au moins, 1 à 2 min de repos (exercices de force à répétitions seulement). */
+const HYPER_KINDS = new Set(['pull', 'legs', 'core', 'antagonist']);
+function hypertrophyScheme(ex, lib, plan) {
+  if (!plan.hypertrophy || plan.circuit || !ex || ex.mode === 'time' || lib?.mode === 'time' || !HYPER_KINDS.has(lib?.kind || ex.kind) || lib?.role !== 'main') return;
+  if (lib.minLevel >= 3) return; // figures et mouvements très durs : on garde leur schéma
+  ex.repsMin = 8; ex.repsMax = 12; ex.sets = Math.max(3, Number(ex.sets) || 3); ex.rest = Math.max(60, Math.min(120, Number(ex.rest) || 90));
+}
 /* ───────── Simulation avant génération ───────── */
 /**
  * opts : { activityId, mode: weaknesses|strengths|goal, goalId, capId, minutes, intentions:[{id,p}], envId, light, priorities:{capId:0..3}, seed }
@@ -166,6 +173,8 @@ export function planSession(opts = {}, ctx) {
   for (const c of opts.strengthCaps || []) add(c, 1, 'point fort que tu as choisi');
   for (const c of opts.weakCaps || []) add(c, 1.2, 'point faible que tu as choisi');
   for (const [c, w] of Object.entries(muscleCaps(opts.muscles || []))) add(c, w * 0.8, 'muscles que tu as choisis');
+  // Silhouette visée (Profil › Mon corps et mes préférences) : ses muscles passent en priorité, sans écraser tes choix du jour.
+  if (!(opts.muscles || []).length && bodyAdj.groups?.length) { const rel = relevantCaps(ctx, activityId); for (const [c, w] of Object.entries(muscleCaps(bodyAdj.groups))) if (rel[c] != null) add(c, w * 0.5, 'ta silhouette visée'); }
   if (custom) { /* déjà ciblé par la personne */ }
   else if (goal) for (const { id, w } of goalCaps(goal, ctx)) { const st = byCap[id] || capacityState(id, ctx); add(id, w * (st.level == null ? 1 : 1.25 - st.level / 4), `requise pour « ${goalLabel(goal)} » (poids ${w})${st.level != null ? ` · ${STATUS_WORD[st.status]}` : ' · niveau non renseigné'}`); }
   else if (mode === 'strengths') {
@@ -214,7 +223,7 @@ export function planSession(opts = {}, ctx) {
     intentions: opts.intentions || [], priorities: opts.priorities || {}, envId: env?.id || '', envName: env?.name || '', equipment: [...eq], level, levelHow, levelCap: bodyAdj.levelCap ?? null,
     distribution, blocks, difficulty: { value: est, text: `${est}/5 — intensité ${intensityWord} (niveau pris en compte : ${['débutant', 'intermédiaire', 'avancé'][level]}, ${levelHow})` },
     parts, avoidZones: opts.avoidZones || [], noPlyo: !!bodyAdj.noPlyo,
-    constraints, missing, seed, capId: opts.capId || '', bodyReasons: bodyAdj.reasons, restFactor: bodyAdj.restFactor, circuit: !!bodyAdj.circuit,
+    constraints, missing, seed, capId: opts.capId || '', bodyReasons: bodyAdj.reasons, restFactor: bodyAdj.restFactor, circuit: !!bodyAdj.circuit, hypertrophy: !!bodyAdj.hypertrophy,
     intentionText: custom ? `Séance sur mesure : ${[...pickGoals.map(goalLabel), ...(opts.intents || []).map((i) => i.label)].slice(0, 3).join(', ') || 'tes choix'}` : goal ? `Avancer vers « ${goalLabel(goal)} »` : light ? 'Séance légère : technique, mobilité, travail doux' : mode === 'strengths' ? 'Faire progresser tes points forts' : 'Travailler tes axes de progrès',
   };
   if (!isClimbing(activityId) && !parts.length) {
@@ -369,6 +378,7 @@ function generateParts(plan, ctx, eq) {
       const hint = progressHint(it.ex, ctx.history); if (hint) it.ex.note = `Dernière fois : ${hint.last}.${hint.next ? ' ' + hint.next + '.' : ''}`;
       if (plan.restFactor && plan.restFactor !== 1) it.ex.rest = Math.round((it.ex.rest || 60) * plan.restFactor);
       if (plan.circuit) it.ex.rest = Math.min(it.ex.rest || 45, 45);
+      hypertrophyScheme(it.ex, it.lib, plan);
     }
     why.push(...sel.items.map((it) => `${it.lib.name} : ${it.ex.why}.`));
     out.push(...tag(sel.items.map((x) => x.ex)));
@@ -430,7 +440,7 @@ export function generateFromPlan(plan, ctx) {
     const warm = B.warm <= 2 ? buildBlock([warmIds.find((id) => byId(id).mode === 'time') || warmIds[0]].filter(Boolean), 'warmup', B.warm, targets) : buildBlock(warmIds, 'warmup', B.warm, targets);
     const cool = B.cool ? buildBlock(coolIds, 'cool', B.cool, targets) : [];
     // Repos adaptés au profil : plus longs si la forme est basse, courts en circuit (objectif perte de poids).
-    for (const it of items) { if (plan.restFactor && plan.restFactor !== 1) it.ex.rest = Math.round((it.ex.rest || 60) * plan.restFactor); if (plan.circuit) it.ex.rest = Math.min(it.ex.rest || 45, 45); }
+    for (const it of items) { if (plan.restFactor && plan.restFactor !== 1) it.ex.rest = Math.round((it.ex.rest || 60) * plan.restFactor); if (plan.circuit) it.ex.rest = Math.min(it.ex.rest || 45, 45); hypertrophyScheme(it.ex, it.lib, plan); }
     exercises = [...warm, ...items.map((i) => i.ex), ...cool];
     why.push(...items.map((i) => `${i.lib.name} : ${i.ex.why}.`), ...(plan.bodyReasons || []));
     if (plan.light) why.push('Mode léger : uniquement des exercices à faible intensité (technique, mobilité, travail doux). Ce n’est pas un avis médical.');
