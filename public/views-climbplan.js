@@ -33,7 +33,7 @@ import { loadAnalysis } from './brain.js';
 import { alternatives, levelFor } from './generator.js';
 import { assessment } from './assess.js';
 import { sportFamily, SPORT_STRUCTS, sportProposals, sportTargets, sportMoves, bestPerf, targetAdvice, targetParts, targetLabel, defaultWorkParts, workTitle, moveName, paceOf, fmtPace } from './sportplan.js';
-import { MOMENTS, MOMENT_HELP, MAX_AIMS, RANK_WEIGHT, FAMILY_ORDER, familyAim, intentAim, goalAim, textAim, cleanAims, aimCatalog, planFromAims, timeline, clock, sportShort, familyOfCaps, FAM_TITLE, cleanWindows, fromMin } from './aimplan.js';
+import { MOMENTS, MOMENT_HELP, MAX_AIMS, RANK_WEIGHT, FAMILY_ORDER, familyAim, intentAim, goalAim, textAim, cleanAims, aimCatalog, planFromAims, timeline, clock, sportShort, familyOfCaps, FAM_TITLE, cleanWindows, fromMin, tiers, rankWord } from './aimplan.js';
 import { keywordCaps } from './intentions.js';
 import { goalCaps } from './brain.js';
 
@@ -233,8 +233,8 @@ const AIM_NAME = { grade: '🧗 Réussir une cotation à la fin', target: '🎯 
 function aimsSummary() {
   const c = CP(), l = c.aims || [];
   if ((c.aim || 'goals') !== 'goals' && AIM_NAME[c.aim]) return h`<div class="card flat row between wrapf"><span class="small">🎯 Séance : ${AIM_NAME[c.aim]}</span><button class="btn sm" data-act="cpStepTo" data-id="2">Changer</button></div>`;
-  return h`<div class="card stack"><div class="row between wrapf"><b class="small">🎯 Tes objectifs${l.length ? ' (du plus au moins important)' : ''}</b><button class="btn sm" data-act="cpStepTo" data-id="2">${l.length ? 'Modifier ou classer' : '＋ Ajouter'}</button></div>
-    ${l.length ? h`<ol class="small tight aimol">${l.map((a) => h`<li>${a.emoji} ${a.label}</li>`)}</ol>` : h`<p class="tiny muted">Aucun : l’app fera une séance équilibrée${sportsOf(c).length > 1 ? ' pour chaque sport' : ''}. Ajoute-les à l’étape 2 pour une séance sur mesure.</p>`}</div>`;
+  return h`<div class="card stack"><div class="row between wrapf"><b class="small">🎯 Tes objectifs${l.length > 1 ? (c.equal ? ' (sans hiérarchie)' : ' (par importance)') : ''}</b><button class="btn sm" data-act="cpStepTo" data-id="2">${l.length ? 'Modifier ou classer' : '＋ Ajouter'}</button></div>
+    ${l.length ? h`<ul class="clean small tight aimol">${l.map((a, i) => h`<li><b>${c.equal && l.length > 1 ? '•' : rankWord(l, i)}</b> ${a.emoji} ${a.label}</li>`)}</ul>` : h`<p class="tiny muted">Aucun : l’app fera une séance équilibrée${sportsOf(c).length > 1 ? ' pour chaque sport' : ''}. Ajoute-les à l’étape 2 pour une séance sur mesure.</p>`}</div>`;
 }
 /* Étape 2 · Tes objectifs : une liste CLASSÉE (n°1 = le plus important), sur un ou plusieurs sports. On ajoute depuis
  * les 6 familles (expliquées), les intentions précises du sport, ses objectifs du profil, ou avec ses mots (IA). */
@@ -275,12 +275,12 @@ function vWhy() {
       ${c.intentText ? (c.intentGoal ? h`<p class="tiny ok-t">✓ Aussi enregistrée comme objectif.</p>` : h`<button class="btn sm" data-act="cpIntentGoal">🎯 Enregistrer aussi comme objectif</button>`) : ''}</div>`;
 }
 function aimsCard() {
-  const c = CP(), l = c.aims || [], n = l.length, eq = !!c.equal && n > 1;
+  const c = CP(), l = c.aims || [], n = l.length, eq = !!c.equal && n > 1, T = tiers(l), tieN = (i) => T.filter((x) => x === T[i]).length;
   return h`<div class="card stack"><h3 style="margin:0">🎯 Tes objectifs${eq ? ', sans hiérarchie' : ', du plus au moins important'}</h3>
     ${n > 1 ? seg('cpEqual', eq ? 'equal' : 'rank', [['rank', '🥇 Classés par importance'], ['equal', '⚖️ Sans hiérarchie']]) : ''}
-    ${n ? h`<div class="aimlist">${l.map((a, i) => h`<div class="aimrow"><span class="rank" aria-label="${eq ? 'Objectif' : 'Rang ' + (i + 1)}">${eq ? '•' : i + 1}</span><span class="grow aimtxt"><b>${a.emoji} ${a.label}</b><small>${[i === 0 && !eq ? 'le plus important : le plus de temps' : '', SRC[a.source] || '', a.summary || ''].filter(Boolean).join(' · ')}</small></span>
-        <span class="aimbtns"><button class="btn sm ic" data-act="cpAimUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter ${a.label}">↑</button><button class="btn sm ic" data-act="cpAimDown" data-i="${i}" ${i < n - 1 ? '' : 'disabled'} aria-label="Descendre ${a.label}">↓</button><button class="btn sm ic danger" data-act="cpAimDel" data-i="${i}" aria-label="Retirer ${a.label}">✕</button></span></div>`)}</div>
-      <p class="tiny muted">${eq ? 'Tous aussi importants : même part de temps pour chacun, l’app choisit l’ordre selon l’effort (↑ ↓ ne change que l’ordre d’affichage). À l’étape 3, tu peux quand même fixer le moment de chacun.' : '↑ ↓ pour classer. Le n°1 reçoit le plus de temps, puis le n°2, le n°3… À l’étape 3, tu diras à quel moment faire chacun.'}</p>
+    ${n ? h`<div class="aimlist">${l.map((a, i) => h`<div class="aimrow"><span class="rank ${!eq && tieN(i) > 1 ? 'tie' : ''}" aria-label="${eq ? 'Objectif' : rankWord(l, i)}">${eq ? '•' : T[i] + 1}${!eq && tieN(i) > 1 ? '=' : ''}</span><span class="grow aimtxt"><b>${a.emoji} ${a.label}</b><small>${[!eq && T[i] === 0 ? (tieN(i) > 1 ? 'n°1 ex æquo : le plus de temps, à égalité' : 'le plus important : le plus de temps') : !eq && tieN(i) > 1 ? `${rankWord(l, i)} : même part que les autres n°${T[i] + 1}` : '', SRC[a.source] || '', a.summary || ''].filter(Boolean).join(' · ')}</small></span>
+        <span class="aimbtns">${!eq && i > 0 ? h`<button class="btn sm ic ${a.tie ? 'pri' : ''}" data-act="cpAimTie" data-i="${i}" aria-pressed="${!!a.tie}" aria-label="${a.tie ? 'Séparer de l’objectif au-dessus' : 'Même importance que l’objectif au-dessus'}" title="${a.tie ? 'Séparer de l’objectif au-dessus' : 'Même importance que l’objectif au-dessus'}">=</button>` : ''}<button class="btn sm ic" data-act="cpAimUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter ${a.label}">↑</button><button class="btn sm ic" data-act="cpAimDown" data-i="${i}" ${i < n - 1 ? '' : 'disabled'} aria-label="Descendre ${a.label}">↓</button><button class="btn sm ic danger" data-act="cpAimDel" data-i="${i}" aria-label="Retirer ${a.label}">✕</button></span></div>`)}</div>
+      <p class="tiny muted">${eq ? 'Tous aussi importants : même part de temps pour chacun, l’app choisit l’ordre selon l’effort (↑ ↓ ne change que l’ordre d’affichage). À l’étape 3, tu peux quand même fixer le moment de chacun.' : '↑ ↓ pour classer. « = » met un objectif à la même importance que celui au-dessus (ex æquo : même part de temps). Le n°1 reçoit le plus de temps, puis le n°2… À l’étape 3, tu diras à quel moment faire chacun.'}</p>
       ${eq ? '' : h`<button class="btn sm" data-act="cpStrat">🧭 Plusieurs chemins pour ton n°1</button>`}`
       : h`<p class="small muted">Aucun objectif pour l’instant : ajoute-en un ou plusieurs ci-dessous. Sans objectif, l’app fait une séance équilibrée.</p>`}</div>`;
 }
@@ -423,12 +423,13 @@ function vStructure() {
 function momentsCard() {
   const c = CP(), l = c.aims || [];
   return h`<div class="card stack"><h3 style="margin:0">⏱️ À quel moment ?</h3>
-    ${l.length ? h`<div class="aimlist">${l.map((a, i) => h`<div class="momrow"><span class="rank">${c.equal && l.length > 1 ? '•' : i + 1}</span><span class="grow small aimtxt">${a.emoji} ${a.label}</span><select data-change="cpAimWhen" data-i="${i}" aria-label="Moment de ${a.label}">${Object.entries(MOMENTS).map(([k, t]) => h`<option value="${k}" ${(a.when || 'auto') === k ? 'selected' : ''}>${t}</option>`)}</select></div>`)}</div>
+    ${l.length ? h`<div class="aimlist">${l.map((a, i) => h`<div class="momrow"><span class="rank">${c.equal && l.length > 1 ? '•' : tiers(l)[i] + 1}</span><span class="grow small aimtxt">${a.emoji} ${a.label}</span><select data-change="cpAimWhen" data-i="${i}" aria-label="Moment de ${a.label}">${Object.entries(MOMENTS).map(([k, t]) => h`<option value="${k}" ${(a.when || 'auto') === k ? 'selected' : ''}>${t}</option>`)}</select></div>`)}</div>
       <ul class="clean tight tiny muted">${Object.entries(MOMENT_HELP).map(([k, t]) => h`<li><b>${MOMENTS[k]}</b> — ${t}</li>`)}</ul>`
       : h`<p class="small muted">Pas d’objectif classé : une partie équilibrée pour chaque sport. Ajoute des objectifs à l’étape 2 pour une séance sur mesure.</p>`}
     ${c.partsTouched ? h`<p class="tiny warn-t">Tu as modifié les phases à la main. Changer un moment recalcule toute la structure (tes réglages de phases seront remplacés).</p>`
       : (c.planNotes || []).length ? h`<div class="card flat acc-b"><b class="small">🧠 Comment la séance s’adapte</b><ul class="clean tight small">${c.planNotes.map((t) => h`<li>${t}</li>`)}</ul></div>` : ''}</div>`;
 }
+ACT.cpAimTie = (el) => { const c = CP(), a = c.aims?.[Number(el.dataset.i)]; if (!a || !Number(el.dataset.i)) return; a.tie = !a.tie; c.result = null; c.built = null; keep(); render(); toast(a.tie ? `« ${a.label} » : même importance que l’objectif au-dessus.` : `« ${a.label} » : séparé, un rang en dessous.`); };
 ACT.cpEqual = (el) => { const c = CP(); c.equal = el.dataset.id === 'equal'; c.result = null; c.built = null; keep(); render(); toast(c.equal ? 'Sans hiérarchie : même temps pour chaque objectif.' : 'Objectifs classés : le n°1 reçoit le plus de temps.'); };
 CHG.cpAimWhen = (el) => {
   const c = CP(), a = c.aims?.[Number(el.dataset.i)]; if (!a || !MOMENTS[el.value]) return;
@@ -519,14 +520,14 @@ function vValidate() {
     const p = ph[r.i], ex = exOf(p), extra = phaseExtras(p);
     return h`<div class="trow"><span class="tt">${at(r.from)}–${at(r.to)}</span><div class="grow tbody"><b class="small">${ROLES[p.role]?.[0] || '•'} ${phaseName(p)}</b>${p.aimRank === 0 && !p.aimEqual ? h` <span class="tag acc">n°1</span>` : ''}
       <div class="tiny muted">${actLabel(p.activity)} · 📍 ${pls[r.i]?.name || '—'}${p.type === 'pause' ? '' : ` · ${INTENSITY[p.intensity]?.[1] || ''}`} · ${fmtMin(p.minutes)}${p.type === 'climb' ? ` · ${rangeText(p)}` : ''}</div>
-      ${p.aimLabel ? h`<div class="tiny acc-t">${p.aimEqual ? 'Sert ton objectif' : `Sert ton objectif n°${p.aimRank + 1}`} : ${p.aimLabel}</div>` : p.prepFor ? h`<div class="tiny acc-t">Prépare ton objectif n°1</div>` : ''}
+      ${p.aimLabel ? h`<div class="tiny acc-t">${p.aimEqual ? 'Sert ton objectif' : `Sert ton objectif n°${p.aimRank + 1}${String(p.goal || '').includes('=)') ? ' ex æquo' : ''}`} : ${p.aimLabel}</div>` : p.prepFor ? h`<div class="tiny acc-t">Prépare ton objectif n°1</div>` : ''}
       ${ex.length ? h`<div class="tiny">${ex.slice(0, 4).map((e) => e.name).join(' · ')}${ex.length > 4 ? ` · +${ex.length - 4}` : ''}</div>` : ''}
       ${extra ? h`<div class="tiny muted">${extra}</div>` : ''}
       ${!c.partsTouched && (p.why || []).length ? h`<details class="how mini"><summary>Pourquoi ici ?</summary><ul class="clean tight tiny">${p.why.map((t) => h`<li>${t}</li>`)}</ul></details>` : ''}</div></div>`;
   };
   return h`<div class="card stack"><h3 style="margin:0">📋 Ta structure finale</h3>
       <p class="small"><b>${fmtMin(tl.total || c.minutes)}</b> · ${ph.length} phase${ph.length > 1 ? 's' : ''} · ${sessionActivities(ph).map(actLabel).join(', ') || sportLabel(c.sport)}</p>
-      ${aims.length ? h`<p class="small">🎯 ${aims.map((a, i) => (c.equal && aims.length > 1 ? a.label : `${i + 1}. ${a.label}`)).join(' · ')}${c.equal && aims.length > 1 ? ' (sans hiérarchie)' : ''}</p>` : AIM_NAME[c.aim] ? h`<p class="small">🎯 ${AIM_NAME[c.aim]}</p>` : ''}
+      ${aims.length ? h`<p class="small">🎯 ${aims.map((a, i) => (c.equal && aims.length > 1 ? a.label : `${tiers(aims)[i] + 1}${tiers(aims).filter((x) => x === tiers(aims)[i]).length > 1 ? '=' : ''}. ${a.label}`)).join(' · ')}${c.equal && aims.length > 1 ? ' (sans hiérarchie)' : ''}</p>` : AIM_NAME[c.aim] ? h`<p class="small">🎯 ${AIM_NAME[c.aim]}</p>` : ''}
       ${intent.text ? h`<p class="small">📝 Intention : « ${intent.text} » <span class="tiny muted">(pour cette séance seulement)</span></p>` : ''}
       <p class="small">⏱ ${budget(ph, c.minutes, tr).text}</p>
       <p class="small">📈 Charge estimée : <b>${loadOf(ph)}</b> <span class="tiny muted">(minutes × intensité, indicatif : ${loadOf(ph) < 150 ? 'légère' : loadOf(ph) < 350 ? 'moyenne' : 'élevée'})</span></p>

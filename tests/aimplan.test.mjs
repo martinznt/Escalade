@@ -156,4 +156,16 @@ ok('horaires, objectifs classés : le n°1 en bloc (2e créneau) → la voie d�
   const fingers = r.phases.find((p) => p.type === 'fingers'); assert.ok(fingers, 'poutre utilisée'); assert.equal(fingers.place.mode, 'same');
   const iF = r.phases.indexOf(fingers), iRe = r.phases.findIndex((p) => p.goal === 'Remise en route'); assert.ok(iF > iRe, 'doigts à la salle de bloc (la seule avec une poutre)');
 });
+ok('classés avec ex æquo : A et B n°1 à égalité, C n°2 ; même part pour les ex æquo, plus que le n°2', () => {
+  const aims = [A.familyAim('force', 'climbing_boulder'), { ...A.familyAim('technique', 'climbing_boulder'), tie: true }, A.familyAim('endurance', 'climbing_route')];
+  assert.deepEqual(A.tiers(aims), [0, 0, 1]); assert.equal(A.rankWord(aims, 1), 'n°1 ex æquo'); assert.equal(A.rankWord(aims, 2), 'n°2');
+  const r = A.planFromAims({ aims, sports: ['climbing_boulder', 'climbing_route'], minutes: 120 }), w = work(r.phases).filter((p) => p.aimKey);
+  const m = Object.fromEntries(w.map((p) => [p.aimKey, p.minutes]));
+  const [a, b, c] = aims.map((x) => m[x.key]);
+  assert.ok(Math.abs(a - b) <= 5, `ex æquo : ${a} / ${b}`); assert.ok(Math.min(a, b) > c, `n°1 > n°2 : ${a}, ${b}, ${c}`);
+  assert.match(r.notes.join('\n'), /n°1 ex æquo/); assert.equal(sum(r.phases), 120);
+  assert.ok(w.filter((p) => p.objective).length === 2, 'les deux n°1 sont des objectifs principaux');
+  const tie2 = [aims[0], { ...aims[2], tie: false }, { ...A.familyAim('mobilite', 'climbing_boulder'), tie: true }];
+  assert.match(A.planFromAims({ aims: tie2, sports: ['climbing_boulder', 'climbing_route'], minutes: 120 }).notes.join('\n'), /Même importance \(n°2\)/);
+});
 console.log(`\n${n} tests objectifs classés OK`);

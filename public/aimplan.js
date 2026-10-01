@@ -87,7 +87,7 @@ const WORD_INT = { easy: 'facile', mod: 'modérée', hard: 'intense', max: 'maxi
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const minOf = (a) => MIN_ROLE[FAMILY_ROLE[a.family]] || MIN_AIM;
 /** Nom court d'une phase (≤ 40 caractères, rang compris) : « Performer · Voie (n°1) ». */
-const goalText = (a) => { const tail = a.equal ? '' : ` (n°${a.rank + 1})`, max = 40 - tail.length; return (a.label.length > max ? a.label.slice(0, max - 1).trim() + '…' : a.label) + tail; };
+const goalText = (a) => { const tail = a.equal ? '' : ` (n°${a.rank + 1}${a.tied ? '=' : ''})`, max = 40 - tail.length; return (a.label.length > max ? a.label.slice(0, max - 1).trim() + '…' : a.label) + tail; };
 const r5 = (x) => Math.round(x / 5) * 5;
 const str = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
 export const isClimbSport = (sp) => sp === 'climbing_boulder' || sp === 'climbing_route';
@@ -143,13 +143,18 @@ export function textAim(r, sport, acts, family = '') {
 /** Partie « équilibrée » pour un sport choisi sans objectif (pour que chaque sport choisi soit dans la séance). */
 export const balancedAim = (sport, acts) => ({ key: `eq@${sport}`, family: 'equilibre', sport, label: `${FAM_TITLE.equilibre} · ${sportShort(sport, acts)}`, emoji: ACTIVITIES[sport]?.emoji || acts?.[sport]?.emoji || '🏅', caps: capsOk(ACTIVITIES[sport]?.caps), subs: [], source: 'auto', when: 'auto' });
 
+/** Niveau d'importance de chaque objectif de la liste : un objectif marqué « tie » a la même importance que celui
+ * d'avant (ex æquo). [A, B=, C] → [0, 0, 1] : A et B sont tous les deux n°1, C est n°2. */
+export const tiers = (aims = []) => { let t = -1; return aims.map((a, i) => (i === 0 || !a?.tie ? ++t : t)); };
+/** Libellé du rang : « n°1 », « n°1 ex æquo ». */
+export const rankWord = (aims, i) => { const T = tiers(aims), n = T.filter((x) => x === T[i]).length; return `n°${T[i] + 1}${n > 1 ? ' ex æquo' : ''}`; };
 /** Liste d'objectifs nettoyée : clés uniques, familles connues, sport parmi ceux de la séance, moment connu. */
 export function cleanAims(list, sports = []) {
   const seen = new Set(), sp0 = sports[0] || '';
   return (Array.isArray(list) ? list : []).filter((a) => a && typeof a === 'object').map((a) => ({
     ...a, key: str(a.key, 80), family: INTENT_FAMILIES[a.family] || a.family === 'equilibre' ? a.family : '', sport: sports.includes(a.sport) ? a.sport : sp0,
     label: str(a.label, 60), emoji: str(a.emoji, 4), caps: capsOk(a.caps), subs: (Array.isArray(a.subs) ? a.subs : []).map(String).filter((x) => /^[\w.-]{1,60}$/.test(x)).slice(0, 6),
-    when: MOMENTS[a.when] ? a.when : 'auto',
+    when: MOMENTS[a.when] ? a.when : 'auto', tie: !!a.tie,
   })).filter((a) => a.key && a.family && a.sport && !seen.has(a.key) && seen.add(a.key)).slice(0, MAX_AIMS);
 }
 
@@ -220,7 +225,7 @@ export function planFromAims(o = {}) {
   const aims = cleanAims(o.aims, sports);
   for (const sp of sports) if (!aims.some((a) => a.sport === sp)) { aims.push(balancedAim(sp, acts)); if (aims.length > 1) notes.push(`« ${sportShort(sp, acts)} » sans objectif : une partie équilibrée est ajoutée pour ce sport.`); }
   if (!aims.length) return { phases: [], notes, dropped, order: [], envId: o.envId || '', travel: 0 };
-  const EQ = !!o.equal && aims.length > 1, ranked = aims.map((a, rank) => ({ ...a, rank, equal: EQ }));
+  const EQ = !!o.equal && aims.length > 1, T = tiers(aims), ranked = aims.map((a, i) => ({ ...a, rank: EQ ? i : T[i], equal: EQ, tied: !EQ && T.filter((x) => x === T[i]).length > 1 }));
   const n1 = ranked[0], mob = (a) => a.family === 'mobilite';
   const placeOf = (sp) => (sp === sports[0] ? o.envId || '' : o.places?.[sp] || '');
   const eqOf = (sp) => { const e = o.equip?.[sp]; return e instanceof Set ? e : new Set(Array.isArray(e) ? e : []); };
@@ -269,14 +274,17 @@ export function planFromAims(o = {}) {
   const mins = seq.map((a, k) => Math.max(minOf(a), r5((work * weights[k]) / sum)));
   // Total exact : le surplus va au n°1 ; un manque est pris d'abord aux moins importants (jamais sous leur minimum).
   let diff = work - mins.reduce((t, m) => t + m, 0);
-  if (diff > 0) mins[Math.max(0, seq.indexOf(n1))] += diff;
+  if (diff > 0) { // surplus au n°1 (partagé entre les n°1 ex æquo, par tranches de 5 min)
+    const top = seq.map((a, k) => k).filter((k) => seq[k].rank === 0), idx = top.length ? top : [Math.max(0, seq.indexOf(n1))];
+    const each = Math.floor(diff / idx.length / 5) * 5; for (const k of idx) mins[k] += each; mins[idx[0]] += diff - each * idx.length;
+  }
   for (const j of seq.map((a, k) => k).sort((x, y) => seq[y].rank - seq[x].rank)) { if (diff >= 0) break; const d = Math.min(mins[j] - minOf(seq[j]), -diff); mins[j] -= d; diff += d; }
 
   // 3 · Les phases, puis les adaptations au n°1.
   const phs = seq.map((a, k) => ({ a, ph: { ...phaseFor(a, mins[k], eqOf(a.sport)), why: [] } }));
   const i1 = seq.indexOf(n1), lowForme = o.forme === 'low';
   for (const { a, ph } of phs) {
-    ph.why.push(EQ ? 'Sans hiérarchie : la même part de temps que les autres objectifs.' : a === n1 ? 'Ton objectif n°1 : le plus de temps.' : `Objectif n°${a.rank + 1} : ${ph.minutes} min (${a.rank >= 2 ? 'moins important, moins de temps' : 'important'}).`);
+    ph.why.push(EQ ? 'Sans hiérarchie : la même part de temps que les autres objectifs.' : a.tied ? `Objectif n°${a.rank + 1} ex æquo : même part de temps que ceux de même importance.` : a === n1 ? 'Ton objectif n°1 : le plus de temps.' : `Objectif n°${a.rank + 1} : ${ph.minutes} min (${a.rank >= 2 ? 'moins important, moins de temps' : 'important'}).`);
     if (a.when === 'auto') ph.why.push(mob(a) ? 'Placé en fin de séance : la mobilité se fait mieux après l’effort.' : DEMANDING.has(a.family) ? 'Placé tôt : le plus exigeant se fait frais.' : a.family === 'endurance' ? 'Placé après le plus exigeant : l’endurance fatigue tout le reste.' : 'Placé automatiquement selon l’effort qu’il demande.');
     else ph.why.push(`Moment choisi par toi : ${MOMENTS[a.when].toLowerCase()}.`);
   }
@@ -317,8 +325,11 @@ export function planFromAims(o = {}) {
   if (P.prep) notes.push(`📈 Montée progressive de ${P.prep} min juste avant ton n°1, en ${sportShort(n1.sport, acts).toLowerCase()}.`);
   if (EQ) notes.unshift(`Sans hiérarchie : ${phs.map(({ a, ph }) => `« ${a.label} » ${ph.minutes} min`).join(', ')}.`);
   else if (i1 >= 0) {
-    const m1 = phs[i1].ph.minutes, others = phs.filter((x, k) => k !== i1).map((x) => x.ph.minutes), top = others.length ? Math.max(...others) : 0;
-    notes.unshift(m1 > top ? `n°1 « ${n1.label} » : ${m1} min, le plus de temps de la séance.` : `Séance courte : « ${n1.label} » (n°1) a autant de temps que les autres objectifs (${m1} min).`);
+    const m1 = phs[i1].ph.minutes, others = phs.filter((x, k) => k !== i1 && x.a.rank !== 0).map((x) => x.ph.minutes), top = others.length ? Math.max(...others) : 0;
+    const firsts = phs.filter((x) => x.a.rank === 0);
+    notes.unshift(firsts.length > 1 ? `n°1 ex æquo : ${firsts.map((x) => `« ${x.a.label} » ${x.ph.minutes} min`).join(', ')} — le plus de temps, à égalité.` : m1 > top ? `n°1 « ${n1.label} » : ${m1} min, le plus de temps de la séance.` : `Séance courte : « ${n1.label} » (n°1) a autant de temps que les autres objectifs (${m1} min).`);
+    const groups = [...new Set(phs.filter((x) => x.a.tied && x.a.rank > 0).map((x) => x.a.rank))];
+    for (const g of groups) notes.push(`Même importance (n°${g + 1}) : ${phs.filter((x) => x.a.rank === g).map((x) => `« ${x.a.label} »`).join(' et ')} — même part de temps.`);
   }
 
   // 4 · Lieux : chaque phase dans le lieu de son sport ; la mobilité reste où l'on est. Trajets comptés.
@@ -389,7 +400,7 @@ export function planWindows(o = {}) {
   // Un sport de grimpe sans objectif : une partie équilibrée, pour que chaque sport choisi soit dans la séance.
   for (const sp of sports) if (!aims.some((a) => a.sport === sp)) aims.push(balancedAim(sp, acts));
   if (!aims.length) return { phases: [], notes, dropped, order: [], envId: W0[0].envId, travel: 0, errors };
-  const EQ = !!o.equal && aims.length > 1, ranked = aims.map((a, rank) => ({ ...a, rank, equal: EQ })), n1 = ranked[0];
+  const EQ = !!o.equal && aims.length > 1, T = tiers(aims), ranked = aims.map((a, i) => ({ ...a, rank: EQ ? i : T[i], equal: EQ, tied: !EQ && T.filter((x) => x === T[i]).length > 1 })), n1 = ranked[0];
   const win = W0.map((w, k) => ({ ...w, k, aims: [], eq: eqEnv(w.envId), mins: w.to - w.from, gap: k ? w.from - W0[k - 1].to : 0 }));
   const total = win.at(-1).to - win[0].from, active = win.reduce((t, w) => t + w.mins, 0);
   const WU = Math.min(20, r5(clamp(active * 0.1, 8, 15)) + (ranked.some((a) => DEMANDING.has(a.family)) ? 5 : 0)), CD = r5(clamp(active * 0.07, 5, 12)) || 5;
@@ -459,7 +470,7 @@ export function planWindows(o = {}) {
     }
     list.forEach((a, k) => {
       const ph = { ...phaseFor(a, mins[k], w.eq), why: [...(a.why || [])] };
-      ph.why.push(EQ ? 'Sans hiérarchie : même part de temps que les autres objectifs du créneau.' : a === n1 ? 'Ton objectif n°1 : le plus de temps de son créneau.' : `Objectif n°${a.rank + 1} : ${ph.minutes} min.`);
+      ph.why.push(EQ ? 'Sans hiérarchie : même part de temps que les autres objectifs du créneau.' : a.tied ? `Objectif n°${a.rank + 1} ex æquo : même part de temps que ceux de même importance.` : a === n1 ? 'Ton objectif n°1 : le plus de temps de son créneau.' : `Objectif n°${a.rank + 1} : ${ph.minutes} min.`);
       if (!rw && k === 0) arrive(ph); else ph.place = { mode: 'same' };
       if (!EQ && a !== n1 && DEMANDING.has(n1.family) && !seq.includes(n1) && a.family !== 'mobilite') hardBefore.push({ a, ph });
       out.push(ph); seq.push(a);
