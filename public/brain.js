@@ -481,7 +481,7 @@ export function testReminders(ctx, maxAgeDays = 42) {
   const out = [];
   for (const [id, why] of wanted) {
     const m = ctx.metrics[id], all = perfsOf(id, ctx), last = latestPerf(id, ctx), unknown = all[0]?.unknown;
-    const age = last ? Math.floor((ctx.now - last.date) / DAY) : null;
+    const age = last ? Math.max(0, Math.floor((ctx.now - last.date) / DAY)) : null;
     if (last && age < maxAgeDays && !unknown) continue;
     out.push({ metricId: id, label: m.label, why, age, unknown: !!unknown, test: m.test || PROTOCOL[id] || '', text: unknown ? `${m.label} : tu ne sais pas encore` : last ? `${m.label} : dernière mesure il y a ${age} j` : `${m.label} : jamais mesuré` });
   }

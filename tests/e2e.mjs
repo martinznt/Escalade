@@ -604,7 +604,7 @@ await step('8.28 : « L’essentiel » puis ⚡ Proposer ma séance ; envies →
   // Envies → tests utiles ; bilan guidé : un test, une valeur, enregistrée comme mesurée.
   await a.tab('profile'); await a.sub('profSub', 'goals'); await a.click('[data-act=goalsToggle][data-id=force]');
   await a.sub('profSub', 'bilan'); await A.waitForSelector('[data-act=bilanRun]');
-  assert.match(await a.text('#main'), /Devenir plus fort[\s\S]*Pour savoir : ton tirage/);
+  const bt = await a.text('#main'); assert.match(bt, /Devenir plus fort[\s\S]*Pour savoir : ta poussée/); assert.match(bt, /Pour savoir : ton tirage/); assert.doesNotMatch(bt, /il y a -\d/, 'jamais d’âge négatif');
   await a.click('[data-act=bilanRun]'); await A.waitForSelector('#sheet #bilanVal'); assert.match(await a.text('#sheet'), /Comment faire/);
   const label = await a.text('#sheet h2');
   await A.fill('#sheet #bilanVal', '9'); await a.click('#sheet [data-act=bilanSave]'); await A.waitForSelector('#sheet [data-act=bilanStop]'); await a.click('#sheet [data-act=bilanStop]');

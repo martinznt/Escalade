@@ -109,7 +109,7 @@ export function assessment(ctx, { maxAge = 90 } = {}) {
   const inp = profileInputs(ctx), rows = [];
   for (const t of batteryFor(inp)) {
     const m = ctx.metrics?.[t.metricId] || METRICS[t.metricId], p = latest(ctx, t.metricId);
-    const age = p && !p.unknown ? Math.floor(((ctx.now || Date.now()) - (p.date || 0)) / DAY) : null;
+    const age = p && !p.unknown ? Math.max(0, Math.floor(((ctx.now || Date.now()) - (p.date || 0)) / DAY)) : null; // date du jour à midi : jamais « il y a -1 j »
     const state = !p ? 'never' : p.unknown ? 'unknown' : age > maxAge ? 'old' : 'known';
     // Cotation : repère via l'échelle de référence (seulement si une correspondance existe ; sinon aucun repère).
     const ref = p && !p.unknown && m.kind === 'grade' && p.grade ? toReference(p.grade, ctx.systems, m.gradeActivity || 'bloc') : null;

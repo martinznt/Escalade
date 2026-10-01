@@ -38,6 +38,10 @@ ok('bilan : ce qui est connu, ancien, « je ne sais pas » ; couverture ; repèr
   const f = conditionFacts(a); assert.match(f.text, /1 des \d+ repères/); assert.ok(f.lines.every((l) => /\((mesuré|déclaré|relevé en séance)\)/.test(l.text)));
   assert.ok(guidedTests(c).every((r) => r.kind !== 'grade'));
 });
+ok('mesure datée d’aujourd’hui (midi, plus tard que maintenant) : âge 0, jamais négatif', () => {
+  const a = assessment(climber([perf('max_tractions', 8, -0.3)]));
+  assert.equal(a.rows.find((r) => r.metricId === 'max_tractions').age, 0);
+});
 ok('sans donnée, aucune conclusion ; poids ou cœur au repos : jamais de cible proposée d’office', () => {
   assert.equal(conditionFacts(assessment(climber())).lines.length, 0);
   const c = ctxOf({ items: [it('config', 'main', { goals: ['poids'] }), perf('body_weight', 80), perf('fc_repos', 70)] });
