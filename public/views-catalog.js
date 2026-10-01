@@ -11,6 +11,7 @@ import { CATALOG, focusOf, COMPETENCES, MUSCLE_FOCUS, buildSession, rankCatalog,
 import { SOURCES } from './sources.js';
 import { sourcesLine } from './srcui.js';
 import { adaptButton } from './views-adapt.js';
+import { groupButton } from './views-group.js';
 import { catalogEditButtons, sourceAdminButtons } from './content.js';
 import { sessionBrief, exerciseSheet } from './views-library.js';
 export { sourcesLine };
@@ -87,7 +88,7 @@ ACT.catOpen = (el) => {
     ${e.tips?.length ? h`<b class="small">Conseils</b><ul class="small">${e.tips.map((t) => h`<li>${t}</li>`)}</ul>` : ''}
     <b class="small">Déroulé</b><ol class="small catex">${s.exercises.map((x, i) => h`<li><button class="linkish" data-act="catExInfo" data-id="${e.id}" data-i="${i}"><b>${x.emoji} ${x.name}</b> ⓘ</button> — ${x.sets > 1 ? `${x.sets} × ` : ''}${x.mode === 'time' ? fmtDur(x.secMax) : `${x.repsMax} rép.`}${x.rest ? ` · repos ${fmtDur(x.rest)}` : ''}</li>`)}</ol>
     ${miss.length ? h`<p class="small warn-t">Matériel à prévoir : ${miss.map((n) => EQUIPMENT[n] || n).join(', ')}</p>` : ''}
-    <div class="grid2"><button class="btn pri big" data-act="catPlay" data-id="${e.id}">▶ Lancer</button><button class="btn big" data-act="catSave" data-id="${e.id}">💾 Garder</button></div>${adaptButton(e.id, 'cat', 'btn')}<p class="tiny muted">🔁 Adapter : la même séance pour cette fois, avec ta durée, ton matériel, une zone à ménager ou une autre intensité.</p>${catalogEditButtons(e)}</div>`, { wide: true });
+    <div class="grid2"><button class="btn pri big" data-act="catPlay" data-id="${e.id}">▶ Lancer</button><button class="btn big" data-act="catSave" data-id="${e.id}">💾 Garder</button></div><div class="grid2">${adaptButton(e.id, 'cat', 'btn')}${groupButton(e.id, 'cat', 'btn')}</div><p class="tiny muted">🔁 Adapter : la même séance pour cette fois, avec ta durée, ton matériel, une zone à ménager ou une autre intensité.</p>${catalogEditButtons(e)}</div>`, { wide: true });
 };
 ACT.catExInfo = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; const s = buildSession(e), x = s.exercises[+el.dataset.i]; if (x) openSheet(h`${exerciseSheet(x, h`<button class="btn" data-act="catOpen" data-id="${e.id}">‹ Retour à la séance</button>`, s)}`, { wide: true }); };
 ACT.catPlay = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; closeSheet(); startPlayer(buildSession(e), { fromGenerator: true }); };

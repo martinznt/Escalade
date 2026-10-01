@@ -820,6 +820,26 @@ await step('B signale un bug depuis Paramètres', async () => {
 /* ═════════ Administrateur ═════════ */
 console.log('Administrateur');
 const ctxC = await newCtx(); const C = await ctxC.newPage(); watch(C, 'C'); cur = C; const c = H(C);
+await step('8.30 : séance à plusieurs (code, une poutre pour deux, l’organisateur lance pour tous, chacun son rôle) ; QR code pour partager l’app', async () => {
+  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('[data-act=catView]'); await a.click('[data-act=catView][data-id=book]');
+  if (await a.count('[data-act=catEq].on')) await a.click('[data-act=catEq]');
+  await A.locator('[data-act=catOpen]', { hasText: 'Suspensions 7/3' }).first().click(); await A.waitForSelector('#sheet [data-act=groupNew]');
+  await a.click('#sheet [data-act=groupNew]'); await A.waitForSelector('#grp .duocode');
+  const code = (await a.text('#grp .duocode')).trim(); assert.match(code, /^[A-HJ-NP-Z2-9]{6}$/);
+  await B.evaluate(async (c) => { const m = await import('/views-group.js'); await m.groupJoin(c); }, code); await B.waitForSelector('#grp .grpwrap');
+  assert.match(await b.text('#grp'), /En attente : .* lance la séance pour tout le monde/);
+  await A.waitForFunction(() => /2 personnes/.test(document.querySelector('#grp')?.innerText || ''), null, { timeout: 10000 });
+  await a.click('#grp [data-act=grpEq][data-k=hangboard][data-d="-1"]'); assert.match(await a.text('#grp'), /pause réelle 7 s au lieu de 3 s/);
+  await a.click('#grp [data-act=grpStart]'); await A.waitForSelector('#grp .grptime'); await B.waitForSelector('#grp .grptime', { timeout: 10000 });
+  for (let k = 0; k < 40; k++) { if (/travaille|Suspensions progressives|Repeaters/.test(await a.text('#grp .grpex'))) break; await a.click('#grp [data-act=grpNext]'); await A.waitForTimeout(100); }
+  await A.waitForTimeout(2500);
+  const ra = await a.text('#grp .grprole'), rb = await b.text('#grp .grprole');
+  assert.notEqual(ra, rb, 'sur une seule poutre, l’un travaille pendant que l’autre récupère');
+  await a.click('#grp [data-act=grpStop]'); await a.confirm();
+  await B.waitForFunction(() => !document.getElementById('grp'), null, { timeout: 10000 });
+  await a.tab('settings'); await a.click('[data-act=shareApp]'); await A.waitForSelector('#appqr svg'); assert.match(await a.text('#sheet'), /seances-sport\.pages\.dev/);
+  await A.keyboard.press('Escape');
+});
 await step('mauvais mot de passe admin refusé ; bon EDIT_PASSWORD → compte administrateur', async () => {
   await C.goto(BASE); await C.waitForSelector('[data-act=authPick][data-id=register]'); await c.click('[data-act=authPick][data-id=register]');
   await C.fill('input[name=username]', 'Carole'); await C.fill('input[name=password]', 'motdepasse3'); await c.click('button[type=submit]'); await C.waitForSelector('nav.tabs');

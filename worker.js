@@ -19,7 +19,8 @@ import { findContext, buildAssistant, cleanAssistant, mergeItems, ASSIST_KINDS }
 import { LIBRARY } from './public/library.js';
 import { FAQ } from './public/help.js';
 import { SPORT_INTENTS } from './public/intentions.js';
-import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo.js';
+import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX, cleanGroupState, GROUP_TTL } from './server/duo.js';
+import { cleanConfig as cleanGroupConfig, GROUP_MAX } from './public/group.js';
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
 
@@ -32,7 +33,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/library-more.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/library-more.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -515,6 +516,8 @@ async function routeAuthed(request, env, url, auth, secure) {
   // Intentions communes (lecture pour tous) et propositions (envoyées aux administrateurs)
   if (p === '/api/community/intents' && m === 'GET') return json({ ok: true, intents: ((await db(env, 'SELECT id,activity,label,emoji,caps_json FROM community_intents ORDER BY created_at').all()).results || []).map((r) => ({ id: r.id, activityId: r.activity, label: r.label, emoji: r.emoji, caps: safeParse(r.caps_json) || {} })) });
   // Séance à deux : un salon avec un code ; seuls la position et le chrono sont partagés
+  if (p === '/api/group' && m === 'POST') return groupCreate(request, env, u);
+  if ((x = p.match(/^\/api\/group\/([A-Za-z0-9]{6})(\/join)?$/))) return groupRoom(request, env, u, normCode(x[1]), !!x[2], m);
   if (p === '/api/duo' && m === 'POST') return duoCreate(request, env, u);
   if ((x = p.match(/^\/api\/duo\/([A-Za-z0-9]{6})(\/join)?$/))) return duoRoom(request, env, u, normCode(x[1]), !!x[2], m);
   if (p === '/api/proposals' && m === 'POST') return proposalCreate(request, env, u);
@@ -742,6 +745,7 @@ async function deleteAccount(request, env, auth, secure) {
       db(env, 'UPDATE common_exercises SET created_by=NULL WHERE created_by=?', id),
       db(env, "DELETE FROM shared_sessions WHERE owner_id=? AND scope IN ('public','link')", id),
       db(env, 'DELETE FROM duo_rooms WHERE owner_id=?', id),
+      db(env, 'DELETE FROM group_rooms WHERE owner_id=?', id),
       db(env, 'UPDATE global_content SET updated_by=NULL WHERE updated_by=?', id),
       // Studio : l'historique reste, l'auteur devient « compte supprimé ».
       db(env, 'UPDATE change_sets SET author_id=NULL WHERE author_id=?', id), db(env, 'UPDATE change_sets SET published_by=NULL WHERE published_by=?', id), db(env, 'UPDATE change_sets SET rolled_back_by=NULL WHERE rolled_back_by=?', id),
@@ -1139,6 +1143,63 @@ async function intentCreate(env, u, b) {
   return { id };
 }
 /* ═════════════ Séance à deux ═════════════ */
+/* ═════════════ Séance à plusieurs : salon, organisateur, lancement pour tous ═════════════ */
+// Seul l'organisateur règle (format, matériel, intervalles) et pilote (lancer, pause, étape suivante, fin).
+// Chaque membre ne voit que les pseudos des autres membres du salon ; aucune autre donnée n'est partagée.
+async function groupCreate(request, env, u) {
+  const b = await readJson(request, 200000);
+  if (!b || !b.session || typeof b.session !== 'object') return fail('Données invalides.');
+  if (await limited(env, 'group:' + u.id, 20, DAY)) return fail('Trop de salons créés aujourd’hui. Réessaie demain.', 429);
+  const s = sanitizeForPublication(b.session);
+  if (!s.exercises.length) return fail('La séance est vide.');
+  const data = JSON.stringify(s); if (data.length > 150000) return fail('Séance trop volumineuse.', 413);
+  const now = Date.now();
+  await db(env, 'DELETE FROM group_rooms WHERE expires_at<?', now).run();
+  for (let k = 0; k < 5; k++) {
+    const code = duoCode();
+    const r = await db(env, 'INSERT INTO group_rooms(code,owner_id,members_json,session_json,config_json,state_json,v,updated_at,expires_at) VALUES(?,?,?,?,?,?,1,?,?) ON CONFLICT(code) DO NOTHING',
+      code, u.id, JSON.stringify([u.id]), data, JSON.stringify(cleanGroupConfig(b.config)), JSON.stringify(cleanGroupState({}, now)), now, now + GROUP_TTL).run();
+    if (r.meta?.changes) return json({ ok: true, code, v: 1, now });
+  }
+  return fail('Salon indisponible, réessaie.', 503);
+}
+async function groupView(env, u, r, members, now, withSession = false) {
+  const rows = (await db(env, `SELECT id,username FROM users WHERE id IN (${members.map(() => '?').join(',')})`, ...members).all()).results || [];
+  const name = Object.fromEntries(rows.map((x) => [x.id, x.username]));
+  return { code: r.code, v: r.v, host: r.owner_id === u.id, hostName: name[r.owner_id] || '', me: name[u.id] || '', members: members.map((id) => name[id]).filter(Boolean),
+    state: safeParse(r.state_json) || {}, config: safeParse(r.config_json) || {}, now, ...(withSession ? { session: safeParse(r.session_json) || {} } : {}) };
+}
+async function groupRoom(request, env, u, code, join, m) {
+  const now = Date.now();
+  const r = await db(env, 'SELECT * FROM group_rooms WHERE code=? AND expires_at>?', code, now).first();
+  if (!r) return fail('Séance introuvable ou terminée. Vérifie le code.', 404);
+  const members = safeParse(r.members_json) || [], isMember = members.includes(u.id), host = r.owner_id === u.id;
+  if (join) {
+    if (m !== 'POST') return fail('Méthode non autorisée.', 405);
+    if (!isMember) {
+      if (members.length >= GROUP_MAX) return fail('Cette séance est complète (30 personnes).', 409);
+      if (await limited(env, 'groupj:' + u.id, 30, 3600000)) return fail('Trop d’essais. Réessaie plus tard.', 429);
+      members.push(u.id);
+      await db(env, 'UPDATE group_rooms SET members_json=?,v=v+1 WHERE code=?', JSON.stringify(members), code).run();
+    }
+    return json({ ok: true, ...(await groupView(env, u, r, members, now, true)) });
+  }
+  if (!isMember) return fail('Rejoins d’abord la séance avec son code.', 403);
+  if (m === 'GET') return json({ ok: true, ...(await groupView(env, u, r, members, now, new URL(request.url).searchParams.get('full') === '1')) });
+  if (m === 'PUT') {
+    if (!host) return fail('Seul l’organisateur peut régler ou lancer la séance.', 403);
+    const b = await readJson(request, 20000);
+    const state = b?.state ? JSON.stringify(cleanGroupState(b.state, now)) : r.state_json, config = b?.config ? JSON.stringify(cleanGroupConfig(b.config)) : r.config_json;
+    const row = await db(env, 'UPDATE group_rooms SET state_json=?,config_json=?,v=v+1,updated_at=?,expires_at=? WHERE code=? RETURNING v', state, config, now, now + GROUP_TTL, code).first();
+    return json({ ok: true, v: row?.v || 0, now });
+  }
+  if (m === 'DELETE') {
+    if (host) await db(env, 'DELETE FROM group_rooms WHERE code=?', code).run();
+    else await db(env, 'UPDATE group_rooms SET members_json=?,v=v+1 WHERE code=?', JSON.stringify(members.filter((x) => x !== u.id)), code).run();
+    return json({ ok: true });
+  }
+  return fail('Méthode non autorisée.', 405);
+}
 async function duoCreate(request, env, u) {
   const b = await readJson(request, 200000);
   if (!b || !b.session || typeof b.session !== 'object') return fail('Données invalides.');

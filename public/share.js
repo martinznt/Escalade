@@ -35,7 +35,7 @@ ACT.shNative = async (el) => {
 
 /* Arrivée par un lien (#/s/ID ou #/duo/CODE) : on le garde de côté le temps de se connecter. */
 export function catchLink() {
-  const m = (location.hash || '').match(/^#\/(s|duo)\/([\w-]{1,64})$/);
+  const m = (location.hash || '').match(/^#\/(s|duo|group)\/([\w-]{1,64})$/);
   if (!m) return false;
   ls.set('sea:pending', { kind: m[1], id: decodeURIComponent(m[2]), at: Date.now() });
   history.replaceState(null, '', location.pathname + location.search);

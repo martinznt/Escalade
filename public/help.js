@@ -16,5 +16,7 @@ export const FAQ = [
   ['Je ne comprends pas une page, comment savoir à quoi elle sert ?', 'Touche « 🧭 Visite de cette page » en haut de l’écran : la visite te montre chaque partie de la page, ce qu’il y a dedans et à quoi ça sert, sans rien modifier.'],
   ['Je n’ai pas le temps de créer une séance, que faire ?', 'Ouvre le carnet de séances (Bibliothèque, « Carnet de séances ») : des séances toutes prêtes pour chaque sport, classées Débutant, Intermédiaire et Avancé. Touche-en une, puis lance-la.'],
   ['Je fais du street workout, c’est prévu ?', 'Oui : ajoute le sport « Calisthenics (street workout) » dans Profil › Mes sports. Tu as les figures (front lever, planche, muscle-up, équilibre sur les mains…), leurs progressions et des séances prêtes des trois niveaux dans le carnet.'],
+  ['Comment faire une séance à plusieurs ?', 'Sur une séance (Mes séances ou le carnet), touche « 👥 À plusieurs » : un code et un QR code s’affichent. Les autres le scannent ou tapent le code (Bibliothèque › « ＋ Nouvelle séance » › « Séance à plusieurs »). Tu es l’organisateur : tu dis combien il y a de matériel, tu choisis le format (tous en même temps, chacun son tour, ateliers en rotation), puis tu lances pour tout le monde. Chacun voit sur son téléphone s’il travaille ou récupère.'],
+  ['Partager l’app avec quelqu’un ?', 'Paramètres › « 📲 Partager l’app » : un QR code à scanner, ou le lien à envoyer.'],
   ['Un problème ?', 'Va dans « 🐞 Signaler un bug » et décris ce qui s’est passé : le message arrive directement à l’administrateur.'],
 ];

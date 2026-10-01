@@ -30,12 +30,29 @@ const MENU = [
   ['notifs', '🔔', 'Notifications', 'Rappels d’entraînement, mises à jour, son'],
   ['data', '💾', 'Mes données', 'Exporter, importer un historique'],
   ['sync', '🔄', 'Synchronisation', 'État de l’envoi de tes données'],
+  ['shareapp', '📲', 'Partager l’app', 'Un QR code à scanner pour ouvrir le site sur un autre téléphone', 'shareApp'],
   ['help', '❓', 'Aide', 'Visite guidée, questions fréquentes, sources'],
   ['updates', '🆕', 'Toutes les mises à jour', 'L’évolution de l’app depuis le début, avec une visite pour chacune'],
   ['bug', '🐞', 'Signaler un bug', 'Un problème ? Dis-le nous'],
   ['idea', '💡', 'Proposer une amélioration', 'Une idée, une modification ? Les administrateurs répondent', 'ideaNew'],
   ['admin', '🛡️', 'Admin', 'Réservé aux administrateurs'],
 ];
+/** Partager le site : QR code qui ouvre l'adresse de l'app, comme si on la tapait. */
+export const SITE_URL = 'https://seances-sport.pages.dev/';
+ACT.shareApp = async () => {
+  const { qrSvg } = await import('./share.js');
+  openSheet(h`<div class="sharesheet center"><h2>📲 Partager l’app</h2><p class="small">Fais scanner ce QR code avec l’appareil photo d’un téléphone : il ouvre le site directement.</p>
+    <div class="qrbox" id="appqr">${raw(qrSvg(SITE_URL))}</div><p class="small"><b>${SITE_URL.replace(/^https:\/\//, '').replace(/\/$/, '')}</b></p>
+    <div class="grid2"><button class="btn pri" data-act="shareAppNative">📤 Envoyer le lien</button><button class="btn" data-act="shareAppCopy">📋 Copier le lien</button></div>
+    <button class="btn" data-act="shareAppSave">⬇️ Télécharger le QR code (pour l’imprimer ou l’afficher)</button></div>`);
+};
+ACT.shareAppNative = () => { if (navigator.share) navigator.share({ title: 'Séances entraînement', text: 'L’app que j’utilise pour mes séances :', url: SITE_URL }).catch(() => {}); else ACT.shareAppCopy(); };
+ACT.shareAppCopy = async () => { try { await navigator.clipboard.writeText(SITE_URL); toast('Lien copié'); } catch { toast(SITE_URL, 5000); } };
+ACT.shareAppSave = () => {
+  const svg = document.querySelector('#appqr svg'); if (!svg) return;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg.outerHTML], { type: 'image/svg+xml' })); a.download = 'qr-seances-sport.svg';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('QR code téléchargé');
+};
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
 /* Pages de l'administration : d'où l'on vient (retour) et leur titre. */
 const ADMIN_PARENT = { assistant: ['admin', 'Admin'], content: ['admin', 'Admin'], look: ['admin', 'Admin'], changes: ['admin', 'Admin'], members: ['admin', 'Admin'], bugs: ['admin', 'Admin'], users: ['admin', 'Admin'], push: ['admin', 'Admin'],

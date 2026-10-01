@@ -24,6 +24,7 @@ import { vSettings, APPEAR_KEYS } from './views-settings.js';
 import { onVisible, bigTap, startPlayer } from './player.js';
 import { catchLink, pendingLink, clearPending } from './share.js';
 import './duo.js';
+import './views-group.js';
 import './find-ui.js';
 import { syncContent, loadGlobal } from './content.js';
 import { setLang } from './i18n.js';
@@ -172,6 +173,11 @@ function vPublicVisitor(name) {
 /* ═════════ Arrivée par un lien partagé (séance ou séance à deux) ═════════ */
 function vLanding(pl) {
   const out = h`<button class="btn ghost" data-act="linkClose">${S.user ? '‹ Retour à mon espace' : 'Ignorer'}</button>`;
+  if (pl.kind === 'group') {
+    return h`<div class="card acc-b center"><h1>👥 Séance à plusieurs</h1><p>On t’invite à une séance de groupe. Code : <b class="duocode sm">${pl.id}</b></p>
+      ${S.user && !S.user.guest ? h`<button class="btn pri big" data-act="groupJoinLink" data-code="${pl.id}">Rejoindre la séance</button>`
+        : h`<p class="small muted">Il faut un compte (gratuit) pour suivre les chronos du groupe.</p><button class="btn pri big" data-act="linkLogin" data-mode="${S.user ? 'up' : 'login'}">${S.user ? 'Créer mon compte' : 'Me connecter'}</button>`}${out}</div>`;
+  }
   if (pl.kind === 'duo') {
     return h`<div class="card acc-b center"><h1>👥 Séance à deux</h1><p>On t’invite à faire une séance ensemble. Code : <b class="duocode sm">${pl.id}</b></p>
       ${S.user && !S.user.guest ? h`<button class="btn pri big" data-act="duoJoinLink" data-code="${pl.id}">Rejoindre la séance</button>`
