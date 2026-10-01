@@ -119,4 +119,41 @@ ok('la structure se construit vraiment : chaque phase reçoit des exercices (esc
   for (const p of ph) assert.ok(s.exercises.some((e) => e.phase === p.id), `exercices pour « ${p.goal || p.type} »`);
   assert.ok(s.exercises.filter((e) => e.phase === ph.at(-2).id).length, 'la phase n°1 (voie) a ses essais');
 });
+const W2 = [{ envId: 'voie', name: 'Salle de voie', from: '18:00', to: '19:30' }, { envId: 'bloc', name: 'Salle de bloc', from: '20:00', to: '21:00' }];
+const EQ2 = { voie: ['wall', 'leadwall'], bloc: ['wall', 'hangboard', 'bar', 'weights', 'mat'] };
+const tri = () => [A.familyAim('endurance', 'climbing_route'), A.familyAim('force', 'climbing_boulder'), A.familyAim('force', 'conditioning')];
+ok('sans hiérarchie : même part de temps, pas de n°1, ordre selon l’effort', () => {
+  const r = A.planFromAims({ aims: tri(), sports: ['climbing_route', 'climbing_boulder', 'conditioning'], minutes: 90, equal: true });
+  const w = work(r.phases); assert.equal(w.length, 3);
+  assert.ok(Math.max(...w.map((p) => p.minutes)) - Math.min(...w.map((p) => p.minutes)) <= 5, w.map((p) => p.minutes).join(','));
+  assert.ok(w.every((p) => p.aimEqual && !p.objective && !/n°/.test(p.goal)));
+  assert.equal(sum(r.phases), 90); assert.match(r.notes.join('\n'), /Sans hiérarchie/); assert.doesNotMatch(r.notes.join('\n'), /n°1/);
+});
+ok('horaires par lieu : voie 18:00–19:30, 30 min de trajet, bloc 20:00–21:00 ; le renfo va là où il y a le matériel, après la grimpe', () => {
+  const r = A.planFromAims({ aims: tri(), sports: ['climbing_route', 'climbing_boulder', 'conditioning'], envId: 'voie', places: { climbing_boulder: 'bloc' }, equal: true, windows: W2, envEquip: EQ2 });
+  assert.equal(r.minutes, 180); assert.equal(r.start, 18 * 60); assert.equal(r.travel, 30);
+  const ph = normalizePhases(r.phases, 'climbing_route'), tr = transitions(ph, [{ id: 'voie', name: 'Salle de voie', equipment: EQ2.voie }, { id: 'bloc', name: 'Salle de bloc', equipment: EQ2.bloc }], 'voie');
+  const tl = A.timeline(ph, tr); assert.equal(tl.total, 180, 'phases + trajet = de 18:00 à 21:00');
+  assert.deepEqual(tl.rows.filter((x) => x.kind === 'travel').map((x) => [x.from, x.minutes]), [[90, 30]], 'trajet entre 19:30 et 20:00');
+  const iRe = ph.findIndex((p) => p.goal === 'Remise en route'), iRenfo = ph.findIndex((p) => p.activity === 'conditioning'), iBloc = ph.findIndex((p) => p.activity === 'climbing_boulder' && p.type === 'climb');
+  assert.ok(iRe > 0 && ph[iRe].place.envId === 'bloc', 'remise en route en arrivant à la salle de bloc');
+  assert.ok(iRenfo > iBloc && iBloc > iRe, 'renfo à la salle de bloc, après le bloc');
+  assert.match(r.notes.join('\n'), /Renfo » placé à Salle de bloc[^\n]*poutre/);
+  // la voie remplit son créneau (échauffement compris)
+  const before = ph.slice(0, iRe); assert.equal(sum(before), 90);
+});
+ok('horaires invalides : chevauchement ou fin avant début → dit, rien d’inventé', () => {
+  assert.match(A.cleanWindows([{ name: 'A', from: '18:00', to: '19:00' }, { name: 'B', from: '18:30', to: '20:00' }]).errors[0], /chevauchent/);
+  assert.match(A.cleanWindows([{ name: 'A', from: '19:00', to: '18:00' }]).errors[0], /après l’arrivée/);
+  assert.equal(A.cleanWindows([{ name: 'A', from: '25:00', to: '18:00' }]).windows.length, 0);
+  const r = A.planFromAims({ aims: tri(), sports: ['climbing_route'], windows: [{ name: 'A', from: '19:00', to: '18:00' }] });
+  assert.equal(r.phases.length, 0); assert.ok(r.errors.length);
+});
+ok('horaires, objectifs classés : le n°1 en bloc (2e créneau) → la voie d’avant reste modérée ; doigts sur la poutre là où elle existe', () => {
+  const aims = [A.familyAim('performance', 'climbing_boulder'), A.familyAim('force', 'climbing_route'), A.intentAim({ id: 'doigts', label: 'Doigts', caps: { force_doigts: 1 } }, 'climbing_route')];
+  const r = A.planFromAims({ aims, sports: ['climbing_route', 'climbing_boulder'], envId: 'voie', places: { climbing_boulder: 'bloc' }, windows: W2, envEquip: EQ2 });
+  const voie = r.phases.find((p) => p.type === 'climb' && p.activity === 'climbing_route'); assert.equal(voie.intensity, 'mod');
+  const fingers = r.phases.find((p) => p.type === 'fingers'); assert.ok(fingers, 'poutre utilisée'); assert.equal(fingers.place.mode, 'same');
+  const iF = r.phases.indexOf(fingers), iRe = r.phases.findIndex((p) => p.goal === 'Remise en route'); assert.ok(iF > iRe, 'doigts à la salle de bloc (la seule avec une poutre)');
+});
 console.log(`\n${n} tests objectifs classés OK`);
