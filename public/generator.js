@@ -78,9 +78,9 @@ function climbSettings(ctx, eq) {
 }
 
 /* ───────── Candidats (filtrés et justifiés) ───────── */
-const SHOULDER = new Set(['dips', 'pike-pushup', 'shoulder-press', 'dynos', 'ring-dips', 'overhead-press', 'wall-handstand', 'flag-full', 'flag-tuck']);
-const ELBOW = new Set(['pullup-heavy', 'lockoff', 'explosive-pullup', 'wrist-extension', 'oap', 'oap-negative', 'archer-pullup']);
-const KNEE = new Set(['bulgarian', 'cossack', 'jump-vertical', 'skater-jumps', 'step-up-explosive', 'squat-loaded', 'pistol', 'box-jump', 'back-squat', 'run-hills', 'run-intervals']);
+const SHOULDER = new Set(['dips', 'pike-pushup', 'shoulder-press', 'dynos', 'ring-dips', 'overhead-press', 'wall-handstand', 'flag-full', 'flag-tuck', 'shoulder-press-machine', 'arnold-press', 'handstand-pushup-wall', 'freestanding-handstand', 'korean-dips', 'straight-bar-dips', 'strict-muscle-up', 'muscle-up-band', 'tuck-planche', 'back-lever-tuck', 'skin-the-cat', 'flag-negative', 'flag-vertical', 'campus-ladders']);
+const ELBOW = new Set(['pullup-heavy', 'lockoff', 'explosive-pullup', 'wrist-extension', 'oap', 'oap-negative', 'archer-pullup', 'typewriter-pullup', 'skull-crusher', 'strict-muscle-up', 'back-lever-tuck', 'campus-ladders']);
+const KNEE = new Set(['bulgarian', 'cossack', 'jump-vertical', 'skater-jumps', 'step-up-explosive', 'squat-loaded', 'pistol', 'box-jump', 'back-squat', 'run-hills', 'run-intervals', 'front-squat', 'hack-squat', 'leg-extension', 'pistol-box', 'walking-lunge', 'split-squat', 'smith-squat', 'db-step-up', 'burpee', 'dynos']);
 function customPool(activityId, ctx) {
   const cats = Object.values(ctx.categories).filter((c) => c.activityId === activityId);
   const capIds = new Set(cats.flatMap((c) => (c.caps?.length ? c.caps.map((x) => x.id) : [c.id])));
@@ -549,6 +549,17 @@ export function replaceExercise(session, exId, libId, reason = '') {
   return { session: normalizeSession({ ...s, exercises, updatedAt: Date.now() }), change: { from: old.name, to: lib.name, reason } };
 }
 
+/** Pourquoi un exercice charge une zone douloureuse (doigts, épaules, coudes, genoux, poignets, dos, chevilles) ; [] sinon. */
+export function zoneReasons(x, zones = []) {
+  const z = new Set(zones), why = [];
+  if (!x) return why;
+  if (z.has('fingers') && (x.risk === 'finger' || (x.caps?.force_doigts || 0) >= 0.8)) why.push('doigts à ménager');
+  if (z.has('shoulders') && (x.risk === 'shoulder' || SHOULDER.has(x.id))) why.push('épaules à ménager');
+  if (z.has('elbows') && ELBOW.has(x.id)) why.push('coudes à ménager');
+  if (z.has('knees') && KNEE.has(x.id)) why.push('genoux à ménager');
+  why.push(...zoneRisk(x, [...z]).map((t) => t.replace(/ \(pour cette séance\)$/, '')));
+  return [...new Set(why)];
+}
 /* ───────── Matériel dynamique ───────── */
 export function rebuildForEquipment(session, eqSet, ctx, level = 2) {
   const s = normalizeSession(session), changes = [];

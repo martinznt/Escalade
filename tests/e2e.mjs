@@ -674,6 +674,22 @@ await step('8.30 : visite de la page (reste sur la page, chaque partie expliqué
   await a.click('[data-act=catView][data-id=book]');
   await a.click('[data-act=catEq]');
 });
+await step('8.30 : « 🔁 Adapter » une séance (20 min, zone à ménager, phrase) → version lancée ou gardée à part ; l’originale ne change pas', async () => {
+  const orig = await A.evaluate(async () => { const st = await import('/state.js'); const s = st.S.seances.items.find((x) => !x.archived && x.exercises.length >= 3); return s ? JSON.stringify({ id: s.id, name: s.name, ex: s.exercises.map((e) => [e.name, e.sets, e.rest]) }) : ''; });
+  assert.ok(orig, 'une séance à adapter'); const o = JSON.parse(orig);
+  await A.evaluate((id) => { location.hash = '#/library/seance/' + id; }, o.id); await A.waitForSelector('[data-act=adaptOpen]');
+  assert.match(await a.text('#main'), /sans toucher à cette séance/);
+  await a.click('#main [data-act=adaptOpen]'); await A.waitForSelector('#sheet [data-act=adPreview]'); assert.match(await a.text('#sheet'), /ta séance d’origine ne change pas/);
+  await a.click('#sheet [data-act=adSet][data-k=minutes][data-v="20"]'); await a.click('#sheet [data-act=adTog][data-k=zones][data-v=knees]');
+  await A.fill('#sheet input[data-change=adText]', 'échauffement plus court, plus facile'); await A.dispatchEvent('#sheet input[data-change=adText]', 'change');
+  assert.match(await a.text('#sheet'), /Compris : .*échauffement : plus court.*plus facile/);
+  await a.click('#sheet [data-act=adPreview]'); await A.waitForSelector('#sheet [data-act=adSave]');
+  const pv = await a.text('#sheet'); assert.match(pv, /Ce qui change/); assert.match(pv, /au lieu de/);
+  await a.click('#sheet [data-act=adSave]'); await A.waitForTimeout(300);
+  const after = await A.evaluate(async (id) => { const st = await import('/state.js'); const s = st.getSeance(id); return JSON.stringify({ id: s.id, name: s.name, ex: s.exercises.map((e) => [e.name, e.sets, e.rest]) }); }, o.id);
+  assert.equal(after, orig, 'séance d’origine identique');
+  await poll(async () => (await a.api('GET', '/api/sync')).data.items.some((x) => x.name === `${o.name} (adaptée)`.slice(0, 80)), 12000, 'version adaptée gardée à part');
+});
 await step('8.28 : « L’essentiel » puis ⚡ Proposer ma séance ; envies → bilan physique guidé, valeur mesurée, objectif précis proposé', async () => {
   await cpFresh('auto'); await a.click('[data-act=cpSport][data-id=conditioning]'); await a.click('[data-act=cpMin][data-id="45"]');
   assert.match(await a.text('.steps b'), /Étape 1\/6 · L’essentiel/); assert.match(await a.text('#main'), /Tes objectifs/);

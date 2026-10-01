@@ -10,6 +10,7 @@ import { cleanParts } from './format.js';
 import { vClimbPlan } from './views-climbplan.js';
 import { setReturn } from './nav.js';
 import { composePage } from './layout.js';
+import { adaptButton } from './views-adapt.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
 import { orderAdvice, similarOptions } from './guide.js';
 import { exWhat, exUse, exWhyHere, sessionWhat, sessionUse, sessionWhy } from './explain.js';
@@ -120,7 +121,7 @@ function vSeances() {
 function seanceCard(s) {
   const sel = S.sel?.includes(s.id); const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card ${sel ? 'on-b' : ''}"><div class="row">${S.sel ? h`<button class="selbox ${sel ? 'on' : ''}" data-act="selTog" data-id="${s.id}" aria-pressed="${!!sel}" aria-label="Sélectionner">${sel ? '✓' : ''}</button>` : ''}<div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
       <div class="tiny muted">${s.context?.env ? placeName(s.context.env) + ' · ' : ''}${cats.map(catName).join(' · ')}</div></div></div>
-      ${S.sel ? '' : h`<div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div>`}</div>`;
+      ${S.sel ? '' : h`<div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button>${adaptButton(s.id)}</div>`}</div>`;
 }
 const groupName = (by, k) => (by === 'place' ? placeName(k) : by === 'sport' ? (k === 'none' ? '🏷 Sans sport' : sportName(k)) : k === 'none' ? '🗂 Sans catégorie' : catName(k));
 /** « C'est quoi ? · À quoi ça sert ? · Pourquoi ? » d'une séance, en trois lignes courtes. */
@@ -288,7 +289,8 @@ function editing() {
 function vEditor(s, mode) {
   const c = ctx(), lv = estimateLevel(s), shared = mode === 'shared';
   const intents = new Map((s.intentions || []).map((x) => [x.id, x.p]));
-  return h`<div class="row"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
+  return h`<div class="row"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`${adaptButton(s.id, 'seance', 'btn')}<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
+    ${shared ? '' : h`<p class="tiny muted">🔁 « Adapter » fait une version pour cette fois (durée, matériel, douleur, échauffement, intensité) sans toucher à cette séance. Pour la changer pour de bon, modifie-la ci-dessous.</p>`}
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
     ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
     ${sessionBrief(s, { edit: !shared })}
