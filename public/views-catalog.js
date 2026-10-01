@@ -7,7 +7,7 @@ import { ACTIVITIES, CAPACITIES, EQUIPMENT } from './model.js';
 import { availableEquipment, profileCapacities, strengthsWeaknesses, activeGoals, goalCaps } from './brain.js';
 import { levelFor } from './generator.js';
 import { startPlayer } from './player.js';
-import { CATALOG, buildSession, rankCatalog, needsOf, rankExercises, EX_CATEGORIES } from './catalog.js';
+import { CATALOG, focusOf, COMPETENCES, MUSCLE_FOCUS, buildSession, rankCatalog, needsOf, rankExercises, EX_CATEGORIES } from './catalog.js';
 import { SOURCES } from './sources.js';
 import { sourcesLine } from './srcui.js';
 import { catalogEditButtons, sourceAdminButtons } from './content.js';
@@ -36,14 +36,16 @@ export function vCatalog() {
   if (f.level !== '' && f.level != null) list = list.filter((r) => String(r.entry.level) === String(f.level));
   if (f.onlyEq) list = list.filter((r) => !r.missing.length);
   const sports = [['', 'Tous'], ['climbing', '🧗 Escalade'], ['calisthenics', '🤸 Calisthenics'], ['running', '🏃 Course'], ['strength', '🏋️ Muscu'], ['conditioning', '💪 Renfo'], ['swimming', '🏊 Natation']];
-  const book = (f.view || 'book') === 'book';
-  return h`${seg('catView', book ? 'book' : 'rank', [['book', '📖 Par sport et niveau'], ['rank', '✨ Pour toi d’abord']])}
+  const view = ['book', 'focus', 'rank'].includes(f.view) ? f.view : 'book', book = view === 'book';
+  if (view === 'focus' && f.focus) list = list.filter((r) => { const [k, id] = f.focus.split(':'), fo = focusOf(r.entry); return (k === 'm' ? fo.muscles : fo.skills).includes(id); });
+  return h`${seg('catView', view, [['book', '📖 Par sport et niveau'], ['focus', '🎯 Par muscle ou compétence'], ['rank', '✨ Pour toi d’abord']])}
+    ${view === 'focus' ? focusPicker() : ''}
     <div class="card catf"><div class="chips">${sports.map(([k, l]) => chip(f.sport === k, l, `data-act="catF" data-k="sport" data-v="${k}"`))}</div>
       <div class="chips">${[['', 'Tous niveaux'], ['0', '🌱 Débutant'], ['1', '🌿 Intermédiaire'], ['2', '🌳 Avancé']].map(([k, l]) => chip(String(f.level ?? '') === k, l, `data-act="catF" data-k="level" data-v="${k}"`))}</div>
       <div class="chips">${chip(!f.goal, 'Tous objectifs', 'data-act="catF" data-k="goal" data-v=""')}${Object.entries(GOAL_L).map(([k, l]) => chip(f.goal === k, l, `data-act="catF" data-k="goal" data-v="${k}"`))}</div>
       <div class="chips">${[['', 'Toutes durées'], ['s', '≤ 20 min'], ['m', '20–40 min'], ['l', '> 40 min']].map(([k, l]) => chip(f.time === k, l, `data-act="catF" data-k="time" data-v="${k}"`))}${chip(f.onlyEq, '🧰 Faisable avec mon matériel', 'data-act="catEq"')}</div></div>
-    <p class="tiny muted">${book ? 'Le carnet : des séances toutes prêtes pour chaque sport, du niveau débutant à avancé. Touche une séance pour voir ses exercices, puis lance-la ou garde-la.' : 'Triées pour toi : ton sport, tes objectifs, tes points faibles et ton niveau.'} Chaque séance cite ses sources.</p>
-    ${book ? bookView(list) : list.length ? list.map((r, i) => h`<button class="card pick catcard" data-act="catOpen" data-id="${r.entry.id}"><div class="row"><span class="catemoji">${r.entry.emoji}</span><div class="grow"><b>${r.entry.name}</b>
+    <p class="tiny muted">${book ? 'Le carnet : des séances toutes prêtes pour chaque sport, du niveau débutant à avancé. Touche une séance pour voir ses exercices, puis lance-la ou garde-la.' : view === 'focus' ? 'Les séances qui travaillent le muscle ou la compétence choisi, du niveau débutant à avancé, tous sports confondus.' : 'Triées pour toi : ton sport, tes objectifs, tes points faibles et ton niveau.'} Chaque séance cite ses sources.</p>
+    ${view === 'focus' ? (f.focus ? focusList(list) : h`<p class="small muted">Choisis un muscle ou une compétence ci-dessus : toutes les séances qui le travaillent s’affichent, du niveau débutant à avancé.</p>`) : book ? bookView(list) : list.length ? list.map((r, i) => h`<button class="card pick catcard" data-act="catOpen" data-id="${r.entry.id}"><div class="row"><span class="catemoji">${r.entry.emoji}</span><div class="grow"><b>${r.entry.name}</b>
         <div class="tiny muted">${ACTIVITIES[r.entry.activity]?.label || r.entry.activity} · ${r.entry.minutes} min · ${['débutant', 'intermédiaire', 'avancé'][r.entry.level]}</div></div>${i < 3 && r.why.length ? h`<span class="tag acc">pour toi</span>` : ''}</div>
         <p class="small">${r.entry.why}</p>${r.why.length ? h`<div class="tiny acc-t">✓ ${r.why.join(' · ')}</div>` : ''}</button>`) : h`<p class="small muted">Aucune séance avec ces filtres${f.onlyEq ? ' et ton matériel' : ''}.</p>`}`;
 }
@@ -57,6 +59,20 @@ function bookView(list) {
     ${[0, 1, 2].map((lv) => { const g = of.filter((r) => r.entry.level === lv); return g.length ? h`<span class="kicker">${LEVEL_W[lv][0]} ${LEVEL_W[lv][1]} <span class="tiny muted">· ${LEVEL_W[lv][2]}</span></span>
       <div class="setmenu">${g.map((r) => h`<button class="setrow" data-act="catOpen" data-id="${r.entry.id}"><span class="sic">${r.entry.emoji}</span><span class="grow"><b>${r.entry.name}</b><small>${r.entry.minutes} min · ${r.entry.why.split(/[.:]/)[0]}</small></span><span class="chev">›</span></button>`)}</div>` : ''; })}</section>`; })}`;
 }
+/** Muscles et compétences, avec le nombre de séances qui les travaillent (calculé depuis les exercices). */
+function focusPicker() {
+  const f = S.catF, n = (k, id) => CATALOG.filter((e) => (k === 'm' ? focusOf(e).muscles : focusOf(e).skills).includes(id)).length;
+  const row = (k, list) => h`<div class="chips">${list.filter(([id]) => n(k, id)).map(([id, l]) => chip(f.focus === `${k}:${id}`, `${l} · ${n(k, id)}`, `data-act="catFocus" data-id="${k}:${id}"`))}</div>`;
+  return h`<div class="card catf"><span class="kicker">Par muscle</span>${row('m', MUSCLE_FOCUS)}<span class="kicker">Par compétence</span>${row('s', COMPETENCES)}
+    <p class="tiny muted">Calculé à partir des exercices de chaque séance : une séance n’apparaît que si ce muscle ou cette compétence porte une vraie part du travail.</p></div>`;
+}
+function focusList(list) {
+  if (!list.length) return h`<p class="small muted">Aucune séance avec ces filtres${S.catF.onlyEq ? ' et ton matériel (touche « 🧰 Faisable avec mon matériel » pour tout voir)' : ''}.</p>`;
+  return h`${[0, 1, 2].map((lv) => { const g = list.filter((r) => r.entry.level === lv); return g.length ? h`<span class="kicker">${LEVEL_W[lv][0]} ${LEVEL_W[lv][1]} <span class="tiny muted">· ${LEVEL_W[lv][2]}</span></span>
+    <div class="setmenu">${g.map((r) => h`<button class="setrow" data-act="catOpen" data-id="${r.entry.id}"><span class="sic">${r.entry.emoji}</span><span class="grow"><b>${r.entry.name}</b><small>${ACTIVITIES[r.entry.activity]?.label || ''} · ${r.entry.minutes} min · ${focusText(r.entry)}</small></span><span class="chev">›</span></button>`)}</div>` : ''; })}`;
+}
+const focusText = (e) => { const f = focusOf(e); return [...f.muscles.map((id) => MUSCLE_FOCUS.find((x) => x[0] === id)?.[1]), ...f.skills.map((id) => COMPETENCES.find((x) => x[0] === id)?.[1])].filter(Boolean).join(', ').replace(/\p{Extended_Pictographic}️?\s*/gu, ''); };
+ACT.catFocus = (el) => { S.catF.focus = S.catF.focus === el.dataset.id ? '' : el.dataset.id; render(); };
 ACT.catView = (el) => { S.catF.view = el.dataset.id; render(); };
 ACT.catF = (el) => { S.catF[el.dataset.k] = S.catF[el.dataset.k] === el.dataset.v ? '' : el.dataset.v; render(); };
 ACT.catEq = () => { S.catF.onlyEq = !S.catF.onlyEq; render(); };
@@ -66,6 +82,7 @@ ACT.catOpen = (el) => {
   openSheet(h`<div class="catd"><div class="row"><span class="catemoji">${e.emoji}</span><div class="grow"><h2>${e.name}</h2><div class="tiny muted">${ACTIVITIES[e.activity]?.label || ''} · ${e.minutes} min · ${['débutant', 'intermédiaire', 'avancé'][e.level]}</div></div></div>
     ${sessionBrief(s, { minutes: e.minutes })}${sourcesLine(e.sources)}
     <b class="small">Ça travaille</b><div class="chips">${e.works.map((c) => h`<span class="chip static">${CAPACITIES[c]?.label || c}</span>`)}</div>
+    ${focusText(e) ? h`<p class="tiny muted">🎯 Surtout : ${focusText(e)} (d’après ses exercices)</p>` : ''}
     ${e.tips?.length ? h`<b class="small">Conseils</b><ul class="small">${e.tips.map((t) => h`<li>${t}</li>`)}</ul>` : ''}
     <b class="small">Déroulé</b><ol class="small catex">${s.exercises.map((x, i) => h`<li><button class="linkish" data-act="catExInfo" data-id="${e.id}" data-i="${i}"><b>${x.emoji} ${x.name}</b> ⓘ</button> — ${x.sets > 1 ? `${x.sets} × ` : ''}${x.mode === 'time' ? fmtDur(x.secMax) : `${x.repsMax} rép.`}${x.rest ? ` · repos ${fmtDur(x.rest)}` : ''}</li>`)}</ol>
     ${miss.length ? h`<p class="small warn-t">Matériel à prévoir : ${miss.map((n) => EQUIPMENT[n] || n).join(', ')}</p>` : ''}

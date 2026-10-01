@@ -623,6 +623,8 @@ await step('8.29 : horaires précis (voie 18:00–19:30, trajet, bloc 20:00–21
   await a.click('[data-act=cpAimAdd][data-k="fam:endurance@climbing_route"]');
   await a.click('[data-act=cpAddFor][data-id=climbing_boulder]'); await a.click('[data-act=cpAimAdd][data-k="fam:force@climbing_boulder"]');
   await a.click('[data-act=cpAddFor][data-id=conditioning]'); await a.click('[data-act=cpAimAdd][data-k="fam:force@conditioning"]');
+  await a.click('[data-act=cpAimTie][data-i="2"]'); assert.match(await a.text('.aimlist'), /2=[\s\S]*n°2 ex æquo[\s\S]*2=/, 'ex æquo : même rang');
+  await a.click('[data-act=cpAimTie][data-i="2"]');
   await a.click('[data-act=cpEqual][data-id=equal]'); assert.match(await a.text('#main'), /Tes objectifs, sans hiérarchie/);
   await cpTo(3); assert.match(await a.text('#main'), /Renfo » placé à Salle de bloc E2E[\s\S]*poutre/);
   await cpTo(6); const v = await a.text('#main');
@@ -666,6 +668,10 @@ await step('8.30 : visite de la page (reste sur la page, chaque partie expliqué
   assert.match(await a.text('#tour'), /Les onglets[\s\S]*Bibliothèque/);
   await a.click('#tour [data-act=tourEnd]'); await A.waitForSelector('#tour', { state: 'detached' });
   assert.match(await A.evaluate(() => location.hash), /#\/library\/catalog/, 'la visite de la page reste sur la page');
+  await a.click('[data-act=catView][data-id=focus]'); await a.click('[data-act=catFocus][data-id="m:pecs"]');
+  const tf = await a.text('#main'); assert.match(tf, /Pectoraux à la maison[\s\S]*Pectoraux à la salle[\s\S]*Pectoraux et dips/); assert.doesNotMatch(tf, /Sortie longue/);
+  await a.click('[data-act=catFocus][data-id="s:mobilite"]'); assert.match(await a.text('#main'), /Mobilité des hanches/);
+  await a.click('[data-act=catView][data-id=book]');
   await a.click('[data-act=catEq]');
 });
 await step('8.28 : « L’essentiel » puis ⚡ Proposer ma séance ; envies → bilan physique guidé, valeur mesurée, objectif précis proposé', async () => {

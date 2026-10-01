@@ -245,6 +245,108 @@ export const CATALOG = [
     works: ['seuil', 'vitesse', 'endurance_aerobie'], why: 'Séries au seuil (soutenu mais tenable) puis sprints courts très bien récupérés : pour nager plus vite longtemps.',
     tips: ['Sprints : repos 3 à 4 fois plus long que l’effort.'], sources: ['milanovic2015', 'stoggl2014'],
     ex: [X('swim-warm', 1, 400, 0), X('swim-drills', 4, 2, 30), X('swim-threshold', 5, 4, 30), X('swim-sprint', 6, 1, 60), X('swim-vertical-kick', 3, 30, 30), X('swim-endurance', 1, 300, 0)] },
+  // ── Carnet 8.30 : par muscle ──
+  { id: 'pecs-maison', name: 'Pectoraux à la maison', emoji: '🛡️', activity: 'conditioning', level: 0, minutes: 30, goals: ['muscle', 'force', 'forme'],
+    works: ['poussee_horizontale', 'stabilite_epaules'], why: 'Les pompes sous plusieurs angles (mains larges, pieds surélevés, lentes) : de quoi faire travailler les pectoraux sans aucun matériel.',
+    tips: ['Trop dur : mains sur une table ou un banc. Trop facile : 3 s à la descente.', 'Termine chaque série à 1 ou 2 répétitions de l’échec.'], sources: ['schoenfeld2017', 'acsm2009'],
+    ex: [X('wu-mob-upper', 1, 10, 0), X('pushup', 4, 12, 75), X('pseudo-planche-pushup', 3, 8, 90), X('pushup-explosive', 3, 6, 90), X('reverse-plank', 2, 30, 45), X('cd-shoulders', 1, 120, 0)] },
+  { id: 'pecs-salle', name: 'Pectoraux à la salle', emoji: '🏋️', activity: 'strength', level: 1, minutes: 55, goals: ['muscle', 'force'],
+    works: ['poussee_horizontale', 'stabilite_epaules'], why: 'Développé lourd, puis incliné et écartés : le haut, le milieu et l’étirement du pectoral, avec les machines pour finir sans risque.',
+    tips: ['Omoplates serrées et basses sur le banc du début à la fin.'], sources: ['schoenfeld2017', 'acsm2009'],
+    ex: [X('wu-mob-upper', 1, 10, 0), X('bench-press', 4, 6, 150), X('db-incline-press', 3, 10, 120), X('cable-fly', 3, 12, 60), X('chest-press-machine', 3, 12, 75), X('pec-deck', 2, 15, 60), X('cd-shoulders', 1, 120, 0)] },
+  { id: 'pecs-avance', name: 'Pectoraux et dips (avancé)', emoji: '🔥', activity: 'calisthenics', level: 2, minutes: 45, goals: ['muscle', 'force'],
+    works: ['poussee_horizontale', 'poussee_verticale', 'stabilite_epaules'], why: 'Dips aux anneaux et à la barre, pompes très inclinées : la poussée au poids du corps la plus exigeante pour les pectoraux.',
+    tips: ['Dips : penche le buste en avant pour charger les pectoraux plutôt que les triceps.'], sources: ['schoenfeld2017'],
+    ex: [X('wu-scap-band', 1, 12, 0), X('ring-support', 3, 20, 60), X('ring-dips', 4, 6, 120), X('straight-bar-dips', 3, 8, 90), X('pseudo-planche-pushup', 3, 10, 90), X('pushup-explosive', 3, 6, 90), X('cd-shoulders', 1, 120, 0)] },
+  { id: 'bras-salle', name: 'Bras : biceps et triceps', emoji: '💪', activity: 'strength', level: 1, minutes: 45, goals: ['muscle'],
+    works: ['tirage_horizontal', 'poussee_verticale'], why: 'Le triceps fait environ deux tiers du bras : autant de séries de triceps que de biceps, sous plusieurs angles.',
+    tips: ['Coudes fixes le long du corps sur les curls.', 'Alterne une série de biceps et une de triceps.'], sources: ['schoenfeld2017'],
+    ex: [X('wu-mob-upper', 1, 10, 0), X('close-grip-bench', 3, 8, 120), X('barbell-curl', 3, 10, 75), X('skull-crusher', 3, 10, 75), X('hammer-curl', 3, 12, 60), X('triceps-pushdown', 3, 12, 60), X('cable-curl', 2, 15, 45), X('overhead-triceps', 2, 12, 60)] },
+  { id: 'bras-maison', name: 'Bras sans salle', emoji: '🏠', activity: 'calisthenics', level: 0, minutes: 30, goals: ['muscle', 'force'],
+    works: ['tirage_vertical', 'poussee_verticale'], why: 'Tractions prise serrée, dips et pompes serrées : de quoi travailler biceps et triceps avec une barre et deux chaises.',
+    tips: ['Tractions supination (paumes vers toi) : plus de biceps.'], sources: ['schoenfeld2017'],
+    ex: [X('wu-scap-bar', 1, 8, 0), X('australian-pullup', 4, 10, 75), X('negative-pullup', 3, 4, 90), X('dips', 4, 8, 90), X('pushup', 3, 10, 60), X('cd-forearm', 1, 120, 0)] },
+  { id: 'avantbras-prise', name: 'Avant-bras et prise de fer', emoji: '✊', activity: 'strength', level: 0, minutes: 30, goals: ['force', 'climb'],
+    works: ['force_doigts', 'stabilite_epaules'], why: 'Porters lourds, suspension et extenseurs du poignet : une prise solide et des coudes équilibrés (utile en escalade et partout).',
+    tips: ['Les extenseurs (dos de la main) protègent les coudes du grimpeur.'], sources: ['lauersen2014'],
+    ex: [X('wu-wrists', 1, 60, 0), X('farmer-carry', 4, 40, 75), X('dead-hang', 3, 30, 60), X('suitcase-carry', 3, 30, 60), X('wrist-extension', 3, 15, 45), X('finger-extensions', 2, 20, 30), X('cd-forearm', 1, 120, 0)] },
+  { id: 'epaules-maison', name: 'Épaules rondes, sans salle', emoji: '🏔️', activity: 'conditioning', level: 1, minutes: 35, goals: ['muscle', 'force', 'climb'],
+    works: ['poussee_verticale', 'stabilite_epaules', 'controle_scapulaire'], why: 'Pompes en piqué pour le devant, élastique pour l’arrière et les côtés, Y-T-W pour la stabilité : des épaules pleines et solides.',
+    tips: ['Pompes en piqué : la tête passe devant les mains, comme un triangle.'], sources: ['lauersen2014', 'schoenfeld2017'],
+    ex: [X('wu-scap-band', 1, 12, 0), X('pike-pushup', 4, 8, 90), X('band-pull-apart', 3, 15, 45), X('ytw', 3, 8, 45), X('external-rotation', 3, 12, 45), X('wall-handstand', 3, 20, 60), X('cd-shoulders', 1, 120, 0)] },
+  { id: 'lombaires-solides', name: 'Bas du dos solide', emoji: '🔙', activity: 'conditioning', level: 0, minutes: 30, goals: ['sante', 'forme', 'force'],
+    works: ['chaine_posterieure', 'gainage_anterieur', 'gainage_lateral'], why: 'Le bas du dos se protège en le rendant fort et stable : chaîne arrière, gainage sous tous les angles, sans charge lourde.',
+    tips: ['Mouvements lents et contrôlés, aucune douleur. Ce n’est pas un avis médical : en cas de douleur qui dure, consulte.'], sources: ['lauersen2014'],
+    ex: [X('wu-mob-lower', 1, 10, 0), X('bird-dog', 3, 10, 45), X('glute-bridge', 3, 15, 45), X('superman', 3, 12, 45), X('side-plank', 3, 30, 30), X('dead-bug', 3, 10, 45), X('cd-hips', 1, 120, 0)] },
+  { id: 'lombaires-salle', name: 'Chaîne arrière à la salle', emoji: '🏗️', activity: 'strength', level: 1, minutes: 50, goals: ['force', 'muscle'],
+    works: ['chaine_posterieure', 'force_jambes'], why: 'Soulevé de terre roumain, good morning et chaise romaine : lombaires, fessiers et ischios forts ensemble.',
+    tips: ['Dos neutre : la charge descend le long des jambes, la hanche recule.'], sources: ['acsm2009'],
+    ex: [X('wu-mob-lower', 1, 10, 0), X('back-extension', 4, 12, 75), X('good-morning', 3, 8, 120), X('rdl', 3, 8, 150), X('superman', 3, 12, 45), X('pallof-press', 3, 12, 45), X('cd-hips', 1, 120, 0)] },
+  { id: 'lombaires-avance', name: 'Dos bas et chaîne arrière (avancé)', emoji: '🏋️', activity: 'strength', level: 2, minutes: 60, goals: ['force'],
+    works: ['chaine_posterieure', 'force_jambes', 'gainage_anterieur'], why: 'Soulevé de terre lourd, good morning et extensions lestées : des lombaires très solides, pour soulever et porter sans crainte.',
+    tips: ['Dos neutre à chaque répétition : la charge baisse si la forme se dégrade.', '2 à 3 min de repos sur le soulevé de terre.'], sources: ['acsm2009'],
+    ex: [X('wu-mob-lower', 1, 10, 0), X('deadlift', 4, 5, 180), X('good-morning', 3, 8, 120), X('back-extension', 4, 10, 90), X('bird-dog', 3, 10, 45), X('suitcase-carry', 3, 30, 60), X('cd-hips', 1, 120, 0)] },
+  { id: 'abdos-express', name: 'Abdos express (15 min)', emoji: '⏱️', activity: 'conditioning', level: 0, minutes: 15, goals: ['forme', 'muscle'],
+    works: ['gainage_anterieur', 'gainage_lateral'], why: 'Quatre exercices complémentaires (avant, côtés, rotation) enchaînés : un gainage complet quand tu as peu de temps.',
+    tips: ['Le gras du ventre ne part pas avec les abdos seuls : ils se renforcent, ils se voient quand le gras baisse.'], sources: ['vispute2011'],
+    ex: [X('hollow-rocks', 3, 12, 30), X('side-plank', 3, 30, 20), X('mountain-climber', 3, 30, 30), X('dead-bug', 3, 10, 30)] },
+  { id: 'fessiers-maison', name: 'Fessiers à la maison', emoji: '🍑', activity: 'conditioning', level: 0, minutes: 35, goals: ['muscle', 'forme'],
+    works: ['chaine_posterieure', 'force_jambes', 'equilibre'], why: 'Ponts, fentes et une jambe à la fois : les fessiers sous tous les angles avec le poids du corps.',
+    tips: ['Ponts : serre les fessiers 2 s en haut.', 'Ajoute un sac à dos chargé quand c’est facile.'], sources: ['schoenfeld2017'],
+    ex: [X('wu-mob-lower', 1, 10, 0), X('glute-bridge', 4, 15, 45), X('split-squat', 3, 10, 60), X('single-leg-rdl', 3, 10, 60), X('cossack', 3, 8, 60), X('hip-airplane', 2, 5, 45), X('cd-hips', 1, 120, 0)] },
+  { id: 'jambes-maison', name: 'Jambes sans matériel', emoji: '🦵', activity: 'conditioning', level: 1, minutes: 40, goals: ['force', 'muscle', 'endurance'],
+    works: ['force_jambes', 'chaine_posterieure', 'equilibre'], why: 'Fentes bulgares, squats, chaise et mollets : des jambes qui brûlent sans une seule charge.',
+    tips: ['Bulgare : le genou avant reste au-dessus du pied.'], sources: ['acsm2009'],
+    ex: [X('wu-mob-lower', 1, 10, 0), X('bulgarian', 4, 10, 75), X('squat-bw', 3, 20, 60), X('walking-lunge', 3, 12, 60), X('wall-sit', 3, 45, 60), X('calf-raise', 4, 15, 45), X('cd-hips', 1, 120, 0)] },
+  // ── Carnet 8.30 : par compétence ──
+  { id: 'mob-hanches', name: 'Mobilité des hanches', emoji: '🧘', activity: 'conditioning', level: 0, minutes: 25, goals: ['mobilite', 'climb', 'sante'],
+    works: ['mobilite_hanches'], why: 'Rotations contrôlées, squat profond, cosaque et fente du canapé : de l’amplitude utile (pieds hauts en escalade, squat, course).',
+    tips: ['Respire lentement, ne force jamais dans la douleur.'], sources: ['behm2016'],
+    ex: [X('hip-cars', 2, 5, 15), X('deep-squat-hold', 3, 45, 30), X('cossack', 3, 6, 30), X('couch-stretch', 2, 60, 15), X('worlds-greatest-stretch', 2, 5, 15), X('mob-hips', 2, 10, 15)] },
+  { id: 'mob-epaules', name: 'Mobilité des épaules et du haut du dos', emoji: '🔄', activity: 'conditioning', level: 0, minutes: 20, goals: ['mobilite', 'climb', 'sante'],
+    works: ['mobilite_epaules', 'controle_scapulaire'], why: 'Rotations contrôlées, ouverture thoracique et élastique : des épaules qui bougent librement au-dessus de la tête.',
+    tips: ['Lent et contrôlé : la mobilité active vaut mieux que l’étirement passif avant l’effort.'], sources: ['behm2016'],
+    ex: [X('shoulder-cars', 2, 5, 15), X('mob-thoracic', 2, 10, 15), X('mob-shoulders', 2, 10, 15), X('band-pull-apart', 2, 15, 30), X('dead-hang', 2, 30, 30), X('cd-shoulders', 1, 120, 0)] },
+  { id: 'souplesse-complete', name: 'Souplesse complète (grand écart, pancake)', emoji: '🤸', activity: 'calisthenics', level: 1, minutes: 35, goals: ['mobilite'],
+    works: ['mobilite_hanches', 'mobilite_epaules'], why: 'Pancake, fente du canapé, squat profond, ouverture d’épaules : la souplesse qui sert aux figures (L-sit, V-sit, planche).',
+    tips: ['À faire après l’effort ou un jour léger : étirements longs, 2 à 3 fois par semaine.'], sources: ['behm2016'],
+    ex: [X('wu-pulse', 1, 240, 0), X('pancake', 3, 60, 30), X('couch-stretch', 2, 60, 15), X('deep-squat-hold', 2, 60, 30), X('mob-hamstrings', 2, 10, 15), X('shoulder-cars', 2, 5, 15)] },
+  { id: 'recup-active', name: 'Récupération active (jour léger)', emoji: '🌿', activity: 'conditioning', level: 0, minutes: 25, goals: ['sante', 'forme', 'mobilite'],
+    works: ['mobilite_hanches', 'mobilite_epaules', 'endurance_aerobie'], why: 'Le lendemain d’une grosse séance : marcher, bouger doucement et respirer aide à repartir sans fatigue de plus.',
+    tips: ['Tu dois finir plus frais qu’au début.'], sources: ['behm2016'],
+    ex: [X('recov-walk', 1, 600, 0), X('hip-cars', 2, 5, 15), X('shoulder-cars', 2, 5, 15), X('worlds-greatest-stretch', 2, 4, 15), X('cd-breath', 1, 180, 0)] },
+  { id: 'gainage-complet', name: 'Gainage complet', emoji: '🧱', activity: 'conditioning', level: 1, minutes: 30, goals: ['force', 'forme', 'climb'],
+    works: ['gainage_anterieur', 'gainage_lateral'], why: 'Avant, côtés, rotation et anti-rotation : le tronc qui transmet la force des jambes aux bras.',
+    tips: ['Qualité avant durée : arrête quand le dos se creuse.'], sources: ['lauersen2014'],
+    ex: [X('wu-core', 1, 60, 0), X('hollow-hold', 3, 30, 45), X('side-plank-raise', 3, 30, 30), X('pallof-press', 3, 12, 45), X('bear-crawl', 3, 30, 45), X('knee-raise', 3, 10, 60), X('copenhagen', 2, 20, 45)] },
+  { id: 'gainage-grimpeur', name: 'Gainage du grimpeur (pieds qui restent au mur)', emoji: '🧗', activity: 'climbing_boulder', level: 1, minutes: 35, goals: ['climb', 'force'],
+    works: ['gainage_anterieur', 'controle_scapulaire'], why: 'Le gainage en suspension (pieds à la barre, L-sit, front lever groupé) garde les pieds sur les prises en dévers.',
+    tips: ['Épaules actives (abaissées) pendant toute la suspension.'], sources: ['saul2019'],
+    ex: [X('wu-scap-bar', 1, 8, 0), X('knee-raise', 3, 10, 60), X('toes-to-bar', 3, 6, 75), X('front-lever-tuck', 4, 10, 90), X('l-sit', 3, 12, 60), X('hollow-rocks', 3, 12, 45)] },
+  { id: 'explosif-debutant', name: 'Explosivité pour débuter', emoji: '🚀', activity: 'conditioning', level: 0, minutes: 30, goals: ['force', 'forme'],
+    works: ['explosivite'], why: 'Sauts simples et bien réceptionnés : apprendre à être rapide et à bien atterrir avant de sauter plus haut.',
+    tips: ['Réception silencieuse, genoux dans l’axe des pieds.', 'Peu de répétitions, toutes rapides.'], sources: ['soligard2008'],
+    ex: [X('wu-pulse', 1, 300, 0), X('wu-jumps', 1, 60, 0), X('jump-vertical', 4, 5, 75), X('skater-jumps', 3, 6, 60), X('box-jump', 3, 5, 75), X('kb-swing', 3, 12, 75), X('cd-hips', 1, 120, 0)] },
+  { id: 'blc-puissance', name: 'Puissance en bloc (dynos et campus)', emoji: '💥', activity: 'climbing_boulder', level: 2, minutes: 60, goals: ['climb', 'force'],
+    works: ['puissance_haut', 'explosivite', 'coordination'], why: 'Mouvements dynamiques à fond, très peu de répétitions et beaucoup de repos : pour les jetés et les mouvements explosifs.',
+    tips: ['Seulement bien échauffé et frais. Campus : réservé aux grimpeurs confirmés aux doigts habitués.'], sources: ['schoffl2006', 'saul2019'],
+    ex: [X('wu-climb', 1, 8, 0), X('wu-hang', 1, 60, 0), X('dynos', 5, 3, 120), X('dev-power-blocs', 4, 3, 180), X('campus-ladders', 3, 3, 180), X('explosive-pullup', 3, 3, 120), X('cd-forearm', 1, 120, 0)] },
+  { id: 'run-vitesse', name: 'Vitesse : lignes droites et fractionné court', emoji: '🏎️', activity: 'running', level: 1, minutes: 40, goals: ['endurance'],
+    works: ['vitesse', 'technique_course'], why: 'Éducatifs, accélérations progressives et fractionné court : courir plus vite en restant relâché.',
+    tips: ['Les lignes droites : vite mais relâché, jamais un sprint crispé.'], sources: ['milanovic2015'],
+    ex: [X('run-easy', 1, 600, 0), X('run-drills', 1, 300, 0), X('run-strides', 6, 6, 60), X('run-intervals', 1, 600, 0), X('run-easy', 1, 300, 0)] },
+  { id: 'cardio-maison', name: 'Cardio à la maison, sans sauter', emoji: '❤️', activity: 'conditioning', level: 0, minutes: 25, goals: ['poids', 'endurance', 'sante'],
+    works: ['endurance_aerobie', 'gainage_anterieur'], why: 'Le cœur monte sans impacts : grimpeurs (mountain climbers), marche de l’ours, squats et chaise, en circuit.',
+    tips: ['Tu dois pouvoir dire quelques mots : sinon, ralentis.'], sources: ['who2020', 'donnelly2009'],
+    ex: [X('wu-pulse', 1, 240, 0), X('mountain-climber', 4, 30, 30), X('squat-bw', 4, 15, 30), X('bear-crawl', 4, 30, 30), X('wall-sit', 3, 40, 30), X('cd-breath', 1, 120, 0)] },
+  { id: 'cal-figures-debut', name: 'Premières figures : front lever et drapeau', emoji: '🚩', activity: 'calisthenics', level: 1, minutes: 45, goals: ['force'],
+    works: ['controle_scapulaire', 'gainage_anterieur', 'tirage_vertical', 'gainage_lateral'], why: 'Front lever groupé avec élastique, drapeau groupé : les premières versions des figures emblématiques, en toute sécurité.',
+    tips: ['Prérequis conseillé : 8 tractions strictes.', 'Drapeau : sur un poteau solide, bras du bas tendu qui pousse.'], sources: ['acsm2009'],
+    ex: [X('wu-scap-bar', 1, 8, 0), X('scap-pullup', 3, 8, 60), X('front-lever-tuck', 4, 10, 90), X('fl-band', 3, 10, 90), X('flag-tuck', 4, 8, 120), X('side-plank-raise', 3, 20, 45), X('cd-shoulders', 1, 120, 0)] },
+  { id: 'equilibre-agilite', name: 'Équilibre et agilité', emoji: '⚖️', activity: 'conditioning', level: 1, minutes: 30, goals: ['sante', 'forme', 'climb'],
+    works: ['equilibre', 'coordination', 'force_jambes'], why: 'Sur une jambe, en mouvement, avec rotation : des chevilles et des hanches stables, moins de chutes et d’entorses.',
+    tips: ['Pieds nus si possible, près d’un appui.'], sources: ['sherrington2019', 'soligard2008'],
+    ex: [X('wu-mob-lower', 1, 10, 0), X('hip-airplane', 3, 5, 45), X('single-leg-rdl', 3, 8, 45), X('pistol-box', 3, 6, 75), X('cossack', 3, 6, 45), X('bear-crawl', 2, 30, 45), X('cd-hips', 1, 120, 0)] },
 ];
 
 /** Séance jouable à partir d'une entrée du catalogue (exercices de la bibliothèque, consignes comprises). */
@@ -255,6 +357,47 @@ export function buildSession(entry) {
     return normalizeEx({ ...lib, id: uid(), libId: lib.id, block, ok: lib.cues, bad: lib.bad, sets: x.sets, rest: x.rest, ...(time ? { secMin: x.amount, secMax: x.amount } : { repsMin: x.amount, repsMax: x.amount }), note: i === 0 && entry.tips?.[0] ? entry.tips[0] : '' });
   }).filter(Boolean);
   return normalizeSession({ id: 'cat-' + entry.id, name: entry.name, emoji: entry.emoji, activity: entry.activity, goal: entry.goals[0] || '', exercises, notes: [{ title: 'Pourquoi cette séance', text: [entry.why, ...(entry.tips || []).map((t) => '• ' + t)].filter(Boolean).join('\n') }] });
+}
+/* ───────── Ce que travaille une séance : muscles et compétences (calculés depuis ses exercices) ───────── */
+/** Compétences du carnet : [id, libellé, capacités]. « figures » = la séance contient une figure (front lever, planche…). */
+export const COMPETENCES = [
+  ['force', '💪 Force', ['tirage_vertical', 'tirage_horizontal', 'poussee_horizontale', 'poussee_verticale', 'force_jambes', 'chaine_posterieure', 'blocage', 'tirage_unilateral']],
+  ['puissance', '⚡ Explosivité', ['explosivite', 'puissance_haut']],
+  ['cardio', '❤️ Cardio et endurance', ['endurance_aerobie', 'seuil']],
+  ['vitesse', '🏎️ Vitesse', ['vitesse']],
+  ['gainage', '🧱 Gainage', ['gainage_anterieur', 'gainage_lateral']],
+  ['mobilite', '🧘 Mobilité et souplesse', ['mobilite_hanches', 'mobilite_epaules']],
+  ['epaules', '🛡️ Épaules solides (prévention)', ['stabilite_epaules', 'controle_scapulaire']],
+  ['doigts', '✋ Doigts', ['force_doigts', 'endurance_doigts', 'pince']],
+  ['equilibre', '⚖️ Équilibre et coordination', ['equilibre', 'coordination']],
+  ['grimpe', '🧗 Technique d’escalade', ['technique_escalade', 'technique_pieds']],
+  ['geste', '👟 Technique de course et de nage', ['technique_course', 'technique_nage']],
+  ['figures', '🤸 Figures', []],
+];
+const MGROUPS = [['bras', '💪 Bras', ['biceps', 'triceps']], ['avantbras', '✊ Avant-bras', ['avant_bras_flech', 'avant_bras_ext']], ['epaules', '🏔️ Épaules', ['deltoide_ant', 'deltoide_lat', 'deltoide_post', 'coiffe']],
+  ['dos', '🔻 Dos', ['grand_dorsal', 'trapezes', 'rhomboides']], ['pecs', '🛡️ Pectoraux', ['pectoraux', 'grand_dentele']], ['abdos', '🍫 Abdos', ['grand_droit', 'obliques']], ['lombaires', '🔙 Lombaires', ['lombaires']],
+  ['fessiers', '🍑 Fessiers', ['grand_fessier', 'moyen_fessier']], ['cuisses', '🦵 Cuisses', ['quadriceps', 'ischios', 'adducteurs']], ['mollets', '🦶 Mollets', ['mollets', 'tibial']]];
+export const MUSCLE_FOCUS = MGROUPS.map(([id, label]) => [id, label]);
+const FOCUS_CACHE = new Map();
+const FIGURE_RE = /^(fl-|flag-|front-lever|tuck-planche|back-lever|freestanding-handstand|wall-handstand|handstand-|oap|muscle-up|strict-muscle-up|l-sit|v-sit|dragon-flag|pistol)/;
+/**
+ * Muscles et compétences d'une séance, d'après ses exercices principaux (séries × muscles et capacités sollicités) :
+ * un muscle est retenu s'il porte au moins 20 % du travail, une compétence au moins 25 % (3 au plus). Rien n'est déclaré à la main,
+ * donc une séance ne peut pas prétendre travailler ce qu'elle ne travaille pas.
+ */
+export function focusOf(entry) {
+  if (FOCUS_CACHE.has(entry)) return FOCUS_CACHE.get(entry);
+  const mus = {}, comp = {}; let figures = false;
+  for (const x of entry.ex || []) {
+    const lib = byId(x.libId); if (!lib || lib.role !== 'main') continue;
+    const w = Math.max(1, Number(x.sets) || 1); if (FIGURE_RE.test(lib.id)) figures = true;
+    for (const m of lib.prim || []) { const g = MGROUPS.find((y) => y[2].includes(m)); if (g) mus[g[0]] = (mus[g[0]] || 0) + w / (lib.prim.length || 1); }
+    for (const [c, v] of Object.entries(lib.caps || {})) { const k = COMPETENCES.find((y) => y[2].includes(c)); if (k) comp[k[0]] = (comp[k[0]] || 0) + w * Number(v); }
+  }
+  for (const c of entry.works || []) { const k = COMPETENCES.find((y) => y[2].includes(c)); if (k) comp[k[0]] = (comp[k[0]] || 0) + 1; }
+  const top = (o, min) => { const t = Object.values(o).reduce((a, b) => a + b, 0) || 1; return Object.entries(o).filter(([, v]) => v / t >= min).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k); };
+  const r = { muscles: top(mus, 0.2), skills: [...new Set([...(figures ? ['figures'] : []), ...top(comp, 0.25)])].slice(0, 3) };
+  FOCUS_CACHE.set(entry, r); return r;
 }
 /** Matériel nécessaire à une séance du catalogue. */
 export const needsOf = (entry) => [...new Set(entry.ex.flatMap((x) => byId(x.libId)?.needs || []))];
