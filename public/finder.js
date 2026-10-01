@@ -52,7 +52,7 @@ export const FEATURE_INDEX = [
   E('feature', '🧗', 'Séance d’escalade (cotation, styles)', 'Bibliothèque', 'library/climbplan', 'escalade bloc voie objectif cotation u8 style devers reglette dalle dynamique pyramide structurer parties echauffement projet', {}),
   E('feature', '🔀', 'Fusionner des séances', 'Bibliothèque', '', 'fusionner combiner melanger regrouper assembler deux seances conseil', { act: 'mergeOpen', to: 'library/seances' }),
   E('feature', '💡', 'Proposer une amélioration', 'Aider l’app', '', 'idee suggestion demande modification ameliorer proposer administrateur', { act: 'ideaNew' }),
-  E('feature', '🗂', 'Séances prêtes', 'Bibliothèque', 'library/catalog', 'catalogue sourcees toutes faites programme', {}),
+  E('feature', '📖', 'Carnet de séances', 'Bibliothèque', 'library/catalog', 'carnet seances pretes types catalogue sourcees toutes faites programme niveau debutant intermediaire avance', {}),
   E('feature', '💪', 'Exercices', 'Bibliothèque', 'library/exercises', 'exercice catalogue muscles liste', {}),
   E('feature', '🏆', 'Top exercices pour toi', 'Bibliothèque', 'library/best', 'meilleurs exercices classement top', {}),
   E('feature', '🌍', 'Séances partagées', 'Bibliothèque', 'library/common', 'communaute partage publiees commune', {}),

@@ -36,7 +36,7 @@ export const FEATURES = {
   // 8.29 : la Bibliothèque et le Profil se personnalisent aussi (ordre, masquer, couleur), pas seulement leurs icônes.
   library: {
     search: F('Recherche', ['icon']), newbtn: F('Bouton « ＋ Nouvelle séance »', ['big'], { ic: '＋' }), draft: F('Séance en cours de création', ['big'], { ic: '📝' }),
-    'r-seances': F('Mes séances', ['big'], { row: 1, ic: '📋' }), 'r-climbplan': F('Créer une séance', ['big'], { row: 1, ic: '✨' }), 'r-catalog': F('Séances prêtes', ['big'], { row: 1, ic: '🗂' }),
+    'r-seances': F('Mes séances', ['big'], { row: 1, ic: '📋' }), 'r-climbplan': F('Créer une séance', ['big'], { row: 1, ic: '✨' }), 'r-catalog': F('Carnet de séances', ['big'], { row: 1, ic: '📖' }),
     'r-exercises': F('Exercices', ['big'], { row: 1, ic: '💪' }), 'r-common': F('Bibliothèque commune', ['big'], { row: 1, ic: '🌍' }), 'r-search': F('Rechercher', ['big'], { row: 1, ic: '🔍' }),
     gen: F('Séance du jour', ['icon']), timer: F('Minuteur', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach', ['icon']),
   },
@@ -177,7 +177,7 @@ ACT.layReset = async (el) => {
 
 /* ───────── Toutes les fonctions, triées ───────── */
 const ALL = [
-  ['S’entraîner', [['✨', 'Créer une séance (ou séance du jour)', 'cpNew'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['🗂', 'Séances prêtes', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Assistant (questions, exercices avec tes mots)', 'coachOpen']]],
+  ['S’entraîner', [['✨', 'Créer une séance (ou séance du jour)', 'cpNew'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['📖', 'Carnet de séances', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Assistant (questions, exercices avec tes mots)', 'coachOpen']]],
   ['Escalade', [['🧗', 'Carnet (blocs, voies)', 'goCarnet'], ['📌', 'Projets (dans Objectifs)', 'goProjects'], ['✋', 'Test de doigts (Records et mesures)', 'allGo', 'profile/perfs']]],
   ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📝', 'Journal (séances, blocs, notes)', 'allGo', 'progress/journal'], ['🏆', 'Records et mesures', 'allGo', 'profile/perfs'], ['🔎', 'Mon analyse', 'allGo', 'profile/analyse']]],
   ['Planifier', [['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], ['🔔', 'Notifications', 'notifOpen']]],

@@ -1,6 +1,6 @@
 // views-catalog.js — Bibliothèque › « Prêtes » (séances sourcées, filtres, tri pour toi), « Top exercices »
 // (classement par catégorie, adapté à ton profil) et la liste des sources scientifiques citées.
-import { h, raw, chip, openSheet, closeSheet, toast, fmtDur, subHead } from './ui.js';
+import { h, raw, chip, openSheet, closeSheet, toast, fmtDur, subHead, seg } from './ui.js';
 import { S, ACT, ctx, render, saveSeance, item } from './state.js';
 import { uid } from './shared.js';
 import { ACTIVITIES, CAPACITIES, EQUIPMENT } from './model.js';
@@ -28,21 +28,36 @@ function profileNeeds() {
 
 /* ───────── Séances prêtes ───────── */
 export function vCatalog() {
-  const f = (S.catF ||= { sport: '', goal: '', time: '', onlyEq: true }), p = profileNeeds();
+  const f = (S.catF ||= { sport: '', goal: '', time: '', level: '', view: 'book', onlyEq: true }), p = profileNeeds();
   let list = rankCatalog({ ...p, equipment: f.onlyEq ? p.equipment : null });
   if (f.sport) list = list.filter((r) => (f.sport === 'climbing' ? r.entry.activity.startsWith('climbing') : r.entry.activity === f.sport));
   if (f.goal) list = list.filter((r) => r.entry.goals.includes(f.goal));
   if (f.time) list = list.filter((r) => (f.time === 's' ? r.entry.minutes <= 20 : f.time === 'm' ? r.entry.minutes > 20 && r.entry.minutes <= 40 : r.entry.minutes > 40));
+  if (f.level !== '' && f.level != null) list = list.filter((r) => String(r.entry.level) === String(f.level));
   if (f.onlyEq) list = list.filter((r) => !r.missing.length);
-  const sports = [['', 'Tous'], ['climbing', '🧗 Escalade'], ['running', '🏃 Course'], ['strength', '🏋️ Muscu'], ['conditioning', '💪 Renfo'], ['swimming', '🏊 Natation']];
-  return h`<div class="card catf"><div class="chips">${sports.map(([k, l]) => chip(f.sport === k, l, `data-act="catF" data-k="sport" data-v="${k}"`))}</div>
+  const sports = [['', 'Tous'], ['climbing', '🧗 Escalade'], ['calisthenics', '🤸 Calisthenics'], ['running', '🏃 Course'], ['strength', '🏋️ Muscu'], ['conditioning', '💪 Renfo'], ['swimming', '🏊 Natation']];
+  const book = (f.view || 'book') === 'book';
+  return h`${seg('catView', book ? 'book' : 'rank', [['book', '📖 Par sport et niveau'], ['rank', '✨ Pour toi d’abord']])}
+    <div class="card catf"><div class="chips">${sports.map(([k, l]) => chip(f.sport === k, l, `data-act="catF" data-k="sport" data-v="${k}"`))}</div>
+      <div class="chips">${[['', 'Tous niveaux'], ['0', '🌱 Débutant'], ['1', '🌿 Intermédiaire'], ['2', '🌳 Avancé']].map(([k, l]) => chip(String(f.level ?? '') === k, l, `data-act="catF" data-k="level" data-v="${k}"`))}</div>
       <div class="chips">${chip(!f.goal, 'Tous objectifs', 'data-act="catF" data-k="goal" data-v=""')}${Object.entries(GOAL_L).map(([k, l]) => chip(f.goal === k, l, `data-act="catF" data-k="goal" data-v="${k}"`))}</div>
       <div class="chips">${[['', 'Toutes durées'], ['s', '≤ 20 min'], ['m', '20–40 min'], ['l', '> 40 min']].map(([k, l]) => chip(f.time === k, l, `data-act="catF" data-k="time" data-v="${k}"`))}${chip(f.onlyEq, '🧰 Faisable avec mon matériel', 'data-act="catEq"')}</div></div>
-    <p class="tiny muted">Triées pour toi : ton sport, tes objectifs, tes points faibles et ton niveau. Chaque séance cite ses sources.</p>
-    ${list.length ? list.map((r, i) => h`<button class="card pick catcard" data-act="catOpen" data-id="${r.entry.id}"><div class="row"><span class="catemoji">${r.entry.emoji}</span><div class="grow"><b>${r.entry.name}</b>
+    <p class="tiny muted">${book ? 'Le carnet : des séances toutes prêtes pour chaque sport, du niveau débutant à avancé. Touche une séance pour voir ses exercices, puis lance-la ou garde-la.' : 'Triées pour toi : ton sport, tes objectifs, tes points faibles et ton niveau.'} Chaque séance cite ses sources.</p>
+    ${book ? bookView(list) : list.length ? list.map((r, i) => h`<button class="card pick catcard" data-act="catOpen" data-id="${r.entry.id}"><div class="row"><span class="catemoji">${r.entry.emoji}</span><div class="grow"><b>${r.entry.name}</b>
         <div class="tiny muted">${ACTIVITIES[r.entry.activity]?.label || r.entry.activity} · ${r.entry.minutes} min · ${['débutant', 'intermédiaire', 'avancé'][r.entry.level]}</div></div>${i < 3 && r.why.length ? h`<span class="tag acc">pour toi</span>` : ''}</div>
         <p class="small">${r.entry.why}</p>${r.why.length ? h`<div class="tiny acc-t">✓ ${r.why.join(' · ')}</div>` : ''}</button>`) : h`<p class="small muted">Aucune séance avec ces filtres${f.onlyEq ? ' et ton matériel' : ''}.</p>`}`;
 }
+const LEVEL_W = [['🌱', 'Débutant', 'pour commencer ou reprendre'], ['🌿', 'Intermédiaire', 'tu t’entraînes régulièrement'], ['🌳', 'Avancé', 'plusieurs années de pratique']];
+const SPORT_ORDER = ['climbing_boulder', 'climbing_route', 'calisthenics', 'conditioning', 'strength', 'running', 'swimming'];
+/** Carnet : sport → niveau → séances (lignes compactes). */
+function bookView(list) {
+  if (!list.length) return h`<p class="small muted">Aucune séance avec ces filtres${S.catF.onlyEq ? ' et ton matériel (touche « 🧰 Faisable avec mon matériel » pour tout voir)' : ''}.</p>`;
+  const acts = [...new Set(list.map((r) => r.entry.activity))].sort((a, b) => (SPORT_ORDER.indexOf(a) + 99) % 99 - (SPORT_ORDER.indexOf(b) + 99) % 99);
+  return h`${acts.map((a) => { const of = list.filter((r) => r.entry.activity === a); return h`<section class="card stack"><h3 style="margin:0">${ACTIVITIES[a]?.emoji || ''} ${ACTIVITIES[a]?.label || a}</h3>
+    ${[0, 1, 2].map((lv) => { const g = of.filter((r) => r.entry.level === lv); return g.length ? h`<span class="kicker">${LEVEL_W[lv][0]} ${LEVEL_W[lv][1]} <span class="tiny muted">· ${LEVEL_W[lv][2]}</span></span>
+      <div class="setmenu">${g.map((r) => h`<button class="setrow" data-act="catOpen" data-id="${r.entry.id}"><span class="sic">${r.entry.emoji}</span><span class="grow"><b>${r.entry.name}</b><small>${r.entry.minutes} min · ${r.entry.why.split(/[.:]/)[0]}</small></span><span class="chev">›</span></button>`)}</div>` : ''; })}</section>`; })}`;
+}
+ACT.catView = (el) => { S.catF.view = el.dataset.id; render(); };
 ACT.catF = (el) => { S.catF[el.dataset.k] = S.catF[el.dataset.k] === el.dataset.v ? '' : el.dataset.v; render(); };
 ACT.catEq = () => { S.catF.onlyEq = !S.catF.onlyEq; render(); };
 ACT.catOpen = (el) => {

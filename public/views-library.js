@@ -75,7 +75,7 @@ const LIB_INFO = {
   generate: ['🎯', 'Séance sur mesure', () => ''],
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
   climbplan: ['✨', 'Créer une séance', () => draftText() || 'Tous sports : l’app choisit, te guide, ou tu composes'],
-  catalog: ['🗂', 'Séances prêtes', () => `Catalogue officiel : ${CATALOG.length} séances expliquées et sourcées`],
+  catalog: ['📖', 'Carnet de séances', () => `${CATALOG.length} séances prêtes, de débutant à avancé, pour chaque sport`],
   exercises: ['💪', 'Exercices', () => `${LIBRARY.filter((x) => x.role === 'main').length} exercices, et le top pour toi`],
   common: ['🌍', 'Bibliothèque commune', () => 'Séances partagées par les membres (non vérifiées)'],
   search: ['🔍', 'Rechercher', () => 'Une séance, un exercice, une capacité…'],

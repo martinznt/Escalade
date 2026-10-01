@@ -6,7 +6,7 @@ import { FEATURE_INDEX, SETTINGS_INDEX, findIn, norm } from './finder.js';
 import { CATALOG } from './catalog.js';
 import { LIBRARY } from './library.js';
 
-const GROUPS = [['feature', 'Fonctions'], ['setting', 'Paramètres'], ['seance', 'Mes séances'], ['catalog', 'Séances prêtes'], ['exercise', 'Exercices']];
+const GROUPS = [['feature', 'Fonctions'], ['setting', 'Paramètres'], ['seance', 'Mes séances'], ['catalog', 'Carnet de séances'], ['exercise', 'Exercices']];
 /** Ce qui vient du compte ou du catalogue : mes séances, les séances prêtes, les exercices. */
 function dynamicIndex() {
   const mine = (S.seances?.items || []).filter((s) => !s.archived).map((s) => ({ kind: 'seance', icon: s.emoji || '📋', title: s.name, sub: 'Mes séances', keys: s.activity || '', act: 'openSeance', id: s.id }));

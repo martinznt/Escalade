@@ -189,7 +189,7 @@ export function vAdminContent() {
     ${menuList([
       ['allGo', '', '💪', 'Exercices', 'Ouvre un exercice puis ✏️ Modifier ; ou crée-en un pour tout le monde', 'library/exercises'],
       ['exNewGlobal', '', '＋', 'Nouvel exercice pour tout le monde', 'Fiche complète : consignes, erreurs, matériel, capacités'],
-      ['allGo', '', '🗂', 'Séances prêtes', 'Ouvre une séance du catalogue puis ✏️ Modifier', 'library/catalog'],
+      ['allGo', '', '📖', 'Carnet de séances', 'Ouvre une séance du carnet puis ✏️ Modifier', 'library/catalog'],
       ['allGo', '', '❓', 'Questions fréquentes et sources', 'Dans Aide : ✏️ sur chaque question et chaque source, ＋ pour en ajouter', 'settings/help'],
       ['allGo', '', '🧗', 'Cotations et styles', 'Dans Profil › Mes sports : crée un système ou un style, puis « 🌍 Pour tout le monde »', 'profile/activities'],
     ])}
@@ -215,7 +215,7 @@ export function vAdminChanges() {
 }
 ACT.admAct = (el) => { S.admAct = el.dataset.v; render(); };
 /* Raccourcis ajoutés par un administrateur : sur une page, une indication qui mène à une autre (pour tout le monde). */
-const ROUTES = [['home/dash', 'Accueil'], ['progress/summary', 'Progrès'], ['library/home', 'Bibliothèque'], ['library/seances', 'Mes séances'], ['library/climbplan', 'Créer une séance'], ['library/exercises', 'Exercices'], ['library/catalog', 'Séances prêtes'], ['profile/home', 'Profil'], ['profile/goals', 'Objectifs'], ['profile/perfs', 'Mesures'], ['profile/climbing', 'Carnet'], ['profile/equipment', 'Mes lieux'], ['settings/main', 'Paramètres']];
+const ROUTES = [['home/dash', 'Accueil'], ['progress/summary', 'Progrès'], ['library/home', 'Bibliothèque'], ['library/seances', 'Mes séances'], ['library/climbplan', 'Créer une séance'], ['library/exercises', 'Exercices'], ['library/catalog', 'Carnet de séances'], ['profile/home', 'Profil'], ['profile/goals', 'Objectifs'], ['profile/perfs', 'Mesures'], ['profile/climbing', 'Carnet'], ['profile/equipment', 'Mes lieux'], ['settings/main', 'Paramètres']];
 ACT.hintNew = () => { if (!isAdmin()) return; const opt = (sel) => ROUTES.map(([k, l]) => h`<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`);
   openSheet(h`<form data-submit="hintGo" class="stack"><h2 style="margin:0">💡 Nouveau raccourci</h2><p class="small muted">Il s’affiche en haut de la page choisie, pour tout le monde ; chacun peut le masquer.</p>
     <label>Sur la page<select name="where">${opt('home/dash')}</select></label><label>Texte<input name="text" required maxlength="120" placeholder="Ex. Note ton max en bloc ici"></label>

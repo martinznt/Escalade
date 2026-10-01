@@ -25,7 +25,7 @@ export const CANNOT = ['écrire du code directement : pour une petite modificati
 export const APP_MAP = `Onglets en bas : Accueil, Progrès, Bibliothèque, Profil, Paramètres.
 - Accueil : « Séance du jour », « Que faire aujourd’hui ? », ce que ta dernière séance change pour la suivante, raccourcis.
 - Progrès : résumé (série, chiffres, badges), Journal (séances, blocs et voies, notes), Records et mesures, Mon analyse.
-- Bibliothèque : « ＋ Nouvelle séance », Mes séances, Créer une séance, Séances prêtes, Exercices, Bibliothèque commune, Rechercher.
+- Bibliothèque : « ＋ Nouvelle séance », Mes séances, Créer une séance, Carnet de séances (séances prêtes par sport et par niveau : débutant, intermédiaire, avancé), Exercices, Bibliothèque commune, Rechercher.
 - Profil : Mon bilan physique, Mon corps et mes préférences, Mes sports (avec les cotations et styles d’escalade), Objectifs, Mes lieux (salles, matériel), Records et mesures, Carnet, Mon analyse, Partage.
 - Paramètres : Affichage, Pendant la séance, Notifications, Mes données, Synchronisation, Aide, Toutes les mises à jour, Signaler un bug, Proposer une amélioration, Admin.
 Icônes en haut à droite (selon la page) : 🔍 rechercher dans l’app ; 🔔 notifications ; ☰ toutes les fonctions ; 📅 planning (calendrier, programme, rappels) ; 💬 assistant ; ⏱ minuteur ; ✏️ « Organiser » : personnaliser la page (chaque bloc en grand, en petite icône en haut ou masqué, l’ordre, une couleur ; rien n’est enregistré sans confirmation ; « Revenir à la mise en page de base » remet tout). Le bouton ✏️ se masque dans Paramètres › Affichage ; la mise en page reste accessible par ☰ › « Mise en page ».
