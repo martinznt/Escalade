@@ -30,8 +30,10 @@ export const dashBlocks = () => (item('config', 'dashboard')?.blocks?.length ? i
 
 export function eventsOn(date) {
   const wd = (d) => new Date(d + 'T12:00:00').getDay();
-  return S.events.filter((e) => e.date === date || (e.recurrence?.freq === 'weekly' && e.date <= date && wd(e.date) === wd(date) && (!e.recurrence.until || date <= e.recurrence.until)));
+  return S.events.filter((e) => e.date === date || (e.recurrence?.freq === 'weekly' && e.date <= date && wd(e.date) === wd(date) && (!e.recurrence.until || date <= e.recurrence.until)))
+    .sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
 }
+const hhmm = (t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 /** Séances du programme en cours prévues ce jour-là (pas encore faites). */
 const programOn = (date) => { const p = activeProgram(); if (!p) return []; const st = programStatus(p, S.history); return st.list.filter((x) => x.date === date && x.status !== 'done').map((x) => ({ ...x, pid: p.id, name: p.name })); };
 const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt)) === date);
@@ -138,7 +140,7 @@ const BLOCK_VIEWS = {
   next() {
     const days = [...Array(8)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return ymd(d); });
     const list = days.flatMap((d) => eventsOn(d).map((e) => ({ d, e }))).slice(0, 5);
-    return card('📅 Prochaines séances', list.length ? list.map(({ d, e }) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${relDate(new Date(d + 'T12:00:00').getTime())}${e.recurrence ? ' · chaque semaine' : ''}</div></div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}</div>`; }) : h`<p class="muted small">Rien de planifié cette semaine. <button class="btn sm" data-act="homeSub" data-id="cal">Planifier</button></p>`);
+    return card('📅 Prochaines séances', list.length ? list.map(({ d, e }) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${relDate(new Date(d + 'T12:00:00').getTime())}${e.time ? ' à ' + e.time : ''}${e.recurrence ? ' · chaque semaine' : ''}</div></div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}</div>`; }) : h`<p class="muted small">Rien de planifié cette semaine. <button class="btn sm" data-act="homeSub" data-id="cal">Planifier</button></p>`);
   },
   progress() {
     const b = benchmarks(ctx(), 7), d = (x) => (x == null ? '' : x > 0 ? ` (+${x} %)` : ` (${x} %)`);
@@ -318,7 +320,7 @@ ACT.icsExport = () => {
   const today = ymd(new Date()), hour = ls.get('sea:reminders', null)?.hour || '18:00', ev = [];
   for (let k = 0; k < 90; k++) {
     const d = new Date(); d.setDate(d.getDate() + k); const day = ymd(d);
-    for (const e of eventsOn(day)) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: hour, minutes: s ? Math.max(10, Math.round(sessionMinutes(s))) : 45 }); }
+    for (const e of eventsOn(day)) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: e.time || hour, minutes: s ? Math.max(10, Math.round(sessionMinutes(s))) : 45 }); }
     for (const x of programOn(day)) if (x.status !== 'missed' || day >= today) ev.push({ uid: `${x.pid}-${x.i}`, title: `${x.name.split(' · ')[0]} · semaine ${x.week}`, date: day, time: hour, minutes: x.minutes, desc: 'Programme Séances entraînement' });
   }
   if (!ev.length) { toast('Rien de prévu pour l’instant : planifie une séance ou crée un programme.'); return; }
@@ -333,21 +335,36 @@ export function openPlanSheet(date, seanceId) {
   const evs = eventsOn(date), done = doneOnDay(date), future = date > ymd(new Date());
   const list = S.seances.items.filter((s) => !s.archived);
   openSheet(h`<h2 style="margin:0">${new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
-    ${done.length ? h`<b class="small ok-t">Réalisé</b>${done.map((x) => h`<div class="item"><div class="ico sm">✅</div><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.aborted ? ' · interrompue' : ''}</div></div></div>`)}` : ''}
-    ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${e.recurrence ? 'se répète chaque semaine' : e.completed ? 'marquée faite' : future ? 'à venir' : ''}</div></div>${s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
+    ${done.length ? h`<b class="small ok-t">Réalisé</b><p class="tiny muted">Pas faite en vrai ? Touche « Pas faite » : elle sort de ton historique et de tes statistiques.</p>${done.map((x) => h`<div class="item"><div class="ico sm">✅</div><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">à ${hhmm(x.startedAt)} · ${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.aborted ? ' · interrompue' : ''}</div></div><button class="btn sm" data-act="notDone" data-id="${x.id}">✗ Pas faite</button></div>`)}` : ''}
+    ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${[e.recurrence ? 'se répète chaque semaine' : '', e.completed ? 'marquée faite' : future ? 'à venir' : ''].filter(Boolean).join(' · ')}</div>
+        <label class="tiny row" style="gap:6px;margin-top:4px">Heure <input type="time" value="${e.time || ''}" data-change="evTime" data-id="${e.id}" aria-label="Heure de la séance" style="width:auto"></label></div>
+        ${e.completed ? h`<button class="btn sm" data-act="evUndone" data-id="${e.id}">✗ Pas faite</button>` : s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}" aria-label="Lancer">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
     ${programOn(date).map((x) => h`<div class="item"><div class="ico sm">📆</div><div class="grow"><b>${x.name.split(' · ')[0]} · S${x.week}</b><div class="tiny muted">${x.minutes} min · programme${x.status === 'missed' ? ' · manquée' : ''}</div></div>${date <= ymd(new Date()) ? h`<button class="btn pri sm" data-act="progPlay" data-id="${x.pid}" data-i="${x.i}">▶</button>` : ''}</div>`)}
     ${!done.length && !evs.length && !programOn(date).length ? h`<p class="muted small">Rien ce jour-là.</p>` : ''}
     ${list.length ? h`<form data-submit="addEvent" class="card flat"><h3>Planifier une séance</h3>
       <label>Séance<select name="sid">${list.map((s) => h`<option value="${s.id}" ${s.id === seanceId ? 'selected' : ''}>${s.emoji} ${s.name}</option>`)}</select></label>
+      <label>Heure <span class="tiny muted">(facultatif : sert au rappel dans l’agenda du téléphone)</span><input type="time" name="time"></label>
       <label class="chk"><input type="checkbox" name="weekly"> Répéter chaque semaine</label>
       <button class="btn pri" type="submit">Planifier le ${date.split('-').reverse().join('/')}</button></form>` : h`<p class="muted small">Crée d’abord une séance pour la planifier.</p>`}
     <button class="btn" data-act="closeSheet">Fermer</button>`);
 }
+CHG.evTime = (el) => { const e = S.events.find((x) => x.id === el.dataset.id), t = el.value; if (!e || (t && !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) return; saveEvent({ ...e, time: t }); toast(t ? `Heure : ${t}` : 'Heure retirée'); render(); };
+/** « Je ne l'ai pas faite » : une séance enregistrée par erreur (lancée puis abandonnée, oubliée ouverte…) sort de l'historique. */
+ACT.notDone = async (el) => {
+  const x = S.history.find((y) => y.id === el.dataset.id); if (!x) return;
+  if (!(await ask(`« ${x.sessionName} » n’a pas été faite ? Elle sera retirée de ton historique : statistiques, séries, progression et programme ne la compteront plus.`, { ok: 'Retirer', danger: true }))) return;
+  const day = ymd(new Date(x.startedAt));
+  deleteHistory(x.id);
+  for (const e of eventsOn(day)) if (e.completed && e.sessionId === x.sessionId) saveEvent({ ...e, completed: false });
+  toast('Retirée de l’historique'); openPlanSheet(S.selDay || day); render();
+};
+ACT.evUndone = (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; saveEvent({ ...e, completed: false }); toast('Remise « à faire »'); openPlanSheet(S.selDay); render(); };
 ACT.planSeance = (el) => openPlanSheet(ymd(new Date()), el.dataset.id);
 ACT.delEvent = async (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; if (!(await ask(e.recurrence ? 'Supprimer toute la série hebdomadaire ?' : 'Supprimer cet événement ?', { ok: 'Supprimer', danger: true }))) return; deleteEvent(e.id); openPlanSheet(S.selDay); render(); };
 SUBMIT.addEvent = (form) => {
   const f = Object.fromEntries(new FormData(form)), s = getSeance(f.sid); if (!s) return;
-  saveEvent({ id: uid(), date: S.selDay, title: s.name, sessionId: s.id, completed: false, recurrence: f.weekly ? { freq: 'weekly', until: null } : null });
-  buzzOk(); toast('Séance planifiée'); openPlanSheet(S.selDay); render();
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || '') ? f.time : '';
+  saveEvent({ id: uid(), date: S.selDay, time, title: s.name, sessionId: s.id, completed: false, recurrence: f.weekly ? { freq: 'weekly', until: null } : null });
+  buzzOk(); toast(time ? `Séance planifiée à ${time}` : 'Séance planifiée'); openPlanSheet(S.selDay); render();
 };
 export { blocksOf };

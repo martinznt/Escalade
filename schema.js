@@ -59,6 +59,7 @@ export const SCHEMA = [
 // Colonnes ajoutées aux tables existantes (migration idempotente : ajoutées seulement si absentes).
 export const ADD_COLUMNS = [
   ['users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0'],
+  ['calendar_events', 'event_time', "TEXT NOT NULL DEFAULT ''"], // heure prévue « HH:MM » (vide = pas d'heure)
   ['users', 'admin_since', 'INTEGER'],
   ['users', 'last_seen', 'INTEGER'], // dernière visite (compte connecté), pour la liste des comptes de l'admin
   // V2 : rôles d'administration (liste séparée par des virgules). Vide = super-administrateur (compatibilité : tout admin existant).

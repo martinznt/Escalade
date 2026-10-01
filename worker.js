@@ -886,10 +886,10 @@ async function settingsPost(request, env, u) {
 }
 
 /* ═════════════ Calendrier ═════════════ */
-const rowToEvent = (r) => ({ id: r.id, date: r.event_date, sessionId: r.session_id, title: r.title || '', completed: !!r.completed, recurrence: r.recurrence_json ? safeParse(r.recurrence_json) : null });
+const rowToEvent = (r) => ({ id: r.id, date: r.event_date, sessionId: r.session_id, title: r.title || '', time: r.event_time || '', completed: !!r.completed, recurrence: r.recurrence_json ? safeParse(r.recurrence_json) : null });
 async function calendarGet(url, env, u) {
   const from = url.searchParams.get('from'), to = url.searchParams.get('to');
-  let sql = 'SELECT id,event_date,session_id,title,completed,recurrence_json FROM calendar_events WHERE user_id=?';
+  let sql = 'SELECT id,event_date,event_time,session_id,title,completed,recurrence_json FROM calendar_events WHERE user_id=?';
   const args = [u.id];
   if (isDate(from)) { sql += ' AND (event_date>=? OR recurrence_json IS NOT NULL)'; args.push(from); }
   if (isDate(to)) { sql += ' AND event_date<=?'; args.push(to); }
@@ -904,13 +904,13 @@ async function calendarPost(request, env, u) {
   if (b.recurrence && b.recurrence.freq === 'weekly') rec = { freq: 'weekly', until: isDate(b.recurrence.until) ? b.recurrence.until : null };
   const count = await db(env, 'SELECT COUNT(*) c FROM calendar_events WHERE user_id=?', u.id).first();
   if (Number(count?.c) > 3000) return fail('Trop d’événements.', 413);
-  const now = Date.now();
-  const r = await db(env, `INSERT INTO calendar_events(id,user_id,event_date,session_id,title,completed,recurrence_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,updated_at=excluded.updated_at
+  const now = Date.now(), time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.time || '')) ? b.time : '';
+  const r = await db(env, `INSERT INTO calendar_events(id,user_id,event_date,event_time,session_id,title,completed,recurrence_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,event_time=excluded.event_time,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,updated_at=excluded.updated_at
     WHERE calendar_events.user_id=excluded.user_id`,
-    id, u.id, b.date, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, now, now).run();
+    id, u.id, b.date, time, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, now, now).run();
   if (!r.meta || r.meta.changes === 0) return fail('Identifiant déjà utilisé.', 409);
-  return json({ ok: true, event: { id, date: b.date, sessionId: b.sessionId || null, title: str(b.title, 120), completed: !!b.completed, recurrence: rec } });
+  return json({ ok: true, event: { id, date: b.date, time, sessionId: b.sessionId || null, title: str(b.title, 120), completed: !!b.completed, recurrence: rec } });
 }
 
 /* ═════════════ Historique des séances effectuées ═════════════ */
