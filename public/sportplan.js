@@ -91,7 +91,7 @@ export const fmtPace = (p) => (p ? `${mmss(p.pace)} /${p.per === 'km' ? 'km' : '
 /** Conseil honnête sur la cible, d'après la meilleure perf notée (rien si elle est inconnue). */
 export function targetAdvice(metricId, target, known, ctx) {
   const m = metricOf(metricId, ctx); if (!m || !Number.isFinite(target)) return '';
-  if (known == null) return 'Note ta perf actuelle dans Profil › Mesures : les allures et les charges seront calculées pour toi.';
+  if (known == null) return 'Note ta perf actuelle dans Profil › Records et mesures : les allures et les charges seront calculées pour toi.';
   const d = m.dir === -1 ? -1 : 1, gap = (d * (target - known)) / Math.abs(known || 1), u = m.unit && m.unit !== 'reps' ? ' ' + m.unit : '';
   if (gap <= 0) return `Déjà atteint (ta meilleure perf notée : ${known}${u}) : vise plus loin !`;
   if (gap > 0.15) { const step = +(known + d * Math.abs(known) * 0.05).toFixed(m.unit === 'kg' ? 1 : 0); return `Objectif ambitieux : ta meilleure perf notée est ${known}${u}. Vise d’abord ${step}${u}, c’est plus réaliste aujourd’hui.`; }
@@ -148,7 +148,7 @@ export function buildWorkPart(p, ctx = {}, { label = '' } = {}) {
       if (goal && K && goal <= K * 1.05) out.push(mk(`${name} — essai à ${goal} kg`, { mode: 'reps', repsMin: 1, repsMax: 1, sets: 2, rest: 240, load: `${goal} kg`, repSec: 5, intensity: 'high', note: 'Seulement si le palier à 90 % est passé proprement. Sinon, reste à 90 %.', caps: m?.caps || {} }));
       else out.push(set('singles lourds', 1, 0.92, 210, { sets: 2, note: goal ? `Objectif ${goal} kg : on s’en rapproche par des singles solides${K ? '' : ' (note ton max pour les charges exactes)'}.` : 'Arrête avant l’échec.' }));
     }
-    if (!K) notes.push(`Charges données au ressenti : note ton max de « ${name} » dans Profil › Mesures pour des charges en kg.`);
+    if (!K) notes.push(`Charges données au ressenti : note ton max de « ${name} » dans Profil › Records et mesures pour des charges en kg.`);
     return { exercises: out, notes };
   }
   // Poids du corps.
@@ -160,7 +160,7 @@ export function buildWorkPart(p, ctx = {}, { label = '' } = {}) {
   else if (s === 'pyramide') [0.2, 0.35, 0.5, 0.35, 0.2].forEach((x) => out.push(ex('', x, 60, { sets: 1 })));
   else if (s === 'emom') out.push(ex('EMOM (au début de chaque minute)', 0.35, 30, { sets: Math.min(20, T), note: 'Le reste de la minute sert de repos.' }));
   else { out.push(ex('série max', 1, 180, { sets: 3, intensity: 'high', note: goal ? `Objectif : ${goal}${time ? ' s' : ''}. Note ton meilleur résultat dans Mesures.` : 'Arrête dès que la forme se dégrade.' })); }
-  if (K == null) notes.push(`Répétitions au ressenti : note ton max de « ${name} » dans Profil › Mesures pour des séries sur mesure.`);
+  if (K == null) notes.push(`Répétitions au ressenti : note ton max de « ${name} » dans Profil › Records et mesures pour des séries sur mesure.`);
   return { exercises: out, notes };
 }
 

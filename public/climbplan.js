@@ -230,7 +230,7 @@ export function buildFromParts(parts, ctx, opts = {}) {
     const sys = (p.systemId && ctx.systems?.[p.systemId]) || opts.systems?.[p.kind] || pickSystem(ctx, p.kind, opts.envId), levels = sortedLevels(sys);
     if (!levels.length) return;
     if (Array.isArray(p.pick) && !p.pick.length) return; // tout décoché : partie vide, comme demandé
-    if (opts.envId && !availableEquipment(ctx, opts.envId).has('wall')) why.push(`⚠️ ${opts.envName || 'Ce lieu'} n’a pas de mur d’escalade dans son matériel : ajoute-le dans Profil › Matériel et lieux, ou choisis un autre lieu pour « ${label} ».`);
+    if (opts.envId && !availableEquipment(ctx, opts.envId).has('wall')) why.push(`⚠️ ${opts.envName || 'Ce lieu'} n’a pas de mur d’escalade dans son matériel : ajoute-le dans Profil › Mes lieux, ou choisis un autre lieu pour « ${label} ».`);
     const structs = p.pick?.length ? p.pick.filter((id) => STRUCTURES[p.kind === 'voie' ? 'voie' : 'bloc'][id]) : [p.structure || null];
     const each = Math.max(5, Math.round(p.minutes / Math.max(1, structs.length)));
     structs.forEach((st, k) => {

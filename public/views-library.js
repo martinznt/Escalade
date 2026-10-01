@@ -146,7 +146,7 @@ function sfSheet() {
   const count = filterSessions(S.seances.items, { ...f, status: S.filters.seances || 'active' }, S.history).length;
   const group = (k, ids, name) => h`<div class="chips">${ids.map((x) => chip(f[k].includes(x), name(x), `data-act="sfTog" data-k="${k}" data-v="${x}"`))}</div>`;
   openSheet(h`<div class="stack"><h2 style="margin:0">⇅ Trier et filtrer</h2>
-    <span class="kicker">Lieu</span>${places.length ? group('places', places, placeName) : h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>`}
+    <span class="kicker">Lieu</span>${places.length ? group('places', places, placeName) : h`<p class="tiny muted">Ajoute tes lieux dans Profil › Mes lieux.</p>`}
     <span class="kicker">Sports (un ou plusieurs)</span>${group('sports', sports, sportName)}
     <span class="kicker">Catégories</span>${cats.length ? group('cats', cats, catName) : h`<p class="tiny muted">Aucune catégorie pour l’instant.</p>`}
     <span class="kicker">Regrouper par</span><div class="chips">${Object.entries(GROUPS).map(([k, [e, l]]) => chip((f.group || 'none') === k, `${e} ${l}`, `data-act="sfGroup" data-id="${k}"`))}</div>
@@ -176,7 +176,7 @@ ACT.selBulk = (el) => {
     : [...new Set([...Object.keys(CATS), ...S.seances.items.flatMap((s) => s.tags || [])])].map((k) => [k, catName(k)]);
   openSheet(h`<div class="stack"><h2 style="margin:0">${what === 'place' ? '📍 Lieu' : what === 'sport' ? '🏷 Ajouter un sport' : '🗂 Ajouter une catégorie'}</h2><p class="small muted">Pour les ${n} séance(s) sélectionnée(s).</p>
     <div class="setmenu">${rows.map(([id, l]) => h`<button class="setrow" data-act="selApply" data-k="${what}" data-id="${id}"><span class="grow"><b>${l}</b></span><span class="chev">›</span></button>`)}</div>
-    ${what === 'place' && !c.envs.length ? h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>` : ''}</div>`);
+    ${what === 'place' && !c.envs.length ? h`<p class="tiny muted">Ajoute tes lieux dans Profil › Mes lieux.</p>` : ''}</div>`);
 };
 ACT.selApply = (el) => {
   const k = el.dataset.k, id = el.dataset.id, env = ctx().envs.find((e) => e.id === id), list = selected();

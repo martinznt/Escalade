@@ -31,7 +31,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -67,10 +67,17 @@ export default {
       return json({ ok: false, error: 'Erreur serveur. Réessaie dans un instant.' }, 500);
     }
   },
-  /** Tâche planifiée (cron, voir wrangler.json) : rappels d'entraînement. */
+  /** Tâche planifiée (cron, voir wrangler.json — chaque minute) : rappels d'entraînement et annonce d'une nouvelle
+   * version, même si personne n'ouvre l'app. Chaque passage est noté (last_cron) : l'admin voit si la tâche tourne. */
   async scheduled(event, env, ctx) {
     if (!env.DB) return;
-    const job = (async () => { await ensureSchema(env); const n = await runReminders(env); if (n) console.log('rappels envoyés', n); const u = await updateNotice(env, buildId(env)); if (u) console.log('mise à jour annoncée', u); })().catch((e) => console.error('rappels', e?.message || e));
+    const job = (async () => {
+      await ensureSchema(env);
+      let n = 0, u = 0, err = '';
+      try { n = await runReminders(env); if (n) console.log('rappels envoyés', n); u = await updateNotice(env, buildId(env)); if (u) console.log('mise à jour annoncée', u); }
+      catch (e) { err = String(e?.message || e).slice(0, 200); console.error('tâche planifiée', err); }
+      await db(env, "INSERT INTO system_state(key,value) VALUES('last_cron',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", JSON.stringify({ t: Date.now(), cron: String(event?.cron || '').slice(0, 40), reminders: n, update: u, build: buildId(env), error: err })).run();
+    })().catch((e) => console.error('tâche planifiée', e?.message || e));
     if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
   },
 };
@@ -572,9 +579,9 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
     if (p === '/api/admin/push-status' && m === 'GET') {
       const st = async (k) => (await db(env, 'SELECT value FROM system_state WHERE key=?', k).first())?.value || '';
-      let last = null; try { last = JSON.parse(await st('last_notify') || 'null'); } catch { last = null; }
+      const parse = async (k) => { try { return JSON.parse(await st(k) || 'null'); } catch { return null; } };
       const n = await db(env, 'SELECT COUNT(*) c FROM push_subs').first();
-      return json({ ok: true, build: buildId(env), lastBuild: await st('last_build'), last, devices: Number(n?.c) || 0 });
+      return json({ ok: true, build: buildId(env), lastBuild: await st('last_build'), last: await parse('last_notify'), cron: await parse('last_cron'), now: Date.now(), devices: Number(n?.c) || 0 });
     }
     if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
     if ((x = p.match(/^\/api\/admin\/users\/([\w-]{1,64})\/role$/)) && m === 'POST') {

@@ -21,7 +21,7 @@ export function linkSheet(id, name) {
     <p class="small">Ton ami scanne le code avec son appareil photo, ou ouvre le lien. Il garde sa propre copie.</p>
     <input class="linkbox" readonly value="${url}" aria-label="Lien de la séance" id="shLink">
     <div class="grid2"><button class="btn pri" data-act="shCopy" data-url="${url}">Copier le lien</button>${navigator.share ? h`<button class="btn" data-act="shNative" data-url="${url}" data-name="${name}">Envoyer…</button>` : h`<button class="btn" data-act="closeSheet">Fermer</button>`}</div>
-    <p class="tiny muted">Tes notes et tes charges ne partent pas. Pour couper le lien : Profil › Public › Mes liens de partage.</p></div>`);
+    <p class="tiny muted">Tes notes et tes charges ne partent pas. Pour couper le lien : Profil › Partage › Mes liens de partage.</p></div>`);
 }
 ACT.shShow = (el) => linkSheet(el.dataset.id, el.dataset.name || 'Séance');
 ACT.shCopy = async (el) => {

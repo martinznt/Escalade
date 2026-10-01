@@ -345,7 +345,7 @@ const saveBody = (b) => { const clean = cleanBody(b); putItem('config', 'body', 
 ACT.bodySet = (el) => { saveBody(bodyToggle(item('config', 'body') || {}, el.dataset.k, el.dataset.v)); render(); };
 CHG.bodyIn = (el) => {
   const b = { ...(item('config', 'body') || {}), [el.dataset.k]: el.value }; saveBody(b);
-  if (el.dataset.k === 'weight' && cleanBody(b).weight) putItem('perf', 'bw-' + new Date().toISOString().slice(0, 10), { metricId: 'body_weight', value: cleanBody(b).weight, unit: 'kg', date: Date.now(), source: 'declared', note: 'Profil › Mon corps' });
+  if (el.dataset.k === 'weight' && cleanBody(b).weight) putItem('perf', 'bw-' + new Date().toISOString().slice(0, 10), { metricId: 'body_weight', value: cleanBody(b).weight, unit: 'kg', date: Date.now(), source: 'declared', note: 'Profil › Mon corps et mes préférences' });
   toast('Enregistré'); render();
 };
 ACT.weighIn = () => openSheet(h`<form data-submit="weighSave" class="stack"><h2 style="margin:0">⚖️ Pesée du jour</h2><label>Poids<span class="unitbox"><input type="number" name="kg" step="0.1" min="25" max="300" inputmode="decimal" required autofocus><em>kg</em></span></label><button class="btn pri" type="submit">Enregistrer</button></form>`);

@@ -10,7 +10,6 @@
 import { assessment } from './assess.js';
 
 export const HINTS = [
-  { id: 'cp-goals', where: 'library/climbplan', icon: '🎯', text: 'Ajoute tes objectifs ici', go: 'profile/goals', back: 'Retour à ma séance', when: (e) => e.cp?.step === 2 && !e.goals.length && !e.envies.length },
   { id: 'cp-place', where: 'library/climbplan', icon: '🧰', text: 'Décris ton lieu et son matériel : la séance s’y adapte', go: 'profile/equipment', back: 'Retour à ma séance', when: (e) => e.cp?.step === 1 && !e.places.length },
   { id: 'cp-ex', where: 'library/climbplan', icon: '💪', text: 'Envie d’autres exercices ? Parcours les Exercices', go: 'library/exercises', back: 'Retour à ma séance', when: (e) => e.cp?.step === 4 },
   { id: 'seance-ex', where: 'library/seance', icon: '💪', text: 'D’autres exercices ? Va dans Exercices', go: 'library/exercises', back: 'Retour à ma séance', when: () => true },

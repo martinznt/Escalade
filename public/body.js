@@ -5,7 +5,7 @@ import { h, raw, chip } from './ui.js';
 import { SHAPES, ZONES, FITNESS, BREATH, DAILY, SEXES } from './body-rules.js';
 export { SHAPES, ZONES, FITNESS, BREATH, DAILY, SEXES, cleanBody, bodyAdjust } from './body-rules.js';
 
-/** Formulaire (questionnaire de départ et Profil › Mon corps). act/inp : actions à brancher. */
+/** Formulaire (questionnaire de départ et Profil › Mon corps et mes préférences). act/inp : actions à brancher. */
 export function bodyFields(b = {}, { act = 'bodyPick', inp = 'bodyInput', onChange = false } = {}) {
   const num = (k, label, unit, min, max) => h`<label class="bnum">${label}<span class="unitbox"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${k === 'weight' ? '0.1' : '1'}" value="${b[k] ?? ''}" ${raw(onChange ? `data-change="${inp}"` : `data-input="${inp}"`)} data-k="${k}"><em>${unit}</em></span></label>`;
   const one = (k, list) => h`<div class="chips">${list.map(([v, l]) => chip(String(b[k]) === String(v), l, `data-act="${act}" data-k="${k}" data-v="${v}"`))}</div>`;

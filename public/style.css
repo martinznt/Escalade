@@ -636,3 +636,23 @@ pre.txt { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 /* 8.28 : assistant du site (admin) — la page défile, pas de boîte à défilement ; espaces du gabarit ignorés. */
 .aslog{display:grid;gap:8px;align-content:start}.aslog .msg{white-space:normal;overflow-wrap:anywhere}.aslog .msg.assistant{max-width:100%}.aslog .msg .t{white-space:pre-wrap}
 .aslog,.chat{grid-template-columns:minmax(0,1fr)}.aslog .btn.sm,.aslog .chip{white-space:normal;max-width:100%;text-align:left}
+
+/* 8.29 · Créer une séance : objectifs classés, moments, structure finale minute par minute */
+.stephelp{margin:6px 0 0;line-height:1.35}
+.aimlist{display:grid;gap:6px}
+.aimrow,.momrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.aimrow .aimtxt,.momrow .aimtxt{min-width:0;flex:1 1 150px}.aimrow .aimtxt b{display:block;overflow-wrap:anywhere}.aimrow .aimtxt small{display:block;color:var(--muted);font-size:.78rem;line-height:1.3}
+.aimrow .aimbtns{display:flex;gap:4px;margin-left:auto}
+.rank{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.85rem;background:var(--accent);color:var(--bg)}
+.momrow select{flex:1 1 130px;max-width:100%;min-width:0}
+ol.aimol{margin:0;padding-left:1.3em}
+.tline{display:grid;gap:0;border-left:2px solid var(--line);margin-left:4px}
+.trow{display:flex;gap:10px;align-items:flex-start;padding:8px 0 8px 10px;position:relative;min-width:0}
+.trow::before{content:'';position:absolute;left:-6px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.trow.travel::before{background:var(--muted)}
+.trow .tt{flex:none;width:82px;font-variant-numeric:tabular-nums;font-size:.78rem;color:var(--muted);padding-top:2px}
+.trow .tbody{min-width:0;display:grid;gap:2px}.trow .tbody>*{overflow-wrap:anywhere}
+@media (max-width:360px){.trow{flex-direction:column;gap:2px}.trow .tt{width:auto}}
+/* Une carte en grille ne s'élargit jamais à cause d'un enfant (sinon : défilement horizontal sur petit écran). */
+.card.stack>*{min-width:0}
+details.fold>input,details.fold>select,details.fold>textarea{width:calc(100% - 32px)}

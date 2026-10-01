@@ -113,4 +113,15 @@ await ok('suivi : l’état de l’abonnement de l’appareil, et ce qu’a donn
   assert.equal(row.targeted, 1); assert.equal(row.gone, 1); assert.equal(row.sent, 0);
   assert.equal((await u.get('/api/admin/push-status')).status, 403);
 });
+await ok('tâche planifiée : passe chaque minute, chaque passage noté ; l’admin voit si elle tourne (sans rien d’autre que des compteurs)', async () => {
+  assert.match(JSON.stringify(JSON.parse((await import('node:fs')).readFileSync(new URL('../wrangler.json', import.meta.url), 'utf8')).triggers.crons), /"\* \* \* \* \*"/, 'cron chaque minute');
+  const env = makeEnv(), a = new Client(env); await a.register('cronadmin'); await a.post('/api/admin/activate', { password: 'Adm1n-Secret!' });
+  const before = (await a.get('/api/admin/push-status')).data; assert.equal(before.cron, null, 'jamais passé : l’admin le voit');
+  env.CF_VERSION_METADATA = { id: 'v-cron-1' };
+  await worker.scheduled({ cron: '* * * * *' }, env, null);
+  const st = (await a.get('/api/admin/push-status')).data;
+  assert.equal(st.cron.cron, '* * * * *'); assert.ok(Date.now() - st.cron.t < 5000); assert.equal(st.cron.build, 'v-cron-1'); assert.equal(st.cron.error, '');
+  assert.equal(st.lastBuild, 'v-cron-1', 'nouvelle version retenue par la tâche, même sans visite');
+  delete env.CF_VERSION_METADATA;
+});
 done();

@@ -498,7 +498,7 @@ export function generateSession(opts = {}, ctx = {}) {
   if (['vitesse', 'jambes'].includes(focus) && A.hoursSinceHighLegs < 36) swap('equilibre', `Séance de jambes intense il y a ${Math.round(A.hoursSinceHighLegs)} h : on évite les sauts et on travaille l’équilibre du haut du corps.`);
   if (A.lastRpe >= 4 && A.lastRpeHours < 36) { volume *= 0.85; capIntensity = capIntensity === 'high' ? 'mod' : capIntensity; why.push('Ta dernière séance était très dure : intensité et volume légèrement réduits.'); }
   if (A.n7 >= 5) { volume *= 0.9; why.push(`${A.n7} séances en 7 jours : un peu moins de volume pour bien récupérer.`); }
-  if (!levelSet) why.push('Ton niveau n’est pas renseigné : la séance reste prudente (pas de suspensions maximales). Remplis ton profil dans Réglages pour l’adapter.');
+  if (!levelSet) why.push('Ton niveau n’est pas renseigné : la séance reste prudente (pas de suspensions maximales). Remplis ton profil sportif (Paramètres, « 🧩 Mon profil sportif ») pour l’adapter.');
 
   const rank = { low: 0, mod: 1, high: 2 };
   const allowed = (x) => {

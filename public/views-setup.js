@@ -31,7 +31,7 @@ const STEPS = [
   { id: 'perWeek', q: 'Combien de séances par semaine aimerais-tu faire ?', opts: () => [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5 ou plus']] },
   { id: 'climbPerWeek', q: 'Et combien de fois grimpes-tu par semaine ?', help: 'En salle ou en falaise, en moyenne. Ça aide l’app à doser le travail des doigts et la récupération.', when: (a) => (a.acts || []).some((x) => x.startsWith('climbing')), opts: () => [['0', 'Pas en ce moment'], ['1', '1 fois'], ['2', '2 fois'], ['3', '3 fois'], ['4', '4 fois ou plus']] },
   { id: 'minutes', q: 'Combien de temps as-tu en général pour une séance ?', opts: () => [['10', '10 min'], ['20', '20 min'], ['30', '30 min'], ['45', '45 min'], ['60', '1 h'], ['90', '1 h 30']] },
-  { id: 'places', multi: true, q: 'Où t’entraînes-tu ?', help: 'L’app proposera seulement des exercices faisables avec le matériel de ces lieux (modifiable dans Profil › Matériel).', opts: () => Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre') },
+  { id: 'places', multi: true, q: 'Où t’entraînes-tu ?', help: 'L’app proposera seulement des exercices faisables avec le matériel de ces lieux (modifiable dans Profil › Mes lieux).', opts: () => Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre') },
   { id: 'goals', multi: true, q: 'Quels sont tes objectifs ?', help: 'Choisis-en autant que tu veux. Tu pourras aussi écrire un objectif à toi dans Profil › Objectifs.', opts: () => GOALS },
   { id: 'skill', q: 'Quelle figure veux-tu réussir ?', when: (a) => (a.goals || []).includes('figure'), opts: () => Object.entries(SKILLS).map(([id, s]) => [id, `${s.emoji} ${s.label}`]) },
   { id: 'avoid', multi: true, q: 'Y a-t-il une zone à ménager ?', help: 'L’app évitera les exercices qui la sollicitent fortement. Ce n’est pas un avis médical : en cas de douleur, consulte un professionnel.', opts: () => AVOID },
@@ -56,7 +56,7 @@ function markFields(a) {
   const climbing = (a.acts || []).some((x) => x.startsWith('climbing'));
   return h`${markKeys(a).map(num)}
     ${climbing ? h`<div class="card flat"><b class="small">Ton meilleur bloc réussi (cotation Font)</b><div class="chips">${BLOC_CHOICES.map((g) => chip(m.bloc === g, g, `data-act="setBloc" data-v="${g}"`))}${chip(m.bloc === 'nsp', '🤷 Je ne sais pas', 'data-act="setBloc" data-v="nsp"')}</div>
-      <p class="tiny muted">Ta salle utilise des couleurs ou U1–U8 ? Tu pourras créer ton propre système dans Profil › Escalade.</p></div>` : ''}`;
+      <p class="tiny muted">Ta salle utilise des couleurs ou U1–U8 ? Tu pourras créer ton propre système dans Profil › Mes sports (« 🧗 Escalade : cotations et styles »).</p></div>` : ''}`;
 }
 function stepBody(st, a) {
   if (st.id === 'marks') return markFields(a);
@@ -220,7 +220,7 @@ export function setupCard() {
   return h`<section class="card flat row"><span class="grow small">🧩 Ton profil n’est pas encore complet : les séances proposées restent prudentes.</span><button class="btn sm pri" data-act="setupStart" data-id="quiz">Compléter</button><button class="btn sm ghost ic" data-act="setupHide" aria-label="Masquer ce rappel">✕</button></section>`;
 }
 ACT.setupSkip = () => { S.setup = null; ACT.setupLater(); };
-ACT.setupHide = () => { saveMain({ setupHidden: true }); toast('Rappel masqué. Tu peux compléter ton profil à tout moment dans Paramètres › Essentiel.', 4500); render(); };
+ACT.setupHide = () => { saveMain({ setupHidden: true }); toast('Rappel masqué. Tu peux compléter ton profil à tout moment dans les Paramètres (« 🧩 Mon profil sportif »).', 4500); render(); };
 
 /* ═════════ Visite guidée ═════════ */
 // La visite elle-même (tour.js) navigue de page en page et pointe chaque élément avec une flèche.

@@ -567,20 +567,32 @@ await step('tous les sports comme l’escalade : course « 10 km en 50 min » �
   assert.equal(await A.inputValue('input[data-change=sName]'), 'Objectif 10 km en 50 min');
   await cpFresh('auto');
 });
-await step('V2 : chaîne de réglages — objectif placé au début puis déplacé, lieu d’une phase + déplacement, filtres de séance, prévisualisation', async () => {
+await step('8.29 : plusieurs sports, objectifs classés ; n°1 « Performer · Voie » mis à la fin → toute la séance s’adapte ; lieu d’une phase + déplacement, filtres, structure finale minute par minute', async () => {
   await cpFresh('auto'); await cpTo(1); await a.click('[data-act=cpSport][data-id=climbing_route]'); await a.click('[data-act=cpMin][data-id="150"]');
-  // L'objectif de la séance se choisit dès « L'essentiel » (étape 1).
-  await a.click('[data-act=cpObjFam][data-id=performance]'); await a.click('[data-act=cpObjSub][data-id="performance.limite"]');
-  await a.click('[data-act=cpObjPrio][data-id="performance.limite"][data-v="4"]'); await a.click('[data-act=cpObjWhen][data-id=start]');
-  await cpTo(2); await a.click('[data-act=cpAim][data-id=goals]');
+  await a.click('[data-act=cpSport2][data-id=climbing_boulder]');
+  await cpTo(2); assert.match(await a.text('.steps b'), /Étape 2\/6 · Tes objectifs/);
+  while (await a.count('.aimrow [data-act=cpAimDel]')) { await A.locator('.aimrow [data-act=cpAimDel]').first().click(); await A.waitForTimeout(60); } // objectifs tirés du profil : on repart de zéro
+  await a.click('[data-act=cpAimAdd][data-k="fam:performance@climbing_route"]');
+  await a.click('[data-act=cpAddFor][data-id=climbing_boulder]'); await a.click('[data-act=cpAimAdd][data-k="fam:technique@climbing_boulder"]');
+  await a.click('[data-act=cpAimAdd][data-k="fam:force@climbing_boulder"]');
+  await a.click('[data-act=cpAimUp][data-i="2"]'); // la force passe n°2
+  assert.match(await a.text('.aimlist'), /1\s*🚀 Performer · Voie[\s\S]*2\s*🏋️ Force · Bloc[\s\S]*3\s*🎯 Technique · Bloc/);
+  // Objectif avec ses mots : sans IA disponible, l'app lit les mots-clés et montre ce qu'elle a compris avant l'ajout.
+  await A.fill('textarea[data-input=cpAiText]', 'souplesse des hanches'); await a.click('[data-act=cpAiAim]'); await A.waitForSelector('[data-act=cpAiAdd]');
+  if (await a.count('[data-act=cpAiAdd][disabled]')) await a.click('[data-act=cpAiFam][data-id=mobilite]');
+  await a.click('[data-act=cpAiAdd]'); await A.waitForFunction(() => document.querySelectorAll('.aimrow').length === 4);
   await cpTo(3); await A.waitForSelector('.cpart');
-  const tags = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /objectif/.test(x.textContent)));
-  assert.equal(tags.indexOf(true), 1, 'objectif juste après l’échauffement');
-  await A.selectOption('select[data-change=cpObjWhere]', 'end'); await A.waitForTimeout(200);
-  const tags2 = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /objectif/.test(x.textContent)));
-  assert.equal(tags2.indexOf(true), tags2.length - 2, 'objectif déplacé à la fin, avant le retour au calme');
-  // Chaîne de réglages de la phase objectif : 8 maillons numérotés, lieu propre à la phase avec déplacement.
-  await A.locator('[data-act=cpEdit]').nth(tags2.length - 2).click(); await A.waitForSelector('#sheet .chainlink');
+  const tags = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /🎯 objectif/.test(x.textContent)));
+  assert.ok(tags.indexOf(true) <= 2, 'Auto : le n°1 (performance) tôt, juste après l’échauffement et la montée');
+  await A.selectOption('select[data-change=cpAimWhen][data-i="0"]', 'end'); await A.waitForTimeout(250);
+  const tags2 = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /🎯 objectif/.test(x.textContent)));
+  const names = await A.evaluate(() => [...document.querySelectorAll('.cpart b')].map((x) => x.textContent));
+  assert.ok(tags2.indexOf(true) >= tags2.length - 3, 'n°1 en fin de séance (avant la mobilité et le retour au calme)');
+  assert.ok(names.findIndex((t) => /Montée progressive/.test(t)) === tags2.indexOf(true) - 1, 'montée progressive juste avant le n°1');
+  const t3 = await a.text('#main');
+  assert.match(t3, /toute la séance est organisée pour que tu y arrives frais/); assert.match(t3, /« Force · Bloc » reste modérée/);
+  // Chaîne de réglages de la phase n°1 : 8 maillons numérotés, lieu propre à la phase avec déplacement.
+  await A.locator('[data-act=cpEdit]').nth(tags2.indexOf(true)).click(); await A.waitForSelector('#sheet .chainlink');
   assert.equal(await a.count('#sheet .chainlink'), 8); assert.match(await a.text('#sheet'), /1 · Type de phase[\s\S]*3 · Précisément[\s\S]*6 · Lieu[\s\S]*8 · Ce que l’app décide/);
   await a.click('#sheet [data-act=cpPhPlace][data-id=other]'); await A.waitForSelector('#sheet select[data-change=cpPhEnv]');
   const other = await A.evaluate(async () => { const st = await import('/state.js'), def = st.S.cp.envId || st.ctx().defEnv?.id || ''; return [...document.querySelectorAll('#sheet select[data-change=cpPhEnv] option')].map((o) => o.value).find((v) => v && v !== def); });
@@ -592,13 +604,14 @@ await step('V2 : chaîne de réglages — objectif placé au début puis déplac
   await a.click('#sheet [data-act=cpFlt][data-k=intensite][data-id=mod]'); await A.keyboard.press('Escape'); await A.waitForTimeout(150);
   assert.match(await a.text('#main'), /Intensité : Modérée/);
   await cpTo(6); const v = await a.text('#main');
-  assert.match(v, /Charge estimée/); assert.match(v, /🎯 Objectif : 🚀 Performance · À la fin/); assert.match(v, /🚗 15 min avant/);
+  assert.match(v, /Ta structure finale/); assert.match(v, /Charge estimée/); assert.match(v, /🎯 1\. Performer · Voie · 2\. Force · Bloc · 3\. Technique · Bloc/);
+  assert.match(v, /0:00–0:\d\d/); assert.match(v, /Sert ton objectif n°1 : Performer · Voie/); assert.match(v, /🚗 Trajet vers .* · 15 min/);
   await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpPlay]');
   assert.match(await a.text('#cpresult'), /Déplacement/);
 });
 await step('8.28 : « L’essentiel » puis ⚡ Proposer ma séance ; envies → bilan physique guidé, valeur mesurée, objectif précis proposé', async () => {
   await cpFresh('auto'); await a.click('[data-act=cpSport][data-id=conditioning]'); await a.click('[data-act=cpMin][data-id="45"]');
-  assert.match(await a.text('.steps b'), /Étape 1\/6 · L’essentiel/); assert.match(await a.text('#main'), /Objectif de la séance/);
+  assert.match(await a.text('.steps b'), /Étape 1\/6 · L’essentiel/); assert.match(await a.text('#main'), /Tes objectifs/);
   await a.click('[data-act=cpQuick]'); await A.waitForSelector('#cpresult'); assert.match(await a.text('.steps b'), /Étape 4\/6/);
   await a.click('[data-act=cpQuickGo]'); await A.waitForSelector('#cpresult [data-act=cpSave]'); assert.match(await a.text('.steps b'), /Étape 6\/6/);
   // Envies → tests utiles ; bilan guidé : un test, une valeur, enregistrée comme mesurée.
@@ -637,7 +650,7 @@ await step('V1 : séance structurée (bloc → pause → voie), but ponctuel, pr
   await A.locator('#cpresult [data-act=cpOpts]').first().click(); await A.waitForSelector('#sheet .optwhy'); assert.match(await a.text('#sheet'), /Le plus adapté à tes contraintes actuelles/); await A.keyboard.press('Escape');
   await cpTo(5); await A.waitForSelector('.sugg [data-act=cpSugApply]:not([disabled])');
   await A.locator('.sugg [data-act=cpSugApply]:not([disabled])').first().click(); await A.waitForSelector('.card.ok-b:has-text("Déjà appliqué")');
-  await cpTo(6); assert.match(await a.text('#main'), /Ta séance avant génération[\s\S]*Préparer puis performer en voie/);
+  await cpTo(6); assert.match(await a.text('#main'), /Ta structure finale[\s\S]*Préparer puis performer en voie/);
   assert.equal(await a.count('#cpresult [data-act=cpPlay]'), 0, 'rien de généré avant la validation');
   await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpPlay]');
   assert.equal(await goalsN(), g0, 'l’intention du jour n’a pas créé d’objectif');

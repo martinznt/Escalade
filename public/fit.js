@@ -33,7 +33,7 @@ export function personalFit(session, ctx) {
   const bw = (ctx.perfs || []).find((p) => p.metricId === 'body_weight' && p.value > 0 && !p.unknown)?.value;
   for (const l of lv.loads || []) {
     if (bw) lines.push(`${l.name} : ${l.kg} kg ≈ ${Math.round((l.kg / bw) * 100)} % de ton poids de corps (${bw} kg).`);
-    else { missing.push('Charges : note ton poids de corps (Profil › Mon corps) pour les voir en % de ton poids.'); break; }
+    else { missing.push('Charges : note ton poids de corps (Profil › Mon corps et mes préférences) pour les voir en % de ton poids.'); break; }
   }
   if (!lines.some((t) => /demande un niveau/.test(t)) && seen.size) lines.push('Aucun exercice reconnu ne dépasse ton niveau actuel.');
   return { lines, missing };

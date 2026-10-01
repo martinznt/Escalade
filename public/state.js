@@ -109,7 +109,7 @@ export async function clearLocal(userId) { try { await idb.del(`data:${userId}`)
 let onExpired = () => {};
 export const setOnExpired = (fn) => { onExpired = fn; };
 export async function api(method, path, body, opts = {}) {
-  if (S.user?.guest && !opts.guestOk) { const e = new Error('Mode invité : crée un compte gratuit (Paramètres › Compte) pour utiliser cette fonction. Tes données d’invité seront conservées.'); e.guest = true; throw e; }
+  if (S.user?.guest && !opts.guestOk) { const e = new Error('Mode invité : crée un compte gratuit (en haut des Paramètres : « Créer mon compte ») pour utiliser cette fonction. Tes données d’invité seront conservées.'); e.guest = true; throw e; }
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeout || 20000) : null;
   let res;

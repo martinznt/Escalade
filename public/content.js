@@ -178,7 +178,7 @@ export async function seanceToCatalog(s) {
 ACT.seanceToCatalog = (el) => { const s = S.seances.items.find((x) => x.id === el.dataset.id); if (s) seanceToCatalog(s); };
 
 /* ───────── Intentions et formats (écran administrateur) ───────── */
-// Admin › Modifier l'app sans code : trois pages claires (contenu, textes et apparence, ce qui a été modifié).
+// Paramètres › Admin, groupe « Modifier l’app sans code » : trois pages claires (contenu, textes et apparence, ce qui a été modifié).
 const CHANGE_KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', hint: '💡 Raccourci', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
 export const globalChanges = () => GL.items.slice().sort((a, b) => b.updatedAt - a.updatedAt);
 /** Contenu de l'app : où modifier chaque type, et les intentions par sport. */
@@ -337,7 +337,7 @@ ACT.propBack = () => { propBar(false); if (S.propCur) ACT.propOpen({ dataset: { 
 /** Modifier l'endroit joint : la fiche de l'exercice ou de la séance prête s'il s'agit de l'une d'elles, sinon le texte. */
 ACT.propEditPlace = () => {
   const el = placeEl(S.propCur?.payload?.sel || ''); propBar(false);
-  if (!el) { toast('Endroit introuvable sur cette page : va le chercher, puis utilise Paramètres › Admin › Modifier les textes.', 5000); return; }
+  if (!el) { toast('Endroit introuvable sur cette page : va le chercher, puis utilise Paramètres › Admin › Textes et apparence.', 5000); return; }
   const ex = el.closest('[data-act=libInfo][data-id], [data-act=gxEdit][data-id]'), cat = el.closest('[data-act=catOpen][data-id]');
   if (ex && byId(ex.dataset.id)) { closeSheet(); ACT.gxEdit({ dataset: { id: ex.dataset.id } }); return; }
   if (cat) { closeSheet(); ACT.gcEdit?.({ dataset: { id: cat.dataset.id } }); return; }

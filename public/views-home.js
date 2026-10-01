@@ -70,7 +70,7 @@ ACT.obEnv = (el) => {
   const t = el.dataset.id, ex = ctx().envs.find((e) => e.type === t);
   if (ex) return;
   putItem('env', 'env-' + t, { name: ENV_TYPES[t], type: t, equipment: ENV_TEMPLATES[t], isDefault: !ctx().envs.length });
-  toast(`${ENV_TYPES[t]} ajouté avec un matériel type : vérifie-le dans Profil › Matériel.`); render();
+  toast(`${ENV_TYPES[t]} ajouté avec un matériel type : vérifie-le dans Profil › Mes lieux.`); render();
 };
 ACT.obDone = () => { S.settings.onboarded = true; saveSettings(); render(); };
 ACT.goProfile = (el) => go('profile', el.dataset.id);
