@@ -70,4 +70,7 @@ export const ADD_COLUMNS = [
   ['push_subs', 'types', "TEXT NOT NULL DEFAULT '[\"reminder\",\"update\",\"reply\",\"admin\"]'"],
   ['push_subs', 'pending', "TEXT NOT NULL DEFAULT ''"],
   ['push_subs', 'silent', 'INTEGER NOT NULL DEFAULT 0'],
+  // 8.29 : propositions de code de l'assistant (remplacements exacts vérifiés) et lien de la Pull Request GitHub.
+  ['code_proposals', 'edits_json', "TEXT NOT NULL DEFAULT ''"],
+  ['code_proposals', 'pr_url', "TEXT NOT NULL DEFAULT ''"],
 ];

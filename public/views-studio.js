@@ -224,11 +224,13 @@ ACT.maintRun = async () => { const st = ST(); st.maint = { busy: true }; render(
 export function vCode() {
   if (!canRole('technical')) return roleNeeded('technical');
   const st = ST(); if (!st.code) { st.code = { loading: true }; api('GET', '/api/admin/code').then((r) => { st.code = r; render(); }).catch((e) => { st.code = { error: e.message }; render(); }); }
-  const c = st.code, SL = { draft: ['📝', 'À examiner'], approved: ['✅', 'Validée — à déployer à la main'], rejected: ['✗', 'Refusée'] };
-  return h`<div class="card stack"><h3>💻 Propositions de code</h3><p class="small">Proposition → diff → analyse d’impact → tests → validation par un <b>autre</b> administrateur. <b>L’app ne déploie jamais de code</b> : une proposition validée s’applique à la main (git, tests, déploiement), puis peut être annulée comme n’importe quel commit.</p>
+  const c = st.code, SL = CODE_SL;
+  return h`<div class="card stack"><h3>💻 Propositions de code</h3><p class="small">Proposition → diff → analyse d’impact → validation (par un autre administrateur, ou par toi seul si tu es le seul, en le confirmant) → <b>Pull Request sur GitHub</b>, où les tests du dépôt tournent → tu fusionnes toi-même sur GitHub. <b>L’app ne fusionne et ne déploie jamais de code.</b></p>
+      <p class="tiny muted">Le plus simple : demande la modification à l’« Assistant du site » (💻 Proposer dans le code), il prépare des remplacements exacts vérifiés.</p>
       <button class="btn" data-act="codeNew">＋ Nouvelle proposition</button></div>
     ${c.loading ? skeleton(2) : c.error ? h`<p class="err small">${c.error}</p>` : c.items.length ? h`<div class="setmenu">${c.items.map((x) => h`<button class="setrow" data-act="codeOpen" data-id="${x.id}"><span class="sic">${SL[x.status]?.[0]}</span><span class="grow"><b>${x.title}</b><small>${SL[x.status]?.[1]} · ${x.author || '—'} · ${relDate(x.updated_at)} · ${(x.impact.files || []).length} fichier(s)${x.impact.flags?.length ? ' · ⚠️ ' + x.impact.flags.length : ''}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">Aucune proposition.</p>`}`;
 }
+const CODE_SL = { draft: ['📝', 'À examiner'], approved: ['✅', 'Validée — prête pour GitHub'], rejected: ['✗', 'Refusée'], pr: ['🔀', 'Pull Request ouverte sur GitHub'] };
 ACT.codeNew = (el) => openSheet(h`<form data-submit="codeGo" class="stack"><h2 style="margin:0">💻 Proposition de code</h2>
   <label>Titre<input name="title" maxlength="120" required value="${el?.dataset?.t || ''}"></label>
   <label>Résumé / pourquoi<textarea name="summary" rows="3" maxlength="2000">${el?.dataset?.s || ''}</textarea></label>
@@ -243,21 +245,37 @@ export function vCodeItem() {
   const st = ST(), it = st.codeItem;
   if (!it || it.id !== S.param) { if (!st.codeLoading) { st.codeLoading = true; api('GET', '/api/admin/code/' + encodeURIComponent(S.param)).then((r) => { st.codeItem = r.item; st.codeLoading = false; render(); }).catch((e) => { st.codeLoading = false; toast(e.message); }); } return skeleton(2); }
   const im = it.impact || {};
-  return h`<div class="card stack"><h2 style="margin:0">${it.title}</h2><p class="tiny muted">Par ${it.author || '—'} · ${fmtDateTime(it.createdAt)} · ${it.status === 'draft' ? 'à examiner' : it.status === 'approved' ? `validée par ${it.reviewer || '—'}` : `refusée par ${it.reviewer || '—'}`}</p>
+  return h`<div class="card stack"><h2 style="margin:0">${it.title}</h2><p class="tiny muted">Par ${it.author || '—'} · ${fmtDateTime(it.createdAt)} · ${it.status === 'draft' ? 'à examiner' : it.status === 'rejected' ? `refusée par ${it.reviewer || '—'}` : `validée par ${it.reviewer || '—'}${it.status === 'pr' ? ' · Pull Request ouverte' : ''}`}</p>
       ${it.summary ? h`<p class="small">${it.summary}</p>` : ''}
       <b class="small">Analyse d’impact</b><ul class="clean tight small"><li>Fichiers : ${(im.files || []).join(', ') || '—'}</li><li>Domaines : ${(im.areas || []).join(', ') || '—'}</li><li>+${im.added || 0} / −${im.removed || 0} lignes${im.migration ? ' · migration D1' : ''}</li>${(im.flags || []).map((x) => h`<li class="warn-t">⚠️ ${x}</li>`)}</ul>
       ${it.tests ? h`<b class="small">Tests</b><p class="small">${it.tests}</p>` : ''}
       <details class="how mini"><summary>Voir le diff</summary><pre class="txt">${it.diff}</pre></details>
       ${it.note ? h`<p class="small">Note de validation : ${it.note}</p>` : ''}
       <div class="row wrapf"><a class="btn sm" href="/api/admin/code/${it.id}.patch" download>⬇ Télécharger le .patch</a>${it.status === 'draft' ? h`<button class="btn sm pri" data-act="codeReview" data-d="approve">✅ Valider</button><button class="btn sm ghost danger" data-act="codeReview" data-d="reject">Refuser</button>` : ''}</div>
-      <p class="tiny muted">Valider ne déploie rien : le déploiement reste manuel, avec les tests du dépôt.</p></div>`;
+      ${it.prUrl ? h`<div class="card flat ok-b stack"><b class="small">🔀 Pull Request ouverte sur GitHub</b><a class="btn sm pri" href="${it.prUrl}" target="_blank" rel="noopener">Voir la Pull Request ↗</a><p class="tiny muted">Les tests du dépôt tournent dessus. Fusionne-la sur GitHub quand tout est vert : le site sera alors redéployé par ton hébergement, pas par l’app.</p></div>`
+        : it.status === 'approved' ? (it.exact ? (it.github ? h`<button class="btn pri" data-act="codePr">🔀 Créer la Pull Request sur GitHub</button><p class="tiny muted">Une branche « assistant/… » est créée avec ces remplacements, puis une Pull Request. Rien n’est fusionné ni déployé.</p>`
+          : h`<p class="tiny warn-t">GitHub n’est pas relié : ajoute au Worker les secrets GITHUB_TOKEN (jeton avec les droits « contents » et « pull requests » sur ton dépôt) et GITHUB_REPO (propriétaire/dépôt), dans Cloudflare › ton Worker › Settings › Variables and Secrets. En attendant : télécharge le .patch.</p>`)
+          : h`<p class="tiny muted">Proposition écrite à la main (diff) : applique le .patch toi-même (git), les tests tournent sur ta Pull Request.</p>`) : ''}
+      <p class="tiny muted">Valider ne déploie rien. Seule la fusion sur GitHub change le site.</p></div>`;
 }
 ACT.codeReview = async (el) => {
   const approve = el.dataset.d === 'approve';
   if (!(await ask(approve ? 'Valider cette proposition ?' : 'Refuser cette proposition ?', { ok: approve ? 'Valider' : 'Refuser', danger: !approve, detail: approve ? 'Elle sera marquée « à déployer à la main ». L’app ne déploie jamais de code.' : '' }))) return;
   const note = (await askText('Note (facultatif)', { ok: 'Envoyer', cancel: 'Sans note', max: 300 })) || '';
-  try { await api('POST', `/api/admin/code/${encodeURIComponent(ST().codeItem.id)}/review`, { decision: el.dataset.d, note }); toast(approve ? 'Validée (déploiement manuel)' : 'Refusée'); ST().codeItem = null; ST().code = null; render(); }
-  catch (e) { toast(e.message, 5000, 'bad'); }
+  const id = encodeURIComponent(ST().codeItem.id), done = () => { toast(approve ? 'Validée : prête pour GitHub' : 'Refusée'); ST().codeItem = null; ST().code = null; render(); };
+  try { await api('POST', `/api/admin/code/${id}/review`, { decision: el.dataset.d, note }); done(); }
+  catch (e) {
+    // Seul administrateur : on peut valider seul, après une confirmation explicite (notée au journal).
+    if (e.status === 409 && e.data?.soloPossible && (await ask('Tu es le seul administrateur : valider seul ?', { ok: 'Je valide seul', detail: 'D’habitude, un autre administrateur relit. Ce choix est noté au journal. La Pull Request GitHub reste à relire avant de fusionner.' }))) {
+      try { await api('POST', `/api/admin/code/${id}/review`, { decision: el.dataset.d, note, solo: true }); done(); } catch (e2) { toast(e2.message, 5000, 'bad'); }
+    } else toast(e.message, 5000, 'bad');
+  }
+};
+ACT.codePr = async () => {
+  const it = ST().codeItem; if (!it) return;
+  if (!(await ask('Créer la Pull Request sur GitHub ?', { ok: 'Créer la Pull Request', detail: 'Une branche avec ces remplacements et une Pull Request seront créées sur ton dépôt. Rien n’est fusionné ni déployé : tu le fais toi-même sur GitHub.' }))) return;
+  try { const r = await api('POST', `/api/admin/code/${encodeURIComponent(it.id)}/pr`, {}, { timeout: 45000 }); toast(r.already ? 'Pull Request déjà ouverte' : 'Pull Request créée ✓'); ST().codeItem = null; ST().code = null; render(); }
+  catch (e) { toast(e.message, 7000, 'bad'); }
 };
 ACT.verDiff = async (el) => {
   try { const r = await api('GET', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}/diff?a=${el.dataset.a}&b=${el.dataset.b}`);

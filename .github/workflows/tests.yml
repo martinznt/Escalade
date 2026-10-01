@@ -1,0 +1,23 @@
+# Tests du dépôt : à chaque Pull Request (dont celles préparées par l'assistant du site) et à chaque envoi sur main.
+# Aucune clé, aucun déploiement : vérification de syntaxe et tests unitaires (dont serveur + base simulée).
+name: Tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - run: npm run check
+      - run: npm test

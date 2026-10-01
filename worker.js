@@ -14,6 +14,7 @@ import { sanitizeForPublication } from './server/publish.js';
 import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server/global.js';
 import { cleanChange, diffState, diffChange, afterOf, runChecks, buildAdminDraft, cleanAdminDraft, buildLab, cleanLab, AI_KINDS } from './server/studio.js';
 import { dataHealth, groupBugs, buildMaintenance, cleanMaintenance, analyzeDiff } from './server/health.js';
+import { CODE_FILES, searchCode, buildCodeEdit, cleanEdits, openPullRequest, REPO_OK } from './server/codeedit.js';
 import { findContext, buildAssistant, cleanAssistant, mergeItems, ASSIST_KINDS } from './server/assistant.js';
 import { LIBRARY } from './public/library.js';
 import { FAQ } from './public/help.js';
@@ -81,6 +82,20 @@ export default {
     if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
   },
 };
+
+/* ═════════════ Code de l'interface (pour l'assistant : lecture seule) ═════════════ */
+const githubReady = (env) => !!(env.GITHUB_TOKEN && REPO_OK.test(String(env.GITHUB_REPO || '')));
+let codeCache = null;
+/** Fichiers de l'interface lisibles par l'assistant (via les fichiers statiques déployés), gardés par version. */
+async function codeFiles(env) {
+  const b = buildId(env); if (codeCache?.b === b && codeCache.db === env.DB) return codeCache.files;
+  const files = new Map(), failed = [];
+  await Promise.all([...PUBLIC_FILES].filter((f) => CODE_FILES.test('public' + f)).map(async (f) => {
+    try { const r = await env.ASSETS.fetch(new Request('https://assets.local' + f)); if (r.ok) files.set('public' + f, await r.text()); else failed.push(f); } catch { failed.push(f); }
+  }));
+  if (failed.length) console.error('code: fichiers illisibles', failed.slice(0, 10).join(', '));
+  codeCache = { b, db: env.DB, files }; return files;
+}
 
 /* ═════════════ Fichiers statiques ═════════════ */
 /** Identifiant du déploiement : fourni par Cloudflare (binding version_metadata), sinon la version de l'application. */
@@ -256,6 +271,7 @@ function roleFor(p, m) {
   if (p.startsWith('/api/admin/users')) return 'users';
   if (p.startsWith('/api/admin/bugs') || p === '/api/admin/push-status' || p.startsWith('/api/admin/code') || p === '/api/admin/maintenance') return 'technical';
   if (p === '/api/admin/studio/ai' || p === '/api/admin/lab' || p === '/api/admin/health') return 'intelligence';
+  if (p === '/api/admin/assistant/code') return 'technical';
   if (p === '/api/admin/assistant') return 'content';
   if (p.startsWith('/api/admin/studio') || p.startsWith('/api/admin/versions') || p.startsWith('/api/admin/global') || p.startsWith('/api/admin/proposals') || p.startsWith('/api/admin/intents')) return 'content';
   return null; // journal : tout administrateur peut le lire
@@ -549,32 +565,75 @@ async function routeAuthed(request, env, url, auth, secure) {
       return json({ ok: true, open: bugs.length, groups, findings: findings || [], ai });
     }
     if (p === '/api/admin/code' && m === 'GET') {
-      const r = (await db(env, 'SELECT c.id,c.title,c.summary,c.status,c.impact_json,c.created_at,c.updated_at,c.reviewed_at,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id ORDER BY c.updated_at DESC LIMIT 100').all()).results || [];
+      const r = (await db(env, 'SELECT c.id,c.title,c.summary,c.status,c.impact_json,c.pr_url,c.created_at,c.updated_at,c.reviewed_at,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id ORDER BY c.updated_at DESC LIMIT 100').all()).results || [];
       return json({ ok: true, items: r.map((c) => ({ ...c, impact: safeParse(c.impact_json) || {}, impact_json: undefined })) });
     }
     if (p === '/api/admin/code' && m === 'POST') {
-      const b = await readJson(request, 260000), title = str(b?.title, 120), diff = String(b?.diff ?? '').slice(0, 200000);
+      const b = await readJson(request, 260000), title = str(b?.title, 120);
+      let diff = String(b?.diff ?? '').slice(0, 200000), edits = [];
+      // Remplacements exacts (assistant) : revérifiés ici sur les fichiers actuels ; le diff est recalculé par le serveur.
+      if (Array.isArray(b?.edits) && b.edits.length) {
+        const r = cleanEdits({ edits: b.edits }, await codeFiles(env));
+        if (!r.edits.length || r.errors.length) return fail('Modification refusée : ' + (r.errors.join(' ') || 'rien d’applicable.'), 422);
+        edits = r.edits; diff = r.diff;
+      }
       if (title.length < 3 || diff.length < 10) return fail('Titre et diff requis.');
       const impact = analyzeDiff(diff), id = uid(), now = Date.now();
       if (impact.blocked) return fail('Proposition refusée : ' + impact.flags.filter((f) => /refusé|interdit/.test(f)).join(' '), 422, { impact });
-      await env.DB.batch([db(env, 'INSERT INTO code_proposals(id,title,summary,diff,impact_json,tests,status,author_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)', id, title, str(b?.summary, 2000), diff, JSON.stringify(impact), str(b?.tests, 2000), 'draft', u.id, now, now),
+      await env.DB.batch([db(env, 'INSERT INTO code_proposals(id,title,summary,diff,impact_json,tests,status,author_id,created_at,updated_at,edits_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)', id, title, str(b?.summary, 2000), diff, JSON.stringify(impact), str(b?.tests, 2000), 'draft', u.id, now, now, edits.length ? JSON.stringify(edits) : ''),
         auditStmt(env, u, 'code_propose', { type: 'code', id, after: { title, files: impact.files, flags: impact.flags } })]);
       return json({ ok: true, id, impact });
     }
     if ((x = p.match(/^\/api\/admin\/code\/([\w-]{1,64})(\.patch)?$/)) && m === 'GET') {
       const c = await db(env, 'SELECT c.*,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id WHERE c.id=?', x[1]).first(); if (!c) return fail('Proposition introuvable.', 404);
       if (x[2]) return new Response(`# ${c.title}\n# Statut : ${c.status} — à appliquer et déployer MANUELLEMENT (git, tests, déploiement Cloudflare).\n${c.diff}`, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="proposition-${c.id}.patch"` } });
-      return json({ ok: true, item: { id: c.id, title: c.title, summary: c.summary, diff: c.diff, tests: c.tests, status: c.status, note: c.note, impact: safeParse(c.impact_json) || {}, author: c.author || '', reviewer: c.reviewer || '', createdAt: c.created_at, reviewedAt: c.reviewed_at } });
+      return json({ ok: true, item: { id: c.id, title: c.title, summary: c.summary, diff: c.diff, tests: c.tests, status: c.status, note: c.note, impact: safeParse(c.impact_json) || {}, author: c.author || '', reviewer: c.reviewer || '', createdAt: c.created_at, reviewedAt: c.reviewed_at,
+        prUrl: c.pr_url || '', exact: !!c.edits_json, github: githubReady(env), mine: c.author_id === u.id } });
     }
     if ((x = p.match(/^\/api\/admin\/code\/([\w-]{1,64})\/review$/)) && m === 'POST') {
       const b = await readJson(request, 3000), d = b?.decision === 'approve' ? 'approved' : b?.decision === 'reject' ? 'rejected' : '';
       if (!d) return fail('Décision invalide.');
       const c = await db(env, 'SELECT author_id,status FROM code_proposals WHERE id=?', x[1]).first(); if (!c) return fail('Proposition introuvable.', 404);
       if (c.status !== 'draft') return fail('Déjà examinée.', 409);
-      if (c.author_id === u.id && d === 'approved') return fail('Une proposition doit être validée par un autre administrateur que son auteur.', 409);
+      let solo = false;
+      if (c.author_id === u.id && d === 'approved') {
+        // Deux regards : un autre administrateur valide. Seul administrateur : validation seul, mais explicite et notée.
+        const admins = Number((await db(env, 'SELECT COUNT(*) c FROM users WHERE is_admin=1').first())?.c) || 0;
+        if (admins > 1 || b?.solo !== true) return fail(admins > 1 ? 'Une proposition doit être validée par un autre administrateur que son auteur.' : 'Tu es le seul administrateur : confirme que tu valides seul (« Je valide seul »).', 409, { soloPossible: admins <= 1 });
+        solo = true;
+      }
       const now = Date.now();
-      await env.DB.batch([db(env, 'UPDATE code_proposals SET status=?,reviewer_id=?,reviewed_at=?,note=?,updated_at=? WHERE id=?', d, u.id, now, str(b?.note, 600), now, x[1]), auditStmt(env, u, 'code_' + d, { type: 'code', id: x[1], after: { note: str(b?.note, 200) } })]);
-      return json({ ok: true, status: d, deployed: false });
+      await env.DB.batch([db(env, 'UPDATE code_proposals SET status=?,reviewer_id=?,reviewed_at=?,note=?,updated_at=? WHERE id=?', d, u.id, now, str(b?.note, 600), now, x[1]), auditStmt(env, u, solo ? 'code_self_approved' : 'code_' + d, { type: 'code', id: x[1], after: { note: str(b?.note, 200), solo } })]);
+      return json({ ok: true, status: d, deployed: false, solo });
+    }
+    if ((x = p.match(/^\/api\/admin\/code\/([\w-]{1,64})\/pr$/)) && m === 'POST') {
+      // Pull Request GitHub d'une proposition validée : une branche, les remplacements, la PR. JAMAIS fusionnée ni déployée ici.
+      const c = await db(env, 'SELECT * FROM code_proposals WHERE id=?', x[1]).first(); if (!c) return fail('Proposition introuvable.', 404);
+      if (c.pr_url) return json({ ok: true, url: c.pr_url, already: true, merged: false, deployed: false });
+      if (c.status !== 'approved') return fail('La proposition doit d’abord être validée.', 409);
+      const edits = safeParse(c.edits_json) || [];
+      if (!Array.isArray(edits) || !edits.length) return fail('Cette proposition n’a pas de remplacements exacts : télécharge le fichier .patch et applique-le à la main.', 409);
+      if (!githubReady(env)) return json({ error: 'GitHub n’est pas relié : ajoute au Worker les secrets GITHUB_TOKEN (jeton avec droits « contents » et « pull requests ») et GITHUB_REPO (propriétaire/dépôt). En attendant, télécharge le fichier .patch.', unavailable: true }, 503);
+      if (await limited(env, 'gh-pr:' + u.id, 6, 600000)) return fail('Beaucoup de demandes : réessaie dans quelques minutes.', 429);
+      let pr;
+      try { pr = await openPullRequest({ repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, id: c.id, title: c.title, edits, body: `${c.summary || c.title}\n\n---\nProposée avec l’assistant du site et validée par un administrateur dans l’app.\n**Rien n’est fusionné ni déployé automatiquement** : relis le diff, laisse passer les tests, puis fusionne toi-même.\n\nFichiers : ${[...new Set(edits.map((e) => e.path))].join(', ')}` }); }
+      catch (e) { console.error('github-pr', e?.message); return fail(String(e?.message || 'GitHub a refusé la Pull Request.').slice(0, 300), 502); }
+      await env.DB.batch([db(env, "UPDATE code_proposals SET status='pr',pr_url=?,updated_at=? WHERE id=?", pr.url, Date.now(), c.id), auditStmt(env, u, 'code_pr', { type: 'code', id: c.id, after: { url: pr.url, branch: pr.branch } })]);
+      return json({ ok: true, url: pr.url, number: pr.number, merged: false, deployed: false });
+    }
+    if (p === '/api/admin/assistant/code' && m === 'POST') {
+      // « Le faire dans le code » : l'IA propose des remplacements exacts dans l'interface ; tout est revérifié ; rien n'est enregistré ici.
+      const b = await readJson(request, 30000), msgs = (Array.isArray(b?.messages) ? b.messages : []).slice(-8);
+      const last = [...msgs].reverse().find((y) => y?.role === 'user');
+      if (!last || str(last.content, 1500).length < 3) return fail('Écris ce que tu veux changer.');
+      if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur (Workers AI).', unavailable: true }, 503);
+      if (await limited(env, 'ai-code:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie dans quelques minutes.', 429);
+      const files = await codeFiles(env), convo = msgs.filter((y) => y?.role === 'user').slice(-3).map((y) => str(y.content, 600)).join(' ');
+      const snippets = searchCode(files, convo);
+      let out;
+      try { out = cleanEdits(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildCodeEdit(msgs, snippets), max_tokens: 1600, temperature: 0.2 }), files); }
+      catch (e) { console.error('ai-code', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+      return json({ ok: true, ...out, impact: out.diff ? analyzeDiff(out.diff) : null, snippets: snippets.map(({ path, start, end }) => ({ path, start, end })), github: githubReady(env) });
     }
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
     if (p === '/api/admin/push-status' && m === 'GET') {

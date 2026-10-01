@@ -101,8 +101,9 @@ function vDisplay() {
       ${tog(['season', '🍂 Décor de saison sur l’accueil (neige, fleurs, feuilles…)'])}
       <label>Langue<select data-change="pref" name="lang"><option value="fr" ${st.lang !== 'en' ? 'selected' : ''}>Français</option><option value="en" ${st.lang === 'en' ? 'selected' : ''}>English (beta)</option></select></label>
       <details class="how mini"><summary>Plus d’options d’affichage</summary><label>Espacement</label>${segA('density', [['compact', 'Serré'], ['normal', 'Normal'], ['airy', 'Aéré']])}<label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</details></div>
-    <div class="card"><h3>✏️ Mise en page</h3><p class="small muted">Choisis ce qui s’affiche, en grand ou en petite icône en haut, dans quel ordre et de quelle couleur. Le ✏️ en haut de chaque page fait pareil.</p>
-      <div class="row wrapf"><button class="btn" data-act="layEditAt" data-to="home/dash">Accueil</button><button class="btn" data-act="layEditAt" data-to="progress/summary">Progrès</button><button class="btn" data-act="layEditAt" data-to="library/seances">Bibliothèque</button><button class="btn" data-act="layEditAt" data-to="profile/home">Profil</button></div>
+    <div class="card"><h3>✏️ Mise en page</h3><p class="small muted">Pour chaque page : ce qui s’affiche (en grand, en petite icône en haut, ou masqué), dans quel ordre et de quelle couleur. Le bouton ✏️ « Organiser » en haut des pages ouvre la même chose.</p>
+      <div class="row wrapf"><button class="btn" data-act="layEditAt" data-to="home/dash">Accueil</button><button class="btn" data-act="layEditAt" data-to="progress/summary">Progrès</button><button class="btn" data-act="layEditAt" data-to="library/home">Bibliothèque</button><button class="btn" data-act="layEditAt" data-to="profile/home">Profil</button></div>
+      ${tog(['hideLayEdit', 'Masquer le bouton ✏️ « Organiser » en haut des pages (la mise en page reste ici, et dans ☰ › « Mise en page »)'])}
       <button class="btn ghost" data-act="layReset" data-scope="all">Revenir à la mise en page de base partout</button></div>
 `;
 }
@@ -293,7 +294,16 @@ function pushStatusCard(open = false) {
   const l = p.last, when = l?.at ? new Date(l.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
   return h`<details class="card how" ${open ? 'open' : ''}><summary>🔔 Notifications de mise à jour</summary>
     <p class="small">${l ? `Dernière envoyée le ${when} : ${l.sent} appareil(s) joint(s) sur ${l.targeted} abonné(s) aux nouveautés${l.gone ? `, ${l.gone} abonnement(s) expiré(s) retiré(s)` : ''}${l.errors ? `, ${l.errors} en erreur` : ''}.` : 'Aucune notification de mise à jour envoyée pour l’instant.'}</p>
+    ${cronLine(p)}
     <p class="tiny muted">${p.devices} appareil(s) abonné(s) en tout. Version en ligne : ${p.build}${p.lastBuild && p.lastBuild !== p.build ? ` (annonce en attente : ${p.lastBuild})` : ''}. Un appareil qui ne reçoit rien : Paramètres › Notifications › « 🩺 Vérifier cet appareil ».</p></details>`;
+}
+/** La tâche planifiée (chaque minute) prévient d'une nouvelle version même si personne n'ouvre l'app : tourne-t-elle ? */
+function cronLine(p) {
+  const c = p.cron, age = c?.t ? Math.max(0, Math.round(((p.now || Date.now()) - c.t) / 60000)) : null;
+  if (!c) return h`<div class="card flat warn-b stack"><p class="small">⚠️ <b>La tâche planifiée n’a encore jamais tourné.</b> Sans elle, l’annonce d’une nouvelle version ne part qu’à la première visite de quelqu’un.</p>
+    <p class="tiny">À vérifier dans Cloudflare : Workers › ton Worker › Settings › Triggers › Cron Triggers : il doit y avoir « * * * * * » (chaque minute, déjà prévu dans wrangler.json, appliqué au prochain déploiement).</p></div>`;
+  if (age > 20) return h`<p class="small warn-t">⚠️ Dernier passage de la tâche planifiée il y a ${age} min : elle devrait passer chaque minute. Vérifie les Cron Triggers du Worker dans Cloudflare.${c.error ? ` Dernière erreur : ${c.error}` : ''}</p>`;
+  return h`<p class="small ok-t">✓ Tâche planifiée active : dernier passage il y a ${age ? `${age} min` : 'moins d’une minute'}${c.error ? ` (erreur : ${c.error})` : ''}. Une nouvelle version est annoncée dans la minute, même si personne n’ouvre l’app.</p>`;
 }
 function vAdmin() {
   if (!S.user.isAdmin) return h`<form data-submit="adminOn" class="card" autocomplete="off"><h3>🛡️ Administration</h3><p class="small muted">Saisis le mot de passe administrateur pour activer les droits d’administration sur ton compte. Il est vérifié uniquement par le serveur.</p>

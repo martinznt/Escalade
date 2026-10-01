@@ -82,7 +82,9 @@ export function ask(message, { ok = 'Confirmer', cancel = 'Annuler', danger = fa
 // Un choix parmi quelques-uns : des pastilles qui passent à la ligne (jamais une barre d'onglets).
 export const seg = (act, cur, opts, extra = '') => h`<div class="chips choice" role="radiogroup">${opts.map(([v, l]) => h`<button type="button" role="radio" class="chip ${cur === v ? 'on' : ''}" aria-checked="${cur === v}" data-act="${act}" data-id="${v}" ${raw(extra)}>${l}</button>`)}</div>`;
 /** Liste de rubriques (comme les réglages d'un téléphone) : [action, id, icône, titre, description]. */
-export const menuList = (rows) => h`<div class="setmenu">${rows.map(([act, id, ic, t, d, to]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''} ${to ? raw(`data-to="${to}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b>${d ? h`<small>${d}</small>` : ''}</span><span class="chev">›</span></button>`)}</div>`;
+/** Une ligne de liste (comme dans les Paramètres) : [action, id, icône, titre, description, destination]. */
+export const menuRow = ([act, id, ic, t, d, to]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''} ${to ? raw(`data-to="${to}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b>${d ? h`<small>${d}</small>` : ''}</span><span class="chev">›</span></button>`;
+export const menuList = (rows) => h`<div class="setmenu">${rows.map(menuRow)}</div>`;
 /** En-tête d'une sous-page : retour vers la liste, puis le titre. */
 export const subHead = (act, id, backLabel, title) => h`<div class="row subhead"><button class="btn sm ghost" data-act="${act}" data-id="${id}">‹ ${backLabel}</button></div><h1>${title}</h1>`;
 export const chip = (on, label, attrs) => h`<button type="button" class="chip ${on ? 'on' : ''}" aria-pressed="${!!on}" ${raw(attrs)}>${label}</button>`;

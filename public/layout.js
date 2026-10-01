@@ -33,16 +33,27 @@ export const FEATURES = {
     regularity: F('Régularité', ['big']), load: F('Charge', ['big']), muscles: F('Muscles travaillés', ['big']), badges: F('Badges', ['big']), weeksum: F('Résumé de la période', ['big']),
     recap: F('Bilan du mois', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']),
   },
-  library: { search: F('Recherche', ['icon']), gen: F('Séance du jour', ['icon']), timer: F('Minuteur', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach', ['icon']) },
-  profile: { search: F('Recherche', ['icon']), carnet: F('Carnet', ['icon']), coach: F('Coach', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']) },
+  // 8.29 : la Bibliothèque et le Profil se personnalisent aussi (ordre, masquer, couleur), pas seulement leurs icônes.
+  library: {
+    search: F('Recherche', ['icon']), newbtn: F('Bouton « ＋ Nouvelle séance »', ['big'], { ic: '＋' }), draft: F('Séance en cours de création', ['big'], { ic: '📝' }),
+    'r-seances': F('Mes séances', ['big'], { row: 1, ic: '📋' }), 'r-climbplan': F('Créer une séance', ['big'], { row: 1, ic: '✨' }), 'r-catalog': F('Séances prêtes', ['big'], { row: 1, ic: '🗂' }),
+    'r-exercises': F('Exercices', ['big'], { row: 1, ic: '💪' }), 'r-common': F('Bibliothèque commune', ['big'], { row: 1, ic: '🌍' }), 'r-search': F('Rechercher', ['big'], { row: 1, ic: '🔍' }),
+    gen: F('Séance du jour', ['icon']), timer: F('Minuteur', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach', ['icon']),
+  },
+  profile: {
+    search: F('Recherche', ['icon']), hero: F('En-tête : nom, sports, chiffres', ['big'], { ic: '👤' }), sw: F('Points forts et à travailler', ['big'], { ic: '💪' }),
+    bilan: F('Mon bilan physique (carte)', ['big'], { ic: '🩺' }), complete: F('Profil à compléter', ['big'], { ic: '🧩' }),
+    'g-moi': F('Tuiles « Moi »', ['big'], { ic: '🙂' }), 'g-res': F('Tuiles « Mes résultats »', ['big'], { ic: '🏆' }), 'g-why': F('Tuiles « Comprendre mes conseils »', ['big'], { ic: '🔎' }), 'g-share': F('Tuiles « Partager »', ['big'], { ic: '🔗' }),
+    carnet: F('Carnet', ['icon']), coach: F('Coach', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']),
+  },
   settings: { search: F('Recherche', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']) },
 };
 // Mise en page de base : simple au départ.
 export const DEFAULTS = {
   home: [['search', 'icon'], ['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['question', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['goalsdone', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['notif', 'icon'], ['all', 'icon']],
-  library: [['search', 'icon'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  profile: [['search', 'icon'], ['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  library: [['search', 'icon'], ['newbtn', 'big'], ['draft', 'big'], ['r-seances', 'big'], ['r-climbplan', 'big'], ['r-catalog', 'big'], ['r-exercises', 'big'], ['r-common', 'big'], ['r-search', 'big'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  profile: [['search', 'icon'], ['hero', 'big'], ['sw', 'big'], ['bilan', 'big'], ['complete', 'big'], ['g-moi', 'big'], ['g-res', 'big'], ['g-why', 'big'], ['g-share', 'big'], ['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   settings: [['search', 'icon'], ['notif', 'icon'], ['all', 'icon']],
 };
 export const COLORS = ['', '#d4a056', '#5fa8d3', '#5cb87a', '#ef6f5e', '#a78bfa', '#f472b6', '#ffd60a'];
@@ -81,7 +92,7 @@ export function topIcons(page) {
   const icons = shown(page).filter((e) => e.as === 'icon' && ICONS[e.id]);
   const unread = S.notifUnread || 0;
   return h`<nav class="topicons" aria-label="Raccourcis">${icons.map((e) => { const [ic, label, act] = ICONS[e.id]; const w = CLEAR.has(e.id) ? '' : SHORT[e.id] || label; return h`<button class="ti ${w ? 'lbl' : ''}" data-act="${act}" data-id="${e.id}" aria-label="${label}" title="${label}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>${w ? h`<span>${ic}</span><small>${w}</small>` : ic}${e.id === 'notif' && unread ? h`<i class="badge-dot">${unread > 9 ? '9+' : unread}</i>` : ''}</button>`; })}
-    ${FEATURES[page] && !S.lay ? h`<button class="ti edit lbl" data-act="layEdit" aria-label="Personnaliser cette page" title="Personnaliser cette page"><span>✏️</span><small>Page</small></button>` : ''}</nav>`;
+    ${FEATURES[page] && !S.lay && !S.settings?.hideLayEdit ? h`<button class="ti edit lbl" data-act="layEdit" aria-label="Organiser cette page : choisir ce qui s’affiche, l’ordre et les couleurs" title="Organiser cette page"><span>✏️</span><small>Organiser</small></button>` : ''}</nav>`;
 }
 
 /**
@@ -90,15 +101,16 @@ export function topIcons(page) {
  */
 export function composePage(page, renderers) {
   if (editing(page)) return editor(page);
-  const feats = FEATURES[page], out = [], preview = S.lay?.page === page; let tiles = [];
+  const feats = FEATURES[page], out = [], preview = S.lay?.page === page; let tiles = [], rows = [];
   if (preview) out.push(h`<div class="editdock top"><span class="grow small"><b>👁 Aperçu</b> — pas encore enregistré</span><button class="btn sm" data-act="layBack">✏️ Continuer</button><button class="btn sm pri" data-act="laySave">✓ Enregistrer</button></div>`);
-  const flush = () => { if (tiles.length) { out.push(h`<div class="quick">${tiles}</div>`); tiles = []; } };
+  // Tuiles consécutives → une grille ; lignes consécutives → une liste (comme dans les Paramètres).
+  const flush = () => { if (tiles.length) { out.push(h`<div class="quick">${tiles}</div>`); tiles = []; } if (rows.length) { out.push(h`<div class="setmenu">${rows}</div>`); rows = []; } };
   for (const e of shown(page)) {
     const f = feats[e.id]; if (!f || e.as !== 'big') continue;
     let content = ''; try { content = renderers[e.id]?.() || ''; } catch (err) { console.error(err); content = h`<section class="card"><p class="small warn-t">« ${f.l} » n’a pas pu s’afficher : ${err.message}</p></section>`; }
     if (!content) continue;
     const node = e.color ? h`<div class="slot" style="--wc:${e.color}">${content}</div>` : content;
-    if (f.tile) tiles.push(node); else { flush(); out.push(node); }
+    if (f.tile) { if (rows.length) flush(); tiles.push(node); } else if (f.row) { if (tiles.length) flush(); rows.push(node); } else { flush(); out.push(node); }
   }
   flush();
   return h`${out}`;
@@ -107,12 +119,12 @@ export function composePage(page, renderers) {
 function editor(page) {
   const list = S.lay.list, feats = FEATURES[page], n = list.length;
   const FORM = { big: 'Grand', icon: 'Icône', off: 'Masqué' };
-  const name = { home: 'l’Accueil', progress: 'Progrès' }[page] || 'cette page';
+  const name = { home: 'l’Accueil', progress: 'Progrès', library: 'la Bibliothèque', profile: 'le Profil' }[page] || 'cette page';
   return h`<section class="card editbar"><h2>✏️ Personnaliser ${name}</h2><p class="small">Choisis ce qui s’affiche sur ${name}, et dans quel ordre :</p>
     <ul class="clean tight small"><li><b>Grand</b> : un bloc sur la page</li><li><b>Icône</b> : un petit bouton en haut à droite</li><li><b>Masqué</b> : n’apparaît plus (tu peux le remettre ici)</li><li><b>↑ ↓</b> : l’ordre · <b>🎨</b> : la couleur</li></ul>
     <p class="tiny muted">Rien ne change tant que tu n’as pas enregistré. <b>👁 Aperçu</b> pour voir le résultat, <b>✕ Quitter</b> en haut pour sortir sans rien changer. <button class="linkish acc-t" data-act="layReset">Revenir à la mise en page de base</button></p></section>
     <div class="edlist">${list.map((e, i) => { const f = feats[e.id]; return h`<div class="edrow ${e.as}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>
-      <div class="row"><span class="edic">${ICONS[e.id]?.[0] || (f.tile ? '▢' : '▭')}</span><b class="grow small">${f.l}${e.forced ? h` <span class="tag warn">🚫 masqué pour tous</span>` : ''}</b>
+      <div class="row"><span class="edic">${f.ic || ICONS[e.id]?.[0] || (f.tile ? '▢' : '▭')}</span><b class="grow small">${f.l}${e.forced ? h` <span class="tag warn">🚫 masqué pour tous</span>` : ''}</b>
         <button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button class="btn sm ic" data-act="layMove" data-id="${e.id}" data-d="1" ${i === n - 1 ? 'disabled' : ''} aria-label="Descendre">↓</button></div>
       <div class="row wrapf"><div class="chips choice sm">${[...f.k, 'off'].map((k) => h`<button type="button" class="chip ${e.as === k ? 'on' : ''}" data-act="layAs" data-id="${e.id}" data-v="${k}">${FORM[k]}</button>`)}</div><span class="grow"></span>
         <button type="button" class="swc cur" data-act="layPick" data-id="${e.id}" aria-label="Couleur" ${raw(e.color ? `style="background:${e.color}"` : '')}>${e.color ? '' : '🎨'}</button></div>
@@ -171,6 +183,6 @@ const ALL = [
   ['Planifier', [['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], ['🔔', 'Notifications', 'notifOpen']]],
   ['Moi', [['👤', 'Mon profil', 'allGo', 'profile/home'], ['🎯', 'Objectifs', 'allGo', 'profile/goals'], ['📍', 'Mes lieux (salles, matériel)', 'allGo', 'profile/equipment']]],
   ['Aider l’app', [['💡', 'Proposer une amélioration', 'ideaNew']]],
-  ['Réglages', [['🎨', 'Affichage et ambiance', 'allGo', 'settings/display'], ['▶️', 'Pendant la séance', 'allGo', 'settings/session'], ['✏️', 'Mise en page', 'layEditHome'], ['❓', 'Aide et visite', 'allGo', 'settings/help'], ['💾', 'Mes données', 'allGo', 'settings/data']]],
+  ['Paramètres', [['🎨', 'Affichage et ambiance', 'allGo', 'settings/display'], ['▶️', 'Pendant la séance', 'allGo', 'settings/session'], ['✏️', 'Mise en page', 'layEditHome'], ['❓', 'Aide et visite', 'allGo', 'settings/help'], ['💾', 'Mes données', 'allGo', 'settings/data']]],
 ];
 ACT.allOpen = () => openSheet(h`<div class="allf"><h2>Toutes les fonctions</h2>${ALL.map(([cat, list]) => h`<div><span class="kicker">${cat}</span><div class="allgrid">${list.map(([ic, l, act, to]) => h`<button class="allb" data-act="${act}" ${to ? raw(`data-to="${to}"`) : ''}><span>${ic}</span>${l}</button>`)}</div></div>`)}</div>`, { wide: true });

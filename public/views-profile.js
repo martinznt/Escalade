@@ -1,6 +1,7 @@
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
 import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
+import { composePage } from './layout.js';
 import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
@@ -64,16 +65,21 @@ function vHub() {
   const climbing = acts.some((a) => a.id.startsWith('climbing'));
   const tiles = Object.entries(TILES).filter(([k]) => k !== 'climbing' || climbing);
   const pill = (x, cls) => h`<button class="chip ${cls}" data-act="capOpen" data-id="${x.capId}">${x.label}</button>`;
-  return h`<section class="card hero phero"><div class="row"><div class="avatar">${acts[0]?.emoji || '🙂'}</div><div class="grow"><h1>${S.user.guest ? 'Mon profil' : S.user.username}</h1>
+  // Chaque bloc se déplace, se masque ou se colore avec ✏️ « Organiser » (mise en page du Profil).
+  const GID = { 'g-moi': 'Moi', 'g-res': 'Mes résultats', 'g-why': 'Comprendre mes conseils', 'g-share': 'Partager' };
+  const group = (gid) => () => { const g = GROUPS.find(([title]) => title === GID[gid]), list = g ? tiles.filter(([k]) => g[1].includes(k)) : [];
+    return list.length ? h`<span class="kicker">${g[0]}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; };
+  return h`<p class="tiny muted pagehelp">Ce que l’app sait de toi (corps, sports, lieux, objectifs, mesures) : plus il est complet, plus tes séances sont justes.</p>${composePage('profile', {
+    hero: () => h`<section class="card hero phero"><div class="row"><div class="avatar">${acts[0]?.emoji || '🙂'}</div><div class="grow"><h1>${S.user.guest ? 'Mon profil' : S.user.username}</h1>
       <div class="chips">${acts.length ? acts.map((a) => h`<span class="chip static">${a.emoji} ${a.label}</span>`) : h`<button class="chip" data-act="setupStart" data-id="quiz">＋ Choisir mes sports</button>`}</div></div></div>
-    <div class="stats"><span>🏋️ ${c.history.length} séance${c.history.length > 1 ? 's' : ''}</span><span>🎯 ${goals.length ? `${goals.length} objectif${goals.length > 1 ? 's' : ''}` : envies.length ? `${envies.length} envie${envies.length > 1 ? 's' : ''}` : '0 objectif'}</span><span>📏 ${c.perfs.filter((p) => !p.unknown).length} mesure(s)</span></div></section>
-    ${sw.strengths.length || sw.weaknesses.length ? h`<div class="grid2 sw2">
+    <div class="stats"><span>🏋️ ${c.history.length} séance${c.history.length > 1 ? 's' : ''}</span><span>🎯 ${goals.length ? `${goals.length} objectif${goals.length > 1 ? 's' : ''}` : envies.length ? `${envies.length} envie${envies.length > 1 ? 's' : ''}` : '0 objectif'}</span><span>📏 ${c.perfs.filter((p) => !p.unknown).length} mesure(s)</span></div></section>`,
+    sw: () => sw.strengths.length || sw.weaknesses.length ? h`<div class="grid2 sw2">
       <section class="card ok-b"><span class="kicker ok-t">💪 Tes points forts</span><div class="chips">${sw.strengths.length ? sw.strengths.slice(0, 3).map((x) => pill(x, 'okc')) : h`<span class="small muted">Bientôt…</span>`}</div></section>
       <section class="card warn-b"><span class="kicker warn-t">🌱 À travailler</span><div class="chips">${sw.weaknesses.length ? sw.weaknesses.slice(0, 3).map((x) => pill(x, 'warnc')) : h`<span class="small muted">Rien de flagrant</span>`}</div></section></div>`
-      : known ? h`<section class="card flat row"><span class="grow small">🧩 Tes capacités connues sont au même niveau : pas de point fort ni faible marqué pour l’instant. Chaque test en plus affine l’image.</span></section>` : ''}
-    ${bilanCard(bil)}
-    ${completeCard(c, acts, goals, climbing)}
-    ${GROUPS.map(([title, ids]) => { const list = tiles.filter(([k]) => ids.includes(k)); return list.length ? h`<span class="kicker">${title}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; })}`;
+      : known ? h`<section class="card flat row"><span class="grow small">🧩 Tes capacités connues sont au même niveau : pas de point fort ni faible marqué pour l’instant. Chaque test en plus affine l’image.</span></section>` : '',
+    bilan: () => bilanCard(bil), complete: () => completeCard(c, acts, goals, climbing),
+    'g-moi': group('g-moi'), 'g-res': group('g-res'), 'g-why': group('g-why'), 'g-share': group('g-share'),
+  })}`;
 }
 ACT.profSub = (el) => { if (el.dataset.id === 'goals') S.filters.goals = 'active'; go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
 const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;

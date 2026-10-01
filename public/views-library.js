@@ -1,7 +1,7 @@
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
 import { personalFit } from './fit.js';
-import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, subHead, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
+import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, menuRow, subHead, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
 import { linkSheet } from './share.js';
 import './duo.js';
 import './views-ai.js';
@@ -9,6 +9,7 @@ import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, del
 import { cleanParts } from './format.js';
 import { vClimbPlan } from './views-climbplan.js';
 import { setReturn } from './nav.js';
+import { composePage } from './layout.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
 import { orderAdvice, similarOptions } from './guide.js';
 import { exWhat, exUse, exWhyHere, sessionWhat, sessionUse, sessionWhy } from './explain.js';
@@ -81,8 +82,12 @@ const LIB_INFO = {
 };
 /** Bibliothèque : créer une séance, puis la liste des rubriques (même format que les paramètres). */
 function vLibHome() {
-  return h`<h1>📚 Bibliothèque</h1><button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
-    ${draftBanner()}${menuList(Object.entries(LIB_INFO).filter(([k]) => k !== 'generate').map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
+  // Chaque élément se déplace, se masque ou se colore avec ✏️ « Organiser » (mise en page de la Bibliothèque).
+  const row = (k) => () => { const [ic, t, d] = LIB_INFO[k]; return menuRow(['libSub', k, ic, t, d()]); };
+  return h`<h1>📚 Bibliothèque</h1><p class="tiny muted pagehelp">Tes séances, et tout pour en créer : par l’app, guidée, prête à l’emploi ou à la main.</p>${composePage('library', {
+    newbtn: () => h`<button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>`, draft: () => draftBanner(),
+    'r-seances': row('seances'), 'r-climbplan': row('climbplan'), 'r-catalog': row('catalog'), 'r-exercises': row('exercises'), 'r-common': row('common'), 'r-search': row('search'),
+  })}`;
 }
 ACT.libSub = (el) => { closeSheet(); S.sel = null; window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 

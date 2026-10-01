@@ -20,7 +20,17 @@ export const ASSIST_KINDS = {
   text: { label: 'Texte de l’app réécrit', format: '{"from":"texte EXACT affiché aujourd’hui","to":"nouveau texte"}' },
   style: { label: 'Style d’escalade', format: '{"label":"…","activity":"climbing_boulder"}' },
 };
-export const CANNOT = ['ajouter ou changer une fonction, un écran ou un calcul de l’app (cela demande du code)', 'lire les données personnelles des membres', 'publier : tu relis et publies toi-même dans le Studio'];
+export const CANNOT = ['écrire du code directement : pour une petite modification de l’interface, « 💻 Proposer dans le code » prépare des remplacements exacts, relus et validés, puis envoyés en Pull Request GitHub — jamais déployés seuls', 'lire les données personnelles des membres', 'publier : tu relis et publies toi-même dans le Studio'];
+/** Ce que contient l'app, écran par écran (pour répondre à « à quoi sert… », « où trouver… »). Vérifié par les tests. */
+export const APP_MAP = `Onglets en bas : Accueil, Progrès, Bibliothèque, Profil, Paramètres.
+- Accueil : « Séance du jour », « Que faire aujourd’hui ? », ce que ta dernière séance change pour la suivante, raccourcis.
+- Progrès : résumé (série, chiffres, badges), Journal (séances, blocs et voies, notes), Records et mesures, Mon analyse.
+- Bibliothèque : « ＋ Nouvelle séance », Mes séances, Créer une séance, Séances prêtes, Exercices, Bibliothèque commune, Rechercher.
+- Profil : Mon bilan physique, Mon corps et mes préférences, Mes sports (avec les cotations et styles d’escalade), Objectifs, Mes lieux (salles, matériel), Records et mesures, Carnet, Mon analyse, Partage.
+- Paramètres : Affichage, Pendant la séance, Notifications, Mes données, Synchronisation, Aide, Toutes les mises à jour, Signaler un bug, Proposer une amélioration, Admin.
+Icônes en haut à droite (selon la page) : 🔍 rechercher dans l’app ; 🔔 notifications ; ☰ toutes les fonctions ; 📅 planning (calendrier, programme, rappels) ; 💬 assistant ; ⏱ minuteur ; ✏️ « Organiser » : personnaliser la page (chaque bloc en grand, en petite icône en haut ou masqué, l’ordre, une couleur ; rien n’est enregistré sans confirmation ; « Revenir à la mise en page de base » remet tout). Le bouton ✏️ se masque dans Paramètres › Affichage ; la mise en page reste accessible par ☰ › « Mise en page ».
+Créer une séance (Bibliothèque › Créer une séance), 6 étapes : 1 L’essentiel (sport principal, autres sports, lieu de chacun, forme, temps, ⚡ Proposer ma séance) ; 2 Tes objectifs (liste classée du plus au moins important ; ajout par type de travail, intention précise, objectif du profil, ou avec ses mots compris par l’IA) ; 3 Ta structure (moment de chaque objectif : auto, début, milieu, fin ; la séance entière s’adapte au n°1 et l’app explique pourquoi ; chaque phase se règle) ; 4 Propositions par phase ; 5 Améliorations ; 6 Structure finale minute par minute, puis Générer.
+Admin (Paramètres › Admin) : Assistant du site, Contenu de l’app, Textes et apparence, Brouillons et publication, Tout ce qui a été modifié, Propositions des membres, Signalements, Comptes et rôles, Bibliothèque commune, Santé des données, Laboratoire, Maintenance, Propositions de code, Notifications de mise à jour, Journal.`;
 
 const words = (t) => [...new Set(String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length >= 4))];
 /**
@@ -43,7 +53,9 @@ export function buildAssistant(messages, context = []) {
   const kinds = Object.entries(ASSIST_KINDS).map(([k, v]) => `- ${k} (${v.label}) : ${v.format}`).join('\n');
   const ctx = context.length ? context.map((c) => `${c.kind}/${c.id}${c.modified ? ' (déjà modifié)' : ''} : ${JSON.stringify(c.data)}`).join('\n') : '(aucun élément existant trouvé pour cette demande)';
   const sys = `Tu es l’assistant d’administration de « Séances entraînement », une app d’entraînement (escalade, renforcement, musculation, course, natation). Tu parles français, simplement, sans jargon.
-Tu aides l’administrateur à modifier le CONTENU commun de l’app. Tu ne publies rien : tes modifications deviennent un brouillon qu’il relit.
+Tu aides l’administrateur à comprendre l’app et à modifier son CONTENU commun. Tu ne publies rien : tes modifications deviennent un brouillon qu’il relit.
+Ce que contient l’app (réponds aux questions « à quoi sert… », « où trouver… » avec ce plan, sans rien inventer) :
+${APP_MAP}
 Types modifiables et format des données :
 ${kinds}
 Règles :
@@ -51,7 +63,7 @@ Règles :
 - Pour créer un élément, utilise un identifiant nouveau de la forme "n-mot-cle" (lettres, chiffres, tirets).
 - "op" vaut "put" (créer ou modifier), "hide" (masquer pour tous) ou "delete" (revenir à l’origine).
 - Pas de code, pas de HTML, pas de lien javascript. Pas de données personnelles. Pas de conseil médical.
-- Si la demande demande une nouvelle fonction ou un nouveau calcul, dis-le dans "needsCode" (titre + description claire pour un développeur) : tu ne peux pas le faire.
+- Si la demande touche au code (un comportement, un écran, un calcul, un bouton à enlever), décris-la dans "needsCode" (titre + description claire) : l’administrateur pourra demander une proposition de code (petits remplacements relus, validés, puis Pull Request GitHub ; jamais déployée seule).
 - S’il manque une information, pose la question dans "questions" au lieu d’inventer.
 Éléments existants liés à la demande :
 ${ctx}

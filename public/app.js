@@ -221,7 +221,12 @@ document.addEventListener('submit', (e) => {
 document.addEventListener('change', (e) => { const el = e.target.closest('[data-change]'); if (!el) return; const fn = CHG[el.dataset.change]; if (fn) try { fn(el); } catch (err) { console.error(err); toast(err.message, 4000, 'bad'); } });
 document.addEventListener('input', (e) => { const el = e.target.closest('[data-input]'); if (!el) return; const fn = INPUT[el.dataset.input]; if (fn) fn(el); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) closeSheet(); });
-window.addEventListener('hashchange', () => { catchLink(); parseHash(); closeSheet(); render(); });
+window.addEventListener('hashchange', () => {
+  catchLink(); parseHash(); closeSheet();
+  // Mode « Organiser » d'une autre page : on le quitte (sans enregistrer, et on le dit) pour retrouver ✏️ partout.
+  if (S.lay && S.lay.page !== S.tab) { S.lay = null; toast('Mise en page non enregistrée : tu as changé de page.', 3500); }
+  render();
+});
 window.addEventListener('online', () => syncAll());
 window.addEventListener('offline', () => { S.sync = 'offline'; render(); });
 document.addEventListener('visibilitychange', () => {
