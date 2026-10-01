@@ -210,7 +210,8 @@ await step('recherche 🔍 dans toute l’app, et recherche limitée aux paramè
   await a.click('#setfindres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/session')); await A.waitForSelector('#main input[name=vibration]');
 });
 await step('séances prêtes : filtres, tri pour toi, sources consultables, lancer / garder ; top exercices', async () => {
-  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('.catcard');
+  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('[data-act=catView]');
+  await a.click('[data-act=catView][data-id=rank]'); await A.waitForSelector('.catcard'); // vue « Pour toi d’abord »
   await a.click('[data-act=catEq]'); // tout afficher, même sans le matériel
   await a.click('[data-act=catF][data-k=sport][data-v=running]'); assert.match(await a.text('main'), /Fractionné 4 × 4 min/);
   await A.locator('.catcard', { hasText: 'Fractionné 4 × 4 min' }).click(); await A.waitForSelector('.catd .src');
@@ -654,7 +655,7 @@ await step('8.29 : silhouette — forme en V choisie → carte « Ma silhouette 
   await a.click('[data-act=bodySet][data-k=physique][data-v=v]'); await A.waitForTimeout(150); // on retire le choix pour la suite du parcours
 });
 await step('8.30 : visite de la page (reste sur la page, chaque partie expliquée) ; carnet par sport et niveau ; calisthenics', async () => {
-  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('[data-act=catView]');
+  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('[data-act=catView]'); await a.click('[data-act=catView][data-id=book]');
   if (await a.count('[data-act=catEq].on')) await a.click('[data-act=catEq]'); // tout le carnet, même sans le matériel
   const t = await a.text('#main'); assert.match(t, /🤸 Calisthenics[\s\S]*🌱 Débutant[\s\S]*🌿 Intermédiaire[\s\S]*🌳 Avancé/); assert.match(t, /Vers le muscle-up/);
   await a.click('[data-act=catF][data-k=level][data-v="2"]'); const t2 = await a.text('#main');
