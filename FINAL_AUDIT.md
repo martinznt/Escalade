@@ -1037,8 +1037,10 @@ Détail complet (fonctionnalités, fichiers, migrations — aucune —, fonction
 | Commande | Résultat |
 |---|---|
 | `npm run check` | OK |
-| `npm test` | 52 fichiers, tous OK — dont `profile828.test.mjs` (11) et `assistant.test.mjs` (9), `data.test.mjs` (niveau factuel) |
-| `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` | **76 étapes OK**, aucune erreur JavaScript, sur la version 8.28.0 — dont « L'essentiel + ⚡ + bilan guidé » et « Admin en 3 groupes + assistant du site ». Deux lancements précédents avaient échoué (« Je compose » gardait des exercices ; âge « il y a -1 j ») : corrigés avant ce lancement. |
+| `npm test` | 53 fichiers, tous OK — dont `profile828.test.mjs` (11), `assistant.test.mjs` (9), `loop.test.mjs` (6 : boucle après séance, « Pour toi », charges écrites), `data.test.mjs` (niveau factuel) |
+| `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` | **76 étapes OK**, aucune erreur JavaScript, relancé après l'ajout de la boucle après séance et de « Pour toi » — dont « L'essentiel + ⚡ + bilan guidé » et « Admin en 3 groupes + assistant du site ». Deux lancements précédents avaient échoué (« Je compose » gardait des exercices ; âge « il y a -1 j ») : corrigés avant ce lancement. |
 | Scripts Playwright de mise en page (créateur, bilan, Admin et ses 8 pages, assistant, « Faite pour toi ») | aucun débordement à 320 / 390 / 768 px après correction (objectif de séance et assistant débordaient à 320 px) |
+
+Accueil avec « 🔁 Ce que ta dernière séance change » vérifié sans débordement à 320 / 390 / 768 px ; le texte « option légère » a été corrigé pour dire ce que l'app propose réellement (repos ou récupération légère).
 
 Non vérifiable ici : la qualité réelle des réponses de Workers AI (réponses simulées dans les tests), le rendu sur de vrais téléphones.
