@@ -797,7 +797,7 @@ await step('séance à deux : code affiché, B rejoint, les chronos avancent ens
   cur = A; await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=play]').first().click(); await A.waitForSelector('#player.open');
   await a.click('#player [data-act=duoOpen]'); await A.waitForSelector('#sheet .duocode'); const code = (await a.text('#sheet .duocode')).trim(); assert.match(code, /^[A-Z2-9]{6}$/);
   await A.keyboard.press('Escape');
-  cur = B; await b.tab('library'); await b.sub('libSub', 'seances'); await b.click('[data-act=newChoose]'); await b.click('#sheet [data-act=duoJoinAsk]'); await B.fill('#sheet input[name=code]', code.toLowerCase()); await b.click('#sheet button.pri');
+  cur = B; await b.tab('library'); await b.sub('libSub', 'seances'); await b.click('[data-act=newChoose]'); await b.click('#sheet [data-act=groupMenu]'); await b.click('#sheet [data-act=groupJoinAsk]'); await B.fill('#sheet input[name=code]', code.toLowerCase()); await b.click('#sheet button.pri'); // le même champ rejoint aussi un ancien code « à deux »
   await B.waitForSelector('#player.open .duobar:has-text("Avec Alice")');
   await A.waitForSelector('#player .duobar:has-text("Avec Bob")', { timeout: 8000 });
   const where = (P) => P.evaluate(() => `${document.querySelector('#player .pl .muted.small')?.textContent.split('·')[0].trim()}|${document.querySelector('#ptimer.rest') ? 'repos' : 'série'}`);
