@@ -609,6 +609,50 @@ await step('8.29 : plusieurs sports, objectifs classés ; n°1 « Performer · V
   await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpPlay]');
   assert.match(await a.text('#cpresult'), /Déplacement/);
 });
+await step('8.29 : horaires précis (voie 18:00–19:30, trajet, bloc 20:00–21:00), renfo placé là où il y a le matériel, objectifs sans hiérarchie, vraies heures', async () => {
+  await A.evaluate(async () => { const st = await import('/state.js'); st.putItem('env', 'e2e-voie', { name: 'Salle de voie E2E', type: 'salle', equipment: ['wall', 'leadwall'] }); st.putItem('env', 'e2e-bloc', { name: 'Salle de bloc E2E', type: 'salle', equipment: ['wall', 'hangboard', 'bar', 'weights', 'mat'] }); });
+  await cpFresh('auto'); await cpTo(1); await a.click('[data-act=cpSport][data-id=climbing_route]');
+  await a.click('[data-act=cpSport2][data-id=climbing_boulder]'); await a.click('[data-act=cpSport2][data-id=conditioning]');
+  await A.selectOption('select[data-change=cpEnv]', 'e2e-voie'); await A.selectOption('select[data-change=cpEnvFor][data-sp=climbing_boulder]', 'e2e-bloc');
+  await A.check('input[data-change=cpUseWin]'); await A.waitForSelector('input[data-change=cpWin]');
+  const tset = async (id, k, v) => { const sel = `input[data-change=cpWin][data-id=${id}][data-k=${k}]`; await A.fill(sel, v); await A.dispatchEvent(sel, 'change'); await A.waitForTimeout(120); };
+  await tset('e2e-voie', 'from', '18:00'); await tset('e2e-voie', 'to', '19:30'); await tset('e2e-bloc', 'from', '20:00'); await tset('e2e-bloc', 'to', '21:00');
+  const t1 = await a.text('#main'); assert.match(t1, /Salle de voie E2E 18:00–19:30 → Salle de bloc E2E 20:00–21:00 · 30 min entre deux/); assert.match(t1, /Temps disponible : 3 h/);
+  await cpTo(2); while (await a.count('.aimrow [data-act=cpAimDel]')) { await A.locator('.aimrow [data-act=cpAimDel]').first().click(); await A.waitForTimeout(60); }
+  await a.click('[data-act=cpAimAdd][data-k="fam:endurance@climbing_route"]');
+  await a.click('[data-act=cpAddFor][data-id=climbing_boulder]'); await a.click('[data-act=cpAimAdd][data-k="fam:force@climbing_boulder"]');
+  await a.click('[data-act=cpAddFor][data-id=conditioning]'); await a.click('[data-act=cpAimAdd][data-k="fam:force@conditioning"]');
+  await a.click('[data-act=cpEqual][data-id=equal]'); assert.match(await a.text('#main'), /Tes objectifs, sans hiérarchie/);
+  await cpTo(3); assert.match(await a.text('#main'), /Renfo » placé à Salle de bloc E2E[\s\S]*poutre/);
+  await cpTo(6); const v = await a.text('#main');
+  assert.match(v, /18:00–18:\d\d/); assert.match(v, /19:30–20:00\s*🚗 Trajet vers Salle de bloc E2E · 30 min/); assert.match(v, /Remise en route/); assert.match(v, /–21:00/);
+  assert.match(v, /\(sans hiérarchie\)/); assert.doesNotMatch(v, /objectif n°/);
+  await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpSave]'); await a.click('#cpresult [data-act=cpSave]'); await A.waitForTimeout(300);
+});
+await step('8.29 : planning — séance planifiée avec son heure (et heure modifiable) ; « Pas faite » après coup retire la séance de l’historique', async () => {
+  const today = await A.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  await A.evaluate(async () => { const st = await import('/state.js'); st.addHistory({ id: 'e2e-oops', sessionId: 'x', sessionName: 'Séance pas vraiment faite', startedAt: Date.now() - 60000, durationSeconds: 60, data: { exercises: [] } }); });
+  await a.tab('home'); await A.evaluate(() => { location.hash = '#/home/cal'; }); await A.waitForSelector(`[data-act=calDay][data-id="${today}"]`);
+  assert.match(await a.text('#main'), /Touche un jour pour planifier une séance \(avec son heure\)/);
+  await a.click(`[data-act=calDay][data-id="${today}"]`); await A.waitForSelector('#sheet form[data-submit=addEvent]');
+  await A.fill('#sheet input[name=time]', '18:30'); await a.click('#sheet form[data-submit=addEvent] button[type=submit]'); await A.waitForTimeout(300);
+  assert.match(await a.text('#sheet'), /Séance pas vraiment faite[\s\S]*Pas faite/);
+  assert.equal(await A.inputValue('#sheet input[data-change=evTime]'), '18:30');
+  await poll(async () => (await a.api('GET', '/api/calendar')).data.events.some((e) => e.time === '18:30'), 12000, 'heure enregistrée sur le serveur');
+  await A.fill('#sheet input[data-change=evTime]', '19:15'); await A.dispatchEvent('#sheet input[data-change=evTime]', 'change');
+  await poll(async () => (await a.api('GET', '/api/calendar')).data.events.some((e) => e.time === '19:15'), 12000, 'heure modifiée');
+  await a.click('#sheet [data-act=notDone][data-id=e2e-oops]'); await a.confirm(); await A.waitForTimeout(300);
+  assert.doesNotMatch(await a.text('#sheet'), /Séance pas vraiment faite/);
+  await poll(async () => !(await a.api('GET', '/api/history')).data.history.some((x) => x.id === 'e2e-oops'), 12000, 'retirée de l’historique sur le serveur');
+  await A.keyboard.press('Escape'); await A.waitForTimeout(150);
+});
+await step('8.29 : silhouette — forme en V choisie → carte « Ma silhouette » (mensurations, séries par muscle), séances prêtes de salle', async () => {
+  await a.tab('profile'); await a.sub('profSub', 'body'); await A.waitForSelector('[data-act=bodySet][data-k=physique][data-v=v]');
+  await a.click('[data-act=bodySet][data-k=physique][data-v=v]'); await A.waitForSelector('text=Ma silhouette');
+  const t = await a.text('#main'); assert.match(t, /Forme en V[\s\S]*Tour d’épaules[\s\S]*Tour de taille[\s\S]*Séries cette semaine[\s\S]*Dos/); assert.match(t, /rien n’est garanti/);
+  assert.match(t, /Silhouette visée : dos, épaules en priorité/);
+  await a.click('[data-act=bodySet][data-k=physique][data-v=v]'); await A.waitForTimeout(150); // on retire le choix pour la suite du parcours
+});
 await step('8.28 : « L’essentiel » puis ⚡ Proposer ma séance ; envies → bilan physique guidé, valeur mesurée, objectif précis proposé', async () => {
   await cpFresh('auto'); await a.click('[data-act=cpSport][data-id=conditioning]'); await a.click('[data-act=cpMin][data-id="45"]');
   assert.match(await a.text('.steps b'), /Étape 1\/6 · L’essentiel/); assert.match(await a.text('#main'), /Tes objectifs/);
@@ -783,7 +827,7 @@ await step('Studio : brouillon invisible, vérifications, publication confirmée
   // V2 : santé des données, maintenance et propositions de code (lecture ; rien n'est appliqué).
   await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=health]'); await C.waitForSelector('text=Santé des données');
   await C.waitForSelector('[data-act=healthReload]'); assert.match(await c.text('main'), /capacités/);
-  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=code]'); await C.waitForSelector('text=L’app ne déploie jamais de code');
+  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=code]'); await C.waitForSelector('text=L’app ne fusionne et ne déploie jamais de code');
 });
 await step('l’admin modifie puis supprime la contribution ; pas d’accès aux données privées', async () => {
   const d = (await c.api('GET', '/api/shared/' + commonId)).data.item; assert.equal(d.canEdit, true);

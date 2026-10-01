@@ -260,7 +260,7 @@ export function vCodeItem() {
 }
 ACT.codeReview = async (el) => {
   const approve = el.dataset.d === 'approve';
-  if (!(await ask(approve ? 'Valider cette proposition ?' : 'Refuser cette proposition ?', { ok: approve ? 'Valider' : 'Refuser', danger: !approve, detail: approve ? 'Elle sera marquée « à déployer à la main ». L’app ne déploie jamais de code.' : '' }))) return;
+  if (!(await ask(approve ? 'Valider cette proposition ?' : 'Refuser cette proposition ?', { ok: approve ? 'Valider' : 'Refuser', danger: !approve, detail: approve ? 'Ensuite tu pourras ouvrir la Pull Request sur GitHub. L’app ne fusionne et ne déploie jamais de code.' : '' }))) return;
   const note = (await askText('Note (facultatif)', { ok: 'Envoyer', cancel: 'Sans note', max: 300 })) || '';
   const id = encodeURIComponent(ST().codeItem.id), done = () => { toast(approve ? 'Validée : prête pour GitHub' : 'Refusée'); ST().codeItem = null; ST().code = null; render(); };
   try { await api('POST', `/api/admin/code/${id}/review`, { decision: el.dataset.d, note }); done(); }

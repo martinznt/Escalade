@@ -41,7 +41,7 @@ const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}${vCalendar()}`;
+  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}<p class="tiny muted pagehelp">Touche un jour pour planifier une séance (avec son heure), voir ce que tu as fait, ou dire qu’une séance n’a pas été faite.</p>${vCalendar()}`;
   return h`${reinstallCard()}${vDash()}`;
 }
 function hero() {

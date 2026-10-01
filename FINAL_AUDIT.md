@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.28.0
+# FINAL_AUDIT — Séances entraînement v8.29.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -1044,3 +1044,16 @@ Détail complet (fonctionnalités, fichiers, migrations — aucune —, fonction
 Accueil avec « 🔁 Ce que ta dernière séance change » vérifié sans débordement à 320 / 390 / 768 px ; le texte « option légère » a été corrigé pour dire ce que l'app propose réellement (repos ou récupération légère).
 
 Non vérifiable ici : la qualité réelle des réponses de Workers AI (réponses simulées dans les tests), le rendu sur de vrais téléphones.
+
+## Évolution 8.29.0 : plusieurs sports et lieux, objectifs classés ou sans hiérarchie, horaires réels, silhouette visée, salle de sport
+
+Détail dans `CHANGELOG.md` (section 8.29.0). Points de sécurité :
+- Heure d'un événement : format `HH:MM` revérifié par le serveur (sinon vide), colonne `event_time` ajoutée par migration ; « Pas faite » passe par la suppression d'historique existante (propriétaire vérifié côté serveur, pas d'IDOR).
+- Propositions de code de l'assistant : fichiers `public/` seulement (jamais le serveur ni le service worker), texte cité unique, motifs dangereux refusés (eval, `new Function`, `<script>`, `innerHTML`, fetch externe, secrets), diff recalculé par le serveur ; validation par un autre admin ou seul admin avec confirmation explicite (journal d'audit) ; Pull Request seulement, jamais de fusion ni de déploiement.
+- Silhouette : aucune promesse ni norme ; les limites (alimentation, génétique, pas de perte de gras localisée) sont écrites et sourcées.
+
+### Vérification 8.29.0 (commandes réellement lancées)
+- `npm run check` : OK.
+- `npm test` : 56 fichiers, sortie 0.
+- `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` : 79 étapes OK, sortie 0 (une première exécution avait échoué sur un texte du Studio devenu obsolète ; texte du test et de la boîte de confirmation mis à jour, puis tout repassé).
+- Mise en page vérifiée au navigateur à 320, 390 et 768 px (créateur avec horaires, objectifs sans hiérarchie, structure finale, profil « Ma silhouette », fiche de mesure, séances prêtes, planning) : aucun débordement horizontal.

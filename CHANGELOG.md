@@ -1,5 +1,34 @@
 # CHANGELOG — Séances entraînement
 
+## 8.29.0 — Plusieurs sports et lieux, objectifs classés ou sans hiérarchie, horaires réels, silhouette visée, salle de sport complète
+
+Base : 8.28.0 (incluse dans cette même Pull Request).
+
+### Créer une séance
+- Plusieurs sports dans une séance, chacun dans son lieu ; trajets comptés.
+- Étape 2 « Tes objectifs » : plusieurs objectifs (familles expliquées, intentions précises, objectifs du profil, ou écrits avec ses mots et compris par l'IA, avec repli par mots-clés), classés ↑ ↓ — ou **⚖️ Sans hiérarchie** (même part de temps, ordre selon l'effort).
+- Étape 3 : moment de chaque objectif (auto, début, milieu, fin). Un n°1 exigeant placé à la fin réorganise toute la séance (échauffement plus long, phases d'avant modérées, doigts ménagés, montée progressive juste avant) ; chaque adaptation est écrite dans « 🧠 Comment la séance s'adapte ».
+- **🕒 Horaires précis** : arrivée et départ par lieu (ex. voie 18:00–19:30, bloc 20:00–21:00). Le temps entre deux lieux devient le trajet, une remise en route est ajoutée après un arrêt, le renfo / gainage / doigts / mobilité vont là où il y a le matériel (et après la grimpe). Chevauchements et heures invalides refusés avec un message.
+- Étape 6 « 📋 Ta structure finale » : chronologie (vraies heures si horaires), lieu, intensité, objectif servi, exercices et « Pourquoi ici ? ». Chaque étape a une phrase d'explication.
+
+### Planning
+- Heure de chaque séance planifiée (modifiable, envoyée au serveur, utilisée dans l'export agenda .ics) ; affichée dans « Prochaines séances ».
+- **✗ Pas faite** après coup : sur une séance enregistrée (retirée de l'historique et des statistiques, après confirmation) ou sur un événement marqué fait.
+
+### Silhouette et salle de sport
+- « Ce que tu aimerais changer » : forme en V, abdos visibles, bras, pectoraux, épaules, jambes, fessiers, corps plus sec, silhouette affinée, posture. Muscles prioritaires dans les séances générées, séries de 8 à 12 et 1–2 min de repos pour la prise de muscle.
+- Nouveaux objectifs « Prendre du muscle » et « Changer ma silhouette » ; petite question sur la silhouette visée ; bilan physique avec les mensurations qui vont avec.
+- Mensurations : tour d'épaules, de poitrine, de bras, de cuisse, de mollet, de hanches, masse grasse (avec protocole). Carte « 🪞 Ma silhouette » : évolution, rapport épaules / taille (suivi, pas une norme), séries par muscle sur 7 jours vs repère 10–20. Sources : Schoenfeld 2017, Vispute 2011 (pas de perte de gras localisée). Rien n'est présenté comme garanti.
+- ~100 exercices de plus (machines de salle une par une, poids libres, cardio machines, course, natation, escalade, mobilité) ; matériel de salle détaillé par groupes.
+- 10 séances prêtes de salle : full body machines, push, pull, jambes, haut, bas, forme en V, abdos, fessiers, cardio aux machines.
+
+### Admin et fiabilité
+- Assistant du site : connaît chaque écran ; propose de petites modifications du code de l'interface (remplacements exacts revérifiés côté serveur, motifs dangereux refusés, diff recalculé), validées par un autre admin (ou seul admin avec confirmation explicite, noté au journal), puis Pull Request GitHub — jamais fusionnée ni déployée par l'app.
+- Bibliothèque et Profil organisables (✏️ « Organiser », masquable dans Affichage).
+- Notifications de mise à jour envoyées par la tâche planifiée du serveur même sans ouvrir l'app ; état de la tâche visible dans l'admin.
+- Toutes les indications « Profil › … » vérifiées par un test automatique (24 fausses corrigées).
+- Santé des données : plus d'alerte injustifiée.
+
 ## 8.28.0 — Simple mais précis : l'essentiel d'abord, un bilan physique selon tes objectifs, un niveau de séance factuel
 
 Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures relues écran par écran) : `docs/AUDIT_8_28.md` (19 défauts relevés). Plan du niveau factuel : `docs/PLAN_NIVEAU_SEANCE.md`.

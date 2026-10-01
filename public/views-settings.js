@@ -47,7 +47,7 @@ export function vSettings() {
   const subs = S.user.guest ? SUBS.filter(([k]) => k !== 'sync' && !ADMIN_PARENT[k] && k !== 'admin') : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
   const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant), content: adminOnly(vAdminContent), look: adminOnly(vAdminLook), changes: adminOnly(vAdminChanges), members: adminOnly(vAdminProposals), bugs: adminOnly(vAdminBugs), users: adminOnly(vAdminUsers), push: adminOnly(vAdminPush), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
-  if (sub === 'main') return h`<h1>Paramètres</h1>${views.main()}`;
+  if (sub === 'main') return h`<h1>Paramètres</h1><p class="tiny muted pagehelp">Ton compte, l’affichage, les séances, les notifications, tes données et l’aide.</p>${views.main()}`;
   const ic = MENU.find(([k]) => k === sub)?.[1];
   if (ADMIN_PARENT[sub]) { const [pk, pl] = ADMIN_PARENT[sub]; return h`${subHead('setSub', pk, pl, ADMIN_TITLE[sub] || sub)}${views[sub]()}`; }
   return h`${subHead('setSub', 'main', 'Paramètres', `${ic ? ic + ' ' : ''}${subs.find(([k]) => k === sub)[1]}`)}${views[sub]()}`;
