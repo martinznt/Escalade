@@ -103,7 +103,7 @@ await step('fiche de profil (tout sur une page) : sports et lieu, puis visite gu
   await a.click('[data-act=setupThanks]'); await A.waitForSelector('#tour .tour-bubble');
   assert.match(await a.text('#tour .tour-step'), /^1 \/ \d+$/);
   for (let k = 0; k < 3; k++) await a.click('#tour [data-act=tourNext]');
-  await A.waitForFunction(() => location.hash.startsWith('#/library/generate'), null, { timeout: 5000 }); // la visite va elle-même sur la page
+  await A.waitForFunction(() => location.hash.startsWith('#/progress'), null, { timeout: 5000 }); // la visite va elle-même sur la page
   await A.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
   const spot = await A.evaluate(() => { const r = document.querySelector('#tour .tour-spot').getBoundingClientRect(); return r.width > 0 && r.height > 0; });
   assert.ok(spot, 'élément mis en lumière');
@@ -652,6 +652,20 @@ await step('8.29 : silhouette — forme en V choisie → carte « Ma silhouette 
   const t = await a.text('#main'); assert.match(t, /Forme en V[\s\S]*Tour d’épaules[\s\S]*Tour de taille[\s\S]*Séries cette semaine[\s\S]*Dos/); assert.match(t, /rien n’est garanti/);
   assert.match(t, /Silhouette visée : dos, épaules en priorité/);
   await a.click('[data-act=bodySet][data-k=physique][data-v=v]'); await A.waitForTimeout(150); // on retire le choix pour la suite du parcours
+});
+await step('8.30 : visite de la page (reste sur la page, chaque partie expliquée) ; carnet par sport et niveau ; calisthenics', async () => {
+  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('[data-act=catView]');
+  if (await a.count('[data-act=catEq].on')) await a.click('[data-act=catEq]'); // tout le carnet, même sans le matériel
+  const t = await a.text('#main'); assert.match(t, /🤸 Calisthenics[\s\S]*🌱 Débutant[\s\S]*🌿 Intermédiaire[\s\S]*🌳 Avancé/); assert.match(t, /Vers le muscle-up/);
+  await a.click('[data-act=catF][data-k=level][data-v="2"]'); const t2 = await a.text('#main');
+  assert.doesNotMatch(t2, /🌱 Débutant ·/); assert.match(t2, /Bloc à la limite/); await a.click('[data-act=catF][data-k=level][data-v="2"]');
+  await a.click('[data-act=pageTour]'); await A.waitForSelector('#tour .tour-bubble'); assert.match(await a.text('#tour'), /Le carnet de séances/);
+  const total = Number((await a.text('#tour .tour-step')).split('/')[1]); assert.ok(total >= 4, `${total} étapes`);
+  for (let k = 1; k < total; k++) await a.click('#tour [data-act=tourNext]');
+  assert.match(await a.text('#tour'), /Les onglets[\s\S]*Bibliothèque/);
+  await a.click('#tour [data-act=tourEnd]'); await A.waitForSelector('#tour', { state: 'detached' });
+  assert.match(await A.evaluate(() => location.hash), /#\/library\/catalog/, 'la visite de la page reste sur la page');
+  await a.click('[data-act=catEq]');
 });
 await step('8.28 : « L’essentiel » puis ⚡ Proposer ma séance ; envies → bilan physique guidé, valeur mesurée, objectif précis proposé', async () => {
   await cpFresh('auto'); await a.click('[data-act=cpSport][data-id=conditioning]'); await a.click('[data-act=cpMin][data-id="45"]');

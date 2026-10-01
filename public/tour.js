@@ -6,21 +6,21 @@ import { S, ACT, go } from './state.js';
 
 // [onglet, sous-page, sélecteur de l'élément à montrer, titre, texte]
 const STEPS = [
-  ['home', 'dash', '.hero', '👋 Bienvenue !', 'Voici ton accueil : ta semaine en un coup d’œil. On fait le tour ensemble en 30 secondes.'],
+  ['home', 'dash', '.hero', '👋 Bienvenue !', 'Voici ton accueil : ta semaine en un coup d’œil. On fait le tour des 5 onglets ensemble, en une minute.'],
   ['home', 'dash', '.quick .qa.pri', '🎯 Une séance pour toi', 'Touche ici : l’app prépare une séance adaptée à ton niveau, ton temps et ton matériel.'],
-  ['home', 'dash', '.quick .qa:nth-child(2)', '📚 Tes séances', 'Retrouve, lance ou modifie les séances que tu as enregistrées.'],
-  ['library', 'generate', '.gen .chips.big', '🎯 Deux choix, c’est tout', 'Choisis ton sport et combien de temps tu as…'],
-  ['library', 'generate', '[data-act=genPlan]', '👀 Aperçu avant de commencer', '…puis l’app te montre ce qu’elle prévoit. Tu peux ajuster, puis lancer la séance ▶.'],
-  ['progress', 'summary', '.kpis, .card.hero', '📈 Tes progrès', 'Tes chiffres et tes records apparaissent ici, comparés uniquement à toi-même.'],
-  ['profile', 'home', '.tiles', '👤 Ton profil', 'Tout ce que l’app sait de toi : sports, mesures, objectifs, matériel. Touche une tuile pour la modifier.'],
-  ['settings', 'display', '.palette', '🎨 À ton image', 'Change les couleurs, le thème ou la taille du texte. Ça suit ton compte sur tous tes appareils.'],
-  ['settings', 'help', '[data-act=helpTour]', '🧭 C’est parti !', 'Tu pourras relancer cette visite quand tu veux, ici. Bon entraînement 💪'],
+  ['home', 'dash', '.pagetour', '🧭 Une visite sur chaque page', 'Sur chaque écran, ce bouton t’explique la page : chaque partie, ce qu’il y a dedans et à quoi ça sert.'],
+  ['progress', 'summary', '#main h1', '📈 Progrès', 'Tes chiffres, ta régularité, tes records et ton journal, comparés uniquement à toi-même.'],
+  ['library', 'home', '#main .setmenu', '📚 Bibliothèque', 'Tes séances enregistrées, « Créer une séance » (l’app te guide), le carnet de séances prêtes par niveau, et tous les exercices.'],
+  ['library', 'catalog', '#main h1', '📖 Le carnet de séances', 'Pas le temps de créer ? Des séances toutes prêtes pour chaque sport, de débutant à avancé.'],
+  ['profile', 'home', '#main', '👤 Ton profil', 'Tout ce que l’app sait de toi : corps, sports, lieux et matériel, objectifs, mesures. Plus il est complet, plus tes séances sont justes.'],
+  ['settings', 'main', '#main .setmenu', '⚙️ Paramètres', 'Affichage, déroulé des séances, notifications, tes données et l’aide.'],
+  ['settings', 'help', '[data-act=helpTour]', '🧭 C’est parti !', 'Tu pourras relancer cette visite ici, et la visite de chaque page avec le bouton 🧭 en haut. Bon entraînement 💪'],
 ];
-const T = { i: -1, onEnd: null, raf: 0, steps: STEPS };
+const T = { i: -1, onEnd: null, raf: 0, steps: STEPS, stay: false };
 
 /** steps : liste [onglet, sous-page, sélecteur (ou '' pour une bulle centrée), titre, texte] ; la visite complète par défaut. */
-export function startTour({ onEnd, steps } = {}) {
-  T.onEnd = onEnd || null; T.steps = steps?.length ? steps : STEPS;
+export function startTour({ onEnd, steps, stay = false } = {}) {
+  T.onEnd = onEnd || null; T.steps = steps?.length ? steps : STEPS; T.stay = !!stay;
   let root = document.getElementById('tour');
   if (!root) { root = document.createElement('div'); root.id = 'tour'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); document.body.appendChild(root); }
   document.body.classList.add('touring');
@@ -76,14 +76,19 @@ function place() {
     const top = below ? Math.min(vh - bh - 16, r.bottom + pad + 14) : Math.max(16, r.top - pad - 14 - bh);
     const left = Math.max(16, Math.min(vw - bw - 16, r.left + r.width / 2 - bw / 2));
     bub.style.cssText = `left:${left}px;top:${top}px;width:${bw}px`;
-    arrow.style.display = ''; arrow.className = 'tour-arrow ' + (below ? 'up' : 'down');
+    // La hauteur réelle n'est connue qu'une fois la largeur posée : la bulle reste toujours entière à l'écran.
+    const realH = bub.offsetHeight || bh, fixed = Math.max(16, Math.min(top, vh - realH - 16));
+    if (fixed !== top) bub.style.top = `${fixed}px`;
+    const covers = fixed !== top && (below ? fixed < r.bottom : fixed + realH > r.top); // la bulle recouvre l'élément : pas de flèche
+    arrow.style.display = covers ? 'none' : ''; arrow.className = 'tour-arrow ' + (below ? 'up' : 'down');
     arrow.style.left = `${Math.max(18, Math.min(bw - 18, r.left + r.width / 2 - left))}px`;
   });
 }
 function end() {
   T.i = -1; document.getElementById('tour')?.remove(); document.body.classList.remove('touring');
   window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); document.removeEventListener('keydown', onKey);
-  go('home', 'dash');
+  if (!T.stay) go('home', 'dash'); // visite d'une page : on reste sur la page
+  T.stay = false;
   const cb = T.onEnd; T.onEnd = null; cb?.();
 }
 ACT.tourNext = () => show(T.i + 1);

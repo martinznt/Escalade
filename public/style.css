@@ -662,3 +662,4 @@ details.fold>input,details.fold>select,details.fold>textarea{width:calc(100% - 3
 .editdock{flex-wrap:wrap}.editdock .btn{flex:1 1 auto}.edlist>*,.edrow>*{min-width:0}
 .editdock{gap:6px}.editdock .btn{padding:8px 10px;font-size:.85rem}
 .winrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}.winrow>b{flex:1 1 100%;min-width:0}.winrow label{display:flex;align-items:center;gap:6px;margin:0}.winrow input[type=time]{width:auto;min-width:0}
+.pagetour{margin:-4px 0 4px}.pagetour .btn{font-size:.8rem;padding:4px 10px}

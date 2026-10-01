@@ -10,6 +10,7 @@ import { normalizeSession, uid } from './shared.js';
 import { maybeMove, maybeClaim } from './move.js';
 import { pendingNews, latestNews, markNewsToured, initNews, missedNews } from './news.js';
 import { startTour } from './tour.js';
+import { pageTourBar } from './pagetour.js';
 import './timer.js';
 import './views-coach.js';
 import { checkBadges } from './views-motiv.js';
@@ -55,7 +56,7 @@ function doRender() {
       <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
   }
   app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
-    <main class="wrap" id="main">${returnBar()}${hintsBar()}${body}</main>
+    <main class="wrap" id="main">${returnBar()}${hintsBar()}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
 }
 /** Apparence liée au compte : la version la plus récente (cet appareil ou le compte) s'applique partout. */
