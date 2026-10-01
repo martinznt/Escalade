@@ -1,5 +1,6 @@
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
+import { personalFit } from './fit.js';
 import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, subHead, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
 import { linkSheet } from './share.js';
 import './duo.js';
@@ -45,12 +46,14 @@ function metaWhy(m) {
   if (!m?.reasons?.length) return '';
   return h`<details class="how"><summary>🏷 Classée ainsi parce que…</summary><ul>${m.reasons.map((r) => h`<li><b>${r.tag}</b> : ${r.why}</li>`)}</ul><p class="tiny muted">Étiquettes calculées automatiquement à partir des exercices, des phases et de la durée de la séance. Ta copie enregistrée reste indépendante.</p></details>`;
 }
-function levelDetails(lv) {
+function levelDetails(lv, s = null) {
   if (!lv?.criteria) return '';
+  const fit = s ? personalFit(s, ctx()) : null;
   const CAT = { connu: ['✓', 'connu'], estimé: ['≈', 'estimé'], inconnu: ['?', 'inconnu'] };
   return h`<details class="how"><summary>🔎 Pourquoi ce niveau ?</summary><p class="small">${lv.text}</p>
     <ul>${lv.criteria.map((c) => h`<li><span class="tag ${c.cat === 'connu' ? 'ok' : c.cat === 'estimé' ? 'warn' : ''}" title="${CAT[c.cat]?.[1] || ''}">${CAT[c.cat]?.[0] || ''} ${CAT[c.cat]?.[1] || ''}</span> <b>${c.label}</b> : ${c.value} <span class="muted">— ${c.effect}</span></li>`)}</ul>
     ${lv.unknown?.length ? h`<p class="tiny"><b>Ce que l’app ne sait pas :</b></p><ul class="tiny muted">${lv.unknown.slice(0, 6).map((u) => h`<li>${u}</li>`)}</ul>` : ''}
+    ${fit && (fit.lines.length || fit.missing.length) ? h`<p class="tiny"><b>Pour toi :</b></p><ul class="tiny">${fit.lines.map((t) => h`<li>${t}</li>`)}${fit.missing.map((t) => h`<li class="muted">${t}</li>`)}</ul>` : ''}
     <p class="tiny muted">Le niveau conseillé est le prérequis le plus élevé de la séance (fiches d’exercices, cotations écrites) : un seul exercice avancé suffit. Rien n’est rempli au hasard. Jamais un classement de personnes.</p></details>`;
 }
 
@@ -295,7 +298,7 @@ function vEditor(s, mode) {
       <form data-submit="sAdapt" class="row"><label class="grow">Adapter la durée à<span class="unitbox"><input type="number" inputmode="numeric" name="minutes" min="5" max="240" value="${s.context.plannedMin || sessionMinutes(s)}"><em>min</em></span></label><button class="btn" type="submit">⏱ Reconstruire</button></form>
       <label>Notes<textarea data-change="sNotes" maxlength="1200" placeholder="Consignes générales, objectifs, remarques…">${s.notes.find((n) => n.title === 'Notes')?.text || ''}</textarea></label>
       ${s.notes.filter((n) => n.title !== 'Notes').map((n) => h`<details class="how"><summary>${n.title}</summary><pre class="txt">${n.text}</pre></details>`)}
-      ${howBox(s.explain)}${levelDetails(lv)}</div>
+      ${howBox(s.explain)}${levelDetails(lv, s)}</div>
     <div class="card">${s.exercises.length ? blocksOf(s, 'edit') : h`<p class="muted">Aucun exercice. Ajoute-en un.</p>`}
       <div class="row wrapf"><button class="btn pri" data-act="exAdd">＋ Ajouter un exercice</button><button class="btn" data-act="sEquip">🧰 Matériel indisponible</button></div></div>
     ${shared ? '' : h`<div class="row wrapf"><button class="btn" data-act="sDup" data-id="${s.id}">⧉ Dupliquer</button><button class="btn" data-act="sTemplate" data-id="${s.id}">${s.template ? '★ Retirer des modèles' : '☆ Enregistrer comme modèle'}</button><button class="btn" data-act="sArchive" data-id="${s.id}">${s.archived ? '↩ Désarchiver' : '🗄 Archiver'}</button>
@@ -474,7 +477,7 @@ ACT.sPublish = (el) => {
   openSheet(h`<h2 style="margin:0">Partager « ${s.name} »</h2>
     <p class="small">Ce qui sera publié : le titre, l’activité, les exercices et leurs prescriptions, les intentions, le matériel et la durée.</p>
     <p class="small muted">Retiré automatiquement : tes notes de progression personnelles (${notes}), les charges chiffrées issues de tes performances (${loads}), les explications liées à ton profil, ton lieu et ton objectif. Aucun historique ni performance n’est partagé.</p>
-    <p class="small">Niveau estimé : ${levelTag(lv)}</p>${levelDetails(lv)}
+    <p class="small">Niveau estimé : ${levelTag(lv)}</p>${levelDetails(lv, s)}
     <div class="row wrapf"><button class="btn pri" data-act="sPublishDo" data-id="${s.id}" data-scope="common">📚 Bibliothèque commune</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="link">🔗 Lien et QR code</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="public">🌍 Mon profil public</button><button class="btn" data-act="closeSheet">Annuler</button></div>`, { wide: true });
 };
 ACT.sPublishDo = async (el) => {

@@ -37,6 +37,14 @@ Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures
 - **✨ Faite pour toi**, en tête de la séance proposée : ce qui vient réellement de ton profil (durée habituelle, objectif et son moment, lieu et matériel, zones ménagées, niveau pris en compte et sa raison, forme du jour) ; et, si l'app te connaît mal, le lien vers les tests du bilan.
 - Correction : passer de « L'app choisit » à « Je compose moi-même » gardait les exercices choisis avant ; changer qui choisit repart maintenant de zéro (et le dit).
 
+### Après la séance : ce qui change pour la suivante (boucle visible)
+- Sur l'accueil, **🔁 Ce que ta dernière séance change pour la suivante** : uniquement des règles que l'app applique vraiment — doigts ou jambes sollicités intensément (exercices intenses écartés jusqu'à telle heure), gêne aux doigts signalée (travail des doigts écarté 3 jours), séance jugée dure (option légère proposée), exercice réussi en entier (marche suivante), exercice aimé ou à éviter (classement).
+- Correction : « à éviter » / « j'aime » enregistrés par le questionnaire étaient ignorés par les propositions du créateur (vocabulaire différent) ; ils comptent maintenant partout.
+
+### Niveau d'une séance : « Pour toi »
+- Dans « 🔎 Pourquoi ce niveau ? », **Pour toi** : volume et durée comparés à TES séances des 90 derniers jours (à partir de 5), exercices au-dessus de ton niveau dans leur capacité (nommés), charges écrites en % de ton poids de corps (s'il est connu). Jamais comparé à d'autres membres.
+- Les **charges écrites** (« +10 kg ») sont maintenant lues et rapportées telles quelles (« connu »), sans changer le niveau par un seuil arbitraire.
+
 ### Exercices vraiment adaptés
 - **Niveau par capacité** : le niveau pris en compte pour un exercice est celui de sa capacité principale quand il est connu (fort en tirage mais débutant en poussée → tractions avancées et pompes accessibles), au lieu d'une moyenne ; jamais au-dessus du plafond de forme, pas en mode léger.
 
@@ -57,7 +65,7 @@ Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures
 - Brouillon « En cours : étape x/5 » faux → numéro réel ; anciens brouillons (7 étapes) renumérotés.
 
 ### Fichiers
-- **Ajoutés** : `public/assess.js`, `public/views-assistant.js`, `server/assistant.js`, `tests/profile828.test.mjs`, `tests/assistant.test.mjs`, `docs/AUDIT_8_28.md`, `docs/PLAN_NIVEAU_SEANCE.md`.
+- **Ajoutés** : `public/loop.js`, `public/fit.js`, `tests/loop.test.mjs`, `public/assess.js`, `public/views-assistant.js`, `server/assistant.js`, `tests/profile828.test.mjs`, `tests/assistant.test.mjs`, `docs/AUDIT_8_28.md`, `docs/PLAN_NIVEAU_SEANCE.md`.
 - **Modifiés** : `public/estimate.js` (réécrit), `public/views-climbplan.js`, `public/views-profile.js`, `public/views-setup.js`, `public/views-library.js`, `public/views-progress.js`, `public/views-studio.js`, `public/views-settings.js`, `public/content.js`, `public/news.js`, `public/state.js`, `public/generator.js`, `public/phaseplan.js`, `public/climbplan.js`, `public/brain.js`, `public/hints.js`, `public/model.js`, `public/ui.js`, `public/style.css`, `public/i18n.js`, `public/sw.js`, `worker.js`, `tests/e2e.mjs`, `tests/data.test.mjs`, `tests/hints.test.mjs`.
 
 ### Migrations
@@ -65,7 +73,7 @@ Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures
 
 ### Fonctions réutilisées / nouvelles
 - **Réutilisées** : Studio (`csCreate`, `csLoad`, `cleanChange`, `cleanGlobal`, `diffChange`, `currentOf`), `extractJson`, limites de débit, journal d'audit ; `capacityState`, `levelFor`, `candidates`, `proposeForPhase`, `placeObjective`, `toReference`, `levelFromReference`, `availableEquipment`, `putItem` / outbox, `testReminders` (rebranché), `METRICS` (tests existants).
-- **Nouvelles** : `findContext`, `buildAssistant`, `cleanAssistant`, `mergeItems` (server/assistant.js), route `POST /api/admin/assistant` (rôle contenu) ; `vAssistant`, `vAdminLook`, `vAdminChanges`, `vAdminBugs`, `vAdminPush`, `forYou` ; `batteryFor`, `assessment`, `conditionFacts`, `nextStep`, `suggestedGoals`, `guidedTests` (assess.js) ; `exerciseLevel` (generator.js) ; `askText` (ui.js) ; `prefill`, `placeFor`, `freshStructure`, `vBase` (créateur) ; `vBilan` (profil).
+- **Nouvelles** : `nextImpact` (loop.js), `personalFit` (fit.js), `impactCard` ; `findContext`, `buildAssistant`, `cleanAssistant`, `mergeItems` (server/assistant.js), route `POST /api/admin/assistant` (rôle contenu) ; `vAssistant`, `vAdminLook`, `vAdminChanges`, `vAdminBugs`, `vAdminPush`, `forYou` ; `batteryFor`, `assessment`, `conditionFacts`, `nextStep`, `suggestedGoals`, `guidedTests` (assess.js) ; `exerciseLevel` (generator.js) ; `askText` (ui.js) ; `prefill`, `placeFor`, `freshStructure`, `vBase` (créateur) ; `vBilan` (profil).
 
 ### Déploiement / retour arrière
 - Déployer comme d'habitude ; aucune étape de base de données.
@@ -74,7 +82,7 @@ Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures
 ### Limites et risques
 - L'assistant du site utilise le modèle de Workers AI (Llama 3.3 70B par défaut) : moins capable que Claude, il peut mal comprendre ou proposer une modification inutile. C'est pourquoi rien n'est publié sans ta relecture. Testé ici avec des réponses simulées ; sa qualité réelle n'est pas vérifiable dans ce dépôt.
 - Il ne modifie pas encore les séances prêtes, les formats, les cotations ni la mise en page (formats trop complexes pour une proposition fiable) : ces types restent modifiables à la main.
-- Niveau de séance : une charge ajoutée écrite dans un exercice (« +10 kg ») n'est pas encore lue ; seule la cotation l'est.
+- Niveau de séance : une charge écrite est rapportée (et en % du poids si connu) mais ne change pas le niveau conseillé : aucun seuil fiable n'existe sans connaître la personne.
 - Les repères de niveau (tiers) restent des repères indicatifs courants, pas des normes scientifiques par âge ou sexe ; les nouvelles mesures de santé n'en ont pas, volontairement.
 - Le pré-remplissage de l'objectif part de la première envie qui correspond ; il est signalé et modifiable.
 - La comparaison au ressenti des autres membres (bibliothèque commune) n'est **pas** faite : elle demande ta décision (données partagées, même anonymes).

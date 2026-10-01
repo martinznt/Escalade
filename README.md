@@ -62,7 +62,7 @@ dans Cloudflare (vide pour désactiver).
 ```bash
 npm ci             # dépendances exactes (package-lock.json) ; Node 22 ou plus
 npm run check      # syntaxe de tous les fichiers JS + validation JSON
-npm test           # 52 fichiers : unitaires, intégration Worker-D1, sécurité, synchronisation, Studio, V2, bilan, assistant du site, migrations
+npm test           # 53 fichiers : unitaires, intégration Worker-D1, sécurité, synchronisation, Studio, V2, bilan, assistant du site, migrations
 npm run test:e2e   # navigateur réel (Playwright + Chromium) : 2 comptes, admin, Studio, hors ligne, mode invité (73 étapes)
 ```
 

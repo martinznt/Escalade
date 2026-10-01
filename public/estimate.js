@@ -11,7 +11,7 @@
 // Pur JavaScript, sans DOM. Jamais un classement de personnes.
 
 import { byId, LIBRARY } from './library.js';
-import { exKey } from './shared.js';
+import { exKey, parseKg } from './shared.js';
 import { BUILTIN_SYSTEMS, toReference, levelFromReference } from './grading.js';
 
 export const LEVEL_LABEL = { debutant: 'Débutant', intermediaire: 'Intermédiaire', avance: 'Avancé' };
@@ -59,6 +59,7 @@ export function estimateLevel(session) {
 
   let req = 0; const reasons = [], unknown = [], specific = new Set();
   let recognized = 0, sets = 0, high = 0, minutes = 0, timed = 0, maxDiff = 0, maxDiffName = '';
+  const loads = []; // charges écrites dans la séance (« +10 kg ») : un fait, rapporté tel quel
   for (const e of list) {
     const lib = libOf(e), climb = !lib && isClimb(e);
     if (lib) {
@@ -77,6 +78,7 @@ export function estimateLevel(session) {
         req = Math.max(req, ml);
       } else unknown.push(`« ${e.name || 'grimpe'} » : cotation non reconnue (système personnel sans correspondance) — son niveau n’est pas compté.`);
     } else unknown.push(`« ${e.name || 'exercice'} » : absent de la bibliothèque — son niveau n’est pas connu.`);
+    const kg = e.load ? parseKg(e.load) : null; if (kg > 0) loads.push({ name: e.name || lib?.name || 'exercice', kg });
     const s = Number(e.sets) || 0; sets += s;
     if ((e.intensity || lib?.intensity) === 'high') high += s;
     const m = minutesOf(e, lib); if (m != null) { minutes += m; timed++; } else unknown.push(`« ${e.name || 'exercice'} » : séries ou répétitions non renseignées — durée non comptée.`);
@@ -104,11 +106,12 @@ export function estimateLevel(session) {
     { label: 'Volume écrit', value: sets ? `${sets} séries` : 'non renseigné', effect: 'information', cat: sets ? 'connu' : 'inconnu' },
     { label: 'Part des séries intenses', value: sets ? `${Math.round(highShare * 100)} %` : '—', effect: 'information', cat: sets ? 'connu' : 'inconnu' },
     { label: 'Durée', value: declared ? `${declared} min (indiquée)` : timed ? `~${Math.round(minutes)} min${timed < list.length ? ` pour ${timed} exercice(s) sur ${list.length}` : ''}` : 'inconnue', effect: declared ? 'information' : `estimée : ~${REP_SEC} s par répétition, ~${CLIMB_SEC} s par bloc, ${TRANSITION_SEC} s de mise en place par série, repos écrits`, cat: declared ? 'connu' : timed ? 'estimé' : 'inconnu' },
+    ...(loads.length ? [{ label: 'Charges écrites', value: loads.slice(0, 4).map((l) => `${l.name} : ${l.kg} kg`).join(' ; '), effect: 'rapportées telles quelles (leur poids réel dépend de ton poids de corps)', cat: 'connu' }] : []),
     { label: 'Matériel spécifique', value: specific.size ? [...specific].join(', ') : 'aucun', effect: specific.size ? 'demande un équipement particulier' : 'accessible partout', cat: 'connu' },
   ];
   const why = top.length ? `parce que ${top[0].text.replace(/^« /, '« ')}` : 'aucun exercice reconnu ne demande plus';
   return {
-    level, confidence, reasons, criteria, unknown: [...new Set(unknown)], minutes: Math.round(declared || minutes),
+    level, confidence, reasons, loads, criteria, unknown: [...new Set(unknown)], minutes: Math.round(declared || minutes),
     text: `Niveau conseillé : ${LEVEL_LABEL[level].toLowerCase()} — ${why}. Fiabilité ${confidence}${unknown.length ? ` (${unknown.length} point${unknown.length > 1 ? 's' : ''} inconnu${unknown.length > 1 ? 's' : ''})` : ''}. C’est un repère, pas une vérité.`,
   };
 }

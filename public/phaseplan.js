@@ -115,8 +115,8 @@ export function proposeForPhase(phase, ctx = {}, o = {}) {
       if (perfAfter && x.intensity === 'low') { score += 0.2; reasons.push(R('inference', 'Peu exigeant : conserve des ressources pour la phase de performance')); }
       const d = used(x); if (d != null) { score -= 0.4; reasons.push(R('fact', d ? `Déjà fait il y a ${d} jour${d > 1 ? 's' : ''}` : 'Déjà fait aujourd’hui')); }
       const pref = ctx.prefs?.[exKey(x.name)]?.value;
-      if (pref === 'avoid') { score -= 1.5; reasons.push(R('fact', 'Tu as indiqué l’éviter')); }
-      if (pref === 'like') { score += 0.3; reasons.push(R('fact', 'Tu as indiqué l’aimer')); }
+      if (pref === 'evite' || pref === 'avoid') { score -= 1.5; reasons.push(R('fact', 'Tu as indiqué l’éviter')); }
+      if (pref === 'aime' || pref === 'like') { score += 0.3; reasons.push(R('fact', 'Tu as indiqué l’aimer')); }
       // Curseurs de compromis et contraintes de la phase.
       if (tr.volInt > 0 && x.intensity === 'high') { score += 0.2 * tr.volInt; reasons.push(R('fact', 'Tu privilégies l’intensité')); }
       if (tr.volInt < 0 && x.intensity === 'low') { score += 0.2 * -tr.volInt; reasons.push(R('fact', 'Tu privilégies le volume')); }

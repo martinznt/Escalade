@@ -1,5 +1,6 @@
 // views-home.js — Accueil : tableau de bord personnalisable, « Que faire aujourd'hui ? », commandes en langage
 // naturel, calendrier visuel (planifié / réalisé), premier lancement.
+import { nextImpact } from './loop.js';
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk, subHead, menuList } from './ui.js';
 import { sceneSvg, moodLine } from './scene.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings } from './state.js';
@@ -83,6 +84,7 @@ function vDash() {
   const safe = (b) => () => BLOCK_VIEWS[b]();
   return h`${setupCard()}${installCard()}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
+    ${impactCard()}
     <div class="${S.lay?.page === 'home' ? '' : 'home-grid'}">${composePage('home', {
       hero,
       gen: () => h`${tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true)}${whereAmI()}`,
@@ -96,6 +98,14 @@ function vDash() {
       regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'),
     })}</div>`;
 }
+/** Boucle visible : ce que la dernière séance change pour la suivante (règles réellement appliquées, rien d'inventé). */
+function impactCard() {
+  if (S.impactHidden && S.impactHidden === (ctx().history[0]?.id || '')) return '';
+  const r = nextImpact(ctx()); if (!r.items.length) return '';
+  return h`<details class="card flat acc-b" open><summary><b class="small">🔁 Ce que ta dernière séance change pour la suivante</b></summary><ul class="clean tight small">${r.items.map((x) => h`<li>${x.icon} ${x.text}</li>`)}</ul>
+    <div class="row between wrapf"><span class="tiny muted">Calculé depuis « ${r.last.sessionName || 'ta séance'} » et ton questionnaire.</span><button class="btn sm ghost" data-act="impactHide">Masquer</button></div></details>`;
+}
+ACT.impactHide = () => { S.impactHidden = ctx().history[0]?.id || ''; render(); };
 ACT.goLib = () => go('library', 'seances');
 ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
 ACT.topCal = () => { go('home', 'cal'); window.scrollTo(0, 0); };

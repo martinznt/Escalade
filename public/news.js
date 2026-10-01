@@ -147,6 +147,7 @@ export const NEWS = [
     ['library', 'climbplan', '.steps', '⚡ L’essentiel, puis Proposer ma séance', 'Sport, lieu, temps, forme et objectif sur un seul écran, pré-remplis d’après ton profil. « ⚡ Proposer ma séance » : la séance tout de suite, avec « ✨ Faite pour toi ».'],
     ['profile', 'bilan', '#main h1', '🩺 Mon bilan physique', 'Les repères utiles pour TES objectifs, comment faire chaque test, ce que l’app en déduit, et des objectifs précis proposés depuis ta dernière valeur.'],
     ['', '', '', '🔎 Un niveau de séance factuel', 'Le niveau conseillé vient du prérequis le plus exigeant, nommé ; ce qui est connu, estimé ou inconnu est dit.'],
+    ['home', 'dash', '#main', '🔁 Ce que ta séance change pour la suivante', 'Après une séance, l’accueil dit ce qui est adapté pour la prochaine : doigts à reposer, option légère, marche suivante, exercices aimés ou à éviter.'],
     ['', '', '', '💪 Des exercices à ton niveau, capacité par capacité', 'Fort en tirage mais débutant en poussée ? Chaque exercice suit ton niveau dans ce qu’il travaille.'],
   ] },
 ];

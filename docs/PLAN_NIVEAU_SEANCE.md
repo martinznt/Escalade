@@ -1,6 +1,6 @@
 # Plan — rendre factuelle l'analyse du niveau d'une séance
 
-Statut (8.28.0) : **A, B et D faits, sauf la charge relative au poids du corps (le lest écrit n'est pas encore lu — point 4)** (`public/estimate.js` réécrit, tests dans `tests/data.test.mjs`). **C non fait** : comparaison à ton historique et ressenti agrégé des membres (ce dernier attend ta décision : données partagées, même anonymes).
+Statut (8.28.0) : **A, B, D faits** ; charges écrites lues et rapportées (en % du poids si connu, sans seuil arbitraire). **C fait pour toi** (comparaison à TES séances, `public/fit.js`). **Reste** : ressenti agrégé des membres de la bibliothèque commune — attend ta décision (données partagées, même anonymes).
 Code concerné : `public/estimate.js` (`estimateLevel`), utilisé par `generator.js`, `sessionmeta.js`, `views-library.js` (« 🔎 Pourquoi ce niveau ? »), serveur (bibliothèque commune).
 
 ## Problèmes constatés (non factuels aujourd'hui)
