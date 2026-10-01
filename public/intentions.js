@@ -34,7 +34,7 @@ export function intentsFor(activityId, extra = []) {
   const more = extra.filter((x) => x && x.label && (!x.activityId || x.activityId === activityId)).map((x) => ({ id: x.id, emoji: x.emoji || '📌', label: x.label, caps: x.caps || {}, custom: x.source || 'perso' }));
   return [...base, ...more];
 }
-export const MUSCLE_GROUPS = [['bras', 'Bras', ['biceps', 'triceps']], ['avantbras', 'Avant-bras et doigts', ['avant_bras_flech', 'avant_bras_ext']], ['epaules', 'Épaules', ['deltoide_ant', 'deltoide_post', 'coiffe']],
+export const MUSCLE_GROUPS = [['bras', 'Bras', ['biceps', 'triceps']], ['avantbras', 'Avant-bras et doigts', ['avant_bras_flech', 'avant_bras_ext']], ['epaules', 'Épaules', ['deltoide_ant', 'deltoide_lat', 'deltoide_post', 'coiffe']],
   ['dos', 'Dos', ['grand_dorsal', 'trapezes', 'rhomboides']], ['pecs', 'Pectoraux', ['pectoraux', 'grand_dentele']], ['abdos', 'Abdos', ['grand_droit', 'obliques']], ['lombaires', 'Lombaires', ['lombaires']],
   ['fessiers', 'Fessiers', ['grand_fessier', 'moyen_fessier']], ['cuisses', 'Cuisses', ['quadriceps', 'ischios', 'adducteurs']], ['mollets', 'Mollets', ['mollets', 'tibial']]];
 /** Groupes de muscles → capacités (d'après le lien muscle → capacité du modèle). */

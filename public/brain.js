@@ -7,7 +7,7 @@
 // Pur JavaScript, sans DOM : testé avec Node (tests/brain.test.mjs).
 
 import { batteryFor, profileInputs, ENVIES, PROTOCOL } from './assess.js';
-import { CAPACITIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, BUILTIN_STYLES, metricTierText, skillCaps } from './model.js';
+import { CAPACITIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, BUILTIN_STYLES, metricTierText, skillCaps, MACHINES } from './model.js';
 import { LIBRARY, byId } from './library.js';
 import { allSystems, toReference, levelFromReference, bestReferenceLevel, LEVEL_WORDS } from './grading.js';
 import { exKey, norm, normalizeHistory } from './shared.js';
@@ -367,6 +367,8 @@ export function availableEquipment(ctx, envId) {
   const set = new Set(env ? env.equipment : []);
   // Profil jamais rempli : on reprend l'ancien réglage escalade (mur par défaut) pour rester prudent.
   if (!env) { const eq = ctx.settings?.equipment || { wall: true }; for (const [k, v] of Object.entries(eq)) if (v) set.add(k); }
+  // « Machines de musculation » (sans détail) = toutes les machines ; on peut aussi cocher machine par machine.
+  if (set.has('machine')) for (const m of MACHINES) set.add(m);
   for (const u of ctx.unavailable || []) set.delete(u);
   return set;
 }

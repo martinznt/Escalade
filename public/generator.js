@@ -320,7 +320,7 @@ function fillBlock(list, minutes) {
 }
 const STRETCH_STATIC = ['cd-hips', 'cd-shoulders', 'cd-forearm', 'mob-hamstrings', 'mob-hips'];
 const STRETCH_DYNAMIC = ['wu-mob-lower', 'wu-mob-upper', 'wu-wrists', 'mob-thoracic', 'mob-ankles', 'mob-shoulders'];
-const MOBILITY = ['mob-hips', 'mob-thoracic', 'mob-shoulders', 'mob-ankles', 'mob-hamstrings'];
+const MOBILITY = [...new Set(['mob-hips', 'mob-thoracic', 'mob-shoulders', 'mob-ankles', 'mob-hamstrings', ...LIBRARY.filter((x) => x.kind === 'mobility' && x.role === 'main').map((x) => x.id)])];
 /** Séance au format choisi : chaque partie est construite pour son temps, dans l'ordre voulu. */
 function generateParts(plan, ctx, eq) {
   const why = [], excluded = [], out = [], used = new Set();

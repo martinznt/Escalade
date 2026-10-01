@@ -6,7 +6,7 @@ import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
 import { uid, normalizeEx, normalizeSession } from './shared.js';
-import { capOptionGroups, CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
+import { capOptionGroups, CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, EQUIPMENT_GROUPS, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
 import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addLevel, moveLevel, removeLevel, renameLevel, setMapping, sortedLevels, gradeSnapshot, maximaSummary, snapshotText, REFERENCE, LEVEL_WORDS } from './grading.js';
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -663,7 +663,9 @@ function envForm(e) {
     body = h`<label>Région ou ville <span class="tiny muted">(facultatif)</span><input name="city" maxlength="60" value="${e?.city || ''}" placeholder="Ex. Fontainebleau, Céüse"></label>
       <label>Cotation utilisée<select name="gradeSys"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select></label>
       <label>Secteurs <span class="tiny muted">(un par ligne : tu les choisiras en notant tes blocs et tes voies)</span><textarea name="sectors" rows="4" placeholder="Ex. Bas Cuvier&#10;Apremont&#10;Secteur des dalles">${(e?.sectors || []).join('\n')}</textarea></label>`;
-  } else body = h`<label>Matériel disponible</label>${eqChips('eq', Object.keys(EQUIPMENT), eq)}`;
+  } else { const grouped = new Set(EQUIPMENT_GROUPS.flatMap(([, k]) => k)), rest = Object.keys(EQUIPMENT).filter((k) => !grouped.has(k));
+    body = h`<label>Matériel disponible</label><p class="tiny muted">« Machines de musculation (toutes) » suffit pour une salle classique ; sinon coche machine par machine.</p>
+      ${EQUIPMENT_GROUPS.map(([t, keys]) => h`<span class="kicker">${t}</span>${eqChips('eq', keys.filter((k) => EQUIPMENT[k]), eq)}`)}${rest.length ? h`<span class="kicker">Autre</span>${eqChips('eq', rest, eq)}` : ''}`; }
   return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle d’escalade' : t === 'falaise' ? 'Nouvelle falaise' : 'Nouveau lieu'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
     ${head}${body}
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${e ? h`<button class="btn danger" type="button" data-act="envDel" data-id="${e.id}">Supprimer</button>` : ''}</div></form>`;

@@ -5,6 +5,8 @@
 // 1 intermédiaire, 2 avancé), needs (matériel requis), risk (zone sensible), flex ([min,max] secondes ajustables).
 // Ces fiches reprennent des principes d'entraînement courants en escalade — voir SOURCES.
 
+import { MORE } from './library-more.js';
+
 export const EQUIPMENT = {
   wall: 'Mur / salle d’escalade',
   hangboard: 'Poutre de suspension',
@@ -85,7 +87,7 @@ E('wall-traverse-reglettes', 'Traversée sur réglettes larges', '↔️', { kin
 E('finger-extensions', 'Extensions de doigts (élastique)', '🤚', { kind: 'prehab', group: 'doigts', focus: ['reglette', 'equilibre', 'perf'], needs: ['band'], muscles: ['extenseurs des doigts', 'avant-bras'],
   mode: 'reps', sets: 2, repsMin: 15, repsMax: 20, rest: 45, cues: ['Ouvre la main contre l’élastique, lentement.'], why: 'Équilibre les fléchisseurs très sollicités en escalade.', src: 'Prévention classique' });
 E('wrist-extension', 'Extension de poignet lestée', '🤲', { kind: 'prehab', group: 'doigts', focus: ['reglette', 'equilibre', 'devers'], needs: ['weights'], muscles: ['extenseurs du poignet', 'avant-bras'],
-  mode: 'reps', sets: 3, repsMin: 12, repsMax: 15, load: 'Léger (1–3 kg)', rest: 45, cues: ['Avant-bras posé, paume vers le bas.', 'Monte et descends lentement.'], why: 'Protège les coudes et équilibre l’avant-bras.', src: 'Prévention classique' });
+  mode: 'reps', sets: 3, repsMin: 12, repsMax: 15, load: 'Très léger (une petite haltère ou une bouteille d’eau)', rest: 45, cues: ['Avant-bras posé, paume vers le bas.', 'Monte et descends lentement.'], why: 'Protège les coudes et équilibre l’avant-bras.', src: 'Prévention classique' });
 
 /* ───────────── DÉVERS / TIRAGE ───────────── */
 E('dev-power-blocs', 'Blocs de puissance en dévers', '💥', { kind: 'power', group: 'tirer', focus: ['devers', 'perf', 'vitesse'], needs: ['wall'], muscles: ['dorsaux', 'biceps', 'gainage', 'doigts'], intensity: 'high', minLevel: 1, risk: 'finger',
@@ -160,7 +162,7 @@ E('squat-loaded', 'Squats lestés', '🏋️', { kind: 'legs', group: 'jambes', 
   mode: 'reps', sets: 4, repsMin: 6, repsMax: 8, rest: 150, load: '+10 à 15 kg',
   cues: ['Poids près du corps, pieds largeur d’épaules.', 'Descends avec contrôle, genoux dans l’axe des pieds.', 'Choisis la charge basse si la technique se dégrade.'], why: 'Force de base des jambes.', src: 'Renforcement classique' });
 E('bulgarian', 'Fentes bulgares', '🦵', { kind: 'legs', group: 'jambes', focus: ['jambes', 'dalle'], needs: [], muscles: ['quadriceps', 'fessiers', 'stabilité'], intensity: 'mod',
-  mode: 'reps', sets: 3, repsMin: 6, repsMax: 10, perSide: true, rest: 120, load: 'Poids du corps (+5 à 10 kg)',
+  mode: 'reps', sets: 3, repsMin: 6, repsMax: 10, perSide: true, rest: 120, load: 'Poids du corps, puis des haltères quand 10 répétitions deviennent faciles',
   cues: ['Pied arrière sur un support stable et bas.', 'Descends verticalement, genou dans l’axe des orteils.', 'Commence sans charge si tu n’es pas stable.'], why: 'Force et équilibre unilatéral.', src: 'Renforcement classique' });
 E('rdl', 'Soulevé de terre roumain', '🏗️', { kind: 'legs', group: 'jambes', focus: ['jambes', 'equilibre'], needs: ['weights'], muscles: ['ischio-jambiers', 'fessiers', 'bas du dos'], intensity: 'mod',
   mode: 'reps', sets: 3, repsMin: 8, repsMax: 10, rest: 120, load: '+10 à 15 kg',
@@ -168,7 +170,7 @@ E('rdl', 'Soulevé de terre roumain', '🏗️', { kind: 'legs', group: 'jambes'
 E('single-leg-rdl', 'Soulevé roumain unipodal', '🦩', { kind: 'legs', group: 'jambes', focus: ['equilibre', 'dalle'], needs: [], muscles: ['ischio-jambiers', 'fessiers', 'stabilité'],
   mode: 'reps', sets: 3, repsMin: 8, repsMax: 8, perSide: true, rest: 60, cues: ['Bascule le buste, jambe libre tendue derrière.', 'Hanches carrées.'], why: 'Équilibre et fessiers.', src: 'Renforcement classique' });
 E('calf-raise', 'Mollets debout', '🦶', { kind: 'legs', group: 'jambes', focus: ['jambes', 'dalle'], needs: [], muscles: ['mollets'],
-  mode: 'reps', sets: 3, repsMin: 12, repsMax: 20, rest: 90, load: 'Poids du corps (+10 à 15 kg)', cues: ['Monte le plus haut possible, pause courte.', 'Descends lentement.'], why: 'Mollets solides = pieds précis sur petites prises.', src: 'Renforcement classique' });
+  mode: 'reps', sets: 3, repsMin: 12, repsMax: 20, rest: 90, load: 'Poids du corps, puis une charge quand 20 répétitions deviennent faciles', cues: ['Monte le plus haut possible, pause courte.', 'Descends lentement.'], why: 'Mollets solides = pieds précis sur petites prises.', src: 'Renforcement classique' });
 E('cossack', 'Cossack squat', '🕺', { kind: 'legs', group: 'jambes', focus: ['jambes', 'dalle', 'equilibre'], needs: [], muscles: ['adducteurs', 'fessiers', 'mobilité des hanches'],
   mode: 'reps', sets: 2, repsMin: 6, repsMax: 6, perSide: true, rest: 60, cues: ['Pieds largement écartés, descends vers une jambe.', 'L’autre jambe reste tendue autant que confortable.'], why: 'Mobilité des hanches utile à l’escalade.', src: 'Mobilité active' });
 E('calf-iso', 'Isométrie mollets', '🧱', { kind: 'legs', group: 'jambes', focus: ['jambes', 'dalle'], needs: [], muscles: ['mollets', 'stabilité de cheville'],
@@ -332,10 +334,10 @@ X('barbell-row', 'Rowing barre', '🚣', { kind: 'pull', group: 'tirer', needs: 
 X('db-row', 'Rowing haltère à un bras', '🚣', { kind: 'pull', group: 'tirer', needs: ['weights'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, perSide: true, rest: 75,
   caps: cp('tirage_horizontal:.9'), prim: ['grand_dorsal', 'rhomboides'], sec: ['biceps'], acts: acts('SC'), pattern: 'rowing', diff: 2,
   cues: ['Main et genou en appui sur un banc, tire le coude vers la hanche.'], why: 'Tirage horizontal unilatéral.', src: 'Musculation classique' });
-X('lat-pulldown', 'Tirage vertical à la poulie', '⬇️', { kind: 'pull', group: 'tirer', needs: ['machine'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 90,
+X('lat-pulldown', 'Tirage vertical à la poulie', '⬇️', { kind: 'pull', group: 'tirer', needs: ['latpulldown'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 90,
   caps: cp('tirage_vertical:.9'), prim: ['grand_dorsal'], sec: ['biceps', 'trapezes'], acts: acts('S'), pattern: 'traction', diff: 2,
   cues: ['Tire la barre vers le haut de la poitrine, épaules basses.'], why: 'Tirage vertical à charge réglable.', src: 'Musculation classique' });
-X('leg-press', 'Presse à cuisses', '🦵', { kind: 'legs', group: 'jambes', needs: ['machine'], mode: 'reps', sets: 3, repsMin: 10, repsMax: 12, rest: 90,
+X('leg-press', 'Presse à cuisses', '🦵', { kind: 'legs', group: 'jambes', needs: ['legpress'], mode: 'reps', sets: 3, repsMin: 10, repsMax: 12, rest: 90,
   caps: cp('force_jambes:.9'), prim: ['quadriceps', 'grand_fessier'], sec: ['adducteurs'], acts: acts('S'), pattern: 'squat', diff: 2,
   cues: ['Bas du dos collé au dossier, amplitude contrôlée.'], why: 'Force des jambes guidée.', src: 'Musculation classique' });
 X('hip-thrust', 'Hip thrust', '🌉', { kind: 'legs', group: 'jambes', needs: ['barbell', 'bench'], mode: 'reps', sets: 3, repsMin: 8, repsMax: 12, rest: 90,
@@ -540,6 +542,8 @@ const ANN = {
   'cd-hips': ['mobilite_hanches:.3', ['grand_fessier'], ['flechisseurs_hanche'], 'BVSCR', 'retour', 1],
   'cd-breath': ['', [], [], 'BVSCRN', 'retour', 1],
 };
+// 8.29 : salle de musculation machine par machine, poids libres, cardio, course, natation, escalade, mobilité.
+for (const [id, name, emoji, o] of MORE) X(id, name, emoji, { ...o, caps: cp(o.caps || ''), acts: acts(o.acts || '') });
 for (const x of L) {
   const a = ANN[x.id];
   if (a) { x.caps = cp(a[0]); x.prim = a[1]; x.sec = a[2]; x.acts = acts(a[3]); x.pattern = a[4]; x.diff = a[5]; }

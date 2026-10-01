@@ -52,6 +52,7 @@ export const CAP_FAMILIES = { force: 'Force', puissance: 'Puissance', gainage: '
 export const MUSCLES = {
   pectoraux: { label: 'Pectoraux', view: 'front', caps: { poussee_horizontale: 1 } },
   deltoide_ant: { label: 'Deltoïde antérieur', view: 'front', caps: { poussee_verticale: 0.8, poussee_horizontale: 0.4 } },
+  deltoide_lat: { label: 'Deltoïde latéral', view: 'front', caps: { poussee_verticale: 0.5, stabilite_epaules: 0.4 } },
   deltoide_post: { label: 'Deltoïde postérieur', view: 'back', caps: { stabilite_epaules: 0.6, tirage_horizontal: 0.5 } },
   biceps: { label: 'Biceps', view: 'front', caps: { tirage_vertical: 0.6, blocage: 0.8 } },
   triceps: { label: 'Triceps', view: 'back', caps: { poussee_horizontale: 0.6, poussee_verticale: 0.6 } },
@@ -79,10 +80,26 @@ export const MUSCLES = {
 export const EQUIPMENT = {
   wall: 'Mur d’escalade', hangboard: 'Poutre de suspension', bar: 'Barre de traction', dips: 'Barres parallèles', weights: 'Haltères / lest',
   band: 'Élastique', rings: 'Anneaux', barbell: 'Barre et disques', kettlebell: 'Kettlebell', bench: 'Banc', pole: 'Espalier / poteau',
-  box: 'Box / marche', rope: 'Corde à sauter', mat: 'Tapis de sol', machine: 'Machines de musculation', pool: 'Bassin de natation',
+  box: 'Box / marche', rope: 'Corde à sauter', mat: 'Tapis de sol', machine: 'Machines de musculation (toutes)', pool: 'Bassin de natation',
   pullbuoy: 'Pull-buoy / planche', track: 'Piste / terrain', hill: 'Côte', treadmill: 'Tapis de course',
   campus: 'Campus board', boardwall: 'Mur à prises connectées (Moon, Kilter, Tension)', spraywall: 'Pan d’entraînement', autobelay: 'Enrouleurs (auto-assureurs)', leadwall: 'Mur de voies en tête', topwall: 'Voies en moulinette',
+  // 8.29 : la salle de musculation, machine par machine (« Machines de musculation » = toutes), et le cardio.
+  rack: 'Rack / cage à squat', ezbar: 'Barre EZ', cable: 'Poulie / vis-à-vis (câbles)', latpulldown: 'Tirage vertical (poulie haute)', seatedrow: 'Tirage horizontal assis (rowing)',
+  legpress: 'Presse à cuisses', hacksquat: 'Hack squat', legext: 'Leg extension', legcurl: 'Leg curl', smith: 'Machine guidée (Smith)', chestpress: 'Développé couché à la machine',
+  pecdeck: 'Pec deck (butterfly)', shoulderpress: 'Développé épaules à la machine', hipmachine: 'Abducteurs / adducteurs', calfmachine: 'Mollets à la machine', abmachine: 'Abdos à la machine',
+  assist: 'Tractions et dips assistés', ghd: 'Chaise romaine (lombaires)', bike: 'Vélo d’appartement', rower: 'Rameur', elliptical: 'Vélo elliptique', stairs: 'Stepper / escalier', skierg: 'SkiErg', airbike: 'Air bike',
 };
+/** Machines de musculation précises : « Machines de musculation » (machine) les donne toutes. */
+export const MACHINES = ['cable', 'latpulldown', 'seatedrow', 'legpress', 'hacksquat', 'legext', 'legcurl', 'smith', 'chestpress', 'pecdeck', 'shoulderpress', 'hipmachine', 'calfmachine', 'abmachine', 'assist'];
+/** Le matériel rangé par familles (choix d'un lieu). */
+export const EQUIPMENT_GROUPS = [
+  ['🧗 Escalade', ['wall', 'leadwall', 'topwall', 'autobelay', 'boardwall', 'spraywall', 'campus', 'hangboard']],
+  ['🏋️ Poids libres', ['weights', 'barbell', 'ezbar', 'rack', 'bench', 'kettlebell']],
+  ['⚙️ Machines de musculation', ['machine', ...MACHINES]],
+  ['❤️ Cardio', ['treadmill', 'bike', 'rower', 'elliptical', 'stairs', 'skierg', 'airbike', 'rope']],
+  ['🤸 Poids du corps et accessoires', ['bar', 'dips', 'rings', 'pole', 'box', 'mat', 'band', 'ghd']],
+  ['🌳 Dehors et piscine', ['track', 'hill', 'pool', 'pullbuoy']],
+];
 /** Espaces d'une salle d'escalade, avec le matériel qu'on y trouve souvent (on coche ce qui existe vraiment). */
 export const GYM_AREAS = {
   bloc: ['🪨', 'Espace bloc', ['wall', 'mat']], voie: ['🧗', 'Mur de voies', ['leadwall', 'topwall', 'autobelay']],
@@ -93,7 +110,7 @@ export const ENV_TYPES = { maison: 'Maison', salle: 'Salle de sport', exterieur:
 // Modèles proposés à la création d'un environnement (l'utilisateur coche ensuite son matériel réel).
 export const ENV_TEMPLATES = {
   falaise: ['wall'],
-  maison: ['mat', 'band'], salle: ['bar', 'dips', 'weights', 'barbell', 'bench', 'kettlebell', 'machine', 'box', 'mat', 'band', 'rope', 'treadmill'],
+  maison: ['mat', 'band'], salle: ['bar', 'dips', 'weights', 'barbell', 'ezbar', 'rack', 'bench', 'kettlebell', 'machine', 'box', 'mat', 'band', 'rope', 'treadmill', 'bike', 'rower', 'elliptical'],
   exterieur: ['track', 'hill'], escalade: ['wall', 'hangboard', 'bar', 'mat', 'band'], piscine: ['pool', 'pullbuoy'], piste: ['track'], autre: [],
 };
 
@@ -188,6 +205,11 @@ export const METRICS = {
   cooper_12: M('Test de 12 minutes (distance)', 'm', 'distance', { endurance_aerobie: 0.9, seuil: 0.4 }, ['running', 'conditioning'], { test: 'Après 10 min d’échauffement, cours (ou marche vite) 12 min à l’allure la plus élevée que tu peux tenir, sur un parcours plat mesuré ou avec une montre. Note la distance. Arrête-toi en cas de douleur ou de malaise.' }),
   tour_taille: M('Tour de taille', 'cm', 'distance', {}, ['conditioning', 'running', 'strength'], { dir: -1, test: 'Debout, à jeun si possible, mètre ruban à mi-distance entre la dernière côte et le haut de la hanche, sans serrer, en fin d’expiration. Même heure à chaque fois.' }),
   mains_dos: M('Mains dans le dos : écart entre les doigts', 'cm', 'distance', { mobilite_epaules: 1 }, ['conditioning', 'climbing_boulder', 'climbing_route', 'swimming'], { dir: -1, test: 'Une main passe par-dessus l’épaule, l’autre par le bas du dos ; rapproche les doigts sans forcer. Mesure l’écart (0 si les doigts se touchent). Note le côté le moins souple.' }),
+  // 8.29 : des tests pour les capacités qui n'en avaient pas (sinon leur niveau ne pouvait venir que d'une déclaration).
+  pince_charge: M('Pince : charge tenue 5 s (bloc de pince)', 'kg', 'load', { pince: 1, force_doigts: 0.3 }, ['climbing_boulder', 'climbing_route', 'conditioning'], { test: 'Bloc de pince (ou haltère tenu par le disque) : pouce d’un côté, doigts de l’autre, bras tendu le long du corps. Charge la plus lourde tenue 5 s, main la plus faible. Sans repère de niveau : elle dépend du poids de corps, elle sert à suivre ta progression.' }),
+  pieds_precis: M('Précision des pieds : pieds posés du premier coup (sur 20)', 'reps', 'reps', { technique_pieds: 1, equilibre: 0.3 }, ['climbing_boulder', 'climbing_route'], { tiers: [12, 17], test: 'Sur une traversée facile, 20 poses de pied : compte celles posées du premier coup, sans bruit ni correction (quelqu’un peut compter pour toi). Repère indicatif.' }),
+  doubles_corde: M('Corde à sauter : doubles sauts d’affilée', 'reps', 'reps', { coordination: 0.8, explosivite: 0.3 }, ['conditioning', 'running', 'climbing_boulder'], { tiers: [5, 30], test: 'Échauffé, compte le plus grand nombre de doubles sauts (la corde passe deux fois par saut) sans erreur. Repère indicatif.' }),
+  cadence_course: M('Cadence en footing facile', 'pas/min', 'other', { technique_course: 0.6 }, ['running'], { test: 'Pendant un footing facile, compte tes pas pendant 30 s et multiplie par 2 (ou lis-la sur ta montre). Sans repère de niveau : elle dépend de ta taille et de ta vitesse, elle sert à suivre ta foulée.' }),
   body_weight: M('Poids du corps', 'kg', 'load', {}, ['strength', 'conditioning', 'running', 'swimming', 'climbing_boulder', 'climbing_route'], { dir: -1 }),
   max_bloc: M('Niveau max en bloc', '', 'grade', { force_doigts: 0.5, technique_escalade: 0.5, puissance_haut: 0.4 }, ['climbing_boulder'], { gradeActivity: 'bloc' }),
   max_voie: M('Niveau max en voie', '', 'grade', { endurance_doigts: 0.6, technique_escalade: 0.6 }, ['climbing_route'], { gradeActivity: 'voie' }),

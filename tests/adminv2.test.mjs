@@ -13,7 +13,9 @@ await ok('santé des données : doublons, relations contradictoires, orphelins, 
     { kind: 'faq', id: 'f1', data: { q: 'Q', a: '' } },
   ]);
   const types = r.issues.map((x) => x.type);
-  for (const t of ['bad-relation', 'duplicate', 'orphan', 'old-structure', 'no-metric']) assert.ok(types.includes(t), t);
+  for (const t of ['bad-relation', 'duplicate', 'orphan', 'old-structure']) assert.ok(types.includes(t), t);
+  assert.ok(!types.includes('no-metric'), '8.29 : chaque capacité a au moins un test mesurable');
+  assert.deepEqual(dataHealth([]).issues, [], 'données intégrées : aucune alerte');
   const bad = r.issues.find((x) => x.type === 'bad-relation' && x.target === 'exercise/g1'); assert.deepEqual(bad.fix.data.caps, { tirage_vertical: 1 });
   assert.equal(r.issues.find((x) => x.target === 'faq/f1').fix.op, 'delete');
   assert.ok(r.checked.exercises > 100);

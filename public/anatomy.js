@@ -11,6 +11,7 @@ const UPPERARM = 'M30,58 C28,64 28,72 30,78 C32,78 34,74 35,70 C35,65 35,60 33,5
 // [muscle, chemin, symétrique ?]
 const FRONT = [
   ['deltoide_ant', 'M44,40 C37,41 31,44 30,51 C31,56 33,58 35,58 C37,52 40,46 45,43 Z', true],
+  ['deltoide_lat', 'M33,44 C30,47 29,51 29,55 C31,57 33,58 34,57 C33,53 33,49 35,45 Z', true],
   ['pectoraux', 'M45,43 C50,41 56,41 59,42 L59,58 C54,61 46,60 40,57 C40,51 42,46 45,43 Z', true],
   ['biceps', UPPERARM, true],
   ['avant_bras_flech', FOREARM, true],
@@ -25,6 +26,7 @@ const FRONT = [
 const BACK = [
   ['trapezes', 'M50,34 C54,32 58,31 60,31 C62,31 66,32 70,34 C73,38 76,40 78,41 L70,46 L66,64 L60,70 L54,64 L50,46 L42,41 C44,40 47,38 50,34 Z', false],
   ['deltoide_post', 'M42,41 C36,42 31,45 30,52 C31,57 33,58 35,58 C37,52 40,47 44,44 Z', true],
+  ['deltoide_lat', 'M33,44 C30,47 29,51 29,55 C31,57 33,58 34,57 C33,53 33,49 35,45 Z', true],
   ['coiffe', 'M44,46 C41,48 40,52 41,55 L47,55 C48,51 47,48 44,46 Z', true],
   ['rhomboides', 'M52,48 L57,50 L57,62 L54,62 Z', true],
   ['grand_dorsal', 'M41,56 C40,66 41,76 44,86 C48,92 53,95 57,96 L57,74 C53,68 47,62 41,56 Z', true],

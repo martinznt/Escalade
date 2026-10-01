@@ -165,7 +165,7 @@ function cues(ex, sess) {
 }
 function vSet(p) {
   const ex = cur(), t = ex.mode === 'time', working = p.phase === 'work';
-  const usesLoad = p.load > 0 || /kg|lest/i.test(ex.load) || p.hint?.load > 0;
+  const usesLoad = p.load > 0 || !!String(ex.load || '').trim() || p.hint?.load > 0;
   const next = p.s.exercises[p.i + 1];
   return h`<div class="row"><div class="figbox">${raw(figure(ex, { size: 84 }))}</div><div class="grow">${ex.part ? h`<div class="tiny acc-t">${ex.part}</div>` : ''}<h1 style="margin:0">${ex.emoji} ${ex.name}</h1><div class="muted">Série ${p.set + 1} / ${ex.sets}${ex.perSide ? ` · côté ${p.side + 1} / 2` : ''}</div></div></div>
     <div class="center"><b class="presc">${t ? (ex.secMin >= 120 ? fmtDur(ex.secMin) + (ex.secMax !== ex.secMin ? ' à ' + fmtDur(ex.secMax) : '') : rng(ex.secMin, ex.secMax) + ' s') : rng(ex.repsMin, ex.repsMax) + (ex.unit ? ' ' + ex.unit : ' rép.')}</b>${ex.load ? h`<div class="muted">${ex.load}</div>` : ''}${p.hint ? h`<div class="small acc-t">Dernière fois : ${p.hint.last}${p.hint.next ? ' · ' + p.hint.next : ''}</div>` : ''}${ex.rest ? h`<div class="tiny muted">Repos prévu : ${fmtDur(ex.rest)}</div>` : ''}</div>
