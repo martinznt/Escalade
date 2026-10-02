@@ -25,6 +25,7 @@ import { capMastery, transfers, relationMap, estimatedFormats, MASTERY } from '.
 import { strategies } from './strategy.js';
 import { assessment, conditionFacts, suggestedGoals, guidedTests, ENVIES, ZONE_WORD } from './assess.js';
 import { levelFor } from './generator.js';
+import { COMPOSITION, MEASURES, lastValue, evolution, indices, checkWeighIn } from './bodycomp.js';
 import { PHYSIQUE, PHYSIQUE_SOURCES, physiqueGroups, physiqueMeasures, physiqueTrack, weeklySets, SETS_RANGE } from './physique.js';
 
 const SUBS = [['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
@@ -346,9 +347,51 @@ function vBody() {
     <section class="card"><div class="row between"><h3>⚖️ Mon poids</h3><button class="btn sm pri" data-act="weighIn">＋ Pesée</button></div>
       ${weights.length >= 2 ? lineChart(weights.slice(-30).map((p) => ({ v: p.value, t: p.date })), 'kg') : ''}
       ${weights.length ? h`<p class="small">Dernière pesée : <b>${weights.at(-1).value} kg</b> (${fmtDay(weights.at(-1).date)})${weights.length >= 2 ? h` · ${(() => { const d = Math.round((weights.at(-1).value - weights[0].value) * 10) / 10; return d > 0 ? `+${d} kg` : `${d} kg`; })()} depuis le ${fmtDay(weights[0].date)}` : ''}</p>` : h`<p class="small muted">Note ton poids de temps en temps (même heure, même conditions) pour voir la tendance.</p>`}</section>
+    ${compositionCard()}
     ${silhouetteCard(b, goals)}
     <section class="card"><h3>Ce que ça change dans tes séances</h3>${adj.reasons.length ? h`<ul class="small">${adj.reasons.map((r) => h`<li>${r}</li>`)}</ul>` : h`<p class="small muted">Rien de spécial : les séances suivent ton niveau et tes objectifs.</p>`}${sourcesLine(adj.sources)}</section>`;
 }
+/** Composition et mensurations : dernières valeurs, évolution, indices calculés (avec leurs limites), saisie en une fois. */
+function compositionCard() {
+  const c = ctx(), num = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
+  const row = (id) => { const m = c.metrics[id], l = lastValue(c, id); if (!m) return ''; const e = evolution(c, id);
+    return h`<button class="setrow" data-act="mHistory" data-id="${id}"><span class="grow"><b>${m.label}</b><small>${l ? `${num(l.value)} ${m.unit}${l.date ? ` · ${fmtDay(l.date)}` : ' · profil'}${e?.delta ? ` · ${e.delta > 0 ? '+' : ''}${num(e.delta)} ${m.unit} depuis le ${fmtDay(e.since)}` : ''}` : 'pas encore mesuré'}</small></span><span class="chev">›</span></button>`; };
+  const known = (l) => l.filter((id) => lastValue(c, id));
+  const ix = indices(c);
+  return h`<section class="card stack"><h3 style="margin:0">📊 Composition et mensurations</h3>
+    <p class="tiny muted">Pour suivre précisément ton corps : tout ce que donne une balance connectée, et tes mensurations, en une seule saisie. Toujours le même appareil, le matin, à jeun.</p>
+    <div class="grid2"><button class="btn pri" data-act="weighFull">⚖️ Pesée complète</button><button class="btn" data-act="measureAll">📏 Mensurations</button></div>
+    ${known(COMPOSITION).length ? h`<span class="kicker">Composition</span><div class="setmenu">${known(COMPOSITION).map(row)}</div>` : ''}
+    ${known(MEASURES).length ? h`<span class="kicker">Mensurations</span><div class="setmenu">${known(MEASURES).map(row)}</div>` : ''}
+    ${ix.length ? h`<span class="kicker">Calculé à partir de tes mesures</span><div class="stack tight">${ix.map((x) => h`<details class="how mini"><summary><b>${x.label}</b> : ${x.text}</summary><p class="tiny">${x.help}</p></details>`)}</div><p class="tiny muted">Des repères pour suivre ta progression, pas un diagnostic.</p>` : h`<p class="tiny muted">Note ta taille et ton poids (et si possible ta masse grasse) : l’app calcule ton IMC, ta masse maigre, ton indice de masse maigre et tes rapports de mensurations.</p>`}</section>`;
+}
+const MFIELD = (id, extra = '') => { const m = ctx().metrics[id], l = lastValue(ctx(), id); return m ? h`<label class="small">${m.label}<span class="unitbox"><input type="number" inputmode="decimal" step="any" name="${id}" placeholder="${l ? String(l.value).replace('.', ',') : ''}" ${raw(extra)}><em>${m.unit}</em></span></label>` : ''; };
+ACT.weighFull = () => openSheet(h`<form class="stack" data-submit="bodySaveMany" data-kind="composition"><h2 style="margin:0">⚖️ Pesée complète</h2>
+  <p class="tiny muted">Remplis seulement ce que ta balance (ou ta mesure) donne. Le chiffre gris est ta dernière valeur.</p>
+  <div class="grid2">${COMPOSITION.map((id) => MFIELD(id))}</div>
+  <label class="small">Appareil <span class="tiny muted">(facultatif, pour comparer ce qui est comparable)</span><input name="device" maxlength="60" placeholder="Ex. balance de la salle, Withings…"></label>
+  <button class="btn pri big">Enregistrer</button></form>`, { wide: true });
+ACT.measureAll = () => openSheet(h`<form class="stack" data-submit="bodySaveMany" data-kind="measures"><h2 style="margin:0">📏 Mensurations</h2>
+  <p class="tiny muted">Mètre ruban souple, sans serrer, en fin d’expiration. Remplis ce que tu veux ; touche ❓ pour savoir où mesurer.</p>
+  <div class="stack tight">${MEASURES.map((id) => { const m = ctx().metrics[id]; return m ? h`<div>${MFIELD(id)}${m.test ? h`<details class="how mini"><summary class="tiny">❓ Où mesurer</summary><p class="tiny">${m.test}</p></details>` : ''}</div>` : ''; })}</div>
+  <button class="btn pri big">Enregistrer</button></form>`, { wide: true });
+SUBMIT.bodySaveMany = (f) => {
+  const d = Object.fromEntries(new FormData(f)), ids = (f.dataset.kind === 'composition' ? COMPOSITION : MEASURES).filter((id) => String(d[id] ?? '').trim() !== '');
+  if (!ids.length) return toast('Remplis au moins une valeur.');
+  const errs = f.dataset.kind === 'composition' ? checkWeighIn(d) : ids.filter((id) => !(Number(String(d[id]).replace(',', '.')) > 0)).map((id) => `${ctx().metrics[id].label} : valeur invalide.`);
+  if (errs.length) return toast(errs[0], 4000, 'bad');
+  const now = Date.now(), day = new Date().toISOString().slice(0, 10), note = String(d.device || '').trim().slice(0, 60);
+  for (const id of ids) { const m = ctx().metrics[id]; putItem('perf', `bc-${id}-${day}`, { metricId: id, value: Math.round(Number(String(d[id]).replace(',', '.')) * 100) / 100, unit: m.unit, date: now, source: 'measured', note: note || (f.dataset.kind === 'composition' ? 'Pesée complète' : 'Mensurations') }); }
+  if (ids.includes('body_weight')) putItem('config', 'body', { ...(item('config', 'body') || {}), weight: Number(String(d.body_weight).replace(',', '.')) });
+  if (ids.includes('taille_corps')) putItem('config', 'body', { ...(item('config', 'body') || {}), height: Number(String(d.taille_corps).replace(',', '.')) });
+  closeSheet(); toast(`${ids.length} mesure${ids.length > 1 ? 's' : ''} enregistrée${ids.length > 1 ? 's' : ''}`); render();
+};
+ACT.mHistory = (el) => { const c = ctx(), id = el.dataset.id, m = c.metrics[id], e = evolution(c, id), l = lastValue(c, id); if (!m) return;
+  const list = c.perfs.filter((p) => p.metricId === id && !p.unknown && Number.isFinite(Number(p.value))).sort((a, b) => b.date - a.date).slice(0, 20);
+  openSheet(h`<div class="stack"><h2 style="margin:0">${m.label}</h2>${e ? lineChart(e.points, m.unit) : ''}
+    ${l ? h`<p class="small">Dernière : <b>${String(l.value).replace('.', ',')} ${m.unit}</b>${e ? ` · ${e.delta > 0 ? '+' : ''}${String(e.delta).replace('.', ',')} ${m.unit} en ${e.n} mesures` : ''}</p>` : ''}
+    ${list.length ? h`<div class="setmenu">${list.map((p) => h`<button class="setrow" data-act="perfEdit" data-id="${p.id}"><span class="grow"><b>${String(p.value).replace('.', ',')} ${m.unit}</b><small>${fmtDay(p.date)}${p.note ? ' · ' + p.note : ''}</small></span><span class="chev">✏️</span></button>`)}</div>` : ''}
+    ${m.test ? h`<p class="tiny muted">Comment mesurer : ${m.test}</p>` : ''}<button class="btn pri" data-act="perfAdd" data-id="${id}">＋ Nouvelle mesure</button></div>`, { wide: true }); };
 /** Silhouette visée : ce que chaque choix veut dire, mensurations (avec évolution), séries de la semaine par muscle. */
 export function silhouetteCard(b = item('config', 'body') || {}, goals = item('config', 'main')?.goals || []) {
   const ch = (b.physique || []).filter((k) => PHYSIQUE[k]), muscle = goals.includes('muscle') || goals.includes('physique');
