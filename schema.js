@@ -20,6 +20,8 @@ export const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS idx_push_user ON push_subs(user_id)",
   "CREATE TABLE IF NOT EXISTS duo_rooms (code TEXT PRIMARY KEY, owner_id TEXT NOT NULL, members_json TEXT NOT NULL, session_json TEXT NOT NULL, state_json TEXT NOT NULL, v INTEGER NOT NULL DEFAULT 1, by_id TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
   "CREATE INDEX IF NOT EXISTS idx_duo_exp ON duo_rooms(expires_at)",
+  "CREATE TABLE IF NOT EXISTS group_rooms (code TEXT PRIMARY KEY, owner_id TEXT NOT NULL, members_json TEXT NOT NULL, session_json TEXT NOT NULL, config_json TEXT NOT NULL DEFAULT '{}', state_json TEXT NOT NULL, v INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS idx_group_exp ON group_rooms(expires_at)",
   "CREATE TABLE IF NOT EXISTS global_content (kind TEXT NOT NULL, id TEXT NOT NULL, data_json TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, updated_by TEXT, PRIMARY KEY(kind, id))",
   // Intentions communes (ajoutées par un administrateur, visibles par tous) et propositions des utilisateurs.
   "CREATE TABLE IF NOT EXISTS community_intents (id TEXT PRIMARY KEY, activity TEXT NOT NULL DEFAULT '', label TEXT NOT NULL, emoji TEXT NOT NULL DEFAULT '', caps_json TEXT NOT NULL DEFAULT '{}', created_by TEXT, created_at INTEGER NOT NULL)",
@@ -54,11 +56,20 @@ export const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, at INTEGER NOT NULL, actor_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL DEFAULT '', target_id TEXT NOT NULL DEFAULT '', change_set_id TEXT, before_json TEXT, after_json TEXT, checks_json TEXT)",
   "CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_events(at)",
   // V2 : propositions de code (diff, impact, tests déclarés, validation). JAMAIS appliquées ni déployées par l'app.
+  // 8.30 : abonnement agenda (lien secret). Seule l'empreinte SHA-256 du jeton est gardée ; un jeton par compte.
+  // 8.30 : encouragements entre partenaires (abonnés l'un à l'autre, acceptés des deux côtés) : messages tout faits uniquement.
+  "CREATE TABLE IF NOT EXISTS cheers (id TEXT PRIMARY KEY, from_id TEXT NOT NULL, to_id TEXT NOT NULL, msg TEXT NOT NULL, created_at INTEGER NOT NULL, seen INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(from_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(to_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_cheers_to ON cheers(to_id, created_at)",
+  // 8.30 : idées publiées par les administrateurs (texte écrit par eux, jamais le nom de qui a proposé) et votes.
+  "CREATE TABLE IF NOT EXISTS ideas (id TEXT PRIMARY KEY, title TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS idea_votes (idea_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(idea_id, user_id), FOREIGN KEY(idea_id) REFERENCES ideas(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE TABLE IF NOT EXISTS ical_feeds (user_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE TABLE IF NOT EXISTS code_proposals (id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', diff TEXT NOT NULL DEFAULT '', impact_json TEXT NOT NULL DEFAULT '{}', tests TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft', author_id TEXT, reviewer_id TEXT, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, reviewed_at INTEGER)",
 ];
 // Colonnes ajoutées aux tables existantes (migration idempotente : ajoutées seulement si absentes).
 export const ADD_COLUMNS = [
   ['users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0'],
+  ['calendar_events', 'event_time', "TEXT NOT NULL DEFAULT ''"], // heure prévue « HH:MM » (vide = pas d'heure)
   ['users', 'admin_since', 'INTEGER'],
   ['users', 'last_seen', 'INTEGER'], // dernière visite (compte connecté), pour la liste des comptes de l'admin
   // V2 : rôles d'administration (liste séparée par des virgules). Vide = super-administrateur (compatibilité : tout admin existant).
@@ -70,4 +81,9 @@ export const ADD_COLUMNS = [
   ['push_subs', 'types', "TEXT NOT NULL DEFAULT '[\"reminder\",\"update\",\"reply\",\"admin\"]'"],
   ['push_subs', 'pending', "TEXT NOT NULL DEFAULT ''"],
   ['push_subs', 'silent', 'INTEGER NOT NULL DEFAULT 0'],
+  // 8.29 : propositions de code de l'assistant (remplacements exacts vérifiés) et lien de la Pull Request GitHub.
+  ['code_proposals', 'edits_json', "TEXT NOT NULL DEFAULT ''"],
+  ['code_proposals', 'pr_url', "TEXT NOT NULL DEFAULT ''"],
+  // 8.30 : infos d'une séance prévue (séance à préparer, événement important, durée, sport, lieu, légère).
+  ['calendar_events', 'meta_json', "TEXT NOT NULL DEFAULT ''"],
 ];

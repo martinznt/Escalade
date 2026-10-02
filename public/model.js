@@ -52,6 +52,7 @@ export const CAP_FAMILIES = { force: 'Force', puissance: 'Puissance', gainage: '
 export const MUSCLES = {
   pectoraux: { label: 'Pectoraux', view: 'front', caps: { poussee_horizontale: 1 } },
   deltoide_ant: { label: 'Deltoïde antérieur', view: 'front', caps: { poussee_verticale: 0.8, poussee_horizontale: 0.4 } },
+  deltoide_lat: { label: 'Deltoïde latéral', view: 'front', caps: { poussee_verticale: 0.5, stabilite_epaules: 0.4 } },
   deltoide_post: { label: 'Deltoïde postérieur', view: 'back', caps: { stabilite_epaules: 0.6, tirage_horizontal: 0.5 } },
   biceps: { label: 'Biceps', view: 'front', caps: { tirage_vertical: 0.6, blocage: 0.8 } },
   triceps: { label: 'Triceps', view: 'back', caps: { poussee_horizontale: 0.6, poussee_verticale: 0.6 } },
@@ -79,10 +80,26 @@ export const MUSCLES = {
 export const EQUIPMENT = {
   wall: 'Mur d’escalade', hangboard: 'Poutre de suspension', bar: 'Barre de traction', dips: 'Barres parallèles', weights: 'Haltères / lest',
   band: 'Élastique', rings: 'Anneaux', barbell: 'Barre et disques', kettlebell: 'Kettlebell', bench: 'Banc', pole: 'Espalier / poteau',
-  box: 'Box / marche', rope: 'Corde à sauter', mat: 'Tapis de sol', machine: 'Machines de musculation', pool: 'Bassin de natation',
+  box: 'Box / marche', rope: 'Corde à sauter', mat: 'Tapis de sol', machine: 'Machines de musculation (toutes)', pool: 'Bassin de natation',
   pullbuoy: 'Pull-buoy / planche', track: 'Piste / terrain', hill: 'Côte', treadmill: 'Tapis de course',
   campus: 'Campus board', boardwall: 'Mur à prises connectées (Moon, Kilter, Tension)', spraywall: 'Pan d’entraînement', autobelay: 'Enrouleurs (auto-assureurs)', leadwall: 'Mur de voies en tête', topwall: 'Voies en moulinette',
+  // 8.29 : la salle de musculation, machine par machine (« Machines de musculation » = toutes), et le cardio.
+  rack: 'Rack / cage à squat', ezbar: 'Barre EZ', cable: 'Poulie / vis-à-vis (câbles)', latpulldown: 'Tirage vertical (poulie haute)', seatedrow: 'Tirage horizontal assis (rowing)',
+  legpress: 'Presse à cuisses', hacksquat: 'Hack squat', legext: 'Leg extension', legcurl: 'Leg curl', smith: 'Machine guidée (Smith)', chestpress: 'Développé couché à la machine',
+  pecdeck: 'Pec deck (butterfly)', shoulderpress: 'Développé épaules à la machine', hipmachine: 'Abducteurs / adducteurs', calfmachine: 'Mollets à la machine', abmachine: 'Abdos à la machine',
+  assist: 'Tractions et dips assistés', ghd: 'Chaise romaine (lombaires)', bike: 'Vélo d’appartement', rower: 'Rameur', elliptical: 'Vélo elliptique', stairs: 'Stepper / escalier', skierg: 'SkiErg', airbike: 'Air bike',
 };
+/** Machines de musculation précises : « Machines de musculation » (machine) les donne toutes. */
+export const MACHINES = ['cable', 'latpulldown', 'seatedrow', 'legpress', 'hacksquat', 'legext', 'legcurl', 'smith', 'chestpress', 'pecdeck', 'shoulderpress', 'hipmachine', 'calfmachine', 'abmachine', 'assist'];
+/** Le matériel rangé par familles (choix d'un lieu). */
+export const EQUIPMENT_GROUPS = [
+  ['🧗 Escalade', ['wall', 'leadwall', 'topwall', 'autobelay', 'boardwall', 'spraywall', 'campus', 'hangboard']],
+  ['🏋️ Poids libres', ['weights', 'barbell', 'ezbar', 'rack', 'bench', 'kettlebell']],
+  ['⚙️ Machines de musculation', ['machine', ...MACHINES]],
+  ['❤️ Cardio', ['treadmill', 'bike', 'rower', 'elliptical', 'stairs', 'skierg', 'airbike', 'rope']],
+  ['🤸 Poids du corps et accessoires', ['bar', 'dips', 'rings', 'pole', 'box', 'mat', 'band', 'ghd']],
+  ['🌳 Dehors et piscine', ['track', 'hill', 'pool', 'pullbuoy']],
+];
 /** Espaces d'une salle d'escalade, avec le matériel qu'on y trouve souvent (on coche ce qui existe vraiment). */
 export const GYM_AREAS = {
   bloc: ['🪨', 'Espace bloc', ['wall', 'mat']], voie: ['🧗', 'Mur de voies', ['leadwall', 'topwall', 'autobelay']],
@@ -93,7 +110,7 @@ export const ENV_TYPES = { maison: 'Maison', salle: 'Salle de sport', exterieur:
 // Modèles proposés à la création d'un environnement (l'utilisateur coche ensuite son matériel réel).
 export const ENV_TEMPLATES = {
   falaise: ['wall'],
-  maison: ['mat', 'band'], salle: ['bar', 'dips', 'weights', 'barbell', 'bench', 'kettlebell', 'machine', 'box', 'mat', 'band', 'rope', 'treadmill'],
+  maison: ['mat', 'band'], salle: ['bar', 'dips', 'weights', 'barbell', 'ezbar', 'rack', 'bench', 'kettlebell', 'machine', 'box', 'mat', 'band', 'rope', 'treadmill', 'bike', 'rower', 'elliptical'],
   exterieur: ['track', 'hill'], escalade: ['wall', 'hangboard', 'bar', 'mat', 'band'], piscine: ['pool', 'pullbuoy'], piste: ['track'], autre: [],
 };
 
@@ -117,9 +134,14 @@ export const ACTIVITIES = {
     categories: [['tirage', 'Tirage', ['tirage_vertical', 'tirage_horizontal']], ['poussee', 'Poussée', ['poussee_horizontale', 'poussee_verticale']], ['jambes', 'Jambes', ['force_jambes', 'chaine_posterieure']], ['gainage', 'Gainage', ['gainage_anterieur', 'gainage_lateral']]],
   },
   conditioning: {
-    label: 'Renforcement / préparation physique', emoji: '💪', aliases: ['renfo', 'renforcement', 'prepa', 'préparation physique', 'poids du corps', 'street workout', 'calisthenics'],
+    label: 'Renforcement / préparation physique', emoji: '💪', aliases: ['renfo', 'renforcement', 'prepa', 'préparation physique', 'poids du corps'],
     caps: { gainage_anterieur: 0.9, stabilite_epaules: 0.8, gainage_lateral: 0.7, controle_scapulaire: 0.6, chaine_posterieure: 0.6, force_jambes: 0.6, equilibre: 0.6, mobilite_hanches: 0.6, mobilite_epaules: 0.6, explosivite: 0.5, poussee_horizontale: 0.5, tirage_horizontal: 0.5, tirage_vertical: 0.5 },
     categories: [['gainage', 'Gainage', ['gainage_anterieur', 'gainage_lateral']], ['prevention', 'Prévention', ['stabilite_epaules']], ['mobilite', 'Mobilité', ['mobilite_hanches', 'mobilite_epaules']], ['figures', 'Figures', ['controle_scapulaire', 'tirage_unilateral']], ['explosivite', 'Explosivité', ['explosivite']]],
+  },
+  calisthenics: {
+    label: 'Calisthenics (street workout)', emoji: '🤸', aliases: ['calisthenics', 'callisthénie', 'street workout', 'streetworkout', 'barres', 'figures', 'poids du corps avancé'],
+    caps: { tirage_vertical: 1, controle_scapulaire: 0.9, gainage_anterieur: 0.9, poussee_verticale: 0.8, poussee_horizontale: 0.8, blocage: 0.6, tirage_unilateral: 0.6, puissance_haut: 0.6, stabilite_epaules: 0.7, equilibre: 0.5, mobilite_epaules: 0.6, mobilite_hanches: 0.4, force_jambes: 0.4, tirage_horizontal: 0.5 },
+    categories: [['figures', 'Figures', ['controle_scapulaire', 'tirage_unilateral', 'equilibre']], ['tirage', 'Tirage', ['tirage_vertical', 'tirage_horizontal', 'blocage']], ['poussee', 'Poussée', ['poussee_verticale', 'poussee_horizontale']], ['gainage', 'Gainage', ['gainage_anterieur']], ['explosivite', 'Explosivité', ['puissance_haut']], ['mobilite', 'Mobilité', ['mobilite_epaules', 'mobilite_hanches']]],
   },
   running: {
     label: 'Course à pied', emoji: '🏃', aliases: ['course', 'running', 'jogging', 'run', 'trail'],
@@ -149,6 +171,8 @@ export const METRICS = {
   dead_hang: M('Suspension active à la barre (temps)', 's', 'time', { controle_scapulaire: 0.6, endurance_doigts: 0.5 }, ['conditioning', 'climbing_boulder', 'climbing_route'], { tiers: [30, 60], test: 'Bras tendus, épaules actives (omoplates basses). Chronomètre jusqu’au lâcher.' }),
   suspension_20mm: M('Suspension réglette 20 mm (temps)', 's', 'time', { force_doigts: 1 }, ['climbing_boulder', 'climbing_route'], { tiers: [10, 30], test: 'Poutre, réglette 20 mm, prise semi-arquée, poids du corps. Chronomètre jusqu’au lâcher (arrête si douleur).' }),
   suspension_lestee: M('Suspension 20 mm, 10 s : charge ajoutée max', 'kg', 'load', { force_doigts: 1 }, ['climbing_boulder'], { test: 'Réservé aux grimpeurs expérimentés. Charge maximale tenue 10 s en gardant une réserve.' }),
+  // 8.30 : mesure au dynamomètre (traction d'une main sur une réglette, pic de force).
+  traction_doigts_max: M('Force des doigts au dynamomètre (pic, une main)', 'kg', 'load', { force_doigts: 1 }, ['climbing_boulder', 'climbing_route'], { test: 'Réglette de 20 mm reliée au dynamomètre, bras presque tendu, une main : tire progressivement jusqu’au maximum pendant 5 s. Prends le meilleur de 3 essais, 2 min de repos entre chaque. Bien échauffé.' }),
   max_pompes: M('Pompes max', 'reps', 'reps', { poussee_horizontale: 1, gainage_anterieur: 0.2 }, ['strength', 'conditioning'], { tiers: [15, 35], test: 'Corps gainé, poitrine près du sol, bras tendus en haut. Sans pause au sol.' }),
   max_dips: M('Dips max', 'reps', 'reps', { poussee_horizontale: 0.6, poussee_verticale: 0.4 }, ['strength', 'conditioning'], { tiers: [8, 20], test: 'Aux barres parallèles, épaules sous contrôle, amplitude confortable.' }),
   pompes_piquees: M('Pompes piquées max', 'reps', 'reps', { poussee_verticale: 1 }, ['conditioning'], { tiers: [5, 15] }),
@@ -188,10 +212,40 @@ export const METRICS = {
   cooper_12: M('Test de 12 minutes (distance)', 'm', 'distance', { endurance_aerobie: 0.9, seuil: 0.4 }, ['running', 'conditioning'], { test: 'Après 10 min d’échauffement, cours (ou marche vite) 12 min à l’allure la plus élevée que tu peux tenir, sur un parcours plat mesuré ou avec une montre. Note la distance. Arrête-toi en cas de douleur ou de malaise.' }),
   tour_taille: M('Tour de taille', 'cm', 'distance', {}, ['conditioning', 'running', 'strength'], { dir: -1, test: 'Debout, à jeun si possible, mètre ruban à mi-distance entre la dernière côte et le haut de la hanche, sans serrer, en fin d’expiration. Même heure à chaque fois.' }),
   mains_dos: M('Mains dans le dos : écart entre les doigts', 'cm', 'distance', { mobilite_epaules: 1 }, ['conditioning', 'climbing_boulder', 'climbing_route', 'swimming'], { dir: -1, test: 'Une main passe par-dessus l’épaule, l’autre par le bas du dos ; rapproche les doigts sans forcer. Mesure l’écart (0 si les doigts se touchent). Note le côté le moins souple.' }),
+  // 8.29 : mensurations pour les objectifs de silhouette (forme en V, bras, jambes…). Suivi de SA progression, sans norme.
+  tour_epaules: M('Tour d’épaules', 'cm', 'distance', {}, ['strength', 'conditioning'], { test: 'Debout, bras relâchés, mètre ruban à l’horizontale autour des épaules, à l’endroit le plus large (sur les deltoïdes). Sans gonfler, en fin d’expiration.' }),
+  tour_poitrine: M('Tour de poitrine', 'cm', 'distance', {}, ['strength', 'conditioning'], { test: 'Debout, bras relâchés, mètre à l’horizontale sous les aisselles, au niveau des mamelons, en fin d’expiration normale.' }),
+  tour_bras: M('Tour de bras (contracté)', 'cm', 'distance', {}, ['strength', 'conditioning'], { test: 'Bras plié à 90°, biceps contracté : mètre autour de l’endroit le plus gros. Même bras à chaque fois.' }),
+  tour_cuisse: M('Tour de cuisse', 'cm', 'distance', {}, ['strength', 'conditioning', 'running'], { test: 'Debout, poids sur les deux jambes : mètre à mi-distance entre le pli de l’aine et le haut du genou. Même jambe à chaque fois.' }),
+  tour_mollet: M('Tour de mollet', 'cm', 'distance', {}, ['strength', 'conditioning', 'running'], { test: 'Debout, poids réparti : mètre autour de la partie la plus large du mollet.' }),
+  tour_hanches: M('Tour de hanches', 'cm', 'distance', {}, ['strength', 'conditioning', 'running'], { test: 'Debout, pieds joints : mètre à l’horizontale autour de la partie la plus large des fessiers.' }),
+  masse_grasse: M('Masse grasse (balance ou pince)', '%', 'other', {}, ['strength', 'conditioning', 'running'], { dir: -1, test: 'Balance à impédance ou pince à plis cutanés : même appareil, même heure (le matin, à jeun), car la valeur varie beaucoup d’un appareil à l’autre. C’est une estimation, à suivre dans le temps.' }),
+  // 8.30 : composition corporelle (balance à impédance, pince, DEXA…) et mensurations complètes. Suivi de SA progression ;
+  // les valeurs varient d'un appareil à l'autre : toujours le même appareil, le matin, à jeun.
+  masse_musculaire: M('Masse musculaire', 'kg', 'other', {}, ['strength', 'conditioning', 'calisthenics', 'running'], { test: 'Balance à impédance (ou DEXA) : le matin, à jeun, après être passé aux toilettes, pieds nus et secs. Toujours le même appareil : les valeurs varient beaucoup d’un appareil à l’autre.' }),
+  masse_maigre: M('Masse maigre (tout sauf le gras)', 'kg', 'other', {}, ['strength', 'conditioning', 'calisthenics'], { test: 'Donnée par la balance, ou calculée : poids × (1 − masse grasse %).' }),
+  eau_corporelle: M('Eau corporelle', '%', 'other', {}, ['strength', 'conditioning', 'running', 'swimming'], { test: 'Balance à impédance, mêmes conditions à chaque fois (elle varie avec ce que tu as bu et mangé).' }),
+  masse_osseuse: M('Masse osseuse (estimée)', 'kg', 'other', {}, ['strength', 'conditioning'], { test: 'Estimation de la balance : elle bouge très peu, la suivre une fois par mois suffit.' }),
+  graisse_viscerale: M('Graisse viscérale (indice de la balance)', 'indice', 'other', {}, ['strength', 'conditioning', 'running'], { dir: -1, test: 'Indice donné par la balance (son échelle dépend de la marque) : à comparer seulement avec toi-même, sur le même appareil.' }),
+  metabolisme_base: M('Métabolisme de base (estimé)', 'kcal', 'other', {}, ['strength', 'conditioning', 'running'], { test: 'Estimation de la balance ou d’une formule : l’énergie dépensée au repos sur une journée.' }),
+  tour_ventre: M('Tour de ventre (au nombril)', 'cm', 'distance', {}, ['conditioning', 'running', 'strength'], { dir: -1, test: 'Debout, détendu, mètre à l’horizontale au niveau du nombril, en fin d’expiration normale.' }),
+  tour_cou: M('Tour de cou', 'cm', 'distance', {}, ['strength', 'conditioning'], { test: 'Mètre juste sous la pomme d’Adam (ou au milieu du cou), sans serrer, tête droite.' }),
+  tour_avant_bras: M('Tour d’avant-bras', 'cm', 'distance', {}, ['strength', 'conditioning', 'climbing_boulder', 'climbing_route', 'calisthenics'], { test: 'Bras tendu, poing fermé : mètre à l’endroit le plus large, juste sous le coude. Même bras à chaque fois.' }),
+  tour_poignet: M('Tour de poignet', 'cm', 'distance', {}, ['strength', 'conditioning'], { test: 'Juste au-dessus de l’os du poignet (côté main). Il change très peu : il sert à connaître ta carrure.' }),
+  tour_bras_relache: M('Tour de bras (relâché)', 'cm', 'distance', {}, ['strength', 'conditioning', 'calisthenics'], { test: 'Bras le long du corps, relâché : mètre à mi-hauteur entre l’épaule et le coude.' }),
+  taille_corps: M('Taille (hauteur)', 'cm', 'distance', {}, ['strength', 'conditioning', 'running', 'swimming', 'climbing_boulder', 'climbing_route', 'calisthenics'], { test: 'Debout pieds nus contre un mur, talons au mur, regard droit.' }),
+  envergure: M('Envergure (bras écartés)', 'cm', 'distance', {}, ['climbing_boulder', 'climbing_route', 'calisthenics', 'swimming'], { test: 'Bras tendus à l’horizontale, dos au mur : du bout d’un majeur au bout de l’autre. En escalade, on compare à la taille (« ape index »).' }),
+  // 8.29 : des tests pour les capacités qui n'en avaient pas (sinon leur niveau ne pouvait venir que d'une déclaration).
+  pince_charge: M('Pince : charge tenue 5 s (bloc de pince)', 'kg', 'load', { pince: 1, force_doigts: 0.3 }, ['climbing_boulder', 'climbing_route', 'conditioning'], { test: 'Bloc de pince (ou haltère tenu par le disque) : pouce d’un côté, doigts de l’autre, bras tendu le long du corps. Charge la plus lourde tenue 5 s, main la plus faible. Sans repère de niveau : elle dépend du poids de corps, elle sert à suivre ta progression.' }),
+  pieds_precis: M('Précision des pieds : pieds posés du premier coup (sur 20)', 'reps', 'reps', { technique_pieds: 1, equilibre: 0.3 }, ['climbing_boulder', 'climbing_route'], { tiers: [12, 17], test: 'Sur une traversée facile, 20 poses de pied : compte celles posées du premier coup, sans bruit ni correction (quelqu’un peut compter pour toi). Repère indicatif.' }),
+  doubles_corde: M('Corde à sauter : doubles sauts d’affilée', 'reps', 'reps', { coordination: 0.8, explosivite: 0.3 }, ['conditioning', 'running', 'climbing_boulder'], { tiers: [5, 30], test: 'Échauffé, compte le plus grand nombre de doubles sauts (la corde passe deux fois par saut) sans erreur. Repère indicatif.' }),
+  cadence_course: M('Cadence en footing facile', 'pas/min', 'other', { technique_course: 0.6 }, ['running'], { test: 'Pendant un footing facile, compte tes pas pendant 30 s et multiplie par 2 (ou lis-la sur ta montre). Sans repère de niveau : elle dépend de ta taille et de ta vitesse, elle sert à suivre ta foulée.' }),
   body_weight: M('Poids du corps', 'kg', 'load', {}, ['strength', 'conditioning', 'running', 'swimming', 'climbing_boulder', 'climbing_route'], { dir: -1 }),
   max_bloc: M('Niveau max en bloc', '', 'grade', { force_doigts: 0.5, technique_escalade: 0.5, puissance_haut: 0.4 }, ['climbing_boulder'], { gradeActivity: 'bloc' }),
   max_voie: M('Niveau max en voie', '', 'grade', { endurance_doigts: 0.6, technique_escalade: 0.6 }, ['climbing_route'], { gradeActivity: 'voie' }),
 };
+// 8.30 : la calisthenics suit les mêmes tests que le renforcement au poids du corps.
+for (const m of Object.values(METRICS)) if (m.acts?.includes('conditioning') && !m.acts.includes('calisthenics')) m.acts.push('calisthenics');
 export const metricTierText = (m) => {
   if (!m?.tiers) return '';
   const [a, b] = m.tiers, u = m.unit ? ' ' + m.unit : '';

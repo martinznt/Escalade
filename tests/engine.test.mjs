@@ -129,6 +129,16 @@ ok('progression : suggestion de charge quand toutes les séries sont réussies',
   const ex = normalizeEx({ name: 'Tractions +10 kg', sets: 4, repsMin: 5, repsMax: 8, mode: 'reps' });
   const p = progressHint(ex, [mkHist()]); assert.ok(p); assert.match(p.next, /12.5 kg/);
 });
+ok('progression : règle des 2 séances (2 réussites → on monte, 2 échecs → on baisse, 1 échec → on garde)', () => {
+  const ex = normalizeEx({ name: 'Développé couché', sets: 4, repsMin: 6, repsMax: 8, mode: 'reps' });
+  const H = (days, reps, { load = 40, rpe = 3 } = {}) => ({ id: 'h' + days, sessionName: 'x', startedAt: now - days * 86400000, durationSeconds: 3000, data: { rpe, exercises: [{ name: 'Développé couché', sets: reps.map((r) => ({ reps: r, load, done: true })) }] } });
+  const twice = progressHint(ex, [H(2, [8, 8, 8, 8]), H(5, [8, 8, 8, 8])]); assert.equal(twice.trend, 'up'); assert.match(twice.next, /42.5 kg/); assert.match(twice.why, /2 fois de suite/);
+  const hard = progressHint(ex, [H(2, [8, 8, 8, 8], { rpe: 5 }), H(5, [7, 7, 6, 6])]); assert.equal(hard.trend, 'confirm'); assert.match(hard.next, /confirmer.*42.5 kg/);
+  const down = progressHint(ex, [H(2, [5, 4, 4, 4]), H(5, [5, 5, 4, 6])]); assert.equal(down.trend, 'down'); assert.match(down.next, /Baisse à 38 kg/);
+  const once = progressHint(ex, [H(2, [5, 4, 4, 4]), H(5, [7, 7, 7, 6])]); assert.equal(once.trend, 'hold'); assert.match(once.why, /si ça se répète/);
+  const bw = progressHint(normalizeEx({ name: 'Pompes', sets: 3, repsMin: 10, repsMax: 15 }), [{ id: 'b', startedAt: now - 86400000, durationSeconds: 600, data: { exercises: [{ name: 'Pompes', sets: [15, 15, 15].map((r) => ({ reps: r, done: true })) }] } }]);
+  assert.equal(bw.trend, 'up'); assert.match(bw.next, /ajoute une répétition/);
+});
 ok('swapExercise remplace par une alternative compatible', () => {
   const { session: g } = generateSession({ focus: 'devers', size: 'moyenne', seed: 1 }, { settings: settingsPro, now });
   const target = g.exercises.find((e) => e.block === 'main' && e.libId === 'pullup') || g.exercises.find((e) => e.block === 'main');

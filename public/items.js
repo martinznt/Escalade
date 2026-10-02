@@ -75,22 +75,29 @@ export const SCHEMAS = {
   // Journal d'escalade : un bloc / une voie tenté(e) ou réussi(e), avec la cotation au moment de la saisie.
   ascent: {
     kind: ['e', ['bloc', 'voie'], 'bloc'], name: ['s', 80], grade: ['obj', GRADE_SNAPSHOT], gradeText: ['s', 20],
-    result: ['e', ['flash', 'send', 'work', 'top', 'attempt', 'fail'], 'attempt'], attempts: ['n', 1, 999, 1], styles: ['ids', 12], styleText: ['s', 60],
+    result: ['e', ['onsight', 'flash', 'send', 'work', 'top', 'attempt', 'fail'], 'attempt'], attempts: ['n', 1, 999, 1], styles: ['ids', 12], styleText: ['s', 60],
     nuance: ['e', ['', 'facile', 'moyen', 'dur'], ''],
     date: ['n', 0, 9e15, 0], context: ['obj', CONTEXT], note: ['s', 300],
   },
   // Projet d'escalade : un bloc / une voie qu'on travaille sur plusieurs séances, jusqu'à la réussite.
   project: {
     kind: ['e', ['bloc', 'voie'], 'bloc'], name: ['s', 80], grade: ['obj', GRADE_SNAPSHOT], gradeText: ['s', 20], place: ['s', 80],
-    status: ['e', ['active', 'done', 'archived'], 'active'], tries: ['list', { date: ['n', 0, 9e15, 0], n: ['n', 1, 99, 1] }, 200],
-    holds: ['list', { x: ['n', 0, 1, 0], y: ['n', 0, 1, 0], t: ['e', ['main', 'pied', 'depart', 'top'], 'main'] }, 80],
+    status: ['e', ['active', 'done', 'archived', 'wish'], 'active'], tries: ['list', { date: ['n', 0, 9e15, 0], n: ['n', 1, 99, 1] }, 200],
+    holds: ['list', { x: ['n', 0, 1, 0], y: ['n', 0, 1, 0], t: ['e', ['main', 'pied', 'depart', 'top', 'chute'], 'main'] }, 120],
     hasPhoto: ['b'], startedAt: ['n', 0, 9e15, 0], doneAt: ['n', 0, 9e15, 0], note: ['s', 300],
+    // 8.30 : point le plus haut atteint (%), sections, pourquoi on tombe ; pan maison (photo + prises) et blocs générés.
+    high: ['n', 0, 100, 0], sections: ['list', { name: ['s', 40], done: ['b'] }, 12], fallWhy: ['strs', 6, 20],
+    board: ['b'], problems: ['list', { name: ['s', 40], idx: ['strs', 20, 4], level: ['s', 10] }, 30],
   },
   // Programme sur plusieurs semaines : calendrier des séances (générées au moment de les faire).
   program: {
     name: ['s', 80], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'poids', 'goal'], 'forme'], goalId: ['id'], activityId: ['s', 40],
     weeks: ['n', 1, 24, 6], perWeek: ['n', 1, 7, 3], days: ['strs', 7, 1], minutes: ['n', 10, 180, 45], start: ['day'], status: ['e', ['active', 'done', 'stopped'], 'active'],
-    sessions: ['list', { i: ['n', 0, 999, 0], week: ['n', 1, 24, 1], date: ['day'], phase: ['e', ['build', 'deload', 'test'], 'build'], light: ['b'], boost: ['n', 0, 3, 0], minutes: ['n', 10, 180, 45] }, 170],
+    sessions: ['list', { i: ['n', 0, 999, 0], week: ['n', 1, 24, 1], date: ['day'], phase: ['e', ['build', 'deload', 'test', 'specific', 'taper'], 'build'], light: ['b'], boost: ['n', 0, 3, 0], minutes: ['n', 10, 180, 45] }, 170],
+    // 8.30 : objectif daté (programme construit à rebours jusqu'à cette date).
+    eventDate: ['day'], eventLabel: ['s', 80],
+    // 8.30 : programme tiré du carnet (la même séance prête, qui progresse : règle des 2 séances, semaine légère).
+    catalogId: ['s', 60],
   },
   // Photo (JPEG réduit, en data URL) liée à un projet : même identifiant que le projet.
   photo: { data: ['s', 90000], w: ['n', 1, 4000, 1], h: ['n', 1, 4000, 1] },
@@ -104,7 +111,11 @@ export const SCHEMAS = {
     // Salle précise : ville, cotation de la salle, espaces et leur matériel.
     // Falaise / site : ses secteurs (où l'on a grimpé).
     sectors: ['strs', 30, 60],
-    city: ['s', 60], gradeSys: ['id'], areas: ['list', { id: ['e', ['bloc', 'voie', 'entrainement', 'muscu', 'etirement'], 'bloc'], items: ['ids', 30], note: ['s', 120] }, 8] },
+    city: ['s', 60], gradeSys: ['id'], areas: ['list', { id: ['e', ['bloc', 'voie', 'entrainement', 'muscu', 'etirement'], 'bloc'], items: ['ids', 30], note: ['s', 120] }, 8],
+    // 8.30 : horaires d'ouverture (0 = lundi, « HH:MM »), pour caler les séances proposées.
+    hours: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 14],
+    // 8.30 : coordonnées d'une falaise (facultatives) pour les conditions météo.
+    lat: ['n', -90, 90, null], lon: ['n', -180, 180, null] },
   // Préférence explicite ou confirmée : aime / neutre / évite (jamais une suppression automatique).
   pref: { key: ['s', 80], label: ['s', 80], value: ['e', ['aime', 'neutre', 'evite'], 'neutre'], source: ['e', ['explicit', 'habit', 'questionnaire'], 'explicit'], reason: ['s', 200] },
   // Niveau déclaré par l'utilisateur pour une capacité (-1 = « je ne sais pas »).
@@ -126,27 +137,45 @@ export const SCHEMAS = {
     activity: ['s', 40], goalId: ['id'], styles: ['ids', 12], date: ['n', 0, 9e15, 0], hasPhoto: ['b'] },
   // Remplacement d'exercice effectué (sert à détecter « exercice souvent remplacé »).
   swap: { from: ['s', 80], to: ['s', 80], date: ['n', 0, 9e15, 0], where: ['e', ['generator', 'seance', 'player'], 'seance'] },
+  // 8.30 — douleur notée (zone, intensité 0 à 10, côté, moment) : sert à ménager la zone et à suivre la reprise.
+  pain: { zone: ['e', ['fingers', 'shoulders', 'elbows', 'wrists', 'back', 'knees', 'ankles', 'hips', 'neck', 'other'], 'other'], level: ['n', 0, 10, 0],
+    side: ['e', ['', 'gauche', 'droite', 'deux'], ''], when: ['e', ['', 'repos', 'effort', 'apres', 'matin'], ''], date: ['n', 0, 9e15, 0], note: ['s', 300], healed: ['b'] },
+  // 8.30 — check-in du matin (un item par jour, id « wb-AAAA-MM-JJ ») : sommeil, énergie, courbatures, stress,
+  // pouls au repos (facultatif), cycle (facultatif, seulement si activé par la personne).
+  wellness: { day: ['day'], at: ['n', 0, 9e15, 0], sleep: ['n', 0, 16, null], energy: ['n', 1, 5, null], soreness: ['n', 1, 5, null], stress: ['n', 1, 5, null],
+    hr: ['n', 25, 220, null], period: ['b'], note: ['s', 300] },
+  // 8.30 — réglages d'une machine ou d'un exercice (siège, dossier, prise…), affichés pendant la séance.
+  exsetup: { key: ['s', 80], label: ['s', 80], setup: ['s', 160] },
+  // 8.30 — saison de 4 semaines autour d'un thème, et lettre à soi-même (scellée jusqu'à openAt).
+  season: { theme: ['e', ['regularite', 'doigts', 'mobilite', 'endurance', 'recup', 'variete'], 'regularite'], start: ['n', 0, 9e15, 0], closed: ['b'], won: ['b'] },
+  letter: { text: ['s', 3000], writtenAt: ['n', 0, 9e15, 0], openAt: ['n', 0, 9e15, 0], openedAt: ['n', 0, 9e15, 0], snap: ['s', 300] },
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
   habit: { key: ['s', 120], decision: ['e', ['accepted', 'dismissed'], 'dismissed'] },
   // Configuration personnelle (tableau de bord, environnement par défaut…) : un item par clé.
   config: {
     blocks: ['strs', 20, 30], envId: ['id'], durations: ['strs', 10, 10], unavailable: ['ids', 40],
     // Premiers pas (questionnaire de profil, visite guidée) : réponses déclarées par l'utilisateur.
-    perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', 'poids', 'sante', ''], ''], intent: ['s', 30],
+    perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', 'poids', 'muscle', 'physique', 'sante', ''], ''], intent: ['s', 30],
     setupDone: ['b'], asked: ['strs', 30, 30],
     // Apparence choisie (item « appearance ») : suit le compte sur tous les appareils.
     mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], shape: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
     vibe: ['s', 20],
+    easy: ['s', 4], cb: ['s', 4], big: ['s', 4], contrast: ['s', 4],
     // Objectifs (plusieurs) et profil corporel (item « body ») : déclarés, tous facultatifs.
     goals: ['strs', 8, 20], age: ['n', 8, 100, null], height: ['n', 100, 230, null], weight: ['n', 25, 300, null], sex: ['e', ['f', 'h', 'x', ''], ''],
-    shape: ['e', ['mince', 'athletique', 'moyen', 'costaud', 'rond', ''], ''], muscled: ['strs', 8, 20], fitness: ['n', 1, 5, null],
-    breath: ['e', ['jamais', 'effort', 'escaliers', 'souvent', ''], ''], daily: ['e', ['assis', 'debout', 'physique', ''], ''],
+    shape: ['e', ['mince', 'athletique', 'moyen', 'costaud', 'rond', ''], ''], muscled: ['strs', 8, 20], physique: ['strs', 10, 20], fitness: ['n', 1, 5, null],
+    breath: ['e', ['jamais', 'effort', 'escaliers', 'souvent', ''], ''], daily: ['e', ['assis', 'debout', 'physique', ''], ''], cycle: ['b'],
     // Mise en page personnalisée (item « layout ») : JSON validé à la lecture (layout.js).
     lay: ['s', 9000],
     // Formats de séance gardés (item « formats ») : JSON validé à la lecture (format.js).
     formats: ['s', 6000],
     // Notifications cochées « vu » (item « inbox »).
     seenIds: ['strs', 200, 40],
+    // 8.30 — disponibilités (item « availability ») et pause vacances / blessure (item « pause »).
+    slots: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 21],
+    pauseMode: ['e', ['', 'vacances', 'blesse'], ''], pauseFrom: ['day'], pauseTo: ['day'], pauseNote: ['s', 120],
+    // 8.30 — séances du carnet mises en favori (item « catalog »).
+    favs: ['strs', 300, 60],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);

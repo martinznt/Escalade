@@ -20,9 +20,9 @@ export const setupDone = () => !!mainConfig().setupDone;
 
 /* ═════════ Questions ═════════ */
 const LEVELS = [['0', '🌱 Je débute'], ['1', '🙂 Je pratique régulièrement'], ['2', '💪 Je suis confirmé(e)'], ['nsp', '🤷 Je ne sais pas']];
-export const GOALS = [['climb', '🧗 Progresser en escalade'], ['force', '💪 Devenir plus fort(e)'], ['endurance', '🔋 Avoir plus d’endurance / de cardio'], ['mobilite', '🧘 Être plus souple, bouger mieux'], ['forme', '🙂 Rester en forme'], ['figure', '🤸 Réussir une figure (front lever, drapeau…)'], ['poids', '⚖️ Perdre du poids'], ['sante', '❤️ Être en meilleure santé']];
+export const GOALS = [['climb', '🧗 Progresser en escalade'], ['force', '💪 Devenir plus fort(e)'], ['endurance', '🔋 Avoir plus d’endurance / de cardio'], ['mobilite', '🧘 Être plus souple, bouger mieux'], ['forme', '🙂 Rester en forme'], ['figure', '🤸 Réussir une figure (front lever, drapeau…)'], ['poids', '⚖️ Perdre du poids'], ['muscle', '🏋️ Prendre du muscle'], ['physique', '🪞 Changer ma silhouette (V, abdos…)'], ['sante', '❤️ Être en meilleure santé']];
 const AVOID = [['fingers', '✋ Doigts'], ['shoulders', '🦾 Épaules'], ['elbows', '💪 Coudes'], ['knees', '🦵 Genoux'], ['none', '👍 Rien de particulier']];
-export const INTENT_OF = { climb: 'specifique', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: '', figure: 'force', poids: 'endurance', sante: 'endurance' };
+export const INTENT_OF = { climb: 'specifique', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: '', figure: 'force', poids: 'endurance', muscle: 'force', physique: 'force', sante: 'endurance' };
 const BLOC_CHOICES = ['4', '5', '5+', '6A', '6A+', '6B', '6B+', '6C', '7A', '7A+', '7B', '7C', '8A'];
 
 const STEPS = [
@@ -31,7 +31,7 @@ const STEPS = [
   { id: 'perWeek', q: 'Combien de séances par semaine aimerais-tu faire ?', opts: () => [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5 ou plus']] },
   { id: 'climbPerWeek', q: 'Et combien de fois grimpes-tu par semaine ?', help: 'En salle ou en falaise, en moyenne. Ça aide l’app à doser le travail des doigts et la récupération.', when: (a) => (a.acts || []).some((x) => x.startsWith('climbing')), opts: () => [['0', 'Pas en ce moment'], ['1', '1 fois'], ['2', '2 fois'], ['3', '3 fois'], ['4', '4 fois ou plus']] },
   { id: 'minutes', q: 'Combien de temps as-tu en général pour une séance ?', opts: () => [['10', '10 min'], ['20', '20 min'], ['30', '30 min'], ['45', '45 min'], ['60', '1 h'], ['90', '1 h 30']] },
-  { id: 'places', multi: true, q: 'Où t’entraînes-tu ?', help: 'L’app proposera seulement des exercices faisables avec le matériel de ces lieux (modifiable dans Profil › Matériel).', opts: () => Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre') },
+  { id: 'places', multi: true, q: 'Où t’entraînes-tu ?', help: 'L’app proposera seulement des exercices faisables avec le matériel de ces lieux (modifiable dans Profil › Mes lieux).', opts: () => Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre') },
   { id: 'goals', multi: true, q: 'Quels sont tes objectifs ?', help: 'Choisis-en autant que tu veux. Tu pourras aussi écrire un objectif à toi dans Profil › Objectifs.', opts: () => GOALS },
   { id: 'skill', q: 'Quelle figure veux-tu réussir ?', when: (a) => (a.goals || []).includes('figure'), opts: () => Object.entries(SKILLS).map(([id, s]) => [id, `${s.emoji} ${s.label}`]) },
   { id: 'avoid', multi: true, q: 'Y a-t-il une zone à ménager ?', help: 'L’app évitera les exercices qui la sollicitent fortement. Ce n’est pas un avis médical : en cas de douleur, consulte un professionnel.', opts: () => AVOID },
@@ -56,7 +56,7 @@ function markFields(a) {
   const climbing = (a.acts || []).some((x) => x.startsWith('climbing'));
   return h`${markKeys(a).map(num)}
     ${climbing ? h`<div class="card flat"><b class="small">Ton meilleur bloc réussi (cotation Font)</b><div class="chips">${BLOC_CHOICES.map((g) => chip(m.bloc === g, g, `data-act="setBloc" data-v="${g}"`))}${chip(m.bloc === 'nsp', '🤷 Je ne sais pas', 'data-act="setBloc" data-v="nsp"')}</div>
-      <p class="tiny muted">Ta salle utilise des couleurs ou U1–U8 ? Tu pourras créer ton propre système dans Profil › Escalade.</p></div>` : ''}`;
+      <p class="tiny muted">Ta salle utilise des couleurs ou U1–U8 ? Tu pourras créer ton propre système dans Profil › Mes sports (« 🧗 Escalade : cotations et styles »).</p></div>` : ''}`;
 }
 function stepBody(st, a) {
   if (st.id === 'marks') return markFields(a);
@@ -220,7 +220,7 @@ export function setupCard() {
   return h`<section class="card flat row"><span class="grow small">🧩 Ton profil n’est pas encore complet : les séances proposées restent prudentes.</span><button class="btn sm pri" data-act="setupStart" data-id="quiz">Compléter</button><button class="btn sm ghost ic" data-act="setupHide" aria-label="Masquer ce rappel">✕</button></section>`;
 }
 ACT.setupSkip = () => { S.setup = null; ACT.setupLater(); };
-ACT.setupHide = () => { saveMain({ setupHidden: true }); toast('Rappel masqué. Tu peux compléter ton profil à tout moment dans Paramètres › Essentiel.', 4500); render(); };
+ACT.setupHide = () => { saveMain({ setupHidden: true }); toast('Rappel masqué. Tu peux compléter ton profil à tout moment dans les Paramètres (« 🧩 Mon profil sportif »).', 4500); render(); };
 
 /* ═════════ Visite guidée ═════════ */
 // La visite elle-même (tour.js) navigue de page en page et pointe chaque élément avec une flèche.
@@ -295,6 +295,7 @@ ACT.qAnswer = (el) => {
     case 'climbPerWeek': case 'perWeek': done({ [id]: Number(v) }); break;
     case 'minutes': S.settings.defaultMinutes = Number(v); S.gen.minutes = Number(v); saveSettings(); done({ durations: [v] }); break;
     case 'goal': done({ goal: v, intent: INTENT_OF[v] || '' }); break;
+    case 'physique': { const b = item('config', 'body') || {}; if (v !== 'nsp') putItem('config', 'body', { ...b, physique: [...new Set([...(b.physique || []), v])] }); done(); break; }
     case 'place': if (ENV_TYPES[v]) putItem('env', 'env-' + v, { name: ENV_TYPES[v], type: v, equipment: ENV_TEMPLATES[v] || [], isDefault: !itemsOf('env').length }); done(); break;
     case 'bloc': {
       const sys = BUILTIN_SYSTEMS.font, lv = sys.levels.find((l) => l.label === v);

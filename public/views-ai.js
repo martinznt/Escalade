@@ -39,7 +39,7 @@ SUBMIT.aiAsk = async (f) => {
     S.ai.draft = r.draft; S.ai.loading = false; showAssistant();
   } catch (e) {
     S.ai.loading = false;
-    S.ai.error = e.guest ? 'L’assistant IA demande un compte gratuit (Paramètres › Essentiel). En attendant, tu peux remplir la fiche toi-même.'
+    S.ai.error = e.guest ? 'L’assistant IA demande un compte gratuit (en haut des Paramètres : « Créer mon compte »). En attendant, tu peux remplir la fiche toi-même.'
       : e.offline ? 'Pas de connexion : l’assistant IA a besoin d’internet. Tu peux remplir la fiche toi-même.' : e.message;
     showAssistant();
   }

@@ -6,8 +6,10 @@
 //  - une séance datée dans le futur n'est jamais traitée comme réalisée.
 // Pur JavaScript, sans DOM : testé avec Node (tests/brain.test.mjs).
 
+import { readiness } from './coachbrain.js';
+import { pauseState } from './planning.js';
 import { batteryFor, profileInputs, ENVIES, PROTOCOL } from './assess.js';
-import { CAPACITIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, BUILTIN_STYLES, metricTierText, skillCaps } from './model.js';
+import { CAPACITIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, BUILTIN_STYLES, metricTierText, skillCaps, MACHINES } from './model.js';
 import { LIBRARY, byId } from './library.js';
 import { allSystems, toReference, levelFromReference, bestReferenceLevel, LEVEL_WORDS } from './grading.js';
 import { exKey, norm, normalizeHistory } from './shared.js';
@@ -72,7 +74,7 @@ export function buildContext(raw = {}) {
     now, tz, history, future, events: arr(raw.events).filter((e) => e && typeof e === 'object'), seances, seanceById, personal, personalByKey, settings: raw.settings || {},
     activities, categories, metrics, perfs, goals, gradesys, systems, styles, envs, defEnv, unavailable, config, prefs, capdecl,
     ascents: Object.values(get('ascent')).sort((a, b) => (b.date || 0) - (a.date || 0)),
-    swaps: Object.values(get('swap')), labs: Object.values(get('lab')), jnotes: Object.values(get('jnote')), habitDecisions: Object.fromEntries(Object.values(get('habit')).map((h) => [h.key, h.decision])),
+    swaps: Object.values(get('swap')), labs: Object.values(get('lab')), jnotes: Object.values(get('jnote')), pains: Object.values(get('pain')).sort((a, b) => (a.date || 0) - (b.date || 0)), wellness: Object.values(get('wellness')).sort((a, b) => (a.at || 0) - (b.at || 0)), programs: Object.values(get('program')), habitDecisions: Object.fromEntries(Object.values(get('habit')).map((h) => [h.key, h.decision])),
   };
 }
 
@@ -302,7 +304,7 @@ export function goalProgress(g, ctx) {
     return { pct: g.target ? Math.min(100, Math.round((n / g.target) * 100)) : null, current: n, text: `${n} séance(s) depuis le ${fmtDay(since || ctx.now)} · cible ${g.target}` };
   }
   if (g.type === 'ascents') {
-    const since = g.startedAt || 0, n = ctx.ascents.filter((a) => a.date >= since && ['flash', 'send', 'top'].includes(a.result)).length;
+    const since = g.startedAt || 0, n = ctx.ascents.filter((a) => a.date >= since && ['onsight', 'flash', 'send', 'top'].includes(a.result)).length;
     return { pct: g.target ? Math.min(100, Math.round((n / g.target) * 100)) : null, current: n, text: `${n} réussite(s) enregistrée(s) depuis le ${fmtDay(since || ctx.now)} · cible ${g.target}` };
   }
   if (g.type === 'skill') {
@@ -367,6 +369,8 @@ export function availableEquipment(ctx, envId) {
   const set = new Set(env ? env.equipment : []);
   // Profil jamais rempli : on reprend l'ancien réglage escalade (mur par défaut) pour rester prudent.
   if (!env) { const eq = ctx.settings?.equipment || { wall: true }; for (const [k, v] of Object.entries(eq)) if (v) set.add(k); }
+  // « Machines de musculation » (sans détail) = toutes les machines ; on peut aussi cocher machine par machine.
+  if (set.has('machine')) for (const m of MACHINES) set.add(m);
   for (const u of ctx.unavailable || []) set.delete(u);
   return set;
 }
@@ -427,7 +431,11 @@ export function regularity(ctx, weeksN = 12) {
   if (sinceLast != null && sinceLast >= 7) gaps.push({ from: sorted[sorted.length - 1], to: null, days: Math.round(sinceLast) });
   const last4 = weeks.slice(-4).reduce((a, b) => a + b, 0) / 4, prev4 = weeks.slice(-8, -4).reduce((a, b) => a + b, 0) / 4;
   const change = prev4 === 0 && last4 === 0 ? null : prev4 === 0 ? 'reprise' : last4 > prev4 * 1.3 ? 'hausse' : last4 < prev4 * 0.7 ? 'baisse' : 'stable';
-  let streakWeeks = 0; for (let i = weeksN - 1; i >= 0 && weeks[i] > 0; i--) streakWeeks++;
+  // Série : la semaine en cours ne la casse pas (elle n'est pas finie), une semaine de pause non plus (8.30).
+  const P = ctx.config?.pause, day0 = (s) => dayNum(Date.parse(s + 'T12:00:00'), ctx.tz), okDay = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+  const pF = P?.pauseMode && okDay(P.pauseFrom) ? day0(P.pauseFrom) : null, pT = okDay(P?.pauseTo) ? day0(P.pauseTo) : dayNum(ctx.now, ctx.tz);
+  const paused = (i) => { if (pF == null) return false; const mon = thisMon - (weeksN - 1 - i) * 7; return pF <= mon + 6 && pT >= mon; };
+  let streakWeeks = 0; for (let i = weeksN - 1; i >= 0; i--) { if (weeks[i] > 0) streakWeeks++; else if (i === weeksN - 1 || paused(i)) continue; else break; }
   // Périodes d'activité : suites de semaines consécutives avec au moins une séance.
   const periods = []; let startW = null;
   for (let i = 0; i <= weeksN; i++) { if (i < weeksN && weeks[i] > 0) { if (startW == null) startW = i; } else if (startW != null) { periods.push({ fromWeek: startW, toWeek: i - 1, weeks: i - startW }); startW = null; } }
@@ -690,7 +698,7 @@ export function timeline(ctx) {
 }
 
 /* ═════════════ Journal (uniquement des données existantes) ═════════════ */
-const RESULT_FR = { flash: '⚡ flash', send: '✓ réussi', work: '💪 réussi après travail', top: 'top', attempt: 'essai', fail: 'pas encore' };
+const RESULT_FR = { onsight: '👀 à vue', flash: '⚡ flash', send: '✓ réussi', work: '💪 réussi après travail', top: 'top', attempt: 'essai', fail: 'pas encore' };
 export function journal(ctx, limit = 80) {
   const out = [];
   for (const h of ctx.history) {
@@ -702,7 +710,7 @@ export function journal(ctx, limit = 80) {
     out.push({ t: h.startedAt, kind: 'session', icon: '✅', title: h.sessionName, text: bits.join(' · '), more, note: [h.data?.note, q.comment].filter(Boolean).join(' — '), id: h.id });
   }
   for (const p of ctx.perfs) out.push({ t: p.date, kind: 'perf', icon: p.unknown ? '❔' : '📏', title: ctx.metrics[p.metricId]?.label || 'Performance', text: perfText(p, ctx) + (p.styles?.length ? ' · ' + p.styles.map((s) => ctx.styles[s]?.label || s).join(', ') : ''), note: p.note || '' });
-  for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [RESULT_FR[a.result] || a.result, a.attempts > 1 ? a.attempts + ' essais' : a.result === 'flash' ? '' : a.attempts ? '1 essai' : ''].filter(Boolean).join(' · '), note: a.note || '' });
+  for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [RESULT_FR[a.result] || a.result, a.attempts > 1 ? a.attempts + ' essais' : a.result === 'flash' || a.result === 'onsight' ? '' : a.attempts ? '1 essai' : ''].filter(Boolean).join(' · '), note: a.note || '' });
   for (const n of ctx.jnotes) out.push({ t: n.date, kind: 'note', icon: '📝', title: 'Note', text: n.text, note: '' });
   return out.filter((x) => x.t && x.t <= ctx.now + 5 * 60000).sort((a, b) => b.t - a.t).slice(0, limit);
 }
@@ -756,7 +764,22 @@ export function todayOptions(ctx, { todayEvents = [], minutes = null } = {}) {
   if (!opts.some((o) => o.kind === 'generate')) opts.push({ kind: 'generate', id: 'gen:decouverte', title: ctx.history.length ? 'Séance du jour' : 'Séance découverte', reason: ctx.history.length ? 'Équilibrée selon ce que tu as le moins travaillé récemment.' : (ctx.perfs.some((p) => !p.unknown) || Object.keys(ctx.capdecl).length ? 'Première séance : courte, calée sur le niveau et les repères que tu as indiqués.' : 'Pas encore d’historique : une séance courte pour commencer, sans présumer de ton niveau.'), mode: 'weaknesses', minutes: ctx.history.length ? dur : 20, how });
   if (last?.data?.rpe >= 4 && hoursSince < 48 && !opts.some((o) => o.light)) opts.push({ kind: 'generate', id: 'gen:leger', title: 'Version légère (technique / mobilité)', reason: `Ta dernière séance était ressentie comme dure (${last.data.rpe}/5) il y a ${Math.round(hoursSince)} h : une alternative plus douce si tu ne te sens pas frais.`, light: true, mode: 'weaknesses', minutes: Math.min(dur, 25), how });
   opts.push({ kind: 'express', id: 'express', title: 'Express 10 minutes', reason: 'Peu de temps ? Une séance courte reconstruite pour 10 minutes.', minutes: 10, mode: 'weaknesses', how: ['Durée choisie : 10 min'] });
-  return { options: opts.slice(0, 4), note: 'Je ne connais pas ta forme du jour : choisis l’option qui te correspond.' };
+  // 8.30 : pause (vacances / blessure) : rien d'obligatoire en vacances, seulement du doux en cas de blessure.
+  const P = pauseState(ctx.config?.pause || {}, ctx.now);
+  if (P.active && P.mode === 'vacances') return { options: [{ kind: 'rest', id: 'rest', title: 'Profite de tes vacances 🏖️', reason: `${P.text}`, light: true, minutes: 15, how: ['Pause enregistrée dans Planning'] }, opts.find((o) => o.kind === 'express')].filter(Boolean), note: P.text };
+  if (P.active && P.mode === 'blesse') {
+    const keep = opts.filter((o) => o.kind === 'event' || o.kind === 'rest' || o.light);
+    if (!keep.some((o) => o.light && o.kind !== 'rest')) keep.push({ kind: 'generate', id: 'gen:leger', title: 'Séance douce (mobilité, technique)', reason: 'Blessure en cours : la zone notée est ménagée, rien d’intense.', light: true, mode: 'weaknesses', minutes: Math.min(dur, 25), how });
+    return { options: keep.slice(0, 4), note: P.text };
+  }
+  // 8.30 : check-in du matin → la forme du jour passe avant le reste (version légère en tête si fatigué).
+  const rd = readiness(ctx);
+  if (rd.checked && rd.level === 'low') {
+    const i = opts.findIndex((o) => o.light && o.kind !== 'rest'), light = i >= 0 ? opts.splice(i, 1)[0] : { kind: 'generate', id: 'gen:leger', title: 'Version légère (technique / mobilité)', light: true, mode: 'weaknesses', minutes: Math.min(dur, 25), how };
+    light.reason = `Check-in du matin : ${rd.word.toLowerCase()}. ${rd.why.filter((w) => !/^⚠️/.test(w)).slice(0, 2).join(' ')}`.trim();
+    opts.splice(opts.filter((o) => o.kind === 'event').length, 0, light);
+  }
+  return { options: opts.slice(0, 4), note: rd.checked ? `Ta forme du jour (check-in) : ${rd.emoji} ${rd.word} — ${rd.advice}` : 'Fais le check-in du matin (Accueil › Forme du jour) pour que les propositions tiennent compte de ta forme ; sinon, choisis l’option qui te correspond.' };
 }
 
 /* ═════════════ Diagnostics avancés (descriptifs) ═════════════ */

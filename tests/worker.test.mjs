@@ -141,6 +141,10 @@ await ok('calendrier : création, lecture, suppression ; IDOR impossible', async
   assert.equal((await A.post('/api/calendar', ev)).status, 200);
   assert.equal((await B.post('/api/calendar', { ...ev, title: 'volé' })).status, 409, 'même identifiant qu’un autre compte : refus, pas d’écrasement');
   assert.equal((await A.get('/api/calendar')).data.events[0].title, 'Séance');
+  assert.equal((await A.post('/api/calendar', { ...ev, time: '18:30', completed: true })).status, 200);
+  let got = (await A.get('/api/calendar')).data.events[0]; assert.equal(got.time, '18:30'); assert.equal(got.completed, true);
+  await A.post('/api/calendar', { ...ev, time: '25:99<x>', completed: false }); got = (await A.get('/api/calendar')).data.events[0];
+  assert.equal(got.time, '', 'heure invalide : ignorée'); assert.equal(got.completed, false, '« pas faite » après coup');
   assert.equal((await B.del('/api/calendar/ev1')).status, 404);
   assert.equal((await A.del('/api/calendar/ev1')).status, 200); assert.equal((await A.del('/api/calendar/ev1')).status, 404, 'pas de faux succès');
 });

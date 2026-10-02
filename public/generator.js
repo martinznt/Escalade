@@ -14,6 +14,7 @@ import { LIBRARY, byId, FOCUS } from './library.js';
 import { CAPACITIES, ACTIVITIES, INTENTIONS, EQUIPMENT } from './model.js';
 import { bodyAdjust } from './body-rules.js';
 import { muscleCaps, zoneRisk } from './intentions.js';
+import { activePains, muscleBalance, ZONE_LABEL } from './coachbrain.js';
 import { PART_TYPES, cleanParts, totalMinutes, partLabel, stretchBeforeEffort } from './format.js';
 import { generateSession as climbGenerate, exMinutes, sessionMinutes, progressHint, analyze, levelFrom } from './engine.js';
 import { profileCapacities, strengthsWeaknesses, availableEquipment, goalCaps, goalLabel, capVolume, relevantCaps, undertrained, exCaps, capacityState, perfsOf, confWord, STATUS_WORD, DAY } from './brain.js';
@@ -46,10 +47,10 @@ export function budget(minutes, light = false) {
   return { warm, main: m - warm - cool, cool, maxN: m <= 50 ? 5 : m <= 75 ? 6 : m <= 100 ? 7 : Math.min(12, Math.round(m / 14)), light };
 }
 const WARM = {
-  strength: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'], conditioning: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'],
+  strength: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'], conditioning: ['wu-pulse', 'wu-mob-upper', 'wu-mob-lower', 'wu-core'], calisthenics: ['wu-pulse', 'wu-wrists', 'wu-mob-upper', 'wu-scap-bar', 'wu-core'],
   running: ['run-short', 'mob-ankles', 'run-drills'], swimming: ['swim-warm'], custom: ['wu-pulse', 'wu-mob-lower', 'wu-mob-upper'],
 };
-const COOL = { strength: ['cd-shoulders', 'cd-hips', 'cd-breath'], conditioning: ['cd-hips', 'cd-shoulders', 'cd-breath'], running: ['mob-hamstrings', 'cd-hips', 'cd-breath'], swimming: ['cd-shoulders', 'cd-breath'], custom: ['cd-hips', 'cd-breath'] };
+const COOL = { strength: ['cd-shoulders', 'cd-hips', 'cd-breath'], calisthenics: ['cd-shoulders', 'cd-forearm', 'cd-hips', 'cd-breath'], conditioning: ['cd-hips', 'cd-shoulders', 'cd-breath'], running: ['mob-hamstrings', 'cd-hips', 'cd-breath'], swimming: ['cd-shoulders', 'cd-breath'], custom: ['cd-hips', 'cd-breath'] };
 const toEx = (lib, block, over = {}) => normalizeEx({ ...lib, id: uid(), block, libId: lib.id, ok: lib.cues, bad: lib.bad, note: '', ...over });
 
 /* ───────── Niveau et réglages dérivés du profil ───────── */
@@ -78,9 +79,10 @@ function climbSettings(ctx, eq) {
 }
 
 /* ───────── Candidats (filtrés et justifiés) ───────── */
-const SHOULDER = new Set(['dips', 'pike-pushup', 'shoulder-press', 'dynos', 'ring-dips', 'overhead-press', 'wall-handstand', 'flag-full', 'flag-tuck']);
-const ELBOW = new Set(['pullup-heavy', 'lockoff', 'explosive-pullup', 'wrist-extension', 'oap', 'oap-negative', 'archer-pullup']);
-const KNEE = new Set(['bulgarian', 'cossack', 'jump-vertical', 'skater-jumps', 'step-up-explosive', 'squat-loaded', 'pistol', 'box-jump', 'back-squat', 'run-hills', 'run-intervals']);
+const SHOULDER = new Set(['dips', 'pike-pushup', 'shoulder-press', 'dynos', 'ring-dips', 'overhead-press', 'wall-handstand', 'flag-full', 'flag-tuck', 'shoulder-press-machine', 'arnold-press', 'handstand-pushup-wall', 'freestanding-handstand', 'korean-dips', 'straight-bar-dips', 'strict-muscle-up', 'muscle-up-band', 'tuck-planche', 'back-lever-tuck', 'skin-the-cat', 'flag-negative', 'flag-vertical', 'campus-ladders']);
+const ELBOW = new Set(['pullup-heavy', 'lockoff', 'explosive-pullup', 'wrist-extension', 'oap', 'oap-negative', 'archer-pullup', 'typewriter-pullup', 'skull-crusher', 'strict-muscle-up', 'back-lever-tuck', 'campus-ladders']);
+const AVOID_IDS = new Set(['fingers', 'shoulders', 'elbows', 'wrists', 'back', 'knees', 'ankles']);
+const KNEE = new Set(['bulgarian', 'cossack', 'jump-vertical', 'skater-jumps', 'step-up-explosive', 'squat-loaded', 'pistol', 'box-jump', 'back-squat', 'run-hills', 'run-intervals', 'front-squat', 'hack-squat', 'leg-extension', 'pistol-box', 'walking-lunge', 'split-squat', 'smith-squat', 'db-step-up', 'burpee', 'dynos']);
 function customPool(activityId, ctx) {
   const cats = Object.values(ctx.categories).filter((c) => c.activityId === activityId);
   const capIds = new Set(cats.flatMap((c) => (c.caps?.length ? c.caps.map((x) => x.id) : [c.id])));
@@ -138,6 +140,13 @@ export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, 
   return { ok, excluded };
 }
 
+/** Prise de muscle : séries de 8 à 12 répétitions, 3 séries au moins, 1 à 2 min de repos (exercices de force à répétitions seulement). */
+const HYPER_KINDS = new Set(['pull', 'legs', 'core', 'antagonist']);
+function hypertrophyScheme(ex, lib, plan) {
+  if (!plan.hypertrophy || plan.circuit || !ex || ex.mode === 'time' || lib?.mode === 'time' || !HYPER_KINDS.has(lib?.kind || ex.kind) || lib?.role !== 'main') return;
+  if (lib.minLevel >= 3) return; // figures et mouvements très durs : on garde leur schéma
+  ex.repsMin = 8; ex.repsMax = 12; ex.sets = Math.max(3, Number(ex.sets) || 3); ex.rest = Math.max(60, Math.min(120, Number(ex.rest) || 90));
+}
 /* ───────── Simulation avant génération ───────── */
 /**
  * opts : { activityId, mode: weaknesses|strengths|goal, goalId, capId, minutes, intentions:[{id,p}], envId, light, priorities:{capId:0..3}, seed }
@@ -166,6 +175,8 @@ export function planSession(opts = {}, ctx) {
   for (const c of opts.strengthCaps || []) add(c, 1, 'point fort que tu as choisi');
   for (const c of opts.weakCaps || []) add(c, 1.2, 'point faible que tu as choisi');
   for (const [c, w] of Object.entries(muscleCaps(opts.muscles || []))) add(c, w * 0.8, 'muscles que tu as choisis');
+  // Silhouette visée (Profil › Mon corps et mes préférences) : ses muscles passent en priorité, sans écraser tes choix du jour.
+  if (!(opts.muscles || []).length && bodyAdj.groups?.length) { const rel = relevantCaps(ctx, activityId); for (const [c, w] of Object.entries(muscleCaps(bodyAdj.groups))) if (rel[c] != null) add(c, w * 0.5, 'ta silhouette visée'); }
   if (custom) { /* déjà ciblé par la personne */ }
   else if (goal) for (const { id, w } of goalCaps(goal, ctx)) { const st = byCap[id] || capacityState(id, ctx); add(id, w * (st.level == null ? 1 : 1.25 - st.level / 4), `requise pour « ${goalLabel(goal)} » (poids ${w})${st.level != null ? ` · ${STATUS_WORD[st.status]}` : ' · niveau non renseigné'}`); }
   else if (mode === 'strengths') {
@@ -191,6 +202,12 @@ export function planSession(opts = {}, ctx) {
   if (light) { add('mobilite_hanches', 0.6, 'mode léger / récupération'); add('mobilite_epaules', 0.5, 'mode léger / récupération'); }
   for (const [id, p] of Object.entries(opts.priorities || {})) { if (Number(p) <= 0) delete targets[id]; else targets[id] = Number(p); if (!reasons[id]) reasons[id] = ['priorité choisie']; else reasons[id].push('priorité modifiée par toi'); }
 
+  // 8.30 : sans choix explicite des zones, les douleurs notées récemment (3/10 ou plus, 7 jours) sont ménagées d'office.
+  const painZones = opts.avoidZones === undefined ? activePains(ctx.pains || [], ctx.now).map((p) => p.zone).filter((z) => AVOID_IDS.has(z)) : [];
+  if (painZones.length) { opts = { ...opts, avoidZones: painZones }; bodyAdj.reasons.push(`🩹 Douleur notée récemment (${painZones.map((z) => ZONE_LABEL[z]).join(', ')}) : les exercices qui chargent cette zone sont écartés. Touche « C’est passé » dans Profil › Mon corps et mes préférences quand ça va mieux.`); }
+  // 8.30 : poussée et tirage très déséquilibrés sur 4 semaines → un peu plus du côté le moins travaillé (raison affichée).
+  const bal = isClimbing(activityId) || parts.length || custom || opts.capId || light ? null : muscleBalance(ctx);
+  if (bal?.unbalanced) { const rel = relevantCaps(ctx, activityId), side = bal.ratio > 2 ? ['poussee_horizontale', 'poussee_verticale'] : ['tirage_horizontal', 'tirage_vertical']; let added = false; for (const c of side) if (rel[c] != null) { add(c, 0.35, 'équilibre poussée / tirage'); added = true; } if (added) bodyAdj.reasons.push(`⚖️ ${bal.text}`); }
   const { ok, excluded } = isClimbing(activityId) ? { ok: [], excluded: [] } : candidates(activityId, ctx, { eq, level, light, noPlyo: bodyAdj.noPlyo, zones: opts.avoidZones || [], levelCap: bodyAdj.levelCap ?? null });
   const trainable = (id) => isClimbing(activityId) || ok.some((x) => (x.caps?.[id] || 0) >= 0.3);
   const missing = [];
@@ -214,7 +231,7 @@ export function planSession(opts = {}, ctx) {
     intentions: opts.intentions || [], priorities: opts.priorities || {}, envId: env?.id || '', envName: env?.name || '', equipment: [...eq], level, levelHow, levelCap: bodyAdj.levelCap ?? null,
     distribution, blocks, difficulty: { value: est, text: `${est}/5 — intensité ${intensityWord} (niveau pris en compte : ${['débutant', 'intermédiaire', 'avancé'][level]}, ${levelHow})` },
     parts, avoidZones: opts.avoidZones || [], noPlyo: !!bodyAdj.noPlyo,
-    constraints, missing, seed, capId: opts.capId || '', bodyReasons: bodyAdj.reasons, restFactor: bodyAdj.restFactor, circuit: !!bodyAdj.circuit,
+    constraints, missing, seed, capId: opts.capId || '', bodyReasons: bodyAdj.reasons, restFactor: bodyAdj.restFactor, circuit: !!bodyAdj.circuit, hypertrophy: !!bodyAdj.hypertrophy,
     intentionText: custom ? `Séance sur mesure : ${[...pickGoals.map(goalLabel), ...(opts.intents || []).map((i) => i.label)].slice(0, 3).join(', ') || 'tes choix'}` : goal ? `Avancer vers « ${goalLabel(goal)} »` : light ? 'Séance légère : technique, mobilité, travail doux' : mode === 'strengths' ? 'Faire progresser tes points forts' : 'Travailler tes axes de progrès',
   };
   if (!isClimbing(activityId) && !parts.length) {
@@ -320,7 +337,7 @@ function fillBlock(list, minutes) {
 }
 const STRETCH_STATIC = ['cd-hips', 'cd-shoulders', 'cd-forearm', 'mob-hamstrings', 'mob-hips'];
 const STRETCH_DYNAMIC = ['wu-mob-lower', 'wu-mob-upper', 'wu-wrists', 'mob-thoracic', 'mob-ankles', 'mob-shoulders'];
-const MOBILITY = ['mob-hips', 'mob-thoracic', 'mob-shoulders', 'mob-ankles', 'mob-hamstrings'];
+const MOBILITY = [...new Set(['mob-hips', 'mob-thoracic', 'mob-shoulders', 'mob-ankles', 'mob-hamstrings', ...LIBRARY.filter((x) => x.kind === 'mobility' && x.role === 'main').map((x) => x.id)])];
 /** Séance au format choisi : chaque partie est construite pour son temps, dans l'ordre voulu. */
 function generateParts(plan, ctx, eq) {
   const why = [], excluded = [], out = [], used = new Set();
@@ -369,6 +386,7 @@ function generateParts(plan, ctx, eq) {
       const hint = progressHint(it.ex, ctx.history); if (hint) it.ex.note = `Dernière fois : ${hint.last}.${hint.next ? ' ' + hint.next + '.' : ''}`;
       if (plan.restFactor && plan.restFactor !== 1) it.ex.rest = Math.round((it.ex.rest || 60) * plan.restFactor);
       if (plan.circuit) it.ex.rest = Math.min(it.ex.rest || 45, 45);
+      hypertrophyScheme(it.ex, it.lib, plan);
     }
     why.push(...sel.items.map((it) => `${it.lib.name} : ${it.ex.why}.`));
     out.push(...tag(sel.items.map((x) => x.ex)));
@@ -430,7 +448,7 @@ export function generateFromPlan(plan, ctx) {
     const warm = B.warm <= 2 ? buildBlock([warmIds.find((id) => byId(id).mode === 'time') || warmIds[0]].filter(Boolean), 'warmup', B.warm, targets) : buildBlock(warmIds, 'warmup', B.warm, targets);
     const cool = B.cool ? buildBlock(coolIds, 'cool', B.cool, targets) : [];
     // Repos adaptés au profil : plus longs si la forme est basse, courts en circuit (objectif perte de poids).
-    for (const it of items) { if (plan.restFactor && plan.restFactor !== 1) it.ex.rest = Math.round((it.ex.rest || 60) * plan.restFactor); if (plan.circuit) it.ex.rest = Math.min(it.ex.rest || 45, 45); }
+    for (const it of items) { if (plan.restFactor && plan.restFactor !== 1) it.ex.rest = Math.round((it.ex.rest || 60) * plan.restFactor); if (plan.circuit) it.ex.rest = Math.min(it.ex.rest || 45, 45); hypertrophyScheme(it.ex, it.lib, plan); }
     exercises = [...warm, ...items.map((i) => i.ex), ...cool];
     why.push(...items.map((i) => `${i.lib.name} : ${i.ex.why}.`), ...(plan.bodyReasons || []));
     if (plan.light) why.push('Mode léger : uniquement des exercices à faible intensité (technique, mobilité, travail doux). Ce n’est pas un avis médical.');
@@ -539,6 +557,17 @@ export function replaceExercise(session, exId, libId, reason = '') {
   return { session: normalizeSession({ ...s, exercises, updatedAt: Date.now() }), change: { from: old.name, to: lib.name, reason } };
 }
 
+/** Pourquoi un exercice charge une zone douloureuse (doigts, épaules, coudes, genoux, poignets, dos, chevilles) ; [] sinon. */
+export function zoneReasons(x, zones = []) {
+  const z = new Set(zones), why = [];
+  if (!x) return why;
+  if (z.has('fingers') && (x.risk === 'finger' || (x.caps?.force_doigts || 0) >= 0.8)) why.push('doigts à ménager');
+  if (z.has('shoulders') && (x.risk === 'shoulder' || SHOULDER.has(x.id))) why.push('épaules à ménager');
+  if (z.has('elbows') && ELBOW.has(x.id)) why.push('coudes à ménager');
+  if (z.has('knees') && KNEE.has(x.id)) why.push('genoux à ménager');
+  why.push(...zoneRisk(x, [...z]).map((t) => t.replace(/ \(pour cette séance\)$/, '')));
+  return [...new Set(why)];
+}
 /* ───────── Matériel dynamique ───────── */
 export function rebuildForEquipment(session, eqSet, ctx, level = 2) {
   const s = normalizeSession(session), changes = [];

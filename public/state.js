@@ -17,9 +17,9 @@ import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
 import { toast, tz, $ } from './ui.js';
 
-export const APP_VERSION = '8.28.0';
+export const APP_VERSION = '8.30.0';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
-export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr', notifSound: 'doux' };
+export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr', notifSound: 'doux', redMode: false };
 export const S = {
   user: null, tab: 'home', sub: { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }, param: '',
   settings: { ...DEFAULT_SETTINGS }, seances: { items: [], tomb: {} }, seancesDirty: false, seancesVer: 0,
@@ -109,7 +109,7 @@ export async function clearLocal(userId) { try { await idb.del(`data:${userId}`)
 let onExpired = () => {};
 export const setOnExpired = (fn) => { onExpired = fn; };
 export async function api(method, path, body, opts = {}) {
-  if (S.user?.guest && !opts.guestOk) { const e = new Error('Mode invité : crée un compte gratuit (Paramètres › Compte) pour utiliser cette fonction. Tes données d’invité seront conservées.'); e.guest = true; throw e; }
+  if (S.user?.guest && !opts.guestOk) { const e = new Error('Mode invité : crée un compte gratuit (en haut des Paramètres : « Créer mon compte ») pour utiliser cette fonction. Tes données d’invité seront conservées.'); e.guest = true; throw e; }
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeout || 20000) : null;
   let res;

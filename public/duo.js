@@ -72,7 +72,7 @@ ACT.duoOpen = async () => {
 function duoSheet() {
   const d = S.duo, url = shareUrl('duo', d.code);
   openSheet(h`<div class="sharesheet center"><h2>👥 Séance à deux</h2>
-    <p class="small">Ton partenaire scanne ce code, ou tape le code dans Bibliothèque › Rejoindre.</p>
+    <p class="small">Ton partenaire scanne ce code, ou tape le code dans Bibliothèque › « ＋ Nouvelle séance » › « Rejoindre un ami ».</p>
     <div class="qrbox">${raw(qrSvg(url))}</div><div class="duocode">${d.code}</div>
     <p class="tiny muted">${d.members.length ? `Connecté${d.members.length > 1 ? 's' : ''} : ${d.members.join(', ')}` : 'En attente…'} · Les chronos et le passage à la série suivante sont partagés ; chacun note ses propres répétitions et charges.</p>
     <div class="grid2"><button class="btn pri" data-act="closeSheet">Continuer</button><button class="btn danger" data-act="duoStop">Arrêter le mode à deux</button></div></div>`);

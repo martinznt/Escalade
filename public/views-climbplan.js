@@ -1,5 +1,5 @@
 // views-climbplan.js — « Structurer ma séance d'escalade » : par objectif de fin de séance, ou partie par partie.
-import { h, raw, chip, openSheet, closeSheet, toast, ask, askText } from './ui.js';
+import { h, raw, chip, openSheet, closeSheet, toast, ask, askText, seg } from './ui.js';
 import { S, ACT, CHG, INPUT, ctx, render, go, saveSeance, ls, putItem, itemsOf, api } from './state.js';
 import { uid } from './shared.js';
 import { simulate } from './whatif.js';
@@ -16,6 +16,7 @@ import { byId } from './library.js';
 import { startPlayer } from './player.js';
 import { surprise, surpriseClimbParts, AIMS } from './surprise.js';
 import { intentsFor, AVOID_ZONES, FORMES } from './intentions.js';
+import { activePains, readiness, ZONE_LABEL } from './coachbrain.js';
 import { activeGoals, goalLabel } from './brain.js';
 import { presetParts } from './format.js';
 import { extraIntents } from './views-gen.js';
@@ -26,13 +27,16 @@ import { sessionMinutes } from './engine.js';
 import { INTENT_FAMILIES, PRIO, subIntentsFor, labelOf } from './intents.js';
 import { FILTER_DEFS, filtersFor, effectiveFilters, filterText, MODES } from './filters.js';
 import { resolvePlaces, transitions, budget } from './budget.js';
-import { placeObjective, cleanObjective, objectiveLabel, whenLabel, WHEN, FAMILY_ROLE, LINKS, chainFor, chainStatus, paramsFor } from './sessionchain.js';
+import { LINKS, chainStatus, paramsFor } from './sessionchain.js';
 import { ROLES, LOCKABLE, LOCK_STATES, FATIGUE, ATTEMPT_TYPES, FOCUS, VOLUME, TRADEOFFS, PLACE_MODES, normalizePhases, normalizePhase, fitDurations, newPhase, totalMinutes as phTotal, sessionActivities, sessionIntent, activityLabel as actLabel } from './phase.js';
 import { proposeForPhase, analyzeSession, applySuggestion, REASON, phaseName } from './phaseplan.js';
 import { loadAnalysis } from './brain.js';
 import { alternatives, levelFor } from './generator.js';
 import { assessment } from './assess.js';
 import { sportFamily, SPORT_STRUCTS, sportProposals, sportTargets, sportMoves, bestPerf, targetAdvice, targetParts, targetLabel, defaultWorkParts, workTitle, moveName, paceOf, fmtPace } from './sportplan.js';
+import { MOMENTS, MOMENT_HELP, MAX_AIMS, RANK_WEIGHT, FAMILY_ORDER, familyAim, intentAim, goalAim, textAim, cleanAims, aimCatalog, planFromAims, timeline, clock, sportShort, familyOfCaps, FAM_TITLE, cleanWindows, fromMin, tiers, rankWord } from './aimplan.js';
+import { keywordCaps } from './intentions.js';
+import { goalCaps } from './brain.js';
 
 const KEY = 'sea:climbplan';
 const DEFAULT_PARTS = [
@@ -42,12 +46,16 @@ const DEFAULT_PARTS = [
 ];
 const CP = () => (S.cp ||= fresh());
 /** Nouveau brouillon (ou brouillon repris). 8.28 : pré-rempli d'après le profil (durée habituelle, lieu adapté au sport,
- * zones à ménager, objectif de séance tiré des envies) ; les anciens brouillons à 7 étapes sont renumérotés. */
+ * zones à ménager, objectifs tirés des envies) ; les anciens brouillons à 7 étapes sont renumérotés.
+ * 8.29 : plusieurs sports (chacun dans son lieu) et des objectifs CLASSÉS ; l'ancien objectif unique devient le n°1. */
 function fresh() {
   const saved = ls.get(KEY, {}) || {};
   const c = { mode: 'goal', kind: 'bloc', envId: '', sys: {}, target: null, styles: [], minutes: 120, parts: DEFAULT_PARTS.map((p) => ({ ...p })), result: null, ...saved, result: null, reasons: [] };
   if (saved.step && saved.v !== 2) c.step = Math.max(1, saved.step - 1);
   c.v = 2;
+  c.more = Array.isArray(c.more) ? c.more : []; c.places = c.places && typeof c.places === 'object' ? c.places : {}; c.travel ??= 15; c.aims = Array.isArray(c.aims) ? c.aims : [];
+  if (c.objective?.family && !c.aims.length) { const a = familyAim(c.objective.family, c.sport || Object.keys(ctx().activities)[0] || 'conditioning', ctx().activities); if (a) c.aims = [{ ...a, when: { start: 'start', middle: 'middle', end: 'end' }[c.objective.when] || 'auto' }]; }
+  c.objective = null;
   if (!saved.step) prefill(c);
   return c;
 }
@@ -58,11 +66,51 @@ function prefill(c) {
   const mins = Number(S.settings.defaultMinutes) || Number(main.durations?.[0]) || 0;
   if (mins) c.minutes = Math.max(10, Math.min(240, mins));
   c.zones = Object.entries(S.settings.avoid || {}).filter(([, v]) => v).map(([k]) => k);
-  const fam = (main.goals || []).map((g) => ENVIE_FAMILY[g]).find(Boolean);
-  // Moment par défaut : force et puissance quand on est frais (début), endurance et mobilité en fin de séance.
-  if (fam && !c.objective) { c.objective = { family: fam, subIntents: [], when: ['force', 'puissance', 'technique'].includes(fam) ? 'start' : 'end' }; c.objFromProfile = true; }
+  // 8.30 : douleurs notées (7 derniers jours, 3/10 ou plus) → zones pré-cochées ; check-in du matin → forme pré-remplie.
+  c.painZones = activePains(x.pains, x.now).map((p) => p.zone).filter((z) => AVOID_ZONES.some(([k]) => k === z) && !c.zones.includes(z));
+  c.zones = [...c.zones, ...c.painZones];
+  const rd = readiness(x); if (rd.checked) { c.forme = rd.level === 'low' ? 'tired' : rd.level === 'top' ? 'fresh' : 'ok'; c.formeFrom = 'checkin'; }
+  // Envies du questionnaire → objectifs classés (dans l'ordre où elles ont été choisies), modifiables à l'étape 2.
+  const fams = [...new Set((main.goals || []).map((g) => ENVIE_FAMILY[g]).filter(Boolean))].slice(0, 2);
+  if (!c.aims.length && fams.length) { c.aims = fams.map((f) => familyAim(f, c.sport, x.activities)).filter(Boolean).map((a) => ({ ...a, source: 'profile' })); c.objFromProfile = true; }
   placeFor(c);
   c.prefilled = true;
+}
+/** Sports de la séance : le principal d'abord, puis les autres (chacun peut avoir son lieu). */
+const sportsOf = (c = CP()) => [c.sport, ...(c.more || []).filter((s) => s && s !== c.sport)];
+const baseEnv = (c = CP()) => c.envId || ctx().defEnv?.id || '';
+/** Lieu d'un sport : celui du sport principal = le lieu de la séance ; '' pour un autre sport = même lieu que la phase d'avant. */
+const placeOfSport = (sp, c = CP()) => (sp === c.sport ? baseEnv(c) : c.places?.[sp] || '');
+const effPlace = (sp, c = CP()) => placeOfSport(sp, c) || baseEnv(c);
+/** Horaires précis par lieu (« salle de voie de 18:00 à 19:30, puis salle de bloc de 20:00 à 21:00 »). */
+const winPlaces = (c = CP()) => [...new Set(sportsOf(c).map((sp) => effPlace(sp, c)).filter(Boolean))];
+const envName = (id) => ctx().envs.find((e) => e.id === id)?.name || 'Lieu';
+const winList = (c = CP()) => winPlaces(c).map((id) => ({ envId: id, name: envName(id), from: c.win?.[id]?.from || '', to: c.win?.[id]?.to || '' }));
+const winState = (c = CP()) => (c.useWin ? cleanWindows(winList(c)) : { windows: [], errors: [] });
+const winOn = (c = CP()) => !!c.useWin && winState(c).windows.length > 0 && ['goals', 'none'].includes(c.aim || 'goals');
+/** La structure vient des objectifs classés (ou d'une partie équilibrée par sport quand il y en a plusieurs, ou des horaires). */
+const aimsMode = (c = CP()) => ((c.aim || 'goals') === 'goals' && ((c.aims || []).length > 0 || sportsOf(c).length > 1)) || (c.aim === 'none' && sportsOf(c).length > 1) || winOn(c);
+function aimOfGoal(g, c = CP()) {
+  const x = ctx(), sp = g.activityId && sportsOf(c).includes(g.activityId) ? g.activityId : c.sport;
+  const tg = g.type === 'metric' && g.target != null && sportTargets(sp, x).some((t) => t.id === g.metricId) ? { metricId: g.metricId, value: Number(g.target) } : null;
+  return goalAim({ id: g.id, label: goalLabel(g) }, goalCaps(g, x), sp, x.activities, tg);
+}
+/** Objectifs ajoutés ailleurs (fiche d'un objectif, coach, « Que faire aujourd'hui ? ») → dans la liste classée. */
+function syncAims(c = CP()) {
+  const x = ctx(), sps = sportsOf(c);
+  // Un objectif « famille » d'un sport qui n'est plus dans la séance suit le sport principal (libellé refait).
+  c.aims = (Array.isArray(c.aims) ? c.aims : []).map((a) => (a && !sps.includes(a.sport) && String(a.key || '').startsWith('fam:') ? { ...(familyAim(a.family, c.sport, x.activities) || a), when: a.when, source: a.source } : a));
+  c.aims = cleanAims(c.aims, sps);
+  for (const id of c.goalIds || []) {
+    if (c.aims.some((a) => a.goalId === id) || c.aims.length >= MAX_AIMS) continue;
+    const g = x.goals.find((y) => y.id === id); if (!g) continue;
+    if (g.activityId && (x.activities[g.activityId] || ACTIVITIES[g.activityId]) && !sportsOf(c).includes(g.activityId)) c.more = [...(c.more || []), g.activityId];
+    const a = aimOfGoal(g, c); if (a) c.aims.push(a);
+  }
+  for (const id of c.intents || []) { const it = intentsFor(c.sport, extraIntents()).find((y) => y.id === id), a = it && intentAim(it, c.sport, x.activities); if (a && !c.aims.some((y) => y.key === a.key) && c.aims.length < MAX_AIMS) c.aims.push(a); }
+  if (c.focus?.caps && c.aims.length < MAX_AIMS) { const a = textAim({ ...c.focus, ai: true }, c.sport, x.activities); if (a) c.aims.push(a); }
+  c.intents = []; c.focus = null;
+  c.goalIds = c.aims.filter((a) => a.goalId).map((a) => a.goalId);
 }
 /** Lieu cohérent avec le sport : pour l'escalade, un lieu qui a un mur (sinon on garde le lieu et on le dit). */
 function placeFor(c) {
@@ -88,9 +136,18 @@ function sysSelect(kind) {
 /* ═════════ Créer une séance : un seul assistant, pour tous les sports, en 7 étapes ═════════
  * Structure d'abord (phases, verrous), puis propositions expliquées, améliorations au choix, et génération
  * seulement après la validation finale. */
-const STEPS = [['base', 'L’essentiel'], ['why', 'Préciser (facultatif)'], ['structure', 'Ta structure'], ['content', 'Propositions par phase'], ['improve', 'Améliorations'], ['validate', 'Valider et générer']];
+const STEPS = [['base', 'L’essentiel'], ['why', 'Tes objectifs'], ['structure', 'Ta structure'], ['content', 'Propositions par phase'], ['improve', 'Améliorations'], ['validate', 'Structure finale']];
 const SI = { base: 1, why: 2, structure: 3, content: 4, improve: 5, validate: 6 };
 const NSTEPS = STEPS.length;
+/** Ce que fait chaque étape, en une phrase (affichée en haut de l'étape). */
+const STEP_HELP = {
+  1: 'Où, quoi et combien de temps. Tout est pré-rempli d’après ton profil : change ce qui ne va pas.',
+  2: 'Ajoute ce que tu veux travailler, puis classe du plus important (n°1) au moins important. Le n°1 reçoit le plus de temps et toute la séance s’organise autour de lui.',
+  3: 'Dis à quel moment faire chaque objectif : l’app en déduit les phases et t’explique pourquoi. Ensuite, règle chaque phase si tu veux (durée, intensité, lieu…).',
+  4: 'Pour chaque phase, les exercices proposés, classés et expliqués. Change ce que tu veux.',
+  5: 'L’app relit toute la séance et propose des améliorations. Rien n’est changé sans ton accord.',
+  6: 'Ta structure finale, minute par minute : chaque phase, son lieu, l’objectif qu’elle sert et pourquoi. « Générer » crée la séance exactement comme ça.',
+};
 /** Niveau de structure : combien l'utilisateur décide de l'ossature (valable aussi pour « Surprends-moi »). */
 export const LEVELS = { libre: ['Libre', 'L’app choisit presque toute la structure.'], leger: ['Léger', 'Tu donnes quelques grandes contraintes (durée, sport).'], modere: ['Modéré', 'L’app propose une ossature visible que tu modifies.'], precis: ['Précis', 'Tu contrôles les phases et leurs durées.'], tres: ['Très précis', 'Tu verrouilles tout ce qui compte ; l’app remplit le reste.'] };
 const HELP = { auto: ['🤖', 'L’app choisit tout', 'Une séance complète ; ensuite tu peux changer le temps et les exercices de chaque partie.'], guide: ['🧭', 'L’app me guide', 'Pour chaque partie, plusieurs exercices expliqués et l’ordre conseillé : tu choisis.'], free: ['✋', 'Je compose moi-même', 'Tes parties, tes exercices, dans tout le catalogue. Rien d’imposé.'] };
@@ -101,11 +158,12 @@ const envOf = () => { const x = ctx(); return x.envs.find((e) => e.id === CP().e
 export function vClimbPlan() {
   const c = CP(); c.step ||= 1; c.sport ||= Object.keys(ctx().activities)[0] || 'conditioning';
   c.step = Math.max(1, Math.min(NSTEPS, c.step));
+  syncAims(c);
   const st = c.step, [, title] = STEPS[st - 1];
   const body = [vBase, vWhy, vStructure, vContent, vImprove, vValidate][st - 1]();
-  const NEXT = { 1: 'Préciser ›', 2: 'Voir la structure ›', 3: 'Analyser et proposer le contenu ›', 4: 'Chercher des améliorations ›', 5: 'Dernière vérification ›' };
+  const NEXT = { 1: 'Mes objectifs ›', 2: 'Voir la structure ›', 3: 'Proposer les exercices ›', 4: 'Chercher des améliorations ›', 5: 'Structure finale ›' };
   return h`<div class="steps"><div class="row between"><b>Étape ${st}/${NSTEPS} · ${title}</b>${st > 1 ? h`<button class="btn sm ghost" data-act="cpRestart">Recommencer</button>` : ''}</div>
-      <div class="meter"><i style="width:${Math.round((st / NSTEPS) * 100)}%"></i></div></div>
+      <div class="meter"><i style="width:${Math.round((st / NSTEPS) * 100)}%"></i></div><p class="tiny muted stephelp">ℹ️ ${STEP_HELP[st]}</p></div>
     ${body}
     <div class="stepdock">${st > 1 ? h`<button class="btn" data-act="cpStep" data-d="-1">‹ Retour</button>` : h`<span></span>`}${st < NSTEPS ? h`<button class="btn pri" data-act="cpStep" data-d="1">${NEXT[st] || 'Suivant ›'}</button>` : ''}</div>`;
 }
@@ -119,48 +177,79 @@ function vHow() {
     <p class="tiny muted">${LEVELS[c.level || 'modere'][1]}</p>`;
 }
 ACT.cpLevel = (el) => { const c = CP(); c.level = el.dataset.id; c.partsTouched = false; keep(); render(); };
-/* Étape 1 · L'essentiel : sport, lieu, temps, forme et objectif de la séance — pré-remplis d'après le profil.
- * « ⚡ Proposer ma séance » construit tout de suite la structure et les exercices ; les étapes suivantes servent à affiner. */
+/* Étape 1 · L'essentiel : sports (un principal + d'autres au choix), lieu de chacun, forme, temps — pré-remplis d'après
+ * le profil. « ⚡ Proposer ma séance » construit tout de suite la structure et les exercices ; les étapes suivantes affinent. */
+const noWallSports = (c = CP()) => sportsOf(c).filter((sp) => isClimb(sp) && !availableEquipment(ctx(), effPlace(sp, c)).has('wall'));
 function vBase() {
-  const c = CP(), x = ctx(), env = envOf(), noWall = isClimb(c.sport) && !availableEquipment(x, c.envId).has('wall');
-  return h`${c.prefilled ? h`<p class="tiny muted">✓ Pré-rempli d’après ton profil (durée habituelle, lieu, zones à ménager${c.objFromProfile ? ', objectif' : ''}). Tout se change ici.</p>` : ''}
+  const c = CP(), bad = noWallSports(c);
+  return h`${c.prefilled ? h`<p class="tiny muted">✓ Pré-rempli d’après ton profil (durée habituelle, lieu, zones à ménager${c.objFromProfile ? ', objectifs' : ''}). Tout se change ici.</p>` : ''}
     ${vWhere()}
-    ${objectiveCard()}
-    ${noWall ? h`<button class="btn pri big" disabled>⚡ Proposer ma séance</button><p class="tiny warn-t center">Choisis d’abord un lieu avec un mur d’escalade (voir « Lieu » plus haut).</p>`
+    ${aimsSummary()}
+    ${bad.length ? h`<button class="btn pri big" disabled>⚡ Proposer ma séance</button><p class="tiny warn-t center">Choisis d’abord un lieu avec un mur d’escalade pour ${bad.map((sp) => sportLabel(sp)).join(', ')} (voir « Lieu » plus haut).</p>`
       : h`<button class="btn pri big" data-act="cpQuick">⚡ Proposer ma séance</button><p class="tiny muted center">L’app construit la structure et choisit les exercices pour ${fmtMin(c.minutes)}. Tu pourras tout ajuster ensuite, ou continuer étape par étape pour préciser.</p>`}
     <details class="card fold" ${c.level && c.level !== 'modere' || c.help && c.help !== 'auto' ? 'open' : ''}><summary><span>🎛️ Plus de contrôle</span></summary>${vHow()}</details>`;
 }
-function vWhere() {
-  const c = CP(), x = ctx(), env = envOf(), eq = [...availableEquipment(x, c.envId)];
-  const sports = [...new Set([...Object.keys(x.activities), ...Object.keys(ACTIVITIES)])].filter((id) => x.activities[id] || ACTIVITIES[id]); // tous les sports, même pas encore dans le profil
-  return h`<div class="card stack">
-    <span class="kicker">Sport</span><div class="chips">${sports.map((id) => chip(c.sport === id, sportLabel(id), `data-act="cpSport" data-id="${id}"`))}<button type="button" class="chip add" data-act="allGo" data-to="profile/activities">＋ Ajouter un sport</button></div>
-    <label>Lieu<select data-change="cpEnv"><option value="">${x.defEnv ? 'Par défaut : ' + x.defEnv.name : 'Aucun lieu décrit'}</option>${x.envs.map((e) => h`<option value="${e.id}" ${c.envId === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label>
-    <p class="tiny ${eq.length ? 'muted' : 'warn-t'}">🧰 ${env ? `Matériel de ${env.name}` : 'Matériel'} : ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun déclaré (séance sans matériel)'} · <button class="linkish acc-t" data-act="allGo" data-to="profile/equipment">modifier</button></p>
-    ${isClimb(c.sport) && !eq.includes('wall') ? h`<div class="card flat warn-b stack"><p class="small">⚠️ ${env ? `« ${env.name} » n’a pas de mur d’escalade dans son matériel` : 'Aucun lieu avec un mur d’escalade'} : une séance d’escalade y serait impossible.</p>
-      <div class="row wrapf">${x.envs.filter((v) => availableEquipment(x, v.id).has('wall')).map((v) => h`<button class="btn sm" data-act="cpEnvPick" data-id="${v.id}">📍 ${v.name}</button>`)}<button class="btn sm" data-act="cpEnvNew">＋ Ajouter ma salle</button>${x.activities.conditioning || ACTIVITIES.conditioning ? h`<button class="btn sm" data-act="cpSport" data-id="conditioning">💪 Plutôt du renforcement ici</button>` : ''}</div></div>` : ''}
-    ${isClimb(c.sport) ? sysSelect(kindOf(c.sport)) : ''}
-    <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>
-    <span class="kicker">Temps disponible</span>
-    <div class="chips">${[30, 45, 60, 90, 120, 150, 180].map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="240" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div></div>`;
+const envOptions = (cur, x) => x.envs.map((e) => h`<option value="${e.id}" ${cur === e.id ? 'selected' : ''}>${e.name}</option>`);
+function wallWarn(sp) {
+  const c = CP(), x = ctx(), id = effPlace(sp, c), env = x.envs.find((e) => e.id === id);
+  if (!isClimb(sp) || availableEquipment(x, id).has('wall')) return '';
+  return h`<div class="card flat warn-b stack"><p class="small">⚠️ ${env ? `« ${env.name} » n’a pas de mur d’escalade dans son matériel` : 'Aucun lieu avec un mur d’escalade'} : ${sportLabel(sp)} y serait impossible.</p>
+    <div class="row wrapf">${x.envs.filter((v) => availableEquipment(x, v.id).has('wall')).map((v) => h`<button class="btn sm" data-act="cpEnvPick" data-id="${v.id}" data-sp="${sp}">📍 ${v.name}</button>`)}<button class="btn sm" data-act="cpEnvNew">＋ Ajouter ma salle</button>${sp === c.sport && (x.activities.conditioning || ACTIVITIES.conditioning) ? h`<button class="btn sm" data-act="cpSport" data-id="conditioning">💪 Plutôt du renforcement ici</button>` : ''}</div></div>`;
 }
-/* Étape 3 : pour quoi — plusieurs objectifs, une cotation à réussir, une surprise, ce qu'on veut travailler. */
+function vWhere() {
+  const c = CP(), x = ctx(), env = envOf(), eq = [...availableEquipment(x, c.envId)], more = sportsOf(c).slice(1);
+  const sports = [...new Set([...Object.keys(x.activities), ...Object.keys(ACTIVITIES)])].filter((id) => x.activities[id] || ACTIVITIES[id]); // tous les sports, même pas encore dans le profil
+  const multi = more.some((sp) => (c.places?.[sp] || '') && c.places[sp] !== baseEnv(c));
+  return h`<div class="card stack">
+    <span class="kicker">Sport principal</span><div class="chips">${sports.map((id) => chip(c.sport === id, sportLabel(id), `data-act="cpSport" data-id="${id}"`))}<button type="button" class="chip add" data-act="allGo" data-to="profile/activities">＋ Ajouter un sport</button></div>
+    <span class="kicker">Autres sports dans la même séance <span class="tiny muted">(facultatif, plusieurs possibles)</span></span>
+    <div class="chips">${sports.filter((id) => id !== c.sport).map((id) => chip(more.includes(id), sportLabel(id), `data-act="cpSport2" data-id="${id}"`))}</div>
+    <label>Lieu${more.length ? ` pour ${sportLabel(c.sport)}` : ''}<select data-change="cpEnv"><option value="">${x.defEnv ? 'Par défaut : ' + x.defEnv.name : 'Aucun lieu décrit'}</option>${envOptions(c.envId, x)}<option value="__new">＋ Ajouter un lieu…</option></select></label>
+    <p class="tiny ${eq.length ? 'muted' : 'warn-t'}">🧰 ${env ? `Matériel de ${env.name}` : 'Matériel'} : ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun déclaré (séance sans matériel)'} · <button class="linkish acc-t" data-act="allGo" data-to="profile/equipment">modifier</button></p>
+    ${more.map((sp) => h`<label>Lieu pour ${sportLabel(sp)}<select data-change="cpEnvFor" data-sp="${sp}"><option value="">Le même que la phase d’avant</option>${envOptions(c.places?.[sp] || '', x)}<option value="__new">＋ Ajouter un lieu…</option></select></label>`)}
+    ${multi && !winOn(c) ? h`<label>Trajet entre deux lieux<span class="unitbox"><input type="number" min="0" max="120" step="5" value="${c.travel ?? 15}" data-change="cpTravel" aria-label="Minutes de trajet entre deux lieux"><em>min</em></span></label><p class="tiny muted">Compté dans ton temps disponible, à chaque changement de lieu.</p>` : ''}
+    ${winCard()}
+    ${sportsOf(c).map(wallWarn)}
+    ${isClimb(c.sport) ? sysSelect(kindOf(c.sport)) : ''}
+    <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>${c.formeFrom === 'checkin' ? h`<p class="tiny muted">Pré-rempli d’après ton check-in du matin : change-le si besoin.</p>` : ''}
+    ${winOn(c) ? h`<p class="small">⏱ Temps disponible : <b>${fmtMin(c.minutes)}</b> <span class="tiny muted">(calculé d’après tes horaires)</span></p>` : h`<span class="kicker">Temps disponible${more.length ? ' (trajets compris)' : ''}</span>
+    <div class="chips">${[30, 45, 60, 90, 120, 150, 180].map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="240" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
+}
+/** Horaires précis : une arrivée et un départ par lieu ; le temps entre deux lieux devient le trajet. */
+function winCard() {
+  const c = CP(), l = winList(c), st = winState(c);
+  if (!l.length) return '';
+  const ws = st.windows, gaps = ws.slice(1).map((w, k) => w.from - ws[k].to);
+  return h`<label class="chk"><input type="checkbox" data-change="cpUseWin" ${c.useWin ? 'checked' : ''}> 🕒 J’ai des horaires précis</label>
+    ${c.useWin ? h`<p class="tiny muted">Pour chaque lieu : quand tu arrives et quand tu pars. Le temps entre deux lieux devient le trajet. Le renforcement, le gainage ou la mobilité vont là où il y a le matériel qu’il faut.</p>
+      ${l.map((w) => h`<div class="winrow"><b class="small">📍 ${w.name}</b><label class="tiny">Arrivée <input type="time" value="${w.from}" data-change="cpWin" data-id="${w.envId}" data-k="from" aria-label="Arrivée à ${w.name}"></label><label class="tiny">Départ <input type="time" value="${w.to}" data-change="cpWin" data-id="${w.envId}" data-k="to" aria-label="Départ de ${w.name}"></label></div>`)}
+      ${st.errors.length && l.every((w) => w.from && w.to) ? h`<p class="tiny warn-t">${st.errors.join(' ')}</p>` : !ws.length ? h`<p class="tiny muted">Remplis les heures de chaque lieu.</p>` : ''}
+      ${ws.length ? h`<p class="tiny ok-t">✓ ${ws.map((w) => `${w.name} ${fromMin(w.from)}–${fromMin(w.to)}`).join(' → ')}${gaps.some((g) => g > 0) ? ` · ${gaps.filter((g) => g > 0).map((g) => `${g} min entre deux`).join(', ')}` : ''}</p>` : ''}
+      ${l.length === 1 ? h`<p class="tiny muted">Un seul lieu : choisis un lieu différent pour un autre sport pour faire deux créneaux.</p>` : ''}` : ''}`;
+}
+const winSync = (c = CP()) => { const ws = winState(c).windows; if (c.useWin && ws.length) c.minutes = Math.max(10, Math.min(240, ws.at(-1).to - ws[0].from)); };
+CHG.cpUseWin = (el) => { const c = CP(); c.useWin = el.checked; winSync(c); c.result = null; c.built = null; keep(); render(); };
+CHG.cpWin = (el) => {
+  const c = CP(), id = el.dataset.id, k = el.dataset.k; if (!['from', 'to'].includes(k) || (el.value && !/^\d\d:\d\d$/.test(el.value))) return;
+  c.win = { ...(c.win || {}), [id]: { ...(c.win?.[id] || {}), [k]: el.value } }; winSync(c); c.result = null; c.built = null; keep(); render();
+};
+/** Rappel des objectifs classés dans « L'essentiel » (ils se choisissent et se classent à l'étape 2). */
+const AIM_NAME = { grade: '🧗 Réussir une cotation à la fin', target: '🎯 Atteindre une performance', surprise: '🎲 Surprends-moi', none: '🙂 Rien de particulier' };
+function aimsSummary() {
+  const c = CP(), l = c.aims || [];
+  if ((c.aim || 'goals') !== 'goals' && AIM_NAME[c.aim]) return h`<div class="card flat row between wrapf"><span class="small">🎯 Séance : ${AIM_NAME[c.aim]}</span><button class="btn sm" data-act="cpStepTo" data-id="2">Changer</button></div>`;
+  return h`<div class="card stack"><div class="row between wrapf"><b class="small">🎯 Tes objectifs${l.length > 1 ? (c.equal ? ' (sans hiérarchie)' : ' (par importance)') : ''}</b><button class="btn sm" data-act="cpStepTo" data-id="2">${l.length ? 'Modifier ou classer' : '＋ Ajouter'}</button></div>
+    ${l.length ? h`<ul class="clean small tight aimol">${l.map((a, i) => h`<li><b>${c.equal && l.length > 1 ? '•' : rankWord(l, i)}</b> ${a.emoji} ${a.label}</li>`)}</ul>` : h`<p class="tiny muted">Aucun : l’app fera une séance équilibrée${sportsOf(c).length > 1 ? ' pour chaque sport' : ''}. Ajoute-les à l’étape 2 pour une séance sur mesure.</p>`}</div>`;
+}
+/* Étape 2 · Tes objectifs : une liste CLASSÉE (n°1 = le plus important), sur un ou plusieurs sports. On ajoute depuis
+ * les 6 familles (expliquées), les intentions précises du sport, ses objectifs du profil, ou avec ses mots (IA). */
+const SRC = { profile: 'tiré de ton profil', goal: 'objectif de ton profil', ai: 'écrit avec tes mots (compris par l’IA)', words: 'écrit avec tes mots', auto: '' };
 function vWhy() {
-  const c = CP(), x = ctx(), goals = activeGoals(x), kind = kindOf(c.sport), climb = isClimb(c.sport);
-  const AIM = [['goals', '🎯', 'Mes objectifs et mes envies', 'Coche un ou plusieurs objectifs, et ce que tu veux travailler.'], ...(climb ? [['grade', '🧗', 'Réussir une cotation à la fin', 'Ex. un U8 en dévers : échauffement, montée, puis essais.']] : []), ...(sportFamily(c.sport) && sportTargets(c.sport, x).length ? [['target', '🎯', 'Atteindre une performance', TARGET_EX[sportFamily(c.sport)]]] : []), ['surprise', '🎲', 'Surprends-moi', 'Quelque chose de nouveau, ou qui te fait progresser.'], ['none', '🙂', 'Rien de particulier', 'Une séance équilibrée pour ton sport.']];
-  const aim = c.aim && AIM.some(([k]) => k === c.aim) ? c.aim : 'goals';
+  const c = CP(), x = ctx(), kind = kindOf(c.sport), climb = isClimb(c.sport);
+  const OTHER = [...(climb ? [['grade', '🧗', 'Réussir une cotation à la fin', 'Ex. un U8 en dévers : échauffement, montée, puis essais.']] : []), ...(sportFamily(c.sport) && sportTargets(c.sport, x).length ? [['target', '🎯', 'Atteindre une performance', TARGET_EX[sportFamily(c.sport)]]] : []), ['surprise', '🎲', 'Surprends-moi', 'Quelque chose de nouveau, ou qui te fait progresser.'], ['none', '🙂', 'Rien de particulier', 'Une séance équilibrée pour ton sport.']];
+  const aim = OTHER.some(([k]) => k === c.aim) ? c.aim : 'goals';
   let detail = '';
-  if (aim === 'goals') {
-    const ints = intentsFor(c.sport, extraIntents());
-    detail = h`<div class="card stack"><span class="kicker">Mes objectifs <span class="tiny muted">(plusieurs possibles)</span></span>
-      ${goals.length ? h`<div class="chips">${goals.map((g) => chip((c.goalIds || []).includes(g.id), goalLabel(g), `data-act="cpGoal" data-id="${g.id}"`))}</div>` : h`<p class="small muted">Aucun objectif en cours.</p>`}
-      <button class="btn sm" data-act="cpAddGoals">＋ Ajouter des objectifs ici</button>
-      <span class="kicker">Ce que je veux travailler <span class="tiny muted">(facultatif)</span></span>
-      ${c.focus ? h`<div class="chips"><button type="button" class="chip on" data-act="cpFocusOff">🎯 ${c.focus.label} ✕</button></div>` : ''}
-      <div class="chips">${ints.map((it) => chip((c.intents || []).includes(it.id), `${it.emoji} ${it.label}`, `data-act="cpIntent" data-id="${it.id}"`))}<button type="button" class="chip add" data-act="cpIntentWrite">✍️ Autre, avec mes mots</button></div>
-      <span class="kicker">Zones à ménager <span class="tiny muted">(facultatif)</span></span>
-      <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div></div>`;
-  } else if (aim === 'grade') {
+  if (aim === 'grade') {
     const levels = levelsOf(kind), sys = sysOf(kind), max = sys ? knownMax(x, sys, kind) : null;
     const t = c.target != null && c.target < levels.length ? c.target : Math.min(levels.length - 1, (max ?? Math.round(levels.length * 0.6)) + (levels.length > 10 ? 2 : 1));
     const advice = goalAdvice(t, max, levels); c.targetShown = t;
@@ -179,42 +268,97 @@ function vWhy() {
   } else if (aim === 'surprise') {
     detail = h`<div class="setmenu">${Object.entries(AIMS).map(([k, [ic, t, d]]) => h`<button class="setrow" data-act="cpSurAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${(c.surAim || 'any') === k ? '✓' : ''}</span></button>`)}</div>`;
   }
-  return h`<div class="setmenu">${AIM.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : ''}</span></button>`)}</div>
-    ${detail}
+  const one = aim !== 'goals' && aim !== 'none' && sportsOf(c).length > 1 ? h`<p class="tiny warn-t">Ce mode construit la séance sur ton sport principal (${sportLabel(c.sport)}) seulement.</p>` : '';
+  return h`${aim === 'goals' ? h`${aimsCard()}${addCard()}` : h`<div class="card flat stack"><div class="row between wrapf"><span class="small">Mode choisi : <b>${AIM_NAME[aim]}</b>${(c.aims || []).length ? ' · tes objectifs classés sont gardés' : ''}</span><button class="btn sm" data-act="cpAim" data-id="goals">‹ Mes objectifs classés</button></div>${one}</div>${detail}`}
+    <span class="kicker">Ou une autre façon de construire la séance</span>
+    <div class="setmenu">${OTHER.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : '›'}</span></button>`)}</div>
+    <div class="card stack"><span class="kicker">🛡️ Zones à ménager <span class="tiny muted">(facultatif)</span></span>
+      <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div>
+      ${(c.painZones || []).filter((z) => (c.zones || []).includes(z)).length ? h`<p class="tiny warn-t">🩹 Pré-coché d’après tes douleurs notées (${c.painZones.filter((z) => (c.zones || []).includes(z)).map((z) => ZONE_LABEL[z]).join(', ')}). Décoche si c’est passé.</p>` : ''}
+      <p class="tiny muted">Les exercices qui les chargent fort sont écartés de cette séance.</p></div>
     <div class="card stack"><label>📝 Mon intention pour aujourd’hui <span class="tiny muted">(facultatif)</span><textarea data-change="cpIntentText" maxlength="240" rows="2" placeholder="Ex. « Aujourd’hui je veux performer le plus possible en voie »">${c.intentText || ''}</textarea></label>
       <p class="tiny muted">Elle sert à cette séance seulement : ce n’est pas un objectif de ton profil.</p>
       ${c.intentText ? (c.intentGoal ? h`<p class="tiny ok-t">✓ Aussi enregistrée comme objectif.</p>` : h`<button class="btn sm" data-act="cpIntentGoal">🎯 Enregistrer aussi comme objectif</button>`) : ''}</div>`;
 }
+function aimsCard() {
+  const c = CP(), l = c.aims || [], n = l.length, eq = !!c.equal && n > 1, T = tiers(l), tieN = (i) => T.filter((x) => x === T[i]).length;
+  return h`<div class="card stack"><h3 style="margin:0">🎯 Tes objectifs${eq ? ', sans hiérarchie' : ', du plus au moins important'}</h3>
+    ${n > 1 ? seg('cpEqual', eq ? 'equal' : 'rank', [['rank', '🥇 Classés par importance'], ['equal', '⚖️ Sans hiérarchie']]) : ''}
+    ${n ? h`<div class="aimlist">${l.map((a, i) => h`<div class="aimrow"><span class="rank ${!eq && tieN(i) > 1 ? 'tie' : ''}" aria-label="${eq ? 'Objectif' : rankWord(l, i)}">${eq ? '•' : T[i] + 1}${!eq && tieN(i) > 1 ? '=' : ''}</span><span class="grow aimtxt"><b>${a.emoji} ${a.label}</b><small>${[!eq && T[i] === 0 ? (tieN(i) > 1 ? 'n°1 ex æquo : le plus de temps, à égalité' : 'le plus important : le plus de temps') : !eq && tieN(i) > 1 ? `${rankWord(l, i)} : même part que les autres n°${T[i] + 1}` : '', SRC[a.source] || '', a.summary || ''].filter(Boolean).join(' · ')}</small></span>
+        <span class="aimbtns">${!eq && i > 0 ? h`<button class="btn sm ic ${a.tie ? 'pri' : ''}" data-act="cpAimTie" data-i="${i}" aria-pressed="${!!a.tie}" aria-label="${a.tie ? 'Séparer de l’objectif au-dessus' : 'Même importance que l’objectif au-dessus'}" title="${a.tie ? 'Séparer de l’objectif au-dessus' : 'Même importance que l’objectif au-dessus'}">=</button>` : ''}<button class="btn sm ic" data-act="cpAimUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter ${a.label}">↑</button><button class="btn sm ic" data-act="cpAimDown" data-i="${i}" ${i < n - 1 ? '' : 'disabled'} aria-label="Descendre ${a.label}">↓</button><button class="btn sm ic danger" data-act="cpAimDel" data-i="${i}" aria-label="Retirer ${a.label}">✕</button></span></div>`)}</div>
+      <p class="tiny muted">${eq ? 'Tous aussi importants : même part de temps pour chacun, l’app choisit l’ordre selon l’effort (↑ ↓ ne change que l’ordre d’affichage). À l’étape 3, tu peux quand même fixer le moment de chacun.' : '↑ ↓ pour classer. « = » met un objectif à la même importance que celui au-dessus (ex æquo : même part de temps). Le n°1 reçoit le plus de temps, puis le n°2… À l’étape 3, tu diras à quel moment faire chacun.'}</p>
+      ${eq ? '' : h`<button class="btn sm" data-act="cpStrat">🧭 Plusieurs chemins pour ton n°1</button>`}`
+      : h`<p class="small muted">Aucun objectif pour l’instant : ajoute-en un ou plusieurs ci-dessous. Sans objectif, l’app fait une séance équilibrée.</p>`}</div>`;
+}
+const addSport = (c = CP()) => (sportsOf(c).includes(c.addFor) ? c.addFor : c.sport);
+function addCard() {
+  const c = CP(), x = ctx(), sps = sportsOf(c), sp = addSport(c), cat = aimCatalog(sp, x.activities, extraIntents()), has = (k) => (c.aims || []).some((a) => a.key === k), full = (c.aims || []).length >= MAX_AIMS;
+  const goals = activeGoals(x), short = sportShort(sp, x.activities).toLowerCase();
+  return h`<details class="card fold addaim" ${!(c.aims || []).length || c.addOpen ? 'open' : ''}><summary><span>＋ Ajouter un objectif</span></summary>
+    ${full ? h`<p class="small warn-t">${MAX_AIMS} objectifs au plus : retire-en un pour en ajouter un autre.</p>` : ''}
+    ${sps.length > 1 ? h`<span class="kicker">Pour quel sport ?</span><div class="chips">${sps.map((id) => chip(id === sp, sportLabel(id), `data-act="cpAddFor" data-id="${id}"`))}</div>` : ''}
+    <span class="kicker">1 · Ce que tu veux travailler en ${short}</span>
+    <div class="setmenu">${cat.families.map((a) => h`<button class="setrow" data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}" ${full && !has(a.key) ? 'disabled' : ''}><span class="sic">${a.emoji}</span><span class="grow"><b>${a.label}</b><small>${a.help}</small></span><span class="chev">${has(a.key) ? '✓' : '＋'}</span></button>`)}</div>
+    <span class="kicker">2 · Ou plus précis</span>
+    <div class="chips">${cat.precise.map((a) => chip(has(a.key), `${a.emoji} ${a.label.replace(/ · [^·]+$/, '')}`, `data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}" ${full && !has(a.key) ? 'disabled' : ''}`))}</div>
+    ${goals.length ? h`<span class="kicker">3 · Un de tes objectifs du profil</span><div class="chips">${goals.map((g) => chip((c.aims || []).some((a) => a.goalId === g.id), `🎯 ${goalLabel(g)}`, `data-act="cpAimGoal" data-id="${g.id}"`))}</div>` : ''}
+    <span class="kicker">${goals.length ? 4 : 3} · Avec tes mots <span class="tiny muted">(l’IA le comprend et le relie à l’entraînement)</span></span>
+    <textarea data-input="cpAiText" rows="2" maxlength="200" placeholder="Ex. « tenir plus longtemps dans les voies déversantes »" aria-label="Objectif avec tes mots">${c.aiText || ''}</textarea>
+    <button class="btn sm" data-act="cpAiAim" ${S.cpAiBusy ? 'disabled' : ''}>${S.cpAiBusy ? '⏳ L’IA réfléchit…' : '✍️ Comprendre mon objectif'}</button>
+    ${S.cpAiDraft ? aiDraftCard() : ''}</details>`;
+}
+function aiDraftCard() {
+  const d = S.cpAiDraft, x = ctx();
+  return h`<div class="card flat acc-b stack"><b>${d.emoji || '✍️'} ${d.label}</b>${d.why ? h`<p class="tiny warn-t">${d.why}</p>` : ''}${d.summary ? h`<p class="small">${d.summary}</p>` : ''}
+    ${Object.keys(d.caps || {}).length ? h`<span class="tiny muted">Ça travaille :</span><div class="chips">${Object.keys(d.caps).map((id) => h`<span class="chip static">${CAPACITIES[id]?.label || id}</span>`)}</div>` : ''}
+    ${d.family ? h`<p class="tiny muted">Type de travail compris : ${INTENT_FAMILIES[d.family]?.emoji || ''} ${FAM_TITLE[d.family]} · en ${sportShort(d.sport, x.activities).toLowerCase()}.</p>` : h`<p class="small warn-t">Je n’ai pas su le relier à un type de travail : choisis-le.</p>`}
+    <div class="chips">${FAMILY_ORDER.map((f) => chip(d.family === f, `${INTENT_FAMILIES[f].emoji} ${FAM_TITLE[f]}`, `data-act="cpAiFam" data-id="${f}"`))}</div>
+    <div class="row wrapf"><button class="btn sm pri" data-act="cpAiAdd" ${d.family ? '' : 'disabled'}>＋ Ajouter à mes objectifs</button><button class="btn sm ghost" data-act="cpAiCancel">Annuler</button></div></div>`;
+}
+/* Actions de la liste classée (aucune ne change la structure en silence : l'étape 3 la recalcule et l'explique). */
+const aimsChanged = (c = CP()) => { c.result = null; c.built = null; c.generated = false; keep(); render(); };
+const moveAim = (i, d) => { const c = CP(), l = c.aims || [], j = i + d; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; c.objFromProfile = false; aimsChanged(c); };
+ACT.cpAimUp = (el) => moveAim(Number(el.dataset.i), -1);
+ACT.cpAimDown = (el) => moveAim(Number(el.dataset.i), 1);
+ACT.cpAimDel = (el) => { const c = CP(), a = c.aims?.[Number(el.dataset.i)]; if (!a) return; c.aims.splice(Number(el.dataset.i), 1); c.goalIds = c.aims.filter((y) => y.goalId).map((y) => y.goalId); aimsChanged(c); toast(`« ${a.label} » retiré.`); };
+ACT.cpAddFor = (el) => { const c = CP(); c.addFor = el.dataset.id; c.addOpen = true; keep(); render(); };
+const pushAim = (c, a) => { if (!a) return; if (c.aims.length >= MAX_AIMS) { toast(`${MAX_AIMS} objectifs au plus.`); return; } c.aims.push(a); c.addOpen = true; c.objFromProfile = false; aimsChanged(c); toast(c.aims.length > 1 ? `Ajouté en n°${c.aims.length} : classe-le avec ↑ ↓.` : 'Ajouté en n°1.', 3500); };
+ACT.cpAimAdd = (el) => {
+  const c = CP(), sp = el.dataset.sp || c.sport, k = el.dataset.k, i = (c.aims || []).findIndex((a) => a.key === k);
+  if (i >= 0) { c.aims.splice(i, 1); c.addOpen = true; aimsChanged(c); return; }
+  const cat = aimCatalog(sp, ctx().activities, extraIntents()), a = [...cat.families, ...cat.precise].find((y) => y.key === k);
+  if (a) { const { help, ...aim } = a; pushAim(c, aim); }
+};
+ACT.cpAimGoal = (el) => {
+  const c = CP(), x = ctx(), i = (c.aims || []).findIndex((a) => a.goalId === el.dataset.id);
+  if (i >= 0) { c.aims.splice(i, 1); c.goalIds = c.aims.filter((y) => y.goalId).map((y) => y.goalId); c.addOpen = true; aimsChanged(c); return; }
+  const g = x.goals.find((y) => y.id === el.dataset.id); if (!g) return;
+  if (g.activityId && (x.activities[g.activityId] || ACTIVITIES[g.activityId]) && !sportsOf(c).includes(g.activityId)) { c.more = [...(c.more || []), g.activityId]; toast(`${sportLabel(g.activityId)} ajouté à la séance pour cet objectif.`, 3500); }
+  pushAim(c, aimOfGoal(g, c)); c.goalIds = c.aims.filter((y) => y.goalId).map((y) => y.goalId); keep();
+};
+INPUT.cpAiText = (el) => { CP().aiText = el.value.slice(0, 200); keep(); };
+// Objectif écrit avec ses mots : l'IA le relie à des capacités (réponse validée par le serveur, relue ici avant l'ajout) ;
+// sans IA (invité, hors ligne), lecture des mots-clés ; si rien n'est reconnu, l'utilisateur choisit le type de travail.
+ACT.cpAiAim = async () => {
+  const c = CP(), text = String(c.aiText || '').trim(), sp = addSport(c); if (text.length < 3) { toast('Écris ce que tu veux travailler, en quelques mots.'); return; }
+  S.cpAiBusy = true; S.cpAiDraft = null; render();
+  let r = null, why = '';
+  try { r = (await api('POST', '/api/ai/intent', { text, activityId: sp, kind: 'intent' }, { timeout: 45000 })).intent; if (r) r = { ...r, ai: true }; }
+  catch (e) { why = e.guest ? 'Sans compte, l’IA n’est pas disponible : l’app a lu tes mots.' : e.status === 503 ? 'IA indisponible : l’app a lu tes mots.' : e.message ? `IA : ${e.message}` : ''; }
+  if (!r) { const caps = keywordCaps(text); r = { label: text.slice(0, 50), emoji: '✍️', summary: '', caps }; }
+  S.cpAiBusy = false; S.cpAiDraft = { ...r, text, sport: sp, why, family: familyOfCaps(r.caps) }; render();
+};
+ACT.cpAiFam = (el) => { if (S.cpAiDraft) { S.cpAiDraft.family = el.dataset.id; render(); } };
+ACT.cpAiCancel = () => { S.cpAiDraft = null; render(); };
+ACT.cpAiAdd = () => { const c = CP(), d = S.cpAiDraft; if (!d?.family) return; const a = textAim(d, sportsOf(c).includes(d.sport) ? d.sport : c.sport, ctx().activities, d.family); S.cpAiDraft = null; c.aiText = ''; pushAim(c, a); };
 CHG.cpIntentText = (el) => { const c = CP(); c.intentText = el.value.slice(0, 240); c.intentGoal = ''; keep(); render(); };
 // Seulement sur action explicite : l'intention devient un objectif (fiche relue et modifiable avant l'enregistrement).
 ACT.cpIntentGoal = () => { const c = CP(); keep(); ACT.goalFromText?.({ dataset: { text: c.intentText, back: 'cp' } }); };
 const TARGET_EX = { run: 'Ex. 10 km en 50 min : échauffement, montée, blocs à l’allure visée.', swim: 'Ex. 100 m en 1:40 : éducatifs, montée, séries à l’allure visée.', load: 'Ex. 100 kg au squat : montée en charge, paliers, puis volume.', body: 'Ex. 15 tractions : séries faciles, séries max, pyramide.' };
 CHG.cpTMetric = (el) => { const c = CP(); c.tMetric = el.value; c.tValue = null; keep(); render(); };
 CHG.cpTValue = (el) => { const c = CP(), v = Number(String(el.value).replace(',', '.')); c.tMetric ||= sportTargets(c.sport, ctx())[0]?.id; c.tValue = Number.isFinite(v) && el.value !== '' ? v : null; keep(); render(); };
-/* ───────── Objectif de la séance : quoi → précisément → quand (début, milieu, fin, toute la séance ou une phase) ───────── */
+/* Priorités 1–4 des sous-objectifs d'une phase (réglage d'une phase). */
 const prioRows = (list, act, extra = '') => (list?.length ? h`<div class="stack tight">${list.map((x) => h`<div class="row between wrapf prow"><span class="small">${labelOf(x.id)}</span><span class="chips tight">${[1, 2, 3, 4].map((v) => chip(x.prio === v, String(v), `data-act="${act}" data-id="${x.id}" data-v="${v}" ${extra} title="${PRIO[v]}" aria-label="${labelOf(x.id)} : ${PRIO[v]}"`))}</span></div>`)}<p class="tiny muted">1 = secondaire · 2 = important · 3 = prioritaire · 4 = très prioritaire</p></div>` : '');
-function objectiveCard() {
-  const c = CP(), o = c.objective || {}, subs = o.family ? subIntentsFor(c.sport)[o.family] || [] : [], sel = (id) => (o.subIntents || []).some((x) => x.id === id);
-  const hint = { start: 'Juste après l’échauffement, quand tu es encore frais.', middle: 'Au cœur de la séance, après une montée progressive.', end: 'En fin de séance, après la préparation.', all: 'Chaque phase de travail y contribue.' };
-  return h`<div class="card stack chain"><h3 style="margin:0">🎯 Objectif de la séance <span class="tiny muted">(facultatif)</span></h3>
-    <span class="kicker">1 · Quoi ?</span>
-    <div class="chips">${chip(!o.family, 'Aucun en particulier', 'data-act="cpObjFam" data-id=""')}${Object.entries(INTENT_FAMILIES).map(([k, f]) => chip(o.family === k, `${f.emoji} ${f.label}`, `data-act="cpObjFam" data-id="${k}"`))}</div>
-    ${o.family ? h`<span class="kicker">2 · Précisément <span class="tiny muted">(plusieurs possibles)</span></span>
-      <div class="chips">${subs.map((x) => chip(sel(x.id), x.label, `data-act="cpObjSub" data-id="${x.id}"`))}</div>${prioRows(o.subIntents, 'cpObjPrio')}
-      <span class="kicker">3 · À quel moment de la séance ?</span>
-      <div class="chips">${Object.entries(WHEN).map(([k, l]) => chip((o.when || 'end') === k, l, `data-act="cpObjWhen" data-id="${k}"`))}</div>
-      <p class="tiny muted">${hint[o.when] || (o.when?.startsWith('ph:') ? 'Sur la phase que tu as choisie.' : hint.end)} Dans « Ta structure », tu peux aussi le poser sur une phase précise.</p>` : ''}
-    ${o.family || (c.goalIds || []).length ? h`<button class="btn sm" data-act="cpStrat">🧭 Voir plusieurs chemins pour y arriver</button>` : ''}</div>`;
-}
-const objSet = (fn) => { const c = CP(); c.objective = c.objective || { family: '', subIntents: [], when: 'end' }; fn(c.objective); c.objFromProfile = false; if (!c.objective.family) c.objective = null; keep(); render(); };
-ACT.cpObjFam = (el) => objSet((o) => { if (o.family !== el.dataset.id) o.subIntents = []; o.family = el.dataset.id; });
-ACT.cpObjSub = (el) => objSet((o) => { const id = el.dataset.id, l = o.subIntents || []; o.subIntents = l.some((x) => x.id === id) ? l.filter((x) => x.id !== id) : [...l, { id, prio: 3 }]; });
-ACT.cpObjPrio = (el) => objSet((o) => { o.subIntents = (o.subIntents || []).map((x) => (x.id === el.dataset.id ? { ...x, prio: Number(el.dataset.v) } : x)); });
-ACT.cpObjWhen = (el) => objSet((o) => { o.when = el.dataset.id; });
-/** Déplacer l'objectif depuis « Ta structure » (moment ou phase précise) : la structure est réorganisée, rien d'autre. */
-CHG.cpObjWhere = (el) => { const c = CP(); if (!c.objective) return; c.objective.when = el.value; const r = placeObjective(c.parts, c.objective); c.parts = r.phases; c.partsTouched = true; c.result = null; keep(); render(); if (r.notes.length) toast(r.notes[0], 4000); };
-const withObjective = (phases) => { const o = cleanObjective(CP().objective); return o ? placeObjective(phases, o).phases : phases; };
-
 /* ───────── Filtres : séance → phase → exercice, selon l'activité ───────── */
 const levelOfScope = (scope) => (scope === 'g' ? (CP().filters ||= {}) : (CP().parts[Number(scope)].filters ||= {}));
 function filterField(key, scope, inherited) {
@@ -259,8 +403,8 @@ const lockIc = (p, k) => LOCK_STATES[p.locks?.[k] || 'free'][0];
 /** Intention ponctuelle de la séance (texte + capacités des intentions cochées) : jamais un objectif du compte. */
 function sessIntent() {
   const c = CP(), caps = {};
-  for (const it of intentsFor(c.sport, extraIntents()).filter((x) => (c.intents || []).includes(x.id))) for (const [k, w] of Object.entries(it.caps || {})) caps[k] = Math.max(caps[k] || 0, w);
-  for (const [k, w] of Object.entries(c.focus?.caps || {})) caps[k] = Math.max(caps[k] || 0, w);
+  // Capacités des objectifs classés, pondérées par le rang (le n°1 compte le plus).
+  if ((c.aim || 'goals') === 'goals') (c.aims || []).forEach((a, i) => { for (const [k, w] of Object.entries(a.caps || {})) caps[k] = Math.max(caps[k] || 0, w * (RANK_WEIGHT[i] ?? 1)); });
   return sessionIntent({ text: c.intentText, priorities: Object.entries(caps).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k), savedAsGoal: c.intentGoal || '' });
 }
 function vStructure() {
@@ -268,21 +412,37 @@ function vStructure() {
   const compact = (lvl === 'libre' || lvl === 'leger') && !c.editStruct;
   if (c.aim === 'surprise' && !isClimb(c.sport) && compact) return h`<div class="card"><p class="small">🎲 Niveau « ${LEVELS[lvl][0]} » : la surprise choisit la structure. Passe à l’étape suivante pour la découvrir.</p><button class="btn sm" data-act="cpEditStruct">✏️ Construire la structure moi-même</button></div>`;
   const fit = total !== c.minutes ? fitDurations(ph, c.minutes) : null;
-  const tr = transitions(ph, ctx().envs, c.envId || ctx().defEnv?.id || ''), bu = budget(ph, c.minutes, tr), obj = cleanObjective(c.objective), nf = Object.keys(c.filters || {}).length;
+  const tr = transitions(ph, ctx().envs, baseEnv(c)), bu = budget(ph, c.minutes, tr), nf = Object.keys(c.filters || {}).length;
   const issues = tr.flatMap((t) => t.issues.map((x) => ({ ...x, to: t.to })));
-  return h`<div class="card stack"><div class="row between wrapf"><b>${fmtMin(bu.needed || total)} au total</b><span class="tiny muted">${ph.length} phase${ph.length > 1 ? 's' : ''} · ${acts.length > 1 ? `${acts.length} activités` : actLabel(acts[0] || c.sport)}${bu.travel ? ` · 🚗 ${bu.travel} min de déplacement` : ''}</span></div>
+  return h`${aimsMode(c) ? momentsCard() : ''}<div class="card stack"><div class="row between wrapf"><b>${fmtMin(bu.needed || total)} au total</b><span class="tiny muted">${ph.length} phase${ph.length > 1 ? 's' : ''} · ${acts.length > 1 ? `${acts.length} activités` : actLabel(acts[0] || c.sport)}${bu.travel ? ` · 🚗 ${bu.travel} min de déplacement` : ''}</span></div>
       <p class="tiny ${bu.over ? 'warn-t' : 'muted'}">⏱ ${bu.text}</p>
       ${bu.over ? h`<details class="how mini" open><summary>Ce qui pourrait être sacrifié</summary>${bu.sacrifice.map((x, k) => h`<div class="row between wrapf"><span class="small">${x.text} <span class="tiny muted">— ${x.compromise}</span></span><button class="btn sm" data-act="cpSacrifice" data-id="${k}">Appliquer</button></div>`)}</details>` : ''}
-      ${total !== c.minutes && !bu.travel ? h`<div class="row wrapf">${fit?.ok ? h`<button class="btn sm" data-act="cpFit">⚖️ Ajuster à ${fmtMin(c.minutes)} (les 🔒 ne bougent pas)</button>` : h`<span class="tiny warn-t">${fit?.error || ''}</span>`}<button class="btn sm ghost" data-act="cpKeepTotal">Garder ${fmtMin(total)}</button></div>` : bu.travel && total !== c.minutes ? h`<button class="btn sm ghost" data-act="cpKeepTotal">Garder ${fmtMin(total)} de phases</button>` : ''}
+      ${total !== c.minutes && !bu.travel ? h`<div class="row wrapf">${fit?.ok ? h`<button class="btn sm" data-act="cpFit">⚖️ Ajuster à ${fmtMin(c.minutes)} (les 🔒 ne bougent pas)</button>` : h`<span class="tiny warn-t">${fit?.error || ''}</span>`}<button class="btn sm ghost" data-act="cpKeepTotal">Garder ${fmtMin(total)}</button></div>` : bu.travel && bu.needed !== c.minutes ? h`<button class="btn sm ghost" data-act="cpKeepTotal">Garder ${fmtMin(bu.needed)} (trajets compris)</button>` : ''}
       ${sessIntent().text ? h`<p class="tiny acc-t">📝 Intention d’aujourd’hui : « ${sessIntent().text} »</p>` : ''}
-      ${obj ? h`<div class="row between wrapf"><span class="small">🎯 <b>${objectiveLabel(obj)}</b>${obj.subIntents.length ? ` : ${obj.subIntents.map((x) => labelOf(x.id)).join(', ')}` : ''}</span>
-        <select data-change="cpObjWhere" aria-label="Moment de l’objectif">${Object.entries(WHEN).map(([k, l]) => h`<option value="${k}" ${obj.when === k ? 'selected' : ''}>${l}</option>`)}${ph.map((p, k) => (p.type === 'pause' ? '' : h`<option value="ph:${p.id}" ${obj.when === 'ph:' + p.id ? 'selected' : ''}>Phase ${k + 1} : ${phaseName(p)}</option>`))}</select></div>` : ''}
       <button class="btn sm" data-act="cpFilters">🔎 Filtres pour toute la séance${nf ? ` (${nf})` : ''}</button>
       ${nf ? h`<p class="tiny muted">${filterText(globalFilterValues()).join(' · ')}</p>` : ''}</div>
     ${issues.length ? h`<div class="card flat warn-b stack"><b class="small">↔️ Transitions entre phases</b>${issues.map((x) => h`<div class="row between wrapf"><span class="small">Phase ${x.to + 1} : ${x.text}</span>${x.proposal ? h`<button class="btn sm" data-act="cpTransPause" data-id="${x.to}">＋ ${x.proposal.minutes} min de récupération</button>` : ''}</div>`)}</div>` : ''}
     ${compact ? h`<div class="setmenu">${ph.map((p) => h`<div class="setrow"><span class="sic">${ROLES[p.role][0]}</span><span class="grow"><b>${phaseName(p)}</b><small>${actLabel(p.activity)} · ${fmtMin(p.minutes)}</small></span></div>`)}</div>
         <button class="btn" data-act="cpEditStruct">✏️ Modifier la structure</button>` : vPhases()}`;
 }
+/** Étape 3 : le moment de chaque objectif (auto, début, milieu, fin) et ce que l'app en déduit, expliqué. */
+function momentsCard() {
+  const c = CP(), l = c.aims || [];
+  return h`<div class="card stack"><h3 style="margin:0">⏱️ À quel moment ?</h3>
+    ${l.length ? h`<div class="aimlist">${l.map((a, i) => h`<div class="momrow"><span class="rank">${c.equal && l.length > 1 ? '•' : tiers(l)[i] + 1}</span><span class="grow small aimtxt">${a.emoji} ${a.label}</span><select data-change="cpAimWhen" data-i="${i}" aria-label="Moment de ${a.label}">${Object.entries(MOMENTS).map(([k, t]) => h`<option value="${k}" ${(a.when || 'auto') === k ? 'selected' : ''}>${t}</option>`)}</select></div>`)}</div>
+      <ul class="clean tight tiny muted">${Object.entries(MOMENT_HELP).map(([k, t]) => h`<li><b>${MOMENTS[k]}</b> — ${t}</li>`)}</ul>`
+      : h`<p class="small muted">Pas d’objectif classé : une partie équilibrée pour chaque sport. Ajoute des objectifs à l’étape 2 pour une séance sur mesure.</p>`}
+    ${c.partsTouched ? h`<p class="tiny warn-t">Tu as modifié les phases à la main. Changer un moment recalcule toute la structure (tes réglages de phases seront remplacés).</p>`
+      : (c.planNotes || []).length ? h`<div class="card flat acc-b"><b class="small">🧠 Comment la séance s’adapte</b><ul class="clean tight small">${c.planNotes.map((t) => h`<li>${t}</li>`)}</ul></div>` : ''}</div>`;
+}
+ACT.cpAimTie = (el) => { const c = CP(), a = c.aims?.[Number(el.dataset.i)]; if (!a || !Number(el.dataset.i)) return; a.tie = !a.tie; c.result = null; c.built = null; keep(); render(); toast(a.tie ? `« ${a.label} » : même importance que l’objectif au-dessus.` : `« ${a.label} » : séparé, un rang en dessous.`); };
+ACT.cpEqual = (el) => { const c = CP(); c.equal = el.dataset.id === 'equal'; c.result = null; c.built = null; keep(); render(); toast(c.equal ? 'Sans hiérarchie : même temps pour chaque objectif.' : 'Objectifs classés : le n°1 reçoit le plus de temps.'); };
+CHG.cpAimWhen = (el) => {
+  const c = CP(), a = c.aims?.[Number(el.dataset.i)]; if (!a || !MOMENTS[el.value]) return;
+  const touched = c.partsTouched; a.when = el.value;
+  c.parts = proposedPhases(); c.partsFor = partsKey(); c.partsTouched = false; c.hist = []; c.changes = []; c.ignored = []; c.result = null; c.built = null; c.generated = false;
+  keep(); render(); toast(touched ? 'Structure recalculée selon les moments (tes réglages de phases ont été remplacés).' : 'Structure recalculée : regarde « Comment la séance s’adapte ».', 3500);
+};
 ACT.cpEditStruct = () => { CP().editStruct = true; keep(); render(); };
 /** Appliquer un sacrifice proposé par le budget (seulement sur ton clic ; les 🔒 ne bougent pas). */
 ACT.cpSacrifice = (el) => {
@@ -293,7 +453,7 @@ ACT.cpSacrifice = (el) => {
   c.partsTouched = true; c.result = null; keep(); render(); toast(`Fait : ${x.text.toLowerCase()}.`);
 };
 ACT.cpTransPause = (el) => { const c = CP(), at = Number(el.dataset.id); c.parts.splice(at, 0, newPhase('pause', { minutes: 10, goal: 'Récupérer avant la suite' }, Date.now() + at)); c.partsTouched = true; c.result = null; keep(); render(); };
-ACT.cpKeepTotal = () => { const c = CP(); c.minutes = phTotal(c.parts); keep(); render(); };
+ACT.cpKeepTotal = () => { const c = CP(); c.minutes = budget(c.parts, c.minutes, transitions(c.parts, ctx().envs, baseEnv(c))).needed || phTotal(c.parts); keep(); render(); };
 ACT.cpFit = () => { const c = CP(), r = fitDurations(c.parts, c.minutes); if (!r.ok) return toast(r.error, 4500); c.parts = r.phases; c.partsTouched = true; keep(); render(); };
 /* ═════════ Étape 5 : propositions classées et expliquées, phase par phase ═════════ */
 function vContent() {
@@ -343,33 +503,65 @@ ACT.cpUndo = () => {
   const c = CP(), last = (c.hist || []).pop(); if (!last) return;
   const st = JSON.parse(last); c.parts = st.parts; c.built = st.built; c.changes = st.changes; c.generated = false; rebuild(); keep(); render(); toast('Structure précédente rétablie.');
 };
-/* ═════════ Étape 7 : dernière validation, puis génération ═════════ */
+/* ═════════ Étape 6 : structure finale (minute par minute), puis génération ═════════ */
 const INT_W = { easy: 1, mod: 2, hard: 3, max: 4 };
 const loadOf = (ph) => ph.reduce((t, p) => t + (p.type === 'pause' ? 0 : (Number(p.minutes) || 0) * (INT_W[p.intensity] || 2)), 0);
+/** Réglages particuliers d'une phase, en une ligne (filtres, priorités, limites, contraintes, verrous). */
+function phaseExtras(p) {
+  const c = CP(), locks = Object.entries(p.locks || {}).filter(([, v]) => v === 'user').map(([k]) => LOCKABLE[k].toLowerCase());
+  return [p.subIntents?.length && !p.aimKey ? p.subIntents.map((x) => `${labelOf(x.id)} (${x.prio})`).join(', ') : '', Object.keys(p.filters || {}).length ? filterText(effectiveFilters([c.filters || {}, p.filters]).filters).join(', ') : '',
+    p.avoid?.length ? `limiter : ${p.avoid.join(', ').toLowerCase()}` : '', p.constraints || '', locks.length ? `🔒 ${locks.join(', ')}` : ''].filter(Boolean).join(' · ');
+}
 function vValidate() {
   const c = CP(); if (!c.built && !c.result) buildNow();
-  const ph = c.built || [], sug = c.built ? suggestionsNow() : [], intent = sessIntent();
-  const appDecides = ph.filter((p) => p.type !== 'pause' && !Array.isArray(p.pick)).map(phaseName);
   if (c.generated && c.result) return vResult(true);
-  return h`<div class="card stack"><h3 style="margin:0">📋 Ta séance avant génération</h3>
-      <p class="small"><b>${fmtMin(phTotal(ph) || c.minutes)}</b> · ${ph.length} phase${ph.length > 1 ? 's' : ''} · ${sessionActivities(ph).map(actLabel).join(', ') || sportLabel(c.sport)}</p>
+  const ph = c.built || [], sug = c.built ? suggestionsNow() : [], intent = sessIntent(), aims = (c.aim || 'goals') === 'goals' ? c.aims || [] : [];
+  const tr = transitions(ph, ctx().envs, baseEnv(c)), tl = timeline(ph, tr), pls = placesNow(ph);
+  // Horaires précis : vraies heures (18:00–18:20) ; sinon minutes depuis le début (0:00–0:20).
+  const t0 = winOn(c) ? winState(c).windows[0]?.from : null, at = (m) => (t0 == null ? clock(m) : fromMin(t0 + m));
+  const appDecides = ph.filter((p) => p.type !== 'pause' && !Array.isArray(p.pick)).map(phaseName);
+  const exOf = (p) => (c.result?.exercises || []).filter((e) => e.phase === p.id && !/^Déplacement/.test(e.name));
+  const row = (r) => {
+    if (r.kind === 'travel') return h`<div class="trow travel"><span class="tt">${at(r.from)}–${at(r.to)}</span><span class="grow small">🚗 Trajet vers ${pls[r.i]?.name || 'l’autre lieu'} · ${r.minutes} min</span></div>`;
+    const p = ph[r.i], ex = exOf(p), extra = phaseExtras(p);
+    return h`<div class="trow"><span class="tt">${at(r.from)}–${at(r.to)}</span><div class="grow tbody"><b class="small">${ROLES[p.role]?.[0] || '•'} ${phaseName(p)}</b>${p.aimRank === 0 && !p.aimEqual ? h` <span class="tag acc">n°1</span>` : ''}
+      <div class="tiny muted">${actLabel(p.activity)} · 📍 ${pls[r.i]?.name || '—'}${p.type === 'pause' ? '' : ` · ${INTENSITY[p.intensity]?.[1] || ''}`} · ${fmtMin(p.minutes)}${p.type === 'climb' ? ` · ${rangeText(p)}` : ''}</div>
+      ${p.aimLabel ? h`<div class="tiny acc-t">${p.aimEqual ? 'Sert ton objectif' : `Sert ton objectif n°${p.aimRank + 1}${String(p.goal || '').includes('=)') ? ' ex æquo' : ''}`} : ${p.aimLabel}</div>` : p.prepFor ? h`<div class="tiny acc-t">Prépare ton objectif n°1</div>` : ''}
+      ${ex.length ? h`<div class="tiny">${ex.slice(0, 4).map((e) => e.name).join(' · ')}${ex.length > 4 ? ` · +${ex.length - 4}` : ''}</div>` : ''}
+      ${extra ? h`<div class="tiny muted">${extra}</div>` : ''}
+      ${!c.partsTouched && (p.why || []).length ? h`<details class="how mini"><summary>Pourquoi ici ?</summary><ul class="clean tight tiny">${p.why.map((t) => h`<li>${t}</li>`)}</ul></details>` : ''}</div></div>`;
+  };
+  return h`<div class="card stack"><h3 style="margin:0">📋 Ta structure finale</h3>
+      <p class="small"><b>${fmtMin(tl.total || c.minutes)}</b> · ${ph.length} phase${ph.length > 1 ? 's' : ''} · ${sessionActivities(ph).map(actLabel).join(', ') || sportLabel(c.sport)}</p>
+      ${aims.length ? h`<p class="small">🎯 ${aims.map((a, i) => (c.equal && aims.length > 1 ? a.label : `${tiers(aims)[i] + 1}${tiers(aims).filter((x) => x === tiers(aims)[i]).length > 1 ? '=' : ''}. ${a.label}`)).join(' · ')}${c.equal && aims.length > 1 ? ' (sans hiérarchie)' : ''}</p>` : AIM_NAME[c.aim] ? h`<p class="small">🎯 ${AIM_NAME[c.aim]}</p>` : ''}
       ${intent.text ? h`<p class="small">📝 Intention : « ${intent.text} » <span class="tiny muted">(pour cette séance seulement)</span></p>` : ''}
-      <p class="small">⏱ ${budget(ph, c.minutes, transitions(ph, ctx().envs, c.envId || ctx().defEnv?.id || '')).text}</p>
+      <p class="small">⏱ ${budget(ph, c.minutes, tr).text}</p>
       <p class="small">📈 Charge estimée : <b>${loadOf(ph)}</b> <span class="tiny muted">(minutes × intensité, indicatif : ${loadOf(ph) < 150 ? 'légère' : loadOf(ph) < 350 ? 'moyenne' : 'élevée'})</span></p>
-      ${cleanObjective(c.objective) ? h`<p class="small">🎯 Objectif : ${objectiveLabel(cleanObjective(c.objective))} · ${whenLabel(cleanObjective(c.objective), ph)}</p>` : ''}
       ${Object.keys(c.filters || {}).length ? h`<p class="small">🔎 Filtres : ${filterText(globalFilterValues()).join(' · ')}</p>` : ''}
-      <ol class="small">${ph.map((p, k) => h`<li><b>${phaseName(p)}</b>${p.objective ? ' 🎯' : ''} — ${actLabel(p.activity)} · ${fmtMin(p.minutes)} · ${ROLES[p.role][1]}${p.travelBefore ? ` · 🚗 ${p.travelBefore} min avant` : ''}${p.envName ? ` · 📍 ${p.envName}` : ''}${p.subIntents?.length ? ` · ${p.subIntents.map((x) => `${labelOf(x.id)} (${x.prio})`).join(', ')}` : ''}${Object.keys(p.filters || {}).length ? ` · ${filterText(effectiveFilters([c.filters || {}, p.filters]).filters).join(', ')}` : ''}${p.priorities.length ? ` · priorités : ${p.priorities.map((k) => CAPACITIES[k]?.label.toLowerCase() || k).join(', ')}` : ''}${p.avoid.length ? ` · limiter : ${p.avoid.join(', ').toLowerCase()}` : ''}${p.constraints ? ` · ${p.constraints}` : ''}${Object.entries(p.locks).filter(([, v]) => v === 'user').length ? ` · 🔒 ${Object.entries(p.locks).filter(([, v]) => v === 'user').map(([k]) => LOCKABLE[k].toLowerCase()).join(', ')}` : ''}</li>`)}</ol>
+      <div class="tline">${tl.rows.map(row)}</div>
+      ${(c.planDropped || []).length && !c.partsTouched ? h`<p class="tiny warn-t">Pas assez de temps pour : ${c.planDropped.join(', ')}.</p>` : ''}
       ${(c.changes || []).length ? h`<p class="small">✓ Changements appliqués : ${c.changes.join(' ; ')}</p>` : ''}
       ${sug.length ? h`<p class="small warn-t">⚠️ Points d’attention : ${sug.map((x) => x.title).join(' ; ')}</p>` : ''}
       ${appDecides.length ? h`<p class="tiny muted">🤖 Laissé à l’app : les exercices de ${appDecides.join(', ')}.</p>` : ''}
       ${unusualCard()}
-      <div class="row wrapf"><button class="btn sm" data-act="cpEditAi">✍️ Modifier avec l’IA</button></div>
+      <div class="row wrapf"><button class="btn sm" data-act="cpEditAi">✍️ Modifier avec l’IA</button><button class="btn sm" data-act="cpStepTo" data-id="3">✏️ Changer la structure</button></div>
       <button class="btn pri big" data-act="cpGenerate">✅ Générer la séance</button></div>`;
 }
 ACT.cpGenerate = () => { const c = CP(); if (c.built) rebuild(); else buildNow(); c.generated = true; keep(); render(); scrollRes(); };
 /** Format proposé selon le sport, le temps et le « pour quoi ». */
 function proposeParts() {
   const c = CP(), M = c.minutes || 60, kind = kindOf(c.sport);
+  c.planNotes = []; c.planDropped = [];
+  // 8.29 : objectifs classés et/ou plusieurs sports → structure calculée (et expliquée) par aimplan.
+  if (aimsMode(c)) {
+    const x = ctx(), sports = sportsOf(c);
+    const wins = winOn(c) ? winList(c) : null;
+    const r = planFromAims({ aims: c.aim === 'none' ? [] : c.aims, sports, envId: baseEnv(c), places: c.places, minutes: M, forme: FORME_MAP[c.forme] || 'normal', travel: c.travel ?? 15, equal: !!c.equal,
+      equip: Object.fromEntries(sports.map((sp) => [sp, availableEquipment(x, effPlace(sp, c))])), acts: x.activities,
+      ...(wins ? { windows: wins, envEquip: Object.fromEntries(wins.map((w) => [w.envId, availableEquipment(x, w.envId)])) } : {}) });
+    c.planNotes = r.notes; c.planDropped = r.dropped.map((a) => a.label);
+    if (r.phases.length) return r.phases;
+  }
   if (isClimb(c.sport) && c.aim === 'grade') return goalParts({ kind, target: c.targetShown ?? c.target ?? 0, levels: levelsOf(kind), styles: c.styles, minutes: M });
   if (isClimb(c.sport) && c.aim === 'surprise') { const r = surpriseClimbParts({ kind, minutes: M, aim: c.surAim || 'any', forme: FORME_MAP[c.forme] || 'normal', envId: c.envId, seed: c.seed || 1 }, ctx()); c.reasons = r.reasons; c.aimDone = r.aim; c.surName = r.name; c.surGoal = r.goal; c.surSystem = r.system?.id || ''; return r.parts; }
   if (isClimb(c.sport)) {
@@ -392,6 +584,14 @@ function buildOpts() {
   const levels = levelsOf(kindOf(c.sport)), t = c.targetShown ?? c.target;
   const tgt = c.aim === 'target' && c.tMetric && Number.isFinite(c.tValue) ? targetLabel(c.tMetric, c.tValue) : '';
   const intent = sessIntent();
+  if (aimsMode(c)) {
+    // Chaque phase porte son objectif (priorités, sous-objectifs) : rien de global qui tirerait toutes les phases vers le n°1.
+    const l = c.aim === 'none' ? [] : c.aims || [], sps = sportsOf(c);
+    const name = l.length ? l.slice(0, 2).map((a) => a.label).join(' + ') : `${sps.map((sp) => sportShort(sp, x.activities)).join(' + ')} — ${fmtMin(c.minutes || 60)}`;
+    const goal = l.length ? `Objectifs, du plus au moins important : ${l.map((a, i) => `${i + 1}. ${a.label}`).join(' ; ')}.` : `Séance équilibrée : ${sps.map(sportLabel).join(', ')}.`;
+    return { intent, sport: c.sport, envId: baseEnv(c), envName: env?.name || '', goalIds: [], intents: [], avoidZones: c.zones || [], light: FORME_MAP[c.forme] === 'low', goal, name,
+      systems: isClimb(c.sport) ? { [kindOf(c.sport)]: sysOf(kindOf(c.sport)) } : undefined, emoji: isClimb(c.sport) ? '' : (x.activities[c.sport] || ACTIVITIES[c.sport])?.emoji, seed: c.seed || 1 };
+  }
   if (tgt) return { intent, sport: c.sport, envId: c.envId || x.defEnv?.id || '', envName: env?.name || '', goalIds: c.goalIds || [], intents: ints, avoidZones: c.zones || [], light: FORME_MAP[c.forme] === 'low', goal: `Objectif : ${tgt}.`, name: `Objectif ${tgt}`, emoji: (x.activities[c.sport] || ACTIVITIES[c.sport])?.emoji, seed: c.seed || 1 };
   const goal = c.aim === 'grade' ? `Réussir ${kindOf(c.sport) === 'voie' ? 'une voie' : 'un bloc'} ${levels[t]?.label || ''}${c.styles.length ? ' en ' + c.styles.map((id) => x.styles[id]?.label?.toLowerCase() || id).join(', ') : ''}.`
     : c.aim === 'surprise' ? c.surGoal || '' : names.length ? `Pour : ${names.join(', ')}.` : '';
@@ -429,7 +629,7 @@ ACT.cpStep = (el) => {
 function freshStructure() {
   const c = CP();
   if (!c.partsTouched || c.partsFor !== partsKey()) { c.parts = proposedPhases(); c.partsFor = partsKey(); c.partsTouched = false; c.hist = []; c.changes = []; c.ignored = []; }
-  c.parts = withObjective(normalizePhases(c.parts, c.sport));
+  c.parts = normalizePhases(c.parts, c.sport);
 }
 /** ⚡ Proposer ma séance : structure + exercices tout de suite, affichés à l'étape « Propositions ». */
 ACT.cpQuick = () => {
@@ -437,16 +637,36 @@ ACT.cpQuick = () => {
   c.step = SI.content; keep(); render(); window.scrollTo(0, 0);
 };
 ACT.cpQuickGo = () => { const c = CP(); c.step = NSTEPS; keep(); window.scrollTo(0, 0); ACT.cpGenerate(); };
-ACT.cpEnvPick = (el) => { const c = CP(); c.envId = el.dataset.id; c.envPicked = true; c.sys = {}; keep(); render(); };
+ACT.cpEnvPick = (el) => { const c = CP(), sp = el.dataset.sp; if (sp && sp !== c.sport) c.places = { ...(c.places || {}), [sp]: el.dataset.id }; else { c.envId = el.dataset.id; c.envPicked = true; c.sys = {}; } c.result = null; c.built = null; keep(); render(); };
 ACT.cpEnvNew = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); };
-const partsKey = () => { const c = CP(); return JSON.stringify([c.objective?.family || '', c.level || 'modere', c.sport, c.minutes, c.aim, c.aim === 'grade' ? c.targetShown ?? c.target : c.aim === 'target' ? [c.tMetric, c.tValue] : '', c.goalIds, c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme]); };
+const partsKey = () => { const c = CP(); return JSON.stringify([(c.aims || []).map((a) => `${a.key}:${a.when || 'auto'}`), sportsOf(c), c.places || {}, c.travel ?? 15, c.level || 'modere', c.minutes, c.aim, c.aim === 'grade' ? c.targetShown ?? c.target : c.aim === 'target' ? [c.tMetric, c.tValue] : '', c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme, c.envId, !!c.equal, winOn(c) ? winList(c) : '']); };
 ACT.cpRestart = () => { const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; keep(); render(); window.scrollTo(0, 0); };
-ACT.cpSport = (el) => { const c = CP(); c.sport = el.dataset.id; c.result = null; c.target = null; placeFor(c); if ((!isClimb(c.sport) && c.aim === 'grade') || (!sportFamily(c.sport) && c.aim === 'target')) c.aim = 'goals'; keep(); render(); };
-ACT.cpForme = (el) => { CP().forme = el.dataset.id; keep(); render(); };
-ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id;
-  // Réussir une cotation = un objectif de performance, à la fin par défaut (déplaçable ensuite).
-  if (c.aim === 'grade' && (!c.objective || c.objFromProfile)) { c.objective = { family: 'performance', subIntents: [{ id: 'performance.reussite', prio: 4 }], when: 'end' }; c.objFromProfile = false; }
-  keep(); render(); };
+/** Changer de sport principal : les objectifs « famille » suivent (« Force · Voie » → « Force · Bloc ») ; les autres gardent leur texte. */
+function remapAims(c, from, to) {
+  if (from === to || sportsOf(c).includes(from)) return;
+  const x = ctx(), out = [];
+  for (const a of c.aims || []) {
+    if (a.sport !== from) { out.push(a); continue; }
+    if (a.key.startsWith('fam:')) { const b = familyAim(a.family, to, x.activities); if (b) out.push({ ...b, when: a.when, source: a.source }); continue; }
+    if (a.key.startsWith('int:')) { const it = intentsFor(to, extraIntents()).find((y) => y.id === a.intent); const b = it && intentAim(it, to, x.activities); if (b) out.push({ ...b, when: a.when }); continue; }
+    out.push({ ...a, sport: to });
+  }
+  c.aims = out;
+}
+ACT.cpSport = (el) => { const c = CP(), from = c.sport; c.sport = el.dataset.id; c.more = (c.more || []).filter((sp) => sp !== c.sport); remapAims(c, from, c.sport); c.result = null; c.built = null; c.target = null; placeFor(c); if ((!isClimb(c.sport) && c.aim === 'grade') || (!sportFamily(c.sport) && c.aim === 'target')) c.aim = 'goals'; keep(); render(); };
+/** Autres sports de la même séance (chacun pourra avoir son lieu) ; en retirer un retire aussi ses objectifs (dit). */
+ACT.cpSport2 = (el) => {
+  const c = CP(), id = el.dataset.id, on = (c.more || []).includes(id);
+  c.more = on ? c.more.filter((sp) => sp !== id) : [...(c.more || []), id];
+  if (on) { const gone = (c.aims || []).filter((a) => a.sport === id); c.aims = (c.aims || []).filter((a) => a.sport !== id); delete c.places?.[id]; if (gone.length) toast(`${gone.length} objectif${gone.length > 1 ? 's' : ''} de ${sportLabel(id)} retiré${gone.length > 1 ? 's' : ''}.`); }
+  c.result = null; c.built = null; keep(); render();
+};
+CHG.cpEnvFor = (el) => { if (el.value === '__new') { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); return; } const c = CP(); c.places = { ...(c.places || {}), [el.dataset.sp]: el.value }; c.result = null; c.built = null; keep(); render(); };
+CHG.cpTravel = (el) => { const c = CP(); c.travel = Math.max(0, Math.min(120, Math.round(Number(el.value) || 0))); c.result = null; c.built = null; keep(); render(); };
+/** Aller directement à une étape (depuis un résumé) ; la structure est (re)calculée si on avance au-delà des objectifs. */
+ACT.cpStepTo = (el) => { const c = CP(), n = Math.max(1, Math.min(NSTEPS, Number(el.dataset.id) || 1)); if (n >= SI.structure && c.step <= SI.why) freshStructure(); if (n > SI.structure && !c.built) buildNow(); if (n < NSTEPS) c.generated = false; c.step = n; keep(); render(); window.scrollTo(0, 0); };
+ACT.cpForme = (el) => { CP().forme = el.dataset.id; CP().formeFrom = ''; keep(); render(); };
+ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id; c.result = null; c.built = null; keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };
 ACT.cpIntentWrite = () => { S.gen.activityId = CP().sport; ACT.gWrite?.({ dataset: { k: 'intent' } }); };
@@ -578,9 +798,12 @@ function forYou() {
   const c = CP(), x = ctx(), env = envOf(), lv = levelFor(c.sport, x), a = assessment(x), out = [];
   const usual = Number(S.settings.defaultMinutes) || 0;
   out.push(`⏱ ${fmtMin(c.minutes)}${usual && usual === c.minutes ? ' : ta durée habituelle' : ''}.`);
-  const o = cleanObjective(c.objective); if (o) out.push(`🎯 Objectif : ${objectiveLabel(o)} · ${whenLabel(o, c.built || c.parts).toLowerCase()}.`);
-  const eq = [...availableEquipment(x, c.envId)];
-  out.push(`📍 ${env ? env.name : 'Sans lieu décrit'} : seulement des exercices faisables avec ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun matériel'}.`);
+  const aims = (c.aim || 'goals') === 'goals' ? c.aims || [] : [];
+  if (aims.length) out.push(`🎯 Tes objectifs, dans ton ordre : ${aims.map((a, i) => `${i + 1}. ${a.label}${a.when && a.when !== 'auto' ? ` (${MOMENTS[a.when].toLowerCase()})` : ''}`).join(' · ')}.`);
+  if (sportsOf(c).length > 1) out.push(`🏅 ${sportsOf(c).length} sports : ${sportsOf(c).map(sportLabel).join(', ')}, chacun dans son lieu.`);
+  const eq = [...availableEquipment(x, c.envId)], other = sportsOf(c).slice(1).map((sp) => [sp, x.envs.find((e) => e.id === placeOfSport(sp, c))]).filter(([, e]) => e && e.id !== baseEnv(c));
+  out.push(`📍 ${env ? env.name : 'Sans lieu décrit'}${other.length ? ` (${sportShort(c.sport, x.activities).toLowerCase()})` : ''} : seulement des exercices faisables avec ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun matériel'}.`);
+  for (const [sp, e] of other) out.push(`📍 ${e.name} (${sportShort(sp, x.activities).toLowerCase()}) : avec ${[...availableEquipment(x, e.id)].map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() || 'aucun matériel'}.`);
   const zones = (c.zones || []).map((z) => AVOID_ZONES.find(([k]) => k === z)?.[1]?.replace(/^\S+\s/, '').toLowerCase()).filter(Boolean);
   if (zones.length) out.push(`🛡️ À ménager : ${zones.join(', ')} — les exercices qui les chargent fort sont écartés.`);
   out.push(`📊 Niveau : ${['débutant', 'intermédiaire', 'avancé'][lv.level] || 'débutant'} — ${lv.how}.`);
@@ -629,11 +852,16 @@ ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
  * une commande au coach… ouvrent toutes l'assistant, déjà rempli. auto : directement à la dernière validation (étape 7) :
  * un toucher sur « Générer », ou retour aux étapes d'avant pour modifier.
  */
-export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true } = {}) {
+export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true, envId = '' } = {}) {
   closeSheet();
   const help = CP().help || 'auto'; S.cp = null; ls.set(KEY, {}); const c = CP(), x = ctx();
   c.help = help; c.sport = sport || c.sport || Object.keys(x.activities)[0] || 'conditioning'; placeFor(c); c.minutes = Math.max(10, Math.min(240, minutes || S.settings.defaultMinutes || 45));
-  c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = c.goalIds.length || intents.length || c.focus ? 'goals' : 'none'; if (forme) c.forme = forme;
+  c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = 'goals'; if (forme) c.forme = forme;
+  if (envId && x.envs.some((v) => v.id === envId)) { c.envId = envId; c.envPicked = true; } else if (envId === 'none') { c.envId = ''; c.envPicked = true; }
+  // Une demande précise (objectif, intention, capacité) remplace les objectifs tirés du profil ; sinon ceux-ci suivent le sport.
+  if (c.goalIds.length || intents.length || c.focus) c.aims = [];
+  else c.aims = (c.aims || []).filter((a) => a.source === 'profile').map((a) => familyAim(a.family, c.sport, x.activities)).filter(Boolean).map((a) => ({ ...a, source: 'profile' }));
+  syncAims(c);
   if (auto) { c.parts = proposedPhases(); c.partsFor = partsKey(); c.partsTouched = false; c.result = null; c.built = null; buildNow(); c.step = NSTEPS; c.generated = false; } else c.step = SI.base;
   keep(); go('library', 'climbplan'); window.scrollTo(0, 0);
 }
@@ -827,7 +1055,7 @@ CHG.cpPartAdapt = (el) => upd(Number(el.dataset.i), (p) => { p.adapt = el.checke
 export const climbPlanResult = () => S.cp?.result || null;
 void raw;
 /* ═════════ V2 : « Et si… ? », mémoire des décisions, ADN / modules / stratégies, séance inhabituelle, modification guidée ═════════ */
-const remember = (kind, text, o = {}) => { try { const d = decision(kind, text, { ...o, context: { sport: CP().sport, goal: objectiveLabel(cleanObjective(CP().objective)) || '' } }); putItem('decision', uid(), d); } catch { /* invité sans compte : pas de mémoire serveur, rien de bloquant */ } };
+const remember = (kind, text, o = {}) => { try { const d = decision(kind, text, { ...o, context: { sport: CP().sport, goal: CP().aims?.[0]?.label || '' } }); putItem('decision', uid(), d); } catch { /* invité sans compte : pas de mémoire serveur, rien de bloquant */ } };
 const decisionsNow = () => { try { return itemsOf('decision'); } catch { return []; } };
 /** Carte « Et si… ? » : une phase, un changement, des conséquences décrites ; « Appliquer » seulement si tu le décides. */
 function whatIfCard() {
@@ -869,7 +1097,7 @@ const dnaList = () => { try { return itemsOf('sdna').filter((x) => !x.deleted); 
 const modList = () => { try { return itemsOf('smodule').filter((x) => !x.deleted); } catch { return []; } };
 const parseJson = (t) => { try { return JSON.parse(t || '{}'); } catch { return null; } };
 ACT.cpDnaSave = async () => {
-  const c = CP(), name = await askText('Nom de cette structure', { value: objectiveLabel(cleanObjective(c.objective)).replace(/^\S+\s/, '') || 'Ma structure', placeholder: 'Ex. « Préparation voie »', ok: 'Enregistrer', max: 60 }); if (!name) return;
+  const c = CP(), name = await askText('Nom de cette structure', { value: c.aims?.[0]?.label || 'Ma structure', placeholder: 'Ex. « Préparation voie »', ok: 'Enregistrer', max: 60 }); if (!name) return;
   const d = dnaFromPhases(c.parts, name); putItem('sdna', uid(), { name: d.name, sport: c.sport, json: JSON.stringify(d), summary: d.summary }); toast(`Structure « ${d.name} » enregistrée (${d.summary}).`, 4000);
 };
 ACT.cpDnaOpen = () => {
@@ -881,7 +1109,7 @@ ACT.cpDnaOpen = () => {
 ACT.cpDnaUse = (el) => {
   const c = CP(), x = dnaList().find((d) => d.id === el.dataset.id), d = parseJson(x?.json); if (!d) return toast('Structure illisible.');
   const r = phasesFromDna(d, c.minutes); if (!r.ok) return toast(r.error, 4500);
-  pushHist(); c.parts = withObjective(r.phases); c.partsTouched = true; c.result = null; keep(); closeSheet(); render(); toast(`Structure « ${x.name} » générée pour ${fmtMin(c.minutes)}.`);
+  pushHist(); c.parts = r.phases; c.partsTouched = true; c.result = null; keep(); closeSheet(); render(); toast(`Structure « ${x.name} » générée pour ${fmtMin(c.minutes)}.`);
 };
 ACT.cpModSave = async (el) => {
   const c = CP(), p = c.parts[Number(el.dataset.i)]; if (!p) return;
@@ -904,9 +1132,9 @@ ACT.cpModUse = async (el) => {
   pushHist(); c.parts = r.phases; c.partsTouched = true; c.result = null; keep(); closeSheet(); render();
 };
 ACT.cpStrat = () => {
-  const c = CP(), o = cleanObjective(c.objective), g = selGoals()[0];
-  const caps = g?.caps?.length ? Object.fromEntries(g.caps.map((x) => [x.id, x.w])) : o ? Object.fromEntries(o.subIntents.flatMap((s) => Object.entries(subIntentsFor(c.sport)[o.family]?.find((x) => x.id === s.id)?.caps || {}))) : {};
-  const list = strategies({ label: g ? goalLabel(g) : objectiveLabel(o).replace(/^\S+\s/, '') || sportLabel(c.sport), activity: c.sport, caps });
+  // Chemins pour le n°1 (son sport, ses capacités) ; sans objectif, pour le sport principal.
+  const c = CP(), a = (c.aims || [])[0];
+  const list = strategies({ label: a?.label || sportLabel(c.sport), activity: a?.sport || c.sport, caps: a?.caps || {} });
   S.cpStrats = list;
   openSheet(h`<div class="stack"><h2 style="margin:0">🧭 Plusieurs chemins</h2><p class="tiny muted">Aucun n’est « le meilleur » : compare et choisis selon ta journée.</p>
     ${list.map((s) => h`<div class="card flat"><b>${s.title}</b><p class="small">${s.desc}</p>
@@ -918,7 +1146,7 @@ ACT.cpStratUse = async (el) => {
   const c = CP(), s = (S.cpStrats || []).find((x) => x.id === el.dataset.id); if (!s) return;
   const r = phasesFromDna(s.dna, c.minutes); if (!r.ok) return toast(r.error, 4500);
   const why = (await askText('Pourquoi ce chemin ?', { detail: 'Facultatif : ça sert à tes futures recommandations.', ok: 'Continuer', cancel: 'Passer', max: 160 })) || '';
-  c.parts = withObjective(r.phases); c.partsTouched = true; c.partsFor = partsKey(); c.result = null; c.strategy = s.id;
+  c.parts = r.phases; c.partsTouched = true; c.partsFor = partsKey(); c.result = null; c.strategy = s.id;
   remember('strategy', `Chemin « ${s.title} »`, { reason: why, ref: s.id }); keep(); closeSheet();
   c.step = SI.structure; keep(); render(); window.scrollTo(0, 0); toast(`Chemin « ${s.title} » : structure prête à régler.`);
 };
@@ -966,3 +1194,15 @@ ACT.cpEditApply = () => {
   c.changes = [...(c.changes || []), ...pl.changes]; remember('edit', pl.changes.join(' ; ').slice(0, 200), { reason: S.cpEdit.text });
   c.generated = false; if (c.step >= SI.content) rebuild(); keep(); closeSheet(); render(); toast('Modifications appliquées. « ↶ Revenir » annule.');
 };
+
+/* Glisser vers la gauche / la droite sur le créateur : étape suivante / précédente (comme les boutons du bas). */
+let swipe = null;
+document.addEventListener('touchstart', (e) => {
+  const t = e.touches[0], el = e.target;
+  swipe = e.touches.length === 1 && el.closest?.('.steps') && !el.closest('input, textarea, select, svg, canvas, .photo-wrap, .chips, .noswipe') ? { x: t.clientX, y: t.clientY, at: Date.now() } : null;
+}, { passive: true });
+document.addEventListener('touchend', (e) => {
+  if (!swipe) return; const t = e.changedTouches[0], dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, fast = Date.now() - swipe.at < 700; swipe = null;
+  if (!fast || Math.abs(dx) < 80 || Math.abs(dy) > 45 || document.querySelector('#sheet.open, #dialog.open')) return;
+  document.querySelector(`.stepdock [data-act=cpStep][data-d="${dx < 0 ? 1 : -1}"]`)?.click();
+}, { passive: true });

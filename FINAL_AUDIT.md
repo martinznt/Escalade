@@ -1,4 +1,4 @@
-# FINAL_AUDIT — Séances entraînement v8.28.0
+# FINAL_AUDIT — Séances entraînement v8.30.0
 
 Rapport de fin de mission : audit de l'existant (v7.2), corrections, implémentation V1 + V2, tests réellement exécutés
 et limitations restantes. Toutes les commandes citées ont été lancées sur la version livrée.
@@ -1037,8 +1037,48 @@ Détail complet (fonctionnalités, fichiers, migrations — aucune —, fonction
 | Commande | Résultat |
 |---|---|
 | `npm run check` | OK |
-| `npm test` | 52 fichiers, tous OK — dont `profile828.test.mjs` (11) et `assistant.test.mjs` (9), `data.test.mjs` (niveau factuel) |
-| `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` | **76 étapes OK**, aucune erreur JavaScript, sur la version 8.28.0 — dont « L'essentiel + ⚡ + bilan guidé » et « Admin en 3 groupes + assistant du site ». Deux lancements précédents avaient échoué (« Je compose » gardait des exercices ; âge « il y a -1 j ») : corrigés avant ce lancement. |
+| `npm test` | 53 fichiers, tous OK — dont `profile828.test.mjs` (11), `assistant.test.mjs` (9), `loop.test.mjs` (6 : boucle après séance, « Pour toi », charges écrites), `data.test.mjs` (niveau factuel) |
+| `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` | **76 étapes OK**, aucune erreur JavaScript, relancé après l'ajout de la boucle après séance et de « Pour toi » — dont « L'essentiel + ⚡ + bilan guidé » et « Admin en 3 groupes + assistant du site ». Deux lancements précédents avaient échoué (« Je compose » gardait des exercices ; âge « il y a -1 j ») : corrigés avant ce lancement. |
 | Scripts Playwright de mise en page (créateur, bilan, Admin et ses 8 pages, assistant, « Faite pour toi ») | aucun débordement à 320 / 390 / 768 px après correction (objectif de séance et assistant débordaient à 320 px) |
 
+Accueil avec « 🔁 Ce que ta dernière séance change » vérifié sans débordement à 320 / 390 / 768 px ; le texte « option légère » a été corrigé pour dire ce que l'app propose réellement (repos ou récupération légère).
+
 Non vérifiable ici : la qualité réelle des réponses de Workers AI (réponses simulées dans les tests), le rendu sur de vrais téléphones.
+
+## Évolution 8.29.0 : plusieurs sports et lieux, objectifs classés ou sans hiérarchie, horaires réels, silhouette visée, salle de sport
+
+Détail dans `CHANGELOG.md` (section 8.29.0). Points de sécurité :
+- Heure d'un événement : format `HH:MM` revérifié par le serveur (sinon vide), colonne `event_time` ajoutée par migration ; « Pas faite » passe par la suppression d'historique existante (propriétaire vérifié côté serveur, pas d'IDOR).
+- Propositions de code de l'assistant : fichiers `public/` seulement (jamais le serveur ni le service worker), texte cité unique, motifs dangereux refusés (eval, `new Function`, `<script>`, `innerHTML`, fetch externe, secrets), diff recalculé par le serveur ; validation par un autre admin ou seul admin avec confirmation explicite (journal d'audit) ; Pull Request seulement, jamais de fusion ni de déploiement.
+- Silhouette : aucune promesse ni norme ; les limites (alimentation, génétique, pas de perte de gras localisée) sont écrites et sourcées.
+
+### Vérification 8.29.0 (commandes réellement lancées)
+- `npm run check` : OK.
+- `npm test` : 56 fichiers, sortie 0.
+- `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` : 79 étapes OK, sortie 0 (une première exécution avait échoué sur un texte du Studio devenu obsolète ; texte du test et de la boîte de confirmation mis à jour, puis tout repassé).
+- Mise en page vérifiée au navigateur à 320, 390 et 768 px (créateur avec horaires, objectifs sans hiérarchie, structure finale, profil « Ma silhouette », fiche de mesure, séances prêtes, planning) : aucun débordement horizontal.
+
+## Évolution 8.30.0 : mesures précises, coach qui apprend, planning automatique, pendant la séance, outils par sport, mon parcours, communauté, accessibilité
+
+Détail dans `CHANGELOG.md` (section 8.30.0). Points de sécurité et de vie privée :
+- Nouvelles collections synchronisées (douleurs, check-ins, réglages de machine, saisons, lettres) : nettoyées côté serveur par les schémas de `public/items.js` avant tout enregistrement ; rien n'est visible des administrateurs.
+- Abonnement agenda : jeton aléatoire de 256 bits, seule son empreinte SHA-256 est gardée ; lien remplaçable et révocable, supprimé avec le compte ; flux en lecture seule, uniquement les événements du propriétaire.
+- Météo des falaises : coordonnées arrondies à 0,01°, limite de 60 appels par heure et par compte, réponse réduite ; refusée en mode invité. Service externe (Open-Meteo) : une panne affiche un message, rien n'est inventé.
+- Encouragements : seulement entre deux comptes qui se suivent mutuellement (abonnements acceptés des deux côtés, vérifié par le serveur), messages tout faits (pas de texte libre), 30 par jour et 3 par jour vers la même personne. Effacés avec le compte.
+- Idées à voter : écrites par un administrateur « contenu » (aucun nom de membre), vote anonyme, un par personne ; créations, changements et suppressions notés au Journal.
+- Statistiques d'administration : totaux sur l'ensemble des comptes uniquement ; tout groupe de moins de 3 personnes est masqué ; aucun pseudo, aucune donnée individuelle.
+- Bandeau de maintenance : une annonce existante avec une date de fin, nettoyée par `server/global.js`, texte toujours échappé à l'affichage.
+- Signalement avec l'état de la page : pages visitées, taille d'écran, connexion, dernières erreurs techniques (messages seulement) ; aucune donnée d'entraînement ni texte saisi.
+- Photos de progrès : uniquement dans l'IndexedDB de l'appareil, jamais envoyées ; affichées masquées par défaut.
+- Démo : identifiant à part (`demo`), mémoire remise à zéro au démarrage, données effacées en quittant ; jamais transférée vers un compte.
+- Impression : la zone imprimée est construite avec le gabarit échappé `h`.
+- Icône de notification : badge monochrome dédié (`badge-96.png`, blanc sur transparent) ; Android n'utilise que la transparence de cette image dans la barre d'état.
+
+### Vérification 8.30.0 (commandes réellement lancées)
+- `npm run check` : OK.
+- `npm test` : 66 fichiers, sortie 0 (nouveaux : `coachbrain`, `planning`, `planning-server`, `live`, `sports`, `sports-server`, `story`, `community`).
+- `PW_EXEC=/opt/pw-browsers/chromium npm run test:e2e` : 83 étapes OK, sortie 0, aucune erreur JavaScript. Nouvelle étape « 8.30 » (check-in, saison, lettre scellée non lisible avant sa date, disques, gros boutons sans débordement). Deux échecs en cours de route, corrigés dans l'app : un texte d'aide du planning (l'heure de la séance planifiée est de nouveau mentionnée) et « Mon parcours » invisible tant qu'aucune séance n'était faite.
+- Passage complet sur 53 pages (dont les 19 pages d'administration) à 320, 390 et 768 px : aucun débordement, aucun texte cassé (`undefined`, `NaN`…), aucun écran en erreur, aucune erreur JavaScript — après correction d'un débordement réel (boutons en haut d'une séance à 320 / 390 px).
+- Scripts Playwright par lot (forme, planning, séance, sports, parcours, communauté et accessibilité) : aucun débordement à 320 / 390 / 768 px, aucune erreur JavaScript. Un débordement réel a été trouvé et corrigé : le badge « Envoi… » de synchronisation à 320 px.
+
+Limites (non faites ou expérimentales) : comptage des répétitions à la caméra, baisse automatique de la musique, lien direct Strava / Garmin et fichiers `.fit`, mode club / coach, espagnol (l'anglais reste partiel), dynamomètre Bluetooth expérimental (pas sur iPhone). Non vérifiable ici : rendu sur de vrais téléphones, notifications reçues sur un vrai Android, réponses réelles de Workers AI et d'Open-Meteo (simulées dans les tests).

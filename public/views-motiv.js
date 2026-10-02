@@ -9,11 +9,11 @@ const goalPerWeek = () => Math.max(1, Math.min(4, Number(item('config', 'main')?
 export function motivCtx() {
   const c = ctx();
   let rec = 0; try { rec = timeline(c).filter((e) => e.kind === 'record').length; } catch { /* rien */ }
-  return { ...c, projects: itemsOf('project'), recordsCount: rec };
+  return { ...c, projects: itemsOf('project'), seasons: itemsOf('season'), recordsCount: rec };
 }
 
 export function streakCard() {
-  const c = ctx(), st = weekStreak(c.history, c.ascents, { goal: goalPerWeek() });
+  const c = ctx(), st = weekStreak(c.history, c.ascents, { goal: goalPerWeek(), pause: c.config?.pause?.pauseMode ? { from: c.config.pause.pauseFrom, to: c.config.pause.pauseTo } : null });
   const dots = Array.from({ length: st.goal }, (_, i) => h`<i class="${i < st.thisWeek ? 'on' : ''}"></i>`);
   return h`<section class="card streak ${st.streak ? 'hot' : ''}"><div class="row"><div class="flame">${st.streak ? '🔥' : '🌱'}</div>
       <div class="grow"><b class="big">${st.streak ? `${st.streak} semaine${st.streak > 1 ? 's' : ''} d’affilée` : 'Lance ta série'}</b>
@@ -47,7 +47,7 @@ export function checkBadges() {
 /* ───────── Bilan du mois en image ───────── */
 ACT.recapOpen = async (el) => {
   const back = Number(el?.dataset?.m || 0), d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - back);
-  const c = ctx(), r = monthRecap(c, d.getTime()), st = weekStreak(c.history, c.ascents, { goal: goalPerWeek() });
+  const c = ctx(), r = monthRecap(c, d.getTime()), st = weekStreak(c.history, c.ascents, { goal: goalPerWeek(), pause: c.config?.pause?.pauseMode ? { from: c.config.pause.pauseFrom, to: c.config.pause.pauseTo } : null });
   const cv = drawRecap(r, back ? 0 : st.streak, c);
   const url = cv.toDataURL('image/png');
   S.recap = { cv, name: `bilan-${r.label.replace(/\s+/g, '-')}.png` };

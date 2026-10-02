@@ -1,5 +1,6 @@
 // views-home.js — Accueil : tableau de bord personnalisable, « Que faire aujourd'hui ? », commandes en langage
 // naturel, calendrier visuel (planifié / réalisé), premier lancement.
+import { nextImpact } from './loop.js';
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk, subHead, menuList } from './ui.js';
 import { sceneSvg, moodLine } from './scene.js';
 import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings } from './state.js';
@@ -12,13 +13,17 @@ import { todayOptions, regularity, benchmarks, activeGoals, goalLabel, goalProgr
 import { adaptDuration, alternatives, replaceExercise, BODY_WORDS } from './generator.js';
 import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { blocksOf } from './views-library.js';
-import { startPlayer } from './player.js';
+import { startPlayer, resumeCard } from './player.js';
+import { findHistory, sessionFromHistory } from './live.js';
 import { streakCard } from './views-motiv.js';
 import { composePage } from './layout.js';
 import { programCard, fingerCard, activeProgram } from './views-program.js';
 import { programStatus } from './program.js';
 import { buildIcs } from './ics.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard } from './views-setup.js';
+import { formeBlock } from './views-forme.js';
+import { planTools, planAlerts, weekReviewCard } from './views-planning.js';
+import { storyHome } from './views-story.js';
 
 export const DASH_BLOCKS = {
   today: 'Que faire aujourd’hui ?', command: 'Commande', next: 'Prochaines séances', progress: 'Progression', goals: 'Objectifs', records: 'Records',
@@ -29,8 +34,10 @@ export const dashBlocks = () => (item('config', 'dashboard')?.blocks?.length ? i
 
 export function eventsOn(date) {
   const wd = (d) => new Date(d + 'T12:00:00').getDay();
-  return S.events.filter((e) => e.date === date || (e.recurrence?.freq === 'weekly' && e.date <= date && wd(e.date) === wd(date) && (!e.recurrence.until || date <= e.recurrence.until)));
+  return S.events.filter((e) => e.date === date || (e.recurrence?.freq === 'weekly' && e.date <= date && wd(e.date) === wd(date) && (!e.recurrence.until || date <= e.recurrence.until)))
+    .sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
 }
+const hhmm = (t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 /** Séances du programme en cours prévues ce jour-là (pas encore faites). */
 const programOn = (date) => { const p = activeProgram(); if (!p) return []; const st = programStatus(p, S.history); return st.list.filter((x) => x.date === date && x.status !== 'done').map((x) => ({ ...x, pid: p.id, name: p.name })); };
 const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt)) === date);
@@ -38,7 +45,7 @@ const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}${vCalendar()}`;
+  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}<p class="tiny muted pagehelp">Touche un jour pour planifier une séance (avec son heure) ou un événement important. En dessous : ta semaine proposée automatiquement, un objectif daté, tes disponibilités, une pause, l’abonnement agenda.</p>${vCalendar()}`;
   return h`${reinstallCard()}${vDash()}`;
 }
 function hero() {
@@ -69,7 +76,7 @@ ACT.obEnv = (el) => {
   const t = el.dataset.id, ex = ctx().envs.find((e) => e.type === t);
   if (ex) return;
   putItem('env', 'env-' + t, { name: ENV_TYPES[t], type: t, equipment: ENV_TEMPLATES[t], isDefault: !ctx().envs.length });
-  toast(`${ENV_TYPES[t]} ajouté avec un matériel type : vérifie-le dans Profil › Matériel.`); render();
+  toast(`${ENV_TYPES[t]} ajouté avec un matériel type : vérifie-le dans Profil › Mes lieux.`); render();
 };
 ACT.obDone = () => { S.settings.onboarded = true; saveSettings(); render(); };
 ACT.goProfile = (el) => go('profile', el.dataset.id);
@@ -81,8 +88,9 @@ function vDash() {
     ? h`<button class="qa pri" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><span class="qt"><b>${title}</b><small>${sub}</small></span><span class="qgo" aria-hidden="true">▶</span></button>`
     : h`<button class="qa" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><b>${title}</b><small>${sub}</small></button>`);
   const safe = (b) => () => BLOCK_VIEWS[b]();
-  return h`${setupCard()}${installCard()}
+  return h`${resumeCard()}${setupCard()}${installCard()}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
+    ${impactCard()}
     <div class="${S.lay?.page === 'home' ? '' : 'home-grid'}">${composePage('home', {
       hero,
       gen: () => h`${tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true)}${whereAmI()}`,
@@ -93,9 +101,36 @@ function vDash() {
       cal: safe('calendar'), coach: safe('command'), program: () => programCard() || '', finger: () => fingerCard() || '',
       streak: () => (S.history.length || ctx().ascents.length ? streakCard() : ''),
       question: () => questionCard(), today: safe('today'), next: safe('next'), goals: safe('goals'), reco: safe('reco'), weekprog: safe('progress'), records: safe('records'),
-      regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'),
+      regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'), forme: () => formeBlock(), weekreview: () => weekReviewCard(), story: () => storyHome(),
     })}</div>`;
 }
+/** Boucle visible : ce que la dernière séance change pour la suivante (règles réellement appliquées, rien d'inventé). */
+function impactCard() {
+  if (S.impactHidden && S.impactHidden === (ctx().history[0]?.id || '')) return '';
+  const r = nextImpact(ctx()); if (!r.items.length) return '';
+  return h`<details class="card flat acc-b" open><summary><b class="small">🔁 Ce que ta dernière séance change pour la suivante</b></summary><ul class="clean tight small">${r.items.map((x) => h`<li>${x.icon} ${x.text}</li>`)}</ul>
+    <div class="row between wrapf"><span class="tiny muted">Calculé depuis « ${r.last.sessionName || 'ta séance'} » et ton questionnaire.</span><button class="btn sm ghost" data-act="impactHide">Masquer</button></div></details>`;
+}
+/* ───────── 8.30 : « Je n'ai rien prévu » — 3 questions, puis la séance ───────── */
+const ENVIES = [['force', '💪 Force'], ['endurance', '🔋 Cardio, endurance'], ['mobilite', '🧘 Souplesse, mobilité'], ['technique', '🎯 Technique'], ['surprise', '🎲 Surprends-moi']];
+const ENVIE_CAPS = { force: { tirage_vertical: 0.8, poussee_horizontale: 0.8, force_jambes: 0.8, gainage_anterieur: 0.5 }, endurance: { endurance_aerobie: 1, seuil: 0.5 }, mobilite: { mobilite_hanches: 1, mobilite_epaules: 0.8 }, technique: { technique_escalade: 1, technique_pieds: 0.8, coordination: 0.5 } };
+function nothingSheet() {
+  const q = S.np, c = ctx(), envs = c.envs.filter((e) => !e.archived);
+  openSheet(h`<div class="stack"><h2 style="margin:0">⚡ Je n’ai rien prévu</h2>
+    <span class="small"><b>1 · Combien de temps ?</b></span><div class="chips">${[10, 20, 30, 45, 60].map((m) => chip(q.min === m, `${m} min`, `data-act="npSet" data-k="min" data-v="${m}"`))}</div>
+    <span class="small"><b>2 · Où ?</b></span><div class="chips">${envs.slice(0, 6).map((e) => chip(q.env === e.id, e.name, `data-act="npSet" data-k="env" data-v="${e.id}"`))}${chip(q.env === 'none', '🧍 Ici, sans matériel', 'data-act="npSet" data-k="env" data-v="none"')}</div>
+    <span class="small"><b>3 · Envie de quoi ?</b></span><div class="chips">${ENVIES.map(([k, l]) => chip(q.envie === k, l, `data-act="npSet" data-k="envie" data-v="${k}"`))}</div>
+    <button class="btn pri big" data-act="npGo">▶ Préparer ma séance</button></div>`);
+}
+ACT.nothingPlanned = () => { const c = ctx(); S.np = { min: Number(S.settings.defaultMinutes) || 30, env: c.defEnv?.id || 'none', envie: 'surprise' }; nothingSheet(); };
+ACT.npSet = (el) => { S.np[el.dataset.k] = el.dataset.k === 'min' ? Number(el.dataset.v) : el.dataset.v; nothingSheet(); };
+ACT.npGo = () => {
+  const q = S.np, c = ctx(), acts = Object.keys(c.activities), climb = acts.find((a) => /^climbing/.test(a));
+  const sport = q.envie === 'technique' && climb ? climb : q.envie === 'endurance' ? (acts.find((a) => ['running', 'conditioning', 'swimming'].includes(a)) || acts[0]) : q.envie === 'mobilite' ? (acts.find((a) => a === 'conditioning') || acts[0]) : (acts.find((a) => ['strength', 'calisthenics', 'conditioning'].includes(a)) || acts[0]);
+  closeSheet();
+  openWizard({ sport: sport || 'conditioning', minutes: q.min, envId: q.env, focus: ENVIE_CAPS[q.envie] ? { label: ENVIES.find(([k]) => k === q.envie)[1].replace(/^\S+\s/, ''), caps: ENVIE_CAPS[q.envie] } : null });
+};
+ACT.impactHide = () => { S.impactHidden = ctx().history[0]?.id || ''; render(); };
 ACT.goLib = () => go('library', 'seances');
 ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
 ACT.topCal = () => { go('home', 'cal'); window.scrollTo(0, 0); };
@@ -117,7 +152,7 @@ const BLOCK_VIEWS = {
   today() {
     const today = ymd(new Date()), evs = eventsOn(today).filter((e) => !doneOnDay(today).some((d) => d.sessionId === e.sessionId && e.sessionId));
     const t = todayOptions(ctx(), { todayEvents: evs });
-    return card('☀️ Que faire aujourd’hui ?', h`${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
+    return card('☀️ Que faire aujourd’hui ?', h`<button class="btn sm" data-act="nothingPlanned">⚡ Je n’ai rien prévu : 3 questions</button>${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
       <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="tiny">${(o.how || []).map((x) => h`<li>${x}</li>`)}</ul></details></div>
       ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}" aria-label="Préparer cette séance">▶</button>`}</div>`)}`);
   },
@@ -128,7 +163,7 @@ const BLOCK_VIEWS = {
   next() {
     const days = [...Array(8)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return ymd(d); });
     const list = days.flatMap((d) => eventsOn(d).map((e) => ({ d, e }))).slice(0, 5);
-    return card('📅 Prochaines séances', list.length ? list.map(({ d, e }) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${relDate(new Date(d + 'T12:00:00').getTime())}${e.recurrence ? ' · chaque semaine' : ''}</div></div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}</div>`; }) : h`<p class="muted small">Rien de planifié cette semaine. <button class="btn sm" data-act="homeSub" data-id="cal">Planifier</button></p>`);
+    return card('📅 Prochaines séances', list.length ? list.map(({ d, e }) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${relDate(new Date(d + 'T12:00:00').getTime())}${e.time ? ' à ' + e.time : ''}${e.recurrence ? ' · chaque semaine' : ''}</div></div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}</div>`; }) : h`<p class="muted small">Rien de planifié cette semaine. <button class="btn sm" data-act="homeSub" data-id="cal">Planifier</button></p>`);
   },
   progress() {
     const b = benchmarks(ctx(), 7), d = (x) => (x == null ? '' : x > 0 ? ` (+${x} %)` : ` (${x} %)`);
@@ -224,6 +259,11 @@ export async function runCommand(c, raw) {
   if (c.confirm && !(await ask(`Confirmer : ${c.summary}`, { ok: 'Confirmer', danger: true }))) return;
   const cs = currentSession();
   switch (c.type) {
+    case 'redo': {
+      const hh = findHistory(ctx().history, c.query); if (!hh) { toast('Je n’ai pas trouvé cette séance dans ton historique (14 derniers jours pour un jour de la semaine).', 4500); return; }
+      if (!(await ask(`Refaire « ${hh.sessionName} » du ${fmtDate(hh.startedAt)} ?`, { ok: '▶ C’est parti', detail: 'Mêmes exercices, même nombre de séries, dernière charge utilisée.' }))) return;
+      startPlayer(sessionFromHistory(hh, hh.sessionId ? getSeance(hh.sessionId) : null)); return;
+    }
     case 'generate': {
       const pr = {}; for (const f of c.focuses || []) for (const [k, v] of Object.entries(BODY_WORDS[f] || {})) pr[k] = Math.max(pr[k] || 0, v);
       const act = c.activity || (Object.keys(pr).length && !Object.keys(pr).some((k) => ['technique_escalade', 'technique_pieds'].includes(k)) ? (Object.keys(ctx().activities).find((a) => ['conditioning', 'strength'].includes(a)) || Object.keys(ctx().activities)[0] || 'conditioning') : Object.keys(ctx().activities)[0] || 'conditioning');
@@ -279,7 +319,7 @@ export async function runCommand(c, raw) {
 ACT.cmdPick = (el) => { const o = S.cmdOptions?.[Number(el.dataset.i)]; closeSheet(); if (o) runCommand(o, S.cmdRaw); };
 
 /* ═════════ Calendrier visuel ═════════ */
-const ACT_COLORS = { climbing_boulder: '#c8914d', climbing_route: '#d7a86e', strength: '#b0674a', conditioning: '#8c9a6b', running: '#6f97a8', swimming: '#5c8fbf' };
+const ACT_COLORS = { climbing_boulder: '#c8914d', climbing_route: '#d7a86e', strength: '#b0674a', conditioning: '#8c9a6b', calisthenics: '#9a7bb0', running: '#6f97a8', swimming: '#5c8fbf' };
 function miniMonth() { return monthGrid(true); }
 function monthGrid(mini = false) {
   if (!S.cal) { const d = new Date(); S.cal = { y: d.getFullYear(), m: d.getMonth() }; }
@@ -297,8 +337,9 @@ function vCalendar() {
   const inMonth = c.history.filter((x) => { const d = new Date(x.startedAt); return d.getFullYear() === y && d.getMonth() === m; });
   const acts = {}; for (const x of inMonth) { const a = entryActivity(x, c); acts[a] = (acts[a] || 0) + 1; }
   const reg = regularity(c);
-  return h`<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
-    ${menuList([['icsExport', '', '📲', 'Ajouter mes séances à l’agenda du téléphone', 'Programme et séances prévues, sur 90 jours'], ['allGo', '', '⏰', 'Rappels d’entraînement', 'Quels jours, à quelle heure (dans Notifications)', 'settings/notifs']])}
+  return h`${planAlerts()}<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
+    ${planTools()}
+    ${menuList([['icsExport', '', '📲', 'Ajouter mes séances à l’agenda du téléphone', 'Un fichier, une fois (programme et séances prévues, 90 jours)'], ['allGo', '', '⏰', 'Rappels d’entraînement', 'Quels jours, à quelle heure (dans Notifications)', 'settings/notifs']])}
     ${activeProgram() ? programCard() : h`<section class="card prog"><b>📆 Un objectif sur plusieurs semaines ?</b><p class="small muted">4 questions, et ton calendrier se remplit tout seul.</p><button class="btn pri" data-act="progNew">Créer un programme</button></section>`}
     <div class="card"><h3>Ce mois-ci</h3><p class="small">${inMonth.length} séance(s) réalisée(s)${Object.keys(acts).length ? ' · ' + Object.entries(acts).map(([a, n]) => `${activityLabel(a, c)} ×${n}`).join(', ') : ''}.</p><p class="small muted">${reg.text}</p>
       ${activeGoals(c).length ? h`<p class="tiny muted">Objectifs suivis : ${activeGoals(c).map(goalLabel).join(', ')}.</p>` : ''}</div>`;
@@ -308,7 +349,7 @@ ACT.icsExport = () => {
   const today = ymd(new Date()), hour = ls.get('sea:reminders', null)?.hour || '18:00', ev = [];
   for (let k = 0; k < 90; k++) {
     const d = new Date(); d.setDate(d.getDate() + k); const day = ymd(d);
-    for (const e of eventsOn(day)) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: hour, minutes: s ? Math.max(10, Math.round(sessionMinutes(s))) : 45 }); }
+    for (const e of eventsOn(day)) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: e.time || hour, minutes: s ? Math.max(10, Math.round(sessionMinutes(s))) : 45 }); }
     for (const x of programOn(day)) if (x.status !== 'missed' || day >= today) ev.push({ uid: `${x.pid}-${x.i}`, title: `${x.name.split(' · ')[0]} · semaine ${x.week}`, date: day, time: hour, minutes: x.minutes, desc: 'Programme Séances entraînement' });
   }
   if (!ev.length) { toast('Rien de prévu pour l’instant : planifie une séance ou crée un programme.'); return; }
@@ -323,21 +364,45 @@ export function openPlanSheet(date, seanceId) {
   const evs = eventsOn(date), done = doneOnDay(date), future = date > ymd(new Date());
   const list = S.seances.items.filter((s) => !s.archived);
   openSheet(h`<h2 style="margin:0">${new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
-    ${done.length ? h`<b class="small ok-t">Réalisé</b>${done.map((x) => h`<div class="item"><div class="ico sm">✅</div><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.aborted ? ' · interrompue' : ''}</div></div></div>`)}` : ''}
-    ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${e.recurrence ? 'se répète chaque semaine' : e.completed ? 'marquée faite' : future ? 'à venir' : ''}</div></div>${s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
+    ${done.length ? h`<b class="small ok-t">Réalisé</b><p class="tiny muted">Pas faite en vrai ? Touche « Pas faite » : elle sort de ton historique et de tes statistiques.</p>${done.map((x) => h`<div class="item"><div class="ico sm">✅</div><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">à ${hhmm(x.startedAt)} · ${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.aborted ? ' · interrompue' : ''}</div></div><button class="btn sm" data-act="notDone" data-id="${x.id}">✗ Pas faite</button></div>`)}` : ''}
+    ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId), race = e.meta?.kind === 'race', auto = e.meta?.kind === 'auto' || e.meta?.kind === 'test'; return h`<div class="item"><div class="ico sm">${race ? '🏁' : e.meta?.kind === 'test' ? '📏' : auto ? '🤖' : '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${[race ? 'événement important : repos la veille' : '', auto ? (e.meta.kind === 'test' ? 'tes mesures du mois (Mon bilan physique)' : `séance proposée · ${e.meta.minutes || 45} min${e.meta.light ? ' · légère' : ''} · préparée le jour même`) : '', e.recurrence ? 'se répète chaque semaine' : '', e.completed ? 'marquée faite' : future && !race ? 'à venir' : ''].filter(Boolean).join(' · ')}</div>
+        <label class="tiny row" style="gap:6px;margin-top:4px">Heure <input type="time" value="${e.time || ''}" data-change="evTime" data-id="${e.id}" aria-label="Heure" style="width:auto"></label></div>
+        ${e.completed ? h`<button class="btn sm" data-act="evUndone" data-id="${e.id}">✗ Pas faite</button>` : s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}" aria-label="Lancer">▶</button>` : auto && !future ? h`<button class="btn pri sm" data-act="autoPlay" data-id="${e.id}" aria-label="Préparer cette séance">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
     ${programOn(date).map((x) => h`<div class="item"><div class="ico sm">📆</div><div class="grow"><b>${x.name.split(' · ')[0]} · S${x.week}</b><div class="tiny muted">${x.minutes} min · programme${x.status === 'missed' ? ' · manquée' : ''}</div></div>${date <= ymd(new Date()) ? h`<button class="btn pri sm" data-act="progPlay" data-id="${x.pid}" data-i="${x.i}">▶</button>` : ''}</div>`)}
     ${!done.length && !evs.length && !programOn(date).length ? h`<p class="muted small">Rien ce jour-là.</p>` : ''}
     ${list.length ? h`<form data-submit="addEvent" class="card flat"><h3>Planifier une séance</h3>
       <label>Séance<select name="sid">${list.map((s) => h`<option value="${s.id}" ${s.id === seanceId ? 'selected' : ''}>${s.emoji} ${s.name}</option>`)}</select></label>
+      <label>Heure <span class="tiny muted">(facultatif : sert au rappel dans l’agenda du téléphone)</span><input type="time" name="time"></label>
       <label class="chk"><input type="checkbox" name="weekly"> Répéter chaque semaine</label>
       <button class="btn pri" type="submit">Planifier le ${date.split('-').reverse().join('/')}</button></form>` : h`<p class="muted small">Crée d’abord une séance pour la planifier.</p>`}
+    <details class="card flat"><summary><b>🏁 Ajouter un événement important</b> <span class="tiny muted">(compétition, course, sortie…)</span></summary>
+      <form data-submit="addRace" class="stack"><label>Quoi ?<input name="title" maxlength="80" required placeholder="Ex. Contest de bloc, 10 km, sortie à Bleau"></label><label>Heure <span class="tiny muted">(facultatif)</span><input type="time" name="time"></label>
+        <p class="tiny muted">Le planning garde un jour de repos la veille et te prévient s’il y a une séance dure.</p><button class="btn" type="submit">Ajouter</button></form></details>
     <button class="btn" data-act="closeSheet">Fermer</button>`);
 }
+CHG.evTime = (el) => { const e = S.events.find((x) => x.id === el.dataset.id), t = el.value; if (!e || (t && !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) return; saveEvent({ ...e, time: t }); toast(t ? `Heure : ${t}` : 'Heure retirée'); render(); };
+/** « Je ne l'ai pas faite » : une séance enregistrée par erreur (lancée puis abandonnée, oubliée ouverte…) sort de l'historique. */
+ACT.notDone = async (el) => {
+  const x = S.history.find((y) => y.id === el.dataset.id); if (!x) return;
+  if (!(await ask(`« ${x.sessionName} » n’a pas été faite ? Elle sera retirée de ton historique : statistiques, séries, progression et programme ne la compteront plus.`, { ok: 'Retirer', danger: true }))) return;
+  const day = ymd(new Date(x.startedAt));
+  deleteHistory(x.id);
+  for (const e of eventsOn(day)) if (e.completed && e.sessionId === x.sessionId) saveEvent({ ...e, completed: false });
+  toast('Retirée de l’historique'); openPlanSheet(S.selDay || day); render();
+};
+ACT.evUndone = (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; saveEvent({ ...e, completed: false }); toast('Remise « à faire »'); openPlanSheet(S.selDay); render(); };
 ACT.planSeance = (el) => openPlanSheet(ymd(new Date()), el.dataset.id);
 ACT.delEvent = async (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; if (!(await ask(e.recurrence ? 'Supprimer toute la série hebdomadaire ?' : 'Supprimer cet événement ?', { ok: 'Supprimer', danger: true }))) return; deleteEvent(e.id); openPlanSheet(S.selDay); render(); };
+SUBMIT.addRace = (form) => {
+  const f = Object.fromEntries(new FormData(form)), title = String(f.title || '').trim().slice(0, 80); if (!title) return;
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || '') ? f.time : '';
+  saveEvent({ id: uid(), date: S.selDay, time, title, sessionId: null, completed: false, recurrence: null, meta: { kind: 'race' } });
+  buzzOk(); toast('Événement ajouté : repos prévu la veille'); openPlanSheet(S.selDay); render();
+};
 SUBMIT.addEvent = (form) => {
   const f = Object.fromEntries(new FormData(form)), s = getSeance(f.sid); if (!s) return;
-  saveEvent({ id: uid(), date: S.selDay, title: s.name, sessionId: s.id, completed: false, recurrence: f.weekly ? { freq: 'weekly', until: null } : null });
-  buzzOk(); toast('Séance planifiée'); openPlanSheet(S.selDay); render();
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || '') ? f.time : '';
+  saveEvent({ id: uid(), date: S.selDay, time, title: s.name, sessionId: s.id, completed: false, recurrence: f.weekly ? { freq: 'weekly', until: null } : null });
+  buzzOk(); toast(time ? `Séance planifiée à ${time}` : 'Séance planifiée'); openPlanSheet(S.selDay); render();
 };
 export { blocksOf };

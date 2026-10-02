@@ -86,6 +86,8 @@ export function applyLayers(global = GLOBAL, mine = MINE) {
 export const textOverrides = () => new Map(GLOBAL.filter((x) => x.kind === 'text' && !x.hidden && x.data).map((x) => [x.data.from, x.data.to]));
 /** Annonces et notes de mise à jour écrites dans l'app, de la plus récente à la plus ancienne. */
 export const announcements = () => GLOBAL.filter((x) => x.kind === 'announce' && !x.hidden && x.data).map((x) => ({ id: x.id, at: x.updatedAt || 0, by: x.by || '', ...x.data })).sort((a, b) => b.at - a.at);
+/** Bandeau en cours (message de maintenance) : le plus récent encore valable. */
+export const activeBanner = (now = Date.now()) => announcements().find((a) => a.banner && (!a.until || a.until > now)) || null;
 /** Raccourcis contextuels ajoutés par un administrateur. */
 export const globalHints = () => GLOBAL.filter((x) => x.kind === 'hint' && !x.hidden && x.data).map((x) => ({ id: 'g-' + x.id, ...x.data }));
 /** Mise en page de base pour tous (par page) et fonctions masquées pour tous. */

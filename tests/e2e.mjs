@@ -103,7 +103,7 @@ await step('fiche de profil (tout sur une page) : sports et lieu, puis visite gu
   await a.click('[data-act=setupThanks]'); await A.waitForSelector('#tour .tour-bubble');
   assert.match(await a.text('#tour .tour-step'), /^1 \/ \d+$/);
   for (let k = 0; k < 3; k++) await a.click('#tour [data-act=tourNext]');
-  await A.waitForFunction(() => location.hash.startsWith('#/library/generate'), null, { timeout: 5000 }); // la visite va elle-même sur la page
+  await A.waitForFunction(() => location.hash.startsWith('#/progress'), null, { timeout: 5000 }); // la visite va elle-même sur la page
   await A.waitForSelector('#tour .tour-arrow.up, #tour .tour-arrow.down');
   const spot = await A.evaluate(() => { const r = document.querySelector('#tour .tour-spot').getBoundingClientRect(); return r.width > 0 && r.height > 0; });
   assert.ok(spot, 'élément mis en lumière');
@@ -210,7 +210,8 @@ await step('recherche 🔍 dans toute l’app, et recherche limitée aux paramè
   await a.click('#setfindres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/session')); await A.waitForSelector('#main input[name=vibration]');
 });
 await step('séances prêtes : filtres, tri pour toi, sources consultables, lancer / garder ; top exercices', async () => {
-  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('.catcard');
+  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('[data-act=catView]');
+  await a.click('[data-act=catView][data-id=rank]'); await A.waitForSelector('.catcard'); // vue « Pour toi d’abord »
   await a.click('[data-act=catEq]'); // tout afficher, même sans le matériel
   await a.click('[data-act=catF][data-k=sport][data-v=running]'); assert.match(await a.text('main'), /Fractionné 4 × 4 min/);
   await A.locator('.catcard', { hasText: 'Fractionné 4 × 4 min' }).click(); await A.waitForSelector('.catd .src');
@@ -567,20 +568,32 @@ await step('tous les sports comme l’escalade : course « 10 km en 50 min » �
   assert.equal(await A.inputValue('input[data-change=sName]'), 'Objectif 10 km en 50 min');
   await cpFresh('auto');
 });
-await step('V2 : chaîne de réglages — objectif placé au début puis déplacé, lieu d’une phase + déplacement, filtres de séance, prévisualisation', async () => {
+await step('8.29 : plusieurs sports, objectifs classés ; n°1 « Performer · Voie » mis à la fin → toute la séance s’adapte ; lieu d’une phase + déplacement, filtres, structure finale minute par minute', async () => {
   await cpFresh('auto'); await cpTo(1); await a.click('[data-act=cpSport][data-id=climbing_route]'); await a.click('[data-act=cpMin][data-id="150"]');
-  // L'objectif de la séance se choisit dès « L'essentiel » (étape 1).
-  await a.click('[data-act=cpObjFam][data-id=performance]'); await a.click('[data-act=cpObjSub][data-id="performance.limite"]');
-  await a.click('[data-act=cpObjPrio][data-id="performance.limite"][data-v="4"]'); await a.click('[data-act=cpObjWhen][data-id=start]');
-  await cpTo(2); await a.click('[data-act=cpAim][data-id=goals]');
+  await a.click('[data-act=cpSport2][data-id=climbing_boulder]');
+  await cpTo(2); assert.match(await a.text('.steps b'), /Étape 2\/6 · Tes objectifs/);
+  while (await a.count('.aimrow [data-act=cpAimDel]')) { await A.locator('.aimrow [data-act=cpAimDel]').first().click(); await A.waitForTimeout(60); } // objectifs tirés du profil : on repart de zéro
+  await a.click('[data-act=cpAimAdd][data-k="fam:performance@climbing_route"]');
+  await a.click('[data-act=cpAddFor][data-id=climbing_boulder]'); await a.click('[data-act=cpAimAdd][data-k="fam:technique@climbing_boulder"]');
+  await a.click('[data-act=cpAimAdd][data-k="fam:force@climbing_boulder"]');
+  await a.click('[data-act=cpAimUp][data-i="2"]'); // la force passe n°2
+  assert.match(await a.text('.aimlist'), /1\s*🚀 Performer · Voie[\s\S]*2\s*🏋️ Force · Bloc[\s\S]*3\s*🎯 Technique · Bloc/);
+  // Objectif avec ses mots : sans IA disponible, l'app lit les mots-clés et montre ce qu'elle a compris avant l'ajout.
+  await A.fill('textarea[data-input=cpAiText]', 'souplesse des hanches'); await a.click('[data-act=cpAiAim]'); await A.waitForSelector('[data-act=cpAiAdd]');
+  if (await a.count('[data-act=cpAiAdd][disabled]')) await a.click('[data-act=cpAiFam][data-id=mobilite]');
+  await a.click('[data-act=cpAiAdd]'); await A.waitForFunction(() => document.querySelectorAll('.aimrow').length === 4);
   await cpTo(3); await A.waitForSelector('.cpart');
-  const tags = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /objectif/.test(x.textContent)));
-  assert.equal(tags.indexOf(true), 1, 'objectif juste après l’échauffement');
-  await A.selectOption('select[data-change=cpObjWhere]', 'end'); await A.waitForTimeout(200);
-  const tags2 = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /objectif/.test(x.textContent)));
-  assert.equal(tags2.indexOf(true), tags2.length - 2, 'objectif déplacé à la fin, avant le retour au calme');
-  // Chaîne de réglages de la phase objectif : 8 maillons numérotés, lieu propre à la phase avec déplacement.
-  await A.locator('[data-act=cpEdit]').nth(tags2.length - 2).click(); await A.waitForSelector('#sheet .chainlink');
+  const tags = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /🎯 objectif/.test(x.textContent)));
+  assert.ok(tags.indexOf(true) <= 2, 'Auto : le n°1 (performance) tôt, juste après l’échauffement et la montée');
+  await A.selectOption('select[data-change=cpAimWhen][data-i="0"]', 'end'); await A.waitForTimeout(250);
+  const tags2 = await A.evaluate(() => [...document.querySelectorAll('.cpart')].map((x) => /🎯 objectif/.test(x.textContent)));
+  const names = await A.evaluate(() => [...document.querySelectorAll('.cpart b')].map((x) => x.textContent));
+  assert.ok(tags2.indexOf(true) >= tags2.length - 3, 'n°1 en fin de séance (avant la mobilité et le retour au calme)');
+  assert.ok(names.findIndex((t) => /Montée progressive/.test(t)) === tags2.indexOf(true) - 1, 'montée progressive juste avant le n°1');
+  const t3 = await a.text('#main');
+  assert.match(t3, /toute la séance est organisée pour que tu y arrives frais/); assert.match(t3, /« Force · Bloc » reste modérée/);
+  // Chaîne de réglages de la phase n°1 : 8 maillons numérotés, lieu propre à la phase avec déplacement.
+  await A.locator('[data-act=cpEdit]').nth(tags2.indexOf(true)).click(); await A.waitForSelector('#sheet .chainlink');
   assert.equal(await a.count('#sheet .chainlink'), 8); assert.match(await a.text('#sheet'), /1 · Type de phase[\s\S]*3 · Précisément[\s\S]*6 · Lieu[\s\S]*8 · Ce que l’app décide/);
   await a.click('#sheet [data-act=cpPhPlace][data-id=other]'); await A.waitForSelector('#sheet select[data-change=cpPhEnv]');
   const other = await A.evaluate(async () => { const st = await import('/state.js'), def = st.S.cp.envId || st.ctx().defEnv?.id || ''; return [...document.querySelectorAll('#sheet select[data-change=cpPhEnv] option')].map((o) => o.value).find((v) => v && v !== def); });
@@ -592,13 +605,94 @@ await step('V2 : chaîne de réglages — objectif placé au début puis déplac
   await a.click('#sheet [data-act=cpFlt][data-k=intensite][data-id=mod]'); await A.keyboard.press('Escape'); await A.waitForTimeout(150);
   assert.match(await a.text('#main'), /Intensité : Modérée/);
   await cpTo(6); const v = await a.text('#main');
-  assert.match(v, /Charge estimée/); assert.match(v, /🎯 Objectif : 🚀 Performance · À la fin/); assert.match(v, /🚗 15 min avant/);
+  assert.match(v, /Ta structure finale/); assert.match(v, /Charge estimée/); assert.match(v, /🎯 1\. Performer · Voie · 2\. Force · Bloc · 3\. Technique · Bloc/);
+  assert.match(v, /0:00–0:\d\d/); assert.match(v, /Sert ton objectif n°1 : Performer · Voie/); assert.match(v, /🚗 Trajet vers .* · 15 min/);
   await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpPlay]');
   assert.match(await a.text('#cpresult'), /Déplacement/);
 });
+await step('8.29 : horaires précis (voie 18:00–19:30, trajet, bloc 20:00–21:00), renfo placé là où il y a le matériel, objectifs sans hiérarchie, vraies heures', async () => {
+  await A.evaluate(async () => { const st = await import('/state.js'); st.putItem('env', 'e2e-voie', { name: 'Salle de voie E2E', type: 'salle', equipment: ['wall', 'leadwall'] }); st.putItem('env', 'e2e-bloc', { name: 'Salle de bloc E2E', type: 'salle', equipment: ['wall', 'hangboard', 'bar', 'weights', 'mat'] }); });
+  await cpFresh('auto'); await cpTo(1); await a.click('[data-act=cpSport][data-id=climbing_route]');
+  await a.click('[data-act=cpSport2][data-id=climbing_boulder]'); await a.click('[data-act=cpSport2][data-id=conditioning]');
+  await A.selectOption('select[data-change=cpEnv]', 'e2e-voie'); await A.selectOption('select[data-change=cpEnvFor][data-sp=climbing_boulder]', 'e2e-bloc');
+  await A.check('input[data-change=cpUseWin]'); await A.waitForSelector('input[data-change=cpWin]');
+  const tset = async (id, k, v) => { const sel = `input[data-change=cpWin][data-id=${id}][data-k=${k}]`; await A.fill(sel, v); await A.dispatchEvent(sel, 'change'); await A.waitForTimeout(120); };
+  await tset('e2e-voie', 'from', '18:00'); await tset('e2e-voie', 'to', '19:30'); await tset('e2e-bloc', 'from', '20:00'); await tset('e2e-bloc', 'to', '21:00');
+  const t1 = await a.text('#main'); assert.match(t1, /Salle de voie E2E 18:00–19:30 → Salle de bloc E2E 20:00–21:00 · 30 min entre deux/); assert.match(t1, /Temps disponible : 3 h/);
+  await cpTo(2); while (await a.count('.aimrow [data-act=cpAimDel]')) { await A.locator('.aimrow [data-act=cpAimDel]').first().click(); await A.waitForTimeout(60); }
+  await a.click('[data-act=cpAimAdd][data-k="fam:endurance@climbing_route"]');
+  await a.click('[data-act=cpAddFor][data-id=climbing_boulder]'); await a.click('[data-act=cpAimAdd][data-k="fam:force@climbing_boulder"]');
+  await a.click('[data-act=cpAddFor][data-id=conditioning]'); await a.click('[data-act=cpAimAdd][data-k="fam:force@conditioning"]');
+  await a.click('[data-act=cpAimTie][data-i="2"]'); assert.match(await a.text('.aimlist'), /2=[\s\S]*n°2 ex æquo[\s\S]*2=/, 'ex æquo : même rang');
+  await a.click('[data-act=cpAimTie][data-i="2"]');
+  await a.click('[data-act=cpEqual][data-id=equal]'); assert.match(await a.text('#main'), /Tes objectifs, sans hiérarchie/);
+  await cpTo(3); assert.match(await a.text('#main'), /Renfo » placé à Salle de bloc E2E[\s\S]*poutre/);
+  await cpTo(6); const v = await a.text('#main');
+  assert.match(v, /18:00–18:\d\d/); assert.match(v, /19:30–20:00\s*🚗 Trajet vers Salle de bloc E2E · 30 min/); assert.match(v, /Remise en route/); assert.match(v, /–21:00/);
+  assert.match(v, /\(sans hiérarchie\)/); assert.doesNotMatch(v, /objectif n°/);
+  await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpSave]'); await a.click('#cpresult [data-act=cpSave]'); await A.waitForTimeout(300);
+});
+await step('8.29 : planning — séance planifiée avec son heure (et heure modifiable) ; « Pas faite » après coup retire la séance de l’historique', async () => {
+  const today = await A.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  await A.evaluate(async () => { const st = await import('/state.js'); st.addHistory({ id: 'e2e-oops', sessionId: 'x', sessionName: 'Séance pas vraiment faite', startedAt: Date.now() - 60000, durationSeconds: 60, data: { exercises: [] } }); });
+  await a.tab('home'); await A.evaluate(() => { location.hash = '#/home/cal'; }); await A.waitForSelector(`[data-act=calDay][data-id="${today}"]`);
+  assert.match(await a.text('#main'), /Touche un jour pour planifier une séance \(avec son heure\)/);
+  await a.click(`[data-act=calDay][data-id="${today}"]`); await A.waitForSelector('#sheet form[data-submit=addEvent]');
+  await A.fill('#sheet input[name=time]', '18:30'); await a.click('#sheet form[data-submit=addEvent] button[type=submit]'); await A.waitForTimeout(300);
+  assert.match(await a.text('#sheet'), /Séance pas vraiment faite[\s\S]*Pas faite/);
+  assert.equal(await A.inputValue('#sheet input[data-change=evTime]'), '18:30');
+  await poll(async () => (await a.api('GET', '/api/calendar')).data.events.some((e) => e.time === '18:30'), 12000, 'heure enregistrée sur le serveur');
+  await A.fill('#sheet input[data-change=evTime]', '19:15'); await A.dispatchEvent('#sheet input[data-change=evTime]', 'change');
+  await poll(async () => (await a.api('GET', '/api/calendar')).data.events.some((e) => e.time === '19:15'), 12000, 'heure modifiée');
+  await a.click('#sheet [data-act=notDone][data-id=e2e-oops]'); await a.confirm(); await A.waitForTimeout(300);
+  assert.doesNotMatch(await a.text('#sheet'), /Séance pas vraiment faite/);
+  await poll(async () => !(await a.api('GET', '/api/history')).data.history.some((x) => x.id === 'e2e-oops'), 12000, 'retirée de l’historique sur le serveur');
+  await A.keyboard.press('Escape'); await A.waitForTimeout(150);
+});
+await step('8.29 : silhouette — forme en V choisie → carte « Ma silhouette » (mensurations, séries par muscle), séances prêtes de salle', async () => {
+  await a.tab('profile'); await a.sub('profSub', 'body'); await A.waitForSelector('[data-act=bodySet][data-k=physique][data-v=v]');
+  await a.click('[data-act=bodySet][data-k=physique][data-v=v]'); await A.waitForSelector('text=Ma silhouette');
+  const t = await a.text('#main'); assert.match(t, /Forme en V[\s\S]*Tour d’épaules[\s\S]*Tour de taille[\s\S]*Séries cette semaine[\s\S]*Dos/); assert.match(t, /rien n’est garanti/);
+  assert.match(t, /Silhouette visée : dos, épaules en priorité/);
+  await a.click('[data-act=bodySet][data-k=physique][data-v=v]'); await A.waitForTimeout(150); // on retire le choix pour la suite du parcours
+});
+await step('8.30 : visite de la page (reste sur la page, chaque partie expliquée) ; carnet par sport et niveau ; calisthenics', async () => {
+  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('[data-act=catView]'); await a.click('[data-act=catView][data-id=book]');
+  if (await a.count('[data-act=catEq].on')) await a.click('[data-act=catEq]'); // tout le carnet, même sans le matériel
+  const t = await a.text('#main'); assert.match(t, /🤸 Calisthenics[\s\S]*🌱 Débutant[\s\S]*🌿 Intermédiaire[\s\S]*🌳 Avancé/); assert.match(t, /Vers le muscle-up/);
+  await a.click('[data-act=catF][data-k=level][data-v="2"]'); const t2 = await a.text('#main');
+  assert.doesNotMatch(t2, /🌱 Débutant ·/); assert.match(t2, /Bloc à la limite/); await a.click('[data-act=catF][data-k=level][data-v="2"]');
+  await a.click('[data-act=pageTour]'); await A.waitForSelector('#tour .tour-bubble'); assert.match(await a.text('#tour'), /Le carnet de séances/);
+  const total = Number((await a.text('#tour .tour-step')).split('/')[1]); assert.ok(total >= 4, `${total} étapes`);
+  for (let k = 1; k < total; k++) await a.click('#tour [data-act=tourNext]');
+  assert.match(await a.text('#tour'), /Les onglets[\s\S]*Bibliothèque/);
+  await a.click('#tour [data-act=tourEnd]'); await A.waitForSelector('#tour', { state: 'detached' });
+  assert.match(await A.evaluate(() => location.hash), /#\/library\/catalog/, 'la visite de la page reste sur la page');
+  await a.click('[data-act=catView][data-id=focus]'); await a.click('[data-act=catFocus][data-id="m:pecs"]');
+  const tf = await a.text('#main'); assert.match(tf, /Pectoraux à la maison[\s\S]*Pectoraux à la salle[\s\S]*Pectoraux et dips/); assert.doesNotMatch(tf, /Sortie longue/);
+  await a.click('[data-act=catFocus][data-id="s:mobilite"]'); assert.match(await a.text('#main'), /Mobilité des hanches/);
+  await a.click('[data-act=catView][data-id=book]');
+  await a.click('[data-act=catEq]');
+});
+await step('8.30 : « 🔁 Adapter » une séance (20 min, zone à ménager, phrase) → version lancée ou gardée à part ; l’originale ne change pas', async () => {
+  const orig = await A.evaluate(async () => { const st = await import('/state.js'); const s = st.S.seances.items.find((x) => !x.archived && x.exercises.length >= 3); return s ? JSON.stringify({ id: s.id, name: s.name, ex: s.exercises.map((e) => [e.name, e.sets, e.rest]) }) : ''; });
+  assert.ok(orig, 'une séance à adapter'); const o = JSON.parse(orig);
+  await A.evaluate((id) => { location.hash = '#/library/seance/' + id; }, o.id); await A.waitForSelector('[data-act=adaptOpen]');
+  assert.match(await a.text('#main'), /sans toucher à cette séance/);
+  await a.click('#main [data-act=adaptOpen]'); await A.waitForSelector('#sheet [data-act=adPreview]'); assert.match(await a.text('#sheet'), /ta séance d’origine ne change pas/);
+  await a.click('#sheet [data-act=adSet][data-k=minutes][data-v="20"]'); await a.click('#sheet [data-act=adTog][data-k=zones][data-v=knees]');
+  await A.fill('#sheet input[data-change=adText]', 'échauffement plus court, plus facile'); await A.dispatchEvent('#sheet input[data-change=adText]', 'change');
+  assert.match(await a.text('#sheet'), /Compris : .*échauffement : plus court.*plus facile/);
+  await a.click('#sheet [data-act=adPreview]'); await A.waitForSelector('#sheet [data-act=adSave]');
+  const pv = await a.text('#sheet'); assert.match(pv, /Ce qui change/); assert.match(pv, /au lieu de/);
+  await a.click('#sheet [data-act=adSave]'); await A.waitForTimeout(300);
+  const after = await A.evaluate(async (id) => { const st = await import('/state.js'); const s = st.getSeance(id); return JSON.stringify({ id: s.id, name: s.name, ex: s.exercises.map((e) => [e.name, e.sets, e.rest]) }); }, o.id);
+  assert.equal(after, orig, 'séance d’origine identique');
+  await poll(async () => (await a.api('GET', '/api/sync')).data.items.some((x) => x.name === `${o.name} (adaptée)`.slice(0, 80)), 12000, 'version adaptée gardée à part');
+});
 await step('8.28 : « L’essentiel » puis ⚡ Proposer ma séance ; envies → bilan physique guidé, valeur mesurée, objectif précis proposé', async () => {
   await cpFresh('auto'); await a.click('[data-act=cpSport][data-id=conditioning]'); await a.click('[data-act=cpMin][data-id="45"]');
-  assert.match(await a.text('.steps b'), /Étape 1\/6 · L’essentiel/); assert.match(await a.text('#main'), /Objectif de la séance/);
+  assert.match(await a.text('.steps b'), /Étape 1\/6 · L’essentiel/); assert.match(await a.text('#main'), /Tes objectifs/);
   await a.click('[data-act=cpQuick]'); await A.waitForSelector('#cpresult'); assert.match(await a.text('.steps b'), /Étape 4\/6/);
   await a.click('[data-act=cpQuickGo]'); await A.waitForSelector('#cpresult [data-act=cpSave]'); assert.match(await a.text('.steps b'), /Étape 6\/6/);
   // Envies → tests utiles ; bilan guidé : un test, une valeur, enregistrée comme mesurée.
@@ -637,7 +731,7 @@ await step('V1 : séance structurée (bloc → pause → voie), but ponctuel, pr
   await A.locator('#cpresult [data-act=cpOpts]').first().click(); await A.waitForSelector('#sheet .optwhy'); assert.match(await a.text('#sheet'), /Le plus adapté à tes contraintes actuelles/); await A.keyboard.press('Escape');
   await cpTo(5); await A.waitForSelector('.sugg [data-act=cpSugApply]:not([disabled])');
   await A.locator('.sugg [data-act=cpSugApply]:not([disabled])').first().click(); await A.waitForSelector('.card.ok-b:has-text("Déjà appliqué")');
-  await cpTo(6); assert.match(await a.text('#main'), /Ta séance avant génération[\s\S]*Préparer puis performer en voie/);
+  await cpTo(6); assert.match(await a.text('#main'), /Ta structure finale[\s\S]*Préparer puis performer en voie/);
   assert.equal(await a.count('#cpresult [data-act=cpPlay]'), 0, 'rien de généré avant la validation');
   await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpPlay]');
   assert.equal(await goalsN(), g0, 'l’intention du jour n’a pas créé d’objectif');
@@ -703,7 +797,7 @@ await step('séance à deux : code affiché, B rejoint, les chronos avancent ens
   cur = A; await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=play]').first().click(); await A.waitForSelector('#player.open');
   await a.click('#player [data-act=duoOpen]'); await A.waitForSelector('#sheet .duocode'); const code = (await a.text('#sheet .duocode')).trim(); assert.match(code, /^[A-Z2-9]{6}$/);
   await A.keyboard.press('Escape');
-  cur = B; await b.tab('library'); await b.sub('libSub', 'seances'); await b.click('[data-act=newChoose]'); await b.click('#sheet [data-act=duoJoinAsk]'); await B.fill('#sheet input[name=code]', code.toLowerCase()); await b.click('#sheet button.pri');
+  cur = B; await b.tab('library'); await b.sub('libSub', 'seances'); await b.click('[data-act=newChoose]'); await b.click('#sheet [data-act=groupMenu]'); await b.click('#sheet [data-act=groupJoinAsk]'); await B.fill('#sheet input[name=code]', code.toLowerCase()); await b.click('#sheet button.pri'); // le même champ rejoint aussi un ancien code « à deux »
   await B.waitForSelector('#player.open .duobar:has-text("Avec Alice")');
   await A.waitForSelector('#player .duobar:has-text("Avec Bob")', { timeout: 8000 });
   const where = (P) => P.evaluate(() => `${document.querySelector('#player .pl .muted.small')?.textContent.split('·')[0].trim()}|${document.querySelector('#ptimer.rest') ? 'repos' : 'série'}`);
@@ -726,6 +820,26 @@ await step('B signale un bug depuis Paramètres', async () => {
 /* ═════════ Administrateur ═════════ */
 console.log('Administrateur');
 const ctxC = await newCtx(); const C = await ctxC.newPage(); watch(C, 'C'); cur = C; const c = H(C);
+await step('8.30 : séance à plusieurs (code, une poutre pour deux, l’organisateur lance pour tous, chacun son rôle) ; QR code pour partager l’app', async () => {
+  await a.tab('library'); await a.sub('libSub', 'catalog'); await A.waitForSelector('[data-act=catView]'); await a.click('[data-act=catView][data-id=book]');
+  if (await a.count('[data-act=catEq].on')) await a.click('[data-act=catEq]');
+  await A.locator('[data-act=catOpen]', { hasText: 'Suspensions 7/3' }).first().click(); await A.waitForSelector('#sheet [data-act=groupNew]');
+  await a.click('#sheet [data-act=groupNew]'); await A.waitForSelector('#grp .duocode');
+  const code = (await a.text('#grp .duocode')).trim(); assert.match(code, /^[A-HJ-NP-Z2-9]{6}$/);
+  await B.evaluate(async (c) => { const m = await import('/views-group.js'); await m.groupJoin(c); }, code); await B.waitForSelector('#grp .grpwrap');
+  assert.match(await b.text('#grp'), /En attente : .* lance la séance pour tout le monde/);
+  await A.waitForFunction(() => /2 personnes/.test(document.querySelector('#grp')?.innerText || ''), null, { timeout: 10000 });
+  await a.click('#grp [data-act=grpEq][data-k=hangboard][data-d="-1"]'); assert.match(await a.text('#grp'), /pause réelle 7 s au lieu de 3 s/);
+  await a.click('#grp [data-act=grpStart]'); await A.waitForSelector('#grp .grptime'); await B.waitForSelector('#grp .grptime', { timeout: 10000 });
+  for (let k = 0; k < 40; k++) { if (/travaille|Suspensions progressives|Repeaters/.test(await a.text('#grp .grpex'))) break; await a.click('#grp [data-act=grpNext]'); await A.waitForTimeout(100); }
+  await A.waitForTimeout(2500);
+  const ra = await a.text('#grp .grprole'), rb = await b.text('#grp .grprole');
+  assert.notEqual(ra, rb, 'sur une seule poutre, l’un travaille pendant que l’autre récupère');
+  await a.click('#grp [data-act=grpStop]'); await a.confirm();
+  await B.waitForFunction(() => !document.getElementById('grp'), null, { timeout: 10000 });
+  await a.tab('settings'); await a.click('[data-act=shareApp]'); await A.waitForSelector('#appqr svg'); assert.match(await a.text('#sheet'), /seances-sport\.pages\.dev/);
+  await A.keyboard.press('Escape');
+});
 await step('mauvais mot de passe admin refusé ; bon EDIT_PASSWORD → compte administrateur', async () => {
   await C.goto(BASE); await C.waitForSelector('[data-act=authPick][data-id=register]'); await c.click('[data-act=authPick][data-id=register]');
   await C.fill('input[name=username]', 'Carole'); await C.fill('input[name=password]', 'motdepasse3'); await c.click('button[type=submit]'); await C.waitForSelector('nav.tabs');
@@ -770,7 +884,7 @@ await step('Studio : brouillon invisible, vérifications, publication confirmée
   // V2 : santé des données, maintenance et propositions de code (lecture ; rien n'est appliqué).
   await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=health]'); await C.waitForSelector('text=Santé des données');
   await C.waitForSelector('[data-act=healthReload]'); assert.match(await c.text('main'), /capacités/);
-  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=code]'); await C.waitForSelector('text=L’app ne déploie jamais de code');
+  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=code]'); await C.waitForSelector('text=L’app ne fusionne et ne déploie jamais de code');
 });
 await step('l’admin modifie puis supprime la contribution ; pas d’accès aux données privées', async () => {
   const d = (await c.api('GET', '/api/shared/' + commonId)).data.item; assert.equal(d.canEdit, true);
@@ -1048,6 +1162,22 @@ async function twoSites() {
   });
   const P = await c.newPage(); watch(P, 'M'); cur = P; return { c, P };
 }
+await step('8.30 : forme du jour (check-in), mon parcours (saison, lettre scellée), outils par sport, accessibilité, sans débordement', async () => {
+  await g.tab('home'); await G.evaluate(async () => (await import('/state.js')).ACT.checkin()); await G.waitForSelector('#sheet form[data-submit=checkinSave]');
+  await g.click('#sheet [data-act=ciPick][data-k=sleep][data-v="8"]'); await g.click('#sheet [data-act=ciPick][data-k=energy][data-v="4"]'); await g.click('#sheet form[data-submit=checkinSave] button.pri');
+  await G.waitForSelector('#sheet.open', { state: 'detached' }).catch(() => {});
+  assert.equal(await G.evaluate(async () => (await import('/state.js')).itemsOf('wellness').length), 1, 'check-in enregistré');
+  await g.tab('progress'); await G.waitForSelector('#main [data-act=seasonOpen]'); await g.noOverflow('progrès + mon parcours');
+  await g.click('#main [data-act=seasonOpen]'); await g.click('#sheet [data-act=seasonGo]'); assert.equal(await G.evaluate(async () => (await import('/state.js')).itemsOf('season').length), 1);
+  await g.click('#main [data-act=letterOpen]'); await G.fill('#sheet textarea[name=text]', 'Salut moi <b>du futur</b>'); await g.click('#sheet form[data-submit=letterSave] button.pri');
+  await G.waitForSelector('#sheet [data-act=letterRead]'); await g.click('#sheet [data-act=letterRead]'); assert.match(await g.text('#sheet'), /Lettre scellée/, 'pas lisible avant la date');
+  await G.keyboard.press('Escape');
+  await G.evaluate(async () => (await import('/state.js')).go('profile', 'perfs')); await G.waitForSelector('#main [data-act=platesOpen]');
+  await g.click('#main [data-act=platesOpen]'); assert.match(await g.text('#sheet'), /de chaque côté|barre seule/); await G.keyboard.press('Escape');
+  await G.evaluate(async () => (await import('/state.js')).go('settings', 'display')); await G.waitForSelector('#main [data-act=a11ySet][data-k=big]');
+  await g.click('#main [data-act=a11ySet][data-k=big]'); assert.equal(await G.evaluate(() => document.documentElement.dataset.big), 'on'); await g.noOverflow('gros boutons');
+  await g.click('#main [data-act=a11ySet][data-k=big]'); assert.equal(await G.evaluate(() => document.documentElement.dataset.big), 'off');
+});
 await step('ancienne adresse → nouvelle : compte, réglages et séances retrouvés après confirmation', async () => {
   const { c, P } = await twoSites(); const m = H(P);
   await P.goto(NEWO + '/'); await P.waitForSelector('[data-act=authPick]'); // la nouvelle adresse ne redirige pas

@@ -1,11 +1,12 @@
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
-import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
+import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG, ymd } from './ui.js';
+import { composePage } from './layout.js';
 import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
 import { uid, normalizeEx, normalizeSession } from './shared.js';
-import { capOptionGroups, CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
+import { capOptionGroups, CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, EQUIPMENT_GROUPS, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
 import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addLevel, moveLevel, removeLevel, renameLevel, setMapping, sortedLevels, gradeSnapshot, maximaSummary, snapshotText, REFERENCE, LEVEL_WORDS } from './grading.js';
 import { understandProfile, profileCapacities, strengthsWeaknesses, capacityState, STATUS_WORD, confWord, trainingMap, graphFromCap, graphFromGoal, goalProgress, goalLabel, goalCaps, activeGoals, mastery, MASTERY_WORD, blockers, goalPaths, whatIf, whyNoProgress, perfsOf, perfText, metricTrend, testReminders, learnedPreferences, habits, muscleVolume, activityLabel } from './brain.js';
 import { anatomySvg } from './anatomy.js';
@@ -24,6 +25,11 @@ import { capMastery, transfers, relationMap, estimatedFormats, MASTERY } from '.
 import { strategies } from './strategy.js';
 import { assessment, conditionFacts, suggestedGoals, guidedTests, ENVIES, ZONE_WORD } from './assess.js';
 import { levelFor } from './generator.js';
+import { COMPOSITION, MEASURES, lastValue, evolution, indices, checkWeighIn } from './bodycomp.js';
+import { painCard } from './views-forme.js';
+import { sportTools } from './views-sports.js';
+import { cheersCard, loadCheers } from './views-community.js';
+import { PHYSIQUE, PHYSIQUE_SOURCES, physiqueGroups, physiqueMeasures, physiqueTrack, weeklySets, SETS_RANGE } from './physique.js';
 
 const SUBS = [['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
 const TILES = { bilan: ['🩺', 'Mon bilan physique', 'ce que l’app sait de ta condition, tests à faire'], analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
@@ -64,16 +70,21 @@ function vHub() {
   const climbing = acts.some((a) => a.id.startsWith('climbing'));
   const tiles = Object.entries(TILES).filter(([k]) => k !== 'climbing' || climbing);
   const pill = (x, cls) => h`<button class="chip ${cls}" data-act="capOpen" data-id="${x.capId}">${x.label}</button>`;
-  return h`<section class="card hero phero"><div class="row"><div class="avatar">${acts[0]?.emoji || '🙂'}</div><div class="grow"><h1>${S.user.guest ? 'Mon profil' : S.user.username}</h1>
+  // Chaque bloc se déplace, se masque ou se colore avec ✏️ « Organiser » (mise en page du Profil).
+  const GID = { 'g-moi': 'Moi', 'g-res': 'Mes résultats', 'g-why': 'Comprendre mes conseils', 'g-share': 'Partager' };
+  const group = (gid) => () => { const g = GROUPS.find(([title]) => title === GID[gid]), list = g ? tiles.filter(([k]) => g[1].includes(k)) : [];
+    return list.length ? h`<span class="kicker">${g[0]}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; };
+  return h`<p class="tiny muted pagehelp">Ce que l’app sait de toi (corps, sports, lieux, objectifs, mesures) : plus il est complet, plus tes séances sont justes.</p>${composePage('profile', {
+    hero: () => h`<section class="card hero phero"><div class="row"><div class="avatar">${acts[0]?.emoji || '🙂'}</div><div class="grow"><h1>${S.user.guest ? 'Mon profil' : S.user.username}</h1>
       <div class="chips">${acts.length ? acts.map((a) => h`<span class="chip static">${a.emoji} ${a.label}</span>`) : h`<button class="chip" data-act="setupStart" data-id="quiz">＋ Choisir mes sports</button>`}</div></div></div>
-    <div class="stats"><span>🏋️ ${c.history.length} séance${c.history.length > 1 ? 's' : ''}</span><span>🎯 ${goals.length ? `${goals.length} objectif${goals.length > 1 ? 's' : ''}` : envies.length ? `${envies.length} envie${envies.length > 1 ? 's' : ''}` : '0 objectif'}</span><span>📏 ${c.perfs.filter((p) => !p.unknown).length} mesure(s)</span></div></section>
-    ${sw.strengths.length || sw.weaknesses.length ? h`<div class="grid2 sw2">
+    <div class="stats"><span>🏋️ ${c.history.length} séance${c.history.length > 1 ? 's' : ''}</span><span>🎯 ${goals.length ? `${goals.length} objectif${goals.length > 1 ? 's' : ''}` : envies.length ? `${envies.length} envie${envies.length > 1 ? 's' : ''}` : '0 objectif'}</span><span>📏 ${c.perfs.filter((p) => !p.unknown).length} mesure(s)</span></div></section>`,
+    sw: () => sw.strengths.length || sw.weaknesses.length ? h`<div class="grid2 sw2">
       <section class="card ok-b"><span class="kicker ok-t">💪 Tes points forts</span><div class="chips">${sw.strengths.length ? sw.strengths.slice(0, 3).map((x) => pill(x, 'okc')) : h`<span class="small muted">Bientôt…</span>`}</div></section>
       <section class="card warn-b"><span class="kicker warn-t">🌱 À travailler</span><div class="chips">${sw.weaknesses.length ? sw.weaknesses.slice(0, 3).map((x) => pill(x, 'warnc')) : h`<span class="small muted">Rien de flagrant</span>`}</div></section></div>`
-      : known ? h`<section class="card flat row"><span class="grow small">🧩 Tes capacités connues sont au même niveau : pas de point fort ni faible marqué pour l’instant. Chaque test en plus affine l’image.</span></section>` : ''}
-    ${bilanCard(bil)}
-    ${completeCard(c, acts, goals, climbing)}
-    ${GROUPS.map(([title, ids]) => { const list = tiles.filter(([k]) => ids.includes(k)); return list.length ? h`<span class="kicker">${title}</span><div class="tiles">${list.map(([k, [ic, t, sub]]) => h`<button class="tile" data-act="profSub" data-id="${k}"><span class="ti">${ic}</span><b>${t}</b><small>${counts[k] ? h`<em>${counts[k]}</em> · ` : ''}${sub}</small></button>`)}</div>` : ''; })}`;
+      : known ? h`<section class="card flat row"><span class="grow small">🧩 Tes capacités connues sont au même niveau : pas de point fort ni faible marqué pour l’instant. Chaque test en plus affine l’image.</span></section>` : '',
+    bilan: () => bilanCard(bil), complete: () => completeCard(c, acts, goals, climbing),
+    'g-moi': group('g-moi'), 'g-res': group('g-res'), 'g-why': group('g-why'), 'g-share': group('g-share'),
+  })}`;
 }
 ACT.profSub = (el) => { if (el.dataset.id === 'goals') S.filters.goals = 'active'; go('profile', el.dataset.id); if (el.dataset.id === 'public') loadSocial(); };
 const capL = (id) => CAPACITIES[id]?.label || ctx().categories[id]?.label || id;
@@ -195,6 +206,7 @@ function vPerfs() {
   return h`<div class="row wrapf"><button class="btn pri" data-act="perfAdd">＋ Saisir une performance</button><button class="btn" data-act="metricNew">＋ Métrique personnalisée</button></div>
     ${recordsCards()}
     ${climber ? h`<span class="kicker">🧗 Escalade</span>${climbMaxima()}${pyramidCard()}${fingerCard()}` : ''}
+    ${sportTools()}
     ${rem.length ? h`<div class="card flat"><h3>📏 À mesurer</h3>${rem.map((t) => h`<div class="item"><div class="grow"><b class="small">${t.label}</b><div class="tiny muted">${t.unknown ? 'tu ne sais pas encore' : t.age != null ? `il y a ${t.age} j` : 'jamais mesuré'} · pour ${t.why}</div>${t.test ? h`<details class="how mini"><summary>Comment faire le test ?</summary><p class="tiny">${t.test}</p></details>` : ''}</div><button class="btn sm pri" data-act="perfAdd" data-id="${t.metricId}">Saisir</button></div>`)}</div>` : ''}
     ${groups.size ? [...groups.entries()].map(([mid, list]) => { const m = c.metrics[mid] || { label: mid, unit: '' }; const t = metricTrend(mid, c); const pts = list.filter((p) => !p.unknown && p.value != null).sort((a, b) => a.date - b.date).map((p) => ({ v: p.value })); return h`<div class="card"><div class="row between"><h3>${m.label}</h3><button class="btn sm" data-act="perfAdd" data-id="${mid}">＋</button></div>
       ${m.tiers ? h`<p class="tiny muted">${metricTierText(m)}</p>` : ''}${t ? h`<p class="small">${t.dir > 0 ? '📈' : t.dir < 0 ? '📉' : '➖'} ${t.text}</p>` : ''}${pts.length >= 2 ? lineChart(pts, m.unit) : ''}
@@ -339,13 +351,76 @@ function vBody() {
     <section class="card"><div class="row between"><h3>⚖️ Mon poids</h3><button class="btn sm pri" data-act="weighIn">＋ Pesée</button></div>
       ${weights.length >= 2 ? lineChart(weights.slice(-30).map((p) => ({ v: p.value, t: p.date })), 'kg') : ''}
       ${weights.length ? h`<p class="small">Dernière pesée : <b>${weights.at(-1).value} kg</b> (${fmtDay(weights.at(-1).date)})${weights.length >= 2 ? h` · ${(() => { const d = Math.round((weights.at(-1).value - weights[0].value) * 10) / 10; return d > 0 ? `+${d} kg` : `${d} kg`; })()} depuis le ${fmtDay(weights[0].date)}` : ''}</p>` : h`<p class="small muted">Note ton poids de temps en temps (même heure, même conditions) pour voir la tendance.</p>`}</section>
+    ${compositionCard()}
+    ${silhouetteCard(b, goals)}
+    ${painCard()}
     <section class="card"><h3>Ce que ça change dans tes séances</h3>${adj.reasons.length ? h`<ul class="small">${adj.reasons.map((r) => h`<li>${r}</li>`)}</ul>` : h`<p class="small muted">Rien de spécial : les séances suivent ton niveau et tes objectifs.</p>`}${sourcesLine(adj.sources)}</section>`;
+}
+/** Composition et mensurations : dernières valeurs, évolution, indices calculés (avec leurs limites), saisie en une fois. */
+function compositionCard() {
+  const c = ctx(), num = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
+  const row = (id) => { const m = c.metrics[id], l = lastValue(c, id); if (!m) return ''; const e = evolution(c, id);
+    return h`<button class="setrow" data-act="mHistory" data-id="${id}"><span class="grow"><b>${m.label}</b><small>${l ? `${num(l.value)} ${m.unit}${l.date ? ` · ${fmtDay(l.date)}` : ' · profil'}${e?.delta ? ` · ${e.delta > 0 ? '+' : ''}${num(e.delta)} ${m.unit} depuis le ${fmtDay(e.since)}` : ''}` : 'pas encore mesuré'}</small></span><span class="chev">›</span></button>`; };
+  const known = (l) => l.filter((id) => lastValue(c, id));
+  const ix = indices(c);
+  return h`<section class="card stack"><h3 style="margin:0">📊 Composition et mensurations</h3>
+    <p class="tiny muted">Pour suivre précisément ton corps : tout ce que donne une balance connectée, et tes mensurations, en une seule saisie. Toujours le même appareil, le matin, à jeun.</p>
+    <div class="grid2"><button class="btn pri" data-act="weighFull">⚖️ Pesée complète</button><button class="btn" data-act="measureAll">📏 Mensurations</button></div>
+    ${known(COMPOSITION).length ? h`<span class="kicker">Composition</span><div class="setmenu">${known(COMPOSITION).map(row)}</div>` : ''}
+    ${known(MEASURES).length ? h`<span class="kicker">Mensurations</span><div class="setmenu">${known(MEASURES).map(row)}</div>` : ''}
+    ${ix.length ? h`<span class="kicker">Calculé à partir de tes mesures</span><div class="stack tight">${ix.map((x) => h`<details class="how mini"><summary><b>${x.label}</b> : ${x.text}</summary><p class="tiny">${x.help}</p></details>`)}</div><p class="tiny muted">Des repères pour suivre ta progression, pas un diagnostic.</p>` : h`<p class="tiny muted">Note ta taille et ton poids (et si possible ta masse grasse) : l’app calcule ton IMC, ta masse maigre, ton indice de masse maigre et tes rapports de mensurations.</p>`}</section>`;
+}
+const MFIELD = (id, extra = '') => { const m = ctx().metrics[id], l = lastValue(ctx(), id); return m ? h`<label class="small">${m.label}<span class="unitbox"><input type="number" inputmode="decimal" step="any" name="${id}" placeholder="${l ? String(l.value).replace('.', ',') : ''}" ${raw(extra)}><em>${m.unit}</em></span></label>` : ''; };
+ACT.weighFull = () => openSheet(h`<form class="stack" data-submit="bodySaveMany" data-kind="composition"><h2 style="margin:0">⚖️ Pesée complète</h2>
+  <p class="tiny muted">Remplis seulement ce que ta balance (ou ta mesure) donne. Le chiffre gris est ta dernière valeur.</p>
+  <div class="grid2">${COMPOSITION.map((id) => MFIELD(id))}</div>
+  <label class="small">Appareil <span class="tiny muted">(facultatif, pour comparer ce qui est comparable)</span><input name="device" maxlength="60" placeholder="Ex. balance de la salle, balance connectée…"></label>
+  <button class="btn pri big">Enregistrer</button></form>`, { wide: true });
+ACT.measureAll = () => openSheet(h`<form class="stack" data-submit="bodySaveMany" data-kind="measures"><h2 style="margin:0">📏 Mensurations</h2>
+  <p class="tiny muted">Mètre ruban souple, sans serrer, en fin d’expiration. Remplis ce que tu veux ; touche ❓ pour savoir où mesurer.</p>
+  <div class="stack tight">${MEASURES.map((id) => { const m = ctx().metrics[id]; return m ? h`<div>${MFIELD(id)}${m.test ? h`<details class="how mini"><summary class="tiny">❓ Où mesurer</summary><p class="tiny">${m.test}</p></details>` : ''}</div>` : ''; })}</div>
+  <button class="btn pri big">Enregistrer</button></form>`, { wide: true });
+SUBMIT.bodySaveMany = (f) => {
+  const d = Object.fromEntries(new FormData(f)), ids = (f.dataset.kind === 'composition' ? COMPOSITION : MEASURES).filter((id) => String(d[id] ?? '').trim() !== '');
+  if (!ids.length) return toast('Remplis au moins une valeur.');
+  const errs = f.dataset.kind === 'composition' ? checkWeighIn(d) : ids.filter((id) => !(Number(String(d[id]).replace(',', '.')) > 0)).map((id) => `${ctx().metrics[id].label} : valeur invalide.`);
+  if (errs.length) return toast(errs[0], 4000, 'bad');
+  const now = Date.now(), day = ymd(new Date()), note = String(d.device || '').trim().slice(0, 60);
+  for (const id of ids) { const m = ctx().metrics[id]; putItem('perf', `bc-${id}-${day}`, { metricId: id, value: Math.round(Number(String(d[id]).replace(',', '.')) * 100) / 100, unit: m.unit, date: now, source: 'measured', note: note || (f.dataset.kind === 'composition' ? 'Pesée complète' : 'Mensurations') }); }
+  if (ids.includes('body_weight')) putItem('config', 'body', { ...(item('config', 'body') || {}), weight: Number(String(d.body_weight).replace(',', '.')) });
+  if (ids.includes('taille_corps')) putItem('config', 'body', { ...(item('config', 'body') || {}), height: Number(String(d.taille_corps).replace(',', '.')) });
+  closeSheet(); toast(`${ids.length} mesure${ids.length > 1 ? 's' : ''} enregistrée${ids.length > 1 ? 's' : ''}`); render();
+};
+ACT.mHistory = (el) => { const c = ctx(), id = el.dataset.id, m = c.metrics[id], e = evolution(c, id), l = lastValue(c, id); if (!m) return;
+  const list = c.perfs.filter((p) => p.metricId === id && !p.unknown && Number.isFinite(Number(p.value))).sort((a, b) => b.date - a.date).slice(0, 20);
+  openSheet(h`<div class="stack"><h2 style="margin:0">${m.label}</h2>${e ? lineChart(e.points, m.unit) : ''}
+    ${l ? h`<p class="small">Dernière : <b>${String(l.value).replace('.', ',')} ${m.unit}</b>${e ? ` · ${e.delta > 0 ? '+' : ''}${String(e.delta).replace('.', ',')} ${m.unit} en ${e.n} mesures` : ''}</p>` : ''}
+    ${list.length ? h`<div class="setmenu">${list.map((p) => h`<button class="setrow" data-act="perfEdit" data-id="${p.id}"><span class="grow"><b>${String(p.value).replace('.', ',')} ${m.unit}</b><small>${fmtDay(p.date)}${p.note ? ' · ' + p.note : ''}</small></span><span class="chev">✏️</span></button>`)}</div>` : ''}
+    ${m.test ? h`<p class="tiny muted">Comment mesurer : ${m.test}</p>` : ''}<button class="btn pri" data-act="perfAdd" data-id="${id}">＋ Nouvelle mesure</button></div>`, { wide: true }); };
+/** Silhouette visée : ce que chaque choix veut dire, mensurations (avec évolution), séries de la semaine par muscle. */
+export function silhouetteCard(b = item('config', 'body') || {}, goals = item('config', 'main')?.goals || []) {
+  const ch = (b.physique || []).filter((k) => PHYSIQUE[k]), muscle = goals.includes('muscle') || goals.includes('physique');
+  if (!ch.length && !muscle) return '';
+  const c = ctx(), measures = ch.length ? physiqueMeasures(ch) : [['tour_bras', ''], ['tour_poitrine', ''], ['tour_cuisse', ''], ['tour_taille', '']];
+  const tr = physiqueTrack(c, ch.length ? ch : ['bras', 'pecs', 'jambes']), byId2 = Object.fromEntries(tr.rows.map((r) => [r.metricId, r]));
+  const groups = physiqueGroups(ch), sets = weeklySets(c, groups.length ? groups : ['dos', 'pecs', 'epaules', 'bras', 'cuisses', 'fessiers']);
+  const cm = (v) => `${String(Math.round(v * 10) / 10).replace('.', ',')}`;
+  return h`<section class="card stack"><h3 style="margin:0">🪞 Ma silhouette</h3>
+    ${ch.length ? h`<ul class="clean tight small">${ch.map((k) => h`<li><b>${PHYSIQUE[k].emoji} ${PHYSIQUE[k].label}</b> — ${PHYSIQUE[k].tip}</li>`)}</ul>` : h`<p class="small muted">Choisis plus haut ce que tu aimerais changer (forme en V, abdos visibles, bras…) pour des conseils et des mensurations précis.</p>`}
+    <b class="small">📏 Mes mensurations</b>
+    <div class="setmenu">${measures.map(([id]) => { const m = METRICS[id], r = byId2[id]; const v = r?.value ?? c.perfs.filter((p) => p.metricId === id && Number.isFinite(Number(p.value))).sort((x, y) => y.date - x.date)[0]?.value; return m ? h`<button class="setrow" data-act="perfAdd" data-id="${id}"><span class="sic">📏</span><span class="grow"><b>${m.label}</b><small>${v != null ? `${cm(v)} ${m.unit}${r?.delta ? ` · ${r.delta > 0 ? '+' : ''}${cm(r.delta)} depuis le ${fmtDay(r.since)}` : ''}` : 'pas encore mesuré — touche pour noter'}</small></span><span class="chev">＋</span></button>` : ''; })}</div>
+    ${tr.ratioText ? h`<p class="tiny">${tr.ratioText}</p>` : ''}
+    <p class="tiny muted">Mesure toujours dans les mêmes conditions (le matin, même mètre ruban) : l’évolution compte plus que le chiffre.</p>
+    <b class="small">📊 Séries cette semaine (7 jours)</b>
+    <div class="stack tight">${sets.map((x) => h`<div class="small"><div class="row between"><span>${x.label}</span><span class="tiny ${x.state === 'ok' ? 'ok-t' : x.state === 'high' ? 'warn-t' : 'muted'}">${x.text}</span></div>${meter(Math.min(100, (x.sets / SETS_RANGE[1]) * 100), x.state === 'ok' ? 'ok' : '')}</div>`)}</div>
+    <p class="tiny muted">Repère tiré des études : environ ${SETS_RANGE[0]} à ${SETS_RANGE[1]} séries difficiles par muscle et par semaine pour prendre du muscle. L’alimentation, le sommeil et la génétique comptent aussi : rien n’est garanti.</p>
+    ${sourcesLine(PHYSIQUE_SOURCES)}</section>`;
 }
 const saveBody = (b) => { const clean = cleanBody(b); putItem('config', 'body', Object.fromEntries(Object.entries({ ...(item('config', 'body') || {}), ...clean }).filter(([k, v]) => v !== undefined || !(k in clean)).map(([k, v]) => [k, v ?? null]).filter(([, v]) => v !== null))); };
 ACT.bodySet = (el) => { saveBody(bodyToggle(item('config', 'body') || {}, el.dataset.k, el.dataset.v)); render(); };
 CHG.bodyIn = (el) => {
   const b = { ...(item('config', 'body') || {}), [el.dataset.k]: el.value }; saveBody(b);
-  if (el.dataset.k === 'weight' && cleanBody(b).weight) putItem('perf', 'bw-' + new Date().toISOString().slice(0, 10), { metricId: 'body_weight', value: cleanBody(b).weight, unit: 'kg', date: Date.now(), source: 'declared', note: 'Profil › Mon corps' });
+  if (el.dataset.k === 'weight' && cleanBody(b).weight) putItem('perf', 'bw-' + new Date().toISOString().slice(0, 10), { metricId: 'body_weight', value: cleanBody(b).weight, unit: 'kg', date: Date.now(), source: 'declared', note: 'Profil › Mon corps et mes préférences' });
   toast('Enregistré'); render();
 };
 ACT.weighIn = () => openSheet(h`<form data-submit="weighSave" class="stack"><h2 style="margin:0">⚖️ Pesée du jour</h2><label>Poids<span class="unitbox"><input type="number" name="kg" step="0.1" min="25" max="300" inputmode="decimal" required autofocus><em>kg</em></span></label><button class="btn pri" type="submit">Enregistrer</button></form>`);
@@ -623,11 +698,12 @@ function vEquipment() {
 const placeLine = (e, st) => [e.city, st.sessions.length ? `${st.sessions.length} séance(s)` : '', st.ascents.length ? `${st.sent} bloc(s)/voie(s) réussi(s)` : '', st.bestBloc ? `max bloc ${st.bestBloc}` : '', st.bestVoie ? `max voie ${st.bestVoie}` : '', st.last ? `dernière fois ${relDate(st.last)}` : '', !st.count ? 'rien d’enregistré ici pour l’instant' : ''].filter(Boolean).join(' · ');
 function vPlaceDetail(e) {
   const c = ctx(), st = placeStats(e.id, c, e.name), sys = e.gradeSys && c.systems[e.gradeSys];
-  const asc = (a) => h`<div class="item"><span class="gpill">${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${fmtDay(a.date)} · ${({ flash: '⚡ flash', send: '✓ réussi', work: '💪 après travail', top: '✓ réussi', attempt: '… essayé', fail: '✗' })[a.result] || ''}</div></div></div>`;
+  const asc = (a) => h`<div class="item"><span class="gpill">${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${fmtDay(a.date)} · ${({ onsight: '👀 à vue', flash: '⚡ flash', send: '✓ réussi', work: '💪 après travail', top: '✓ réussi', attempt: '… essayé', fail: '✗' })[a.result] || ''}</div></div></div>`;
   return h`<div class="row"><button class="btn sm" data-act="placeBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${KIND_LABEL[kindOfEnv(e)][0]} ${e.name}</h2></div>
     <div class="card"><p class="small">${ENV_TYPES[e.type] || e.type}${e.city ? ` · ${e.city}` : ''}${sys ? ` · cotation ${sys.name}` : ''}</p>
       ${e.equipment?.length && e.type !== 'falaise' ? h`<p class="tiny muted">🧰 ${e.equipment.map((k) => EQUIPMENT[k] || k).join(', ')}</p>` : ''}
       ${e.sectors?.length ? h`<p class="tiny muted">📌 Secteurs : ${e.sectors.join(', ')}</p>` : ''}
+      ${Number.isFinite(e.lat) && Number.isFinite(e.lon) ? h`<p class="tiny"><a href="https://www.openstreetmap.org/?mlat=${e.lat}&amp;mlon=${e.lon}#map=15/${e.lat}/${e.lon}" target="_blank" rel="noopener noreferrer">🗺️ Voir sur la carte (OpenStreetMap)</a></p>` : ''}
       <div class="row wrapf"><button class="btn pri" data-act="placeTrain" data-id="${e.id}">✨ Créer une séance ici</button>${['escalade', 'falaise'].includes(e.type) ? h`<button class="btn" data-act="placeLog" data-id="${e.id}">🧗 Noter un bloc / une voie ici</button>` : ''}
         <button class="btn" data-act="envEdit" data-id="${e.id}">✎ Modifier</button>${c.defEnv?.id === e.id ? '' : h`<button class="btn" data-act="envDefault" data-id="${e.id}">Par défaut</button>`}</div></div>
     <div class="kpis">${[['🏋️', 'Séances', st.sessions.length], ['⏱', 'Minutes', st.minutes], ['🧗', 'Réussis', st.sent], ...(st.bestBloc ? [['🪨', 'Max bloc', st.bestBloc]] : []), ...(st.bestVoie ? [['🧗', 'Max voie', st.bestVoie]] : [])].map(([ic, l, v]) => h`<div class="kpi"><span>${ic}</span><b>${v}</b><small>${l}</small></div>`)}</div>
@@ -656,10 +732,18 @@ function envForm(e) {
     const c = ctx(), systems = Object.values(c.systems).filter((x) => !x.archived);
     body = h`<label>Région ou ville <span class="tiny muted">(facultatif)</span><input name="city" maxlength="60" value="${e?.city || ''}" placeholder="Ex. Fontainebleau, Céüse"></label>
       <label>Cotation utilisée<select name="gradeSys"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select></label>
-      <label>Secteurs <span class="tiny muted">(un par ligne : tu les choisiras en notant tes blocs et tes voies)</span><textarea name="sectors" rows="4" placeholder="Ex. Bas Cuvier&#10;Apremont&#10;Secteur des dalles">${(e?.sectors || []).join('\n')}</textarea></label>`;
-  } else body = h`<label>Matériel disponible</label>${eqChips('eq', Object.keys(EQUIPMENT), eq)}`;
+      <label>Secteurs <span class="tiny muted">(un par ligne : tu les choisiras en notant tes blocs et tes voies)</span><textarea name="sectors" rows="4" placeholder="Ex. Bas Cuvier&#10;Apremont&#10;Secteur des dalles">${(e?.sectors || []).join('\n')}</textarea></label>
+      <label>Coordonnées GPS <span class="tiny muted">(facultatif : pour la météo des conditions, ex. « 48.40, 2.63 »)</span><input name="gps" maxlength="40" inputmode="decimal" value="${Number.isFinite(e?.lat) && Number.isFinite(e?.lon) ? `${e.lat}, ${e.lon}` : ''}" placeholder="latitude, longitude"></label>`;
+  } else { const grouped = new Set(EQUIPMENT_GROUPS.flatMap(([, k]) => k)), rest = Object.keys(EQUIPMENT).filter((k) => !grouped.has(k));
+    body = h`<label>Matériel disponible</label><p class="tiny muted">« Machines de musculation (toutes) » suffit pour une salle classique ; sinon coche machine par machine.</p>
+      ${EQUIPMENT_GROUPS.map(([t, keys]) => h`<span class="kicker">${t}</span>${eqChips('eq', keys.filter((k) => EQUIPMENT[k]), eq)}`)}${rest.length ? h`<span class="kicker">Autre</span>${eqChips('eq', rest, eq)}` : ''}`; }
+  // 8.30 : horaires d'ouverture (lieux qui ferment : salles, piscines, pistes…) — la semaine automatique cale l'heure dessus.
+  const H = new Map((e?.hours || []).map((x) => [x.d, x])), hours = ['escalade', 'salle', 'piscine', 'piste', 'autre'].includes(t) ? h`<details class="card flat" ${e?.hours?.length ? 'open' : ''}><summary><b>🕒 Horaires d’ouverture</b> <span class="tiny muted">(facultatif)</span></summary>
+      <p class="tiny muted">Laisse vide un jour où c’est fermé. Sans aucun horaire, l’app ne suppose rien.</p>
+      <div class="stack tight">${['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((dn, d) => h`<div class="hoursrow"><b class="small">${dn}</b><input type="time" name="hf_${d}" value="${H.get(d)?.from || ''}" aria-label="${dn} : ouverture"><span class="tiny muted">→</span><input type="time" name="ht_${d}" value="${H.get(d)?.to || ''}" aria-label="${dn} : fermeture"></div>`)}</div>
+      <button class="btn sm" type="button" data-act="hoursCopy">Copier lundi sur tous les jours</button></details>` : '';
   return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle d’escalade' : t === 'falaise' ? 'Nouvelle falaise' : 'Nouveau lieu'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
-    ${head}${body}
+    ${head}${body}${hours}
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${e ? h`<button class="btn danger" type="button" data-act="envDel" data-id="${e.id}">Supprimer</button>` : ''}</div></form>`;
 }
 ACT.envNew = () => { S.envType = 'maison'; openSheet(envForm(null), { wide: true }); };
@@ -667,15 +751,20 @@ ACT.envNewGym = () => { S.envType = 'escalade'; openSheet(envForm(null), { wide:
 ACT.envNewCrag = () => { S.envType = 'falaise'; openSheet(envForm(null), { wide: true }); };
 ACT.envEdit = (el) => { const e = item('env', el.dataset.id); if (e) openSheet(envForm(e), { wide: true }); };
 CHG.envType = (el) => { if (!el.form.id.value) { S.envType = el.value; openSheet(envForm(null), { wide: true }); } };
+ACT.hoursCopy = (el) => { const f = el.closest('form'), a = f.elements.hf_0?.value, b = f.elements.ht_0?.value; if (!a || !b) return toast('Remplis d’abord lundi.'); for (let d = 1; d < 7; d++) { f.elements['hf_' + d].value = a; f.elements['ht_' + d].value = b; } };
 SUBMIT.envSave = (f) => {
   const fd = new FormData(f), d = Object.fromEntries(fd), first = !ctx().envs.length;
-  const base = { name: d.name, type: d.type, isDefault: d.id ? item('env', d.id)?.isDefault : first };
+  const hours = [0, 1, 2, 3, 4, 5, 6].map((k) => ({ d: k, from: String(fd.get('hf_' + k) || ''), to: String(fd.get('ht_' + k) || '') })).filter((x) => /^\d\d:\d\d$/.test(x.from) && /^\d\d:\d\d$/.test(x.to));
+  if (hours.some((x) => x.to <= x.from)) return toast('Horaires : la fermeture doit être après l’ouverture.', 3500, 'bad');
+  const base = { name: d.name, type: d.type, isDefault: d.id ? item('env', d.id)?.isDefault : first, hours };
   if (d.type === 'escalade') {
     const areas = fd.getAll('areaOn').filter((id) => GYM_AREAS[id]).map((id) => ({ id, items: fd.getAll('ar_' + id), note: String(fd.get('arn_' + id) || '') }));
     putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', areas, equipment: [...new Set(areas.flatMap((a) => a.items))] });
   } else if (d.type === 'falaise') {
     const sectors = [...new Set(String(d.sectors || '').split('\n').map((x) => x.trim()).filter(Boolean))].slice(0, 30);
-    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', sectors, equipment: ['wall'] });
+    const g = String(d.gps || '').match(/^\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*$/), lat = g ? Number(g[1].replace(',', '.')) : null, lon = g ? Number(g[2].replace(',', '.')) : null;
+    if (String(d.gps || '').trim() && !(g && Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return toast('Coordonnées GPS : écris « latitude, longitude », par exemple 48.40, 2.63.', 4500, 'bad');
+    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', sectors, equipment: ['wall'], ...(g ? { lat: Math.round(lat * 1e4) / 1e4, lon: Math.round(lon * 1e4) / 1e4 } : {}) });
   } else putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, equipment: fd.getAll('eq') });
   closeSheet(); buzzOk(); toast({ escalade: 'Salle enregistrée', falaise: 'Falaise enregistrée' }[d.type] || 'Lieu enregistré'); render();
 };
@@ -702,7 +791,7 @@ SUBMIT.avoidSave = (f) => { const d = Object.fromEntries(new FormData(f)); S.set
 /* ═════════ Profil public et communauté ═════════ */
 export async function loadSocial() {
   const so = S.social; so.error = ''; so.loading = true; render();
-  try { so.me = await api('GET', '/api/social/me'); so.feed = await api('GET', '/api/social/feed?tz=' + new Date().getTimezoneOffset()); const [mine, links] = await Promise.all([api('GET', '/api/shared?scope=public&mine=1'), api('GET', '/api/shared?scope=link&mine=1')]); so.mine = mine.items; so.links = links.items; }
+  try { so.me = await api('GET', '/api/social/me'); so.feed = await api('GET', '/api/social/feed?tz=' + new Date().getTimezoneOffset()); await loadCheers(); const [mine, links] = await Promise.all([api('GET', '/api/shared?scope=public&mine=1'), api('GET', '/api/shared?scope=link&mine=1')]); so.mine = mine.items; so.links = links.items; }
   catch (e) { so.error = e.offline ? 'Connexion requise pour le partage.' : e.message; }
   so.loading = false; render();
 }
@@ -728,11 +817,12 @@ function vPublic() {
     <div class="card"><h3>Mes séances publiques</h3>${(so.mine || []).length ? so.mine.map((x) => h`<div class="item"><div class="grow"><b>${x.title}</b><div class="tiny muted">${x.exerciseCount} exercices · modifiée ${relDate(x.updatedAt)}</div></div><button class="btn danger sm" data-act="pubDel" data-id="${x.id}">Retirer</button></div>`) : h`<p class="muted small">Publie une séance depuis son écran (bouton « Partager »).</p>`}</div>
     ${(so.links || []).length ? h`<div class="card"><h3>🔗 Mes liens de partage</h3><p class="tiny muted">Seules les personnes qui ont le lien voient ces séances. Retire un lien quand tu veux.</p>${so.links.map((x) => h`<div class="item"><div class="grow"><b>${x.title}</b><div class="tiny muted">${x.exerciseCount} exercices · créé ${relDate(x.createdAt || x.updatedAt)}</div></div><button class="btn sm" data-act="shShow" data-id="${x.id}" data-name="${x.title}">QR</button><button class="btn danger sm" data-act="pubDel" data-id="${x.id}">Retirer</button></div>`)}</div>` : ''}
     ${so.me.pending.length ? h`<div class="card"><h3>Demandes d’abonnement</h3>${so.me.pending.map((r) => h`<div class="item"><div class="grow"><b>${r.username}</b></div><button class="btn pri sm" data-act="socRespond" data-id="${r.id}" data-accept="1">Accepter</button><button class="btn sm" data-act="socRespond" data-id="${r.id}" data-accept="">Refuser</button></div>`)}</div>` : ''}
+    ${cheersCard()}
     <div class="card"><h3>Trouver quelqu’un</h3><input type="search" data-input="socSearch" placeholder="Pseudo (2 lettres minimum)" aria-label="Chercher un pseudo" autocomplete="off"><div id="socResults"></div></div>
     <h2>Profils suivis</h2>${so.feed?.people?.length ? so.feed.people.map(vPerson) : empty('Tu ne suis personne, ou ils n’ont rien partagé.')}`;
 }
 function vPerson(u) {
-  return h`<div class="card"><div class="row"><div class="ico">👤</div><div class="grow"><b>${u.username}</b>${u.bio ? h`<div class="small">${u.bio}</div>` : ''}</div><button class="btn sm" data-act="socUnfollow" data-user="${u.username}">Ne plus suivre</button></div>
+  return h`<div class="card"><div class="row"><div class="ico">👤</div><div class="grow"><b>${u.username}</b>${u.bio ? h`<div class="small">${u.bio}</div>` : ''}</div>${u.mutual ? h`<button class="btn sm" data-act="cheerOpen" data-user="${u.username}">💌 Encourager</button>` : ''}<button class="btn sm" data-act="socUnfollow" data-user="${u.username}">Ne plus suivre</button></div>
     ${u.activities?.length ? h`<p class="small">${u.activities.map((a) => a.emoji + ' ' + a.label).join(' · ')}</p>` : ''}${u.goals?.length ? h`<p class="small">🎯 ${u.goals.map((g) => g.label).join(', ')}</p>` : ''}${u.perfs?.length ? h`<p class="small">📏 ${u.perfs.map((p) => `${p.label} : ${p.text}`).join(' · ')}</p>` : ''}${u.caps?.length ? h`<p class="small">🧭 ${u.caps.map((x) => `${x.label} (${x.status})`).join(', ')}</p>` : ''}
     ${u.stats ? h`<p class="small">${u.stats.sessions30} séance(s) sur 30 jours · ${u.stats.minutes30} min</p>` : ''}
     ${u.sessions?.length ? h`<b class="small">Séances publiques</b>${u.sessions.map((x) => h`<div class="item"><div class="grow"><b>${x.title}</b><div class="tiny muted">${x.exerciseCount} exercices</div></div><button class="btn sm" data-act="pubCopy" data-id="${x.id}">Enregistrer</button></div>`)}` : ''}</div>`;
@@ -762,7 +852,7 @@ ACT.pubCopy = async (el) => {
     const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`);
     const now = Date.now(), src = normalizeSession(r.item.session);
     const s = saveSeance({ ...src, id: uid(), name: r.item.title, source: 'copy', exercises: src.exercises.map((e) => ({ ...e, id: uid(), note: '' })), origin: { kind: 'public', id: r.item.id, author: r.item.author || '', copiedAt: now }, createdAt: now, updatedAt: now });
-    toast('Copie indépendante enregistrée'); go('library', 'seance', s.id);
+    toast('Copie gardée : adapte-la à ton niveau si besoin', 3500); go('library', 'seance', s.id); setTimeout(() => ACT.adaptOpen?.({ dataset: { id: s.id, src: 'seance' } }), 50);
   } catch (e) { toast(e.offline ? 'Connexion requise.' : e.message); }
 };
 

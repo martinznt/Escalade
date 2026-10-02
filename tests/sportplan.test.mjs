@@ -35,7 +35,7 @@ ok('muscu : charges en kg depuis le max noté ; sinon au ressenti, avec un messa
   const k = buildWorkPart({ type: 'work', activity: 'strength', intensity: 'hard', structure: 'cinq', move: 'squat_1rm', minutes: 20 }, ctx([{ metricId: 'squat_1rm', value: 100 }]));
   assert.equal(k.exercises[0].load, '80 kg'); assert.equal(k.exercises[0].sets, 5); assert.match(k.exercises[0].name, /Squat/); assert.equal(k.notes.length, 0);
   const u = buildWorkPart({ type: 'work', activity: 'strength', intensity: 'hard', structure: 'cinq', move: 'squat_1rm', minutes: 20 }, ctx());
-  assert.match(u.exercises[0].load, /pourrais soulever 7 fois/); assert.match(u.notes[0], /Mesures/);
+  assert.match(u.exercises[0].load, /pourrais soulever 7 fois/); assert.match(u.notes[0], /Records et mesures/);
 });
 ok('muscu vers le max : essai à la cible seulement si elle est proche du max noté', () => {
   const near = buildWorkPart({ type: 'work', activity: 'strength', intensity: 'max', structure: 'max', move: 'squat_1rm', minutes: 25, target: { metricId: 'squat_1rm', value: 102.5 } }, ctx([{ metricId: 'squat_1rm', value: 100 }]));

@@ -147,7 +147,24 @@ export const NEWS = [
     ['library', 'climbplan', '.steps', '⚡ L’essentiel, puis Proposer ma séance', 'Sport, lieu, temps, forme et objectif sur un seul écran, pré-remplis d’après ton profil. « ⚡ Proposer ma séance » : la séance tout de suite, avec « ✨ Faite pour toi ».'],
     ['profile', 'bilan', '#main h1', '🩺 Mon bilan physique', 'Les repères utiles pour TES objectifs, comment faire chaque test, ce que l’app en déduit, et des objectifs précis proposés depuis ta dernière valeur.'],
     ['', '', '', '🔎 Un niveau de séance factuel', 'Le niveau conseillé vient du prérequis le plus exigeant, nommé ; ce qui est connu, estimé ou inconnu est dit.'],
+    ['home', 'dash', '#main', '🔁 Ce que ta séance change pour la suivante', 'Après une séance, l’accueil dit ce qui est adapté pour la prochaine : doigts à reposer, option légère, marche suivante, exercices aimés ou à éviter.'],
     ['', '', '', '💪 Des exercices à ton niveau, capacité par capacité', 'Fort en tirage mais débutant en poussée ? Chaque exercice suit ton niveau dans ce qu’il travaille.'],
+  ] },
+  { v: '8.29.0', date: '2026-10-01', title: 'Ta séance, tes objectifs, ta silhouette', why: 'Plusieurs sports et plusieurs lieux dans une même séance, des objectifs classés (ou sans hiérarchie) qui organisent toute la séance, tes horaires réels, une silhouette visée avec ses mensurations, et une vraie salle de sport dans l’app.', steps: [
+    ['library', 'climbplan', '.steps', '🎯 Objectifs classés, structure adaptée', 'Ajoute plusieurs objectifs, classe-les (ou « ⚖️ Sans hiérarchie »), dis à quel moment faire chacun : toute la séance s’organise autour de ton n°1, et chaque choix est expliqué.'],
+    ['', '', '', '🕒 Tes horaires réels', 'Salle de voie de 18:00 à 19:30, puis salle de bloc de 20:00 à 21:00 : le temps entre les deux devient le trajet, le renfo va là où il y a le matériel, et la structure finale affiche les vraies heures.'],
+    ['home', 'cal', '#main h1', '📅 Heure et « Pas faite »', 'Donne une heure à chaque séance planifiée (elle part dans l’agenda du téléphone), et retire après coup une séance enregistrée par erreur.'],
+    ['profile', 'body', '#main h1', '🪞 Ma silhouette', 'Forme en V, abdos visibles, bras, jambes… : les bons muscles en priorité, les mensurations à prendre, et tes séries par muscle dans la semaine. Rien n’est promis : l’app dit aussi ce qui ne dépend pas de l’entraînement.'],
+    ['library', 'catalog', '#main h1', '🏢 La salle de sport dans l’app', 'Plus de 100 exercices en plus, chaque machine de salle, et des séances prêtes : full body machines, push / pull / jambes, haut / bas, forme en V, abdos, fessiers, cardio.'],
+  ] },
+  { v: '8.30.0', date: '2026-10-02', title: 'Un vrai coach, du début à la fin', why: 'Des mesures précises (masse musculaire, masse grasse, mensurations…), une forme du jour qui adapte la séance, des douleurs ménagées d’office, un planning qui s’organise tout seul autour de tes créneaux et de tes objectifs datés, des outils pour chaque sport, ton parcours (saison, lettre à toi-même, année en sport, avant / après) et une app plus accessible.', steps: [
+    ['profile', 'body', '#main h1', '📏 Mesures précises', 'Masse musculaire, masse grasse, eau, mensurations complètes… avec les calculs utiles (IMC, masse maigre, rapports) et comment bien mesurer. Toujours toi par rapport à toi.'],
+    ['home', 'dash', '#main', '🔋 Forme du jour', 'Un check-in de 10 secondes le matin (sommeil, énergie, courbatures, stress) : la séance du jour s’adapte, et une douleur notée est ménagée d’office.'],
+    ['home', 'cal', '#main h1', '🤖 Ta semaine automatique', 'D’après tes créneaux, les horaires de tes lieux et tes événements. Un objectif daté (course, compétition) se construit à rebours, et les conflits se corrigent en un toucher.'],
+    ['', '', '', '▶️ Pendant la séance', 'Dis si la série était facile ou dure : la suivante s’ajuste. « ⋯ Outils » : j’ai mal, il me reste peu de temps, note, mode nuit, remplacer un exercice. Une séance interrompue se reprend.'],
+    ['profile', 'climbing', '#main h1', '🧗 Outils par sport', 'Escalade : styles, envies par site, compétition, pan maison, conditions en falaise. Muscu : disques, charge max. Course : allures. Natation : longueurs. Import GPX / TCX.'],
+    ['progress', 'summary', '#main', '🌟 Mon parcours', 'Saison de 4 semaines, lettre à toi-même, ton année en sport, avant / après, rapport du mois à imprimer et photos de progrès gardées sur ton téléphone.'],
+    ['settings', 'display', '#main h1', '♿ Accessibilité', 'Lecture facile, gros boutons, contraste renforcé, couleurs pour daltonisme. Et : encouragements entre partenaires, idées à voter, démo sans compte.'],
   ] },
 ];
 

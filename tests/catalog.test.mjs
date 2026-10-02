@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { CATALOG, buildSession, rankCatalog, needsOf, rankExercises, EX_CATEGORIES } from '../public/catalog.js';
 import { SOURCES, sourceRefs } from '../public/sources.js';
 import { byId } from '../public/library.js';
+import * as C from '../public/catalog.js';
 import { CAPACITIES, ACTIVITIES } from '../public/model.js';
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓', name); };
 console.log('Catalogue et sources');
@@ -42,5 +43,14 @@ ok('top exercices : par catégorie, ce dont tu as besoin en premier, trop durs s
   assert.ok(r.doigts.length > 0 && (r.doigts[0].lib.caps.force_doigts || 0) > 0);
   assert.ok(r.doigts.some((x) => x.hits.includes('Force des doigts')));
   assert.ok(Object.values(r).flat().every((x) => !x.tooHard || x.lib.minLevel > 0));
+});
+ok('carnet : chaque muscle et chaque compétence a au moins 3 séances, des 3 niveaux pour chaque sport, tout exercice existe', () => {
+  const mu = {}, sk = {};
+  for (const e of C.CATALOG) { for (const x of e.ex) assert.ok(byId(x.libId), `${e.id} : ${x.libId}`); const f = C.focusOf(e); for (const m of f.muscles) (mu[m] ||= []).push(e.id); for (const k of f.skills) (sk[k] ||= []).push(e.id); }
+  for (const [id] of C.MUSCLE_FOCUS) assert.ok((mu[id] || []).length >= 3, `muscle ${id} : ${(mu[id] || []).length}`);
+  for (const [id] of C.COMPETENCES) assert.ok((sk[id] || []).length >= 3, `compétence ${id} : ${(sk[id] || []).length}`);
+  for (const a of ['climbing_boulder', 'climbing_route', 'strength', 'conditioning', 'running', 'swimming', 'calisthenics']) for (const lv of [0, 1, 2]) assert.ok(C.CATALOG.filter((e) => e.activity === a && e.level === lv).length >= 2, `${a} niveau ${lv}`);
+  assert.equal(new Set(C.CATALOG.map((e) => e.id)).size, C.CATALOG.length, 'identifiants uniques');
+  assert.deepEqual(C.focusOf(C.CATALOG.find((e) => e.id === 'pecs-salle')).muscles.slice(0, 1), ['pecs']);
 });
 console.log(`\n${n} tests OK`);

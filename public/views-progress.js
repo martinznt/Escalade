@@ -2,7 +2,7 @@
 // timeline, journal, analyses descriptives et mode Lab. Toujours par rapport à soi-même, jamais aux autres.
 import { doneList } from './views-profile.js';
 import { h, raw, $, toast, openSheet, closeSheet, ask, askText, seg, chip, menuList, subHead, tag, empty, howBox, meter, bars, lineChart, fmtDay, fmtDate, fmtDateTime, relDate, numberField, buzzOk, fmtDur } from './ui.js';
-import { S, ACT, SUBMIT, CHG, ctx, go, render, deleteHistory, updateHistory, putItem, delItem, item, itemsOf } from './state.js';
+import { S, ACT, SUBMIT, CHG, ctx, go, render, deleteHistory, updateHistory, putItem, delItem, item, itemsOf, getSeance } from './state.js';
 import { uid, exKey } from './shared.js';
 import { CAPACITIES, MUSCLES, METRICS } from './model.js';
 import { benchmarks, periodSummary, regularity, loadAnalysis, records, timeline, journal, diagnostics, atypicalSessions, undertrained, forgottenGoals, whyNoProgress, activeGoals, goalLabel, labReport, entryActivity, activityLabel, perfText, muscleVolume, achievements, capacityState, confWord } from './brain.js';
@@ -10,6 +10,10 @@ import { anatomySvg } from './anatomy.js';
 import { compressPhoto } from './views-climb.js';
 import { streakCard, badgesCard } from './views-motiv.js';
 import { composePage } from './layout.js';
+import { FEELS, sessionFromHistory } from './live.js';
+import { startPlayer } from './player.js';
+import { learnedCard } from './views-forme.js';
+import { storyCard } from './views-story.js';
 
 const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
 const SUB_INFO = {
@@ -25,7 +29,7 @@ export function vProgress() {
   if ((sub === 'history' && !S.param) || sub === 'timeline') { S.jf = sub === 'history' ? 'session' : 'step'; setTimeout(() => go('progress', 'journal'), 0); return ''; }
   if (sub === 'history') return h`${subHead('progSub', 'journal', 'Journal', '📋 Séance')}${vHistory()}`;
   const views = { summary: vSummary, history: vHistory, journal: vJournal, analyses: vAnalyses, lab: vLab };
-  if (sub === 'summary') { const c = ctx(); return h`<h1>📈 Progrès</h1>${vSummary()}<span class="kicker">Aller plus loin</span>${menuList(Object.entries(SUB_INFO).map(([k, [ic, t, d]]) => ['progSub', k, ic, t, d(c)]))}`; }
+  if (sub === 'summary') { const c = ctx(); return h`<h1>📈 Progrès</h1><p class="tiny muted pagehelp">Ce que tes séances ont changé : régularité, volume, records et ce qui progresse (ou pas).</p>${vSummary()}<span class="kicker">Aller plus loin</span>${menuList(Object.entries(SUB_INFO).map(([k, [ic, t, d]]) => ['progSub', k, ic, t, d(c)]))}`; }
   // Tendances et Lab font partie de « Mon analyse » (profil).
   if (sub === 'analyses' || sub === 'lab') return h`${subHead('profSub', 'analyse', 'Mon analyse', sub === 'lab' ? '🧪 Lab' : '🔍 Tendances et diagnostics')}${views[sub]()}`;
   const [ic, t] = SUB_INFO[sub];
@@ -36,7 +40,7 @@ const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);
 
 function vSummary() {
   const c = ctx(), days = S.benchDays || 30, b = benchmarks(c, days), per = S.sumKind || 'week', s = periodSummary(c, per), reg = regularity(c), load = loadAnalysis(c);
-  if (!c.history.length) return h`<section class="card hero center"><div style="font-size:3rem">🌱</div><h2>Ta progression commence ici</h2><p>Fais ta première séance : tes chiffres, tes records et ta régularité apparaîtront ici.</p><button class="btn pri big" data-act="genOpen">🎯 Me proposer une séance</button></section>`;
+  if (!c.history.length) return h`<section class="card hero center"><div style="font-size:3rem">🌱</div><h2>Ta progression commence ici</h2><p>Fais ta première séance : tes chiffres, tes records et ta régularité apparaîtront ici.</p><button class="btn pri big" data-act="genOpen">🎯 Me proposer une séance</button></section>${storyCard()}`;
   const delta = (x) => (x == null ? '' : x > 0 ? h`<i class="up">▲ ${x} %</i>` : x < 0 ? h`<i class="down">▼ ${Math.abs(x)} %</i>` : h`<i>=</i>`);
   const kpi = (ic, label, v, d) => h`<div class="kpi"><span>${ic} ${label}</span><b>${v}</b>${delta(d)}</div>`;
   const maxCap = Math.max(1, ...b.capDiff.slice(0, 5).map((x) => Math.max(x.cur, x.prev)));
@@ -65,9 +69,11 @@ function vSummary() {
     work: () => (b.capDiff.length ? WORK() : ''),
     regularity: () => REG(),
     load: () => LOAD(),
-    muscles: () => h`<section class="card"><div class="row between"><h3>🫀 Muscles travaillés</h3>${seg('muscleDays', String(S.muscleDays || 7), [['7', '7 j'], ['30', '30 j']])}</div>${raw(anatomySvg({ heat: muscleVolume(c, S.muscleDays || 7) }))}</section>`,
+    muscles: () => h`<section class="card"><div class="row between"><h3>🫀 Muscles travaillés</h3>${seg('muscleDays', String(S.muscleDays || 7), [['7', '7 j'], ['30', '30 j']])}</div>${raw(anatomySvg({ heat: muscleVolume(c, S.muscleDays || 7) }))}${menuList([['allGo', '', '🪞', 'Séries par muscle et mensurations', 'Repère de la semaine, silhouette visée (dans Mon corps et mes préférences)', 'profile/body']])}</section>`,
     badges: () => badgesCard(),
     weeksum: () => SUM(),
+    learned: () => learnedCard(),
+    story: () => storyCard(),
   });
 }
 ACT.benchDays = (el) => { S.benchDays = Number(el.dataset.id); render(); };
@@ -80,6 +86,8 @@ function vHistory() {
   S.jf = 'session'; setTimeout(() => go('progress', 'journal'), 0); return '';
 }
 ACT.histOpen = (el) => go('progress', 'history', el.dataset.id);
+const FEEL_E = Object.fromEntries(FEELS.map(([v, e]) => [v, e]));
+ACT.histRedo = (el) => { const e = S.history.find((x) => x.id === el.dataset.id); if (!e) return; startPlayer(sessionFromHistory(e, e.sessionId ? getSeance(e.sessionId) : null)); };
 function vEntry(e) {
   const q = e.data?.questionnaire || {}, d = e.data || {};
   return h`<h2 style="margin:0">${e.sessionName}</h2>
@@ -87,9 +95,9 @@ function vEntry(e) {
       ${d.context?.envName ? h`<p class="small">Lieu : ${d.context.envName}</p>` : ''}${d.aborted ? h`<p class="small warn-t">Séance interrompue avant la fin.</p>` : ''}
       ${q.felt?.length ? h`<p class="small">Muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}</p>` : ''}${q.hardest ? h`<p class="small">Plus difficile : ${q.hardest}</p>` : ''}${q.easiest ? h`<p class="small">Plus facile : ${q.easiest}</p>` : ''}
       ${d.rpe ? h`<p class="small">Ressenti : ${d.rpe}/5</p>` : ''}${d.note ? h`<p class="small">📝 ${d.note}</p>` : ''}${(q.answers || []).map((a) => h`<p class="small">${a.q} : ${a.a}</p>`)}${(d.swaps || []).length ? h`<p class="small">Remplacements : ${d.swaps.map((s) => `${s.from} → ${s.to}`).join(', ')}</p>` : ''}</div>
-    <div class="card">${(d.exercises || []).map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${(x.sets || []).map((s) => s.seconds ? `${s.seconds} s` : `${s.reps}${s.load ? ' × ' + s.load + ' kg' : ''}`).join(' · ')}</div></div></div>`)}</div>
+    <div class="card">${(d.exercises || []).map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${(x.sets || []).map((s) => (s.seconds ? `${s.seconds} s` : `${s.reps}${s.load ? ' × ' + s.load + ' kg' : ''}`) + (s.feel ? ' ' + (FEEL_E[s.feel] || '') : '')).join(' · ')}</div>${x.note ? h`<div class="tiny">📝 ${x.note}</div>` : ''}</div></div>`)}</div>
     ${mediaCard(e)}
-    <div class="row wrapf"><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
+    <div class="row wrapf"><button class="btn pri" data-act="histRedo" data-id="${e.id}">🔁 Refaire cette séance</button><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
 }
 /* Journal visuel : photos (réduites, synchronisées), liens vidéo, captures et notes liés à une séance. Privé au compte. */
 function mediaCard(e) {

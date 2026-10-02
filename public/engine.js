@@ -399,25 +399,46 @@ export function applyPerformedBase(ex, set) {
   return out;
 }
 
+/**
+ * Progression automatique d'un exercice, à partir des 2 dernières fois où il a été fait (règle des 2 séances) :
+ *  · toutes les séries au haut de la fourchette → on monte (+2,5 kg, ou +1 répétition / +5 s sans charge) ;
+ *    si la séance a été ressentie très dure (4–5/5) et que c'était la première réussite, on confirme d'abord ;
+ *  · 2 fois de suite sous le bas de la fourchette (au moins la moitié des séries) → on baisse d'environ 5 % ;
+ *  · une seule séance ratée → on garde (un mauvais jour arrive), en le disant ;
+ *  · sinon on garde la charge jusqu'à tout réussir.
+ * Retourne { last, next, load, t, why, trend: up|confirm|down|hold|keep } ou null si jamais fait.
+ */
 export function progressHint(ex, history) {
-  const key = exKey(ex.name);
+  const key = exKey(ex.name), isTime = ex.mode === 'time';
+  const top = Number(isTime ? ex.secMax : ex.repsMax) || 0, floor = Number(isTime ? ex.secMin : ex.repsMin) || top;
+  const outings = [];
   for (const h of [...(history || [])].sort((a, b) => b.startedAt - a.startedAt)) {
     const found = (h.data?.exercises || []).find((e) => exKey(e.name) === key);
     const sets = (found?.sets || []).filter((s) => s.done !== false);
     if (!sets.length) continue;
-    const load = Math.max(...sets.map((s) => Number(s.load) || 0));
-    const isTime = ex.mode === 'time';
     const vals = sets.map((s) => (isTime ? Number(s.seconds) || 0 : Number(s.reps) || 0));
-    const target = isTime ? ex.secMax : ex.repsMax;
-    const allTop = vals.length >= ex.sets && vals.every((v) => v >= target);
-    const last = `${load ? load + ' kg × ' : ''}${vals.join(', ')}${isTime ? ' s' : ''}`;
-    let next = '';
-    if (allTop && load > 0) next = `Essaie ${Math.round((load + 2.5) * 10) / 10} kg`;
-    else if (allTop) next = 'Tout est réussi : ajoute une répétition ou un peu de charge';
-    else if (load > 0) next = `Reste à ${load} kg jusqu'à réussir toutes les séries`;
-    return { last, next, load, t: h.startedAt };
+    outings.push({ load: Math.max(...sets.map((s) => Number(s.load) || 0)), vals, t: h.startedAt, rpe: Number(h.data?.rpe) || 0,
+      allTop: vals.length >= (ex.sets || 1) && vals.every((v) => v >= top), missed: floor > 0 && vals.filter((v) => v < floor).length * 2 >= vals.length });
+    if (outings.length >= 2) break;
   }
-  return null;
+  const [a, b] = outings;
+  if (!a) return null;
+  const load = a.load, kg = (x) => `${Math.round(x * 10) / 10} kg`, sameLoad = b && Math.abs(b.load - load) < 0.01;
+  const last = `${load ? load + ' kg × ' : ''}${a.vals.join(', ')}${isTime ? ' s' : ''}`;
+  const plus = isTime ? 'ajoute 5 secondes par série' : 'ajoute une répétition par série';
+  let next = '', why = '', trend = 'keep';
+  if (a.allTop) {
+    const twice = b?.allTop && sameLoad;
+    if (a.rpe >= 4 && !twice) { trend = 'confirm'; next = load > 0 ? `Refais ${kg(load)} une fois pour confirmer, puis passe à ${kg(load + 2.5)}` : `Refais la même chose une fois pour confirmer, puis ${plus}`; why = `Tout réussi, mais la séance t’a semblé dure (${a.rpe}/5) : on confirme avant de monter.`; }
+    else { trend = 'up'; next = load > 0 ? `Essaie ${kg(load + 2.5)}` : `Tout est réussi : ${plus} ou un peu de charge`; why = twice ? 'Réussi 2 fois de suite : la charge est acquise.' : 'Toutes les séries au haut de la fourchette.'; }
+  } else if (a.missed && b?.missed && (sameLoad || !load)) {
+    trend = 'down'; next = load > 0 ? `Baisse à ${kg(Math.max(0, Math.round(load * 0.95 * 2) / 2))} pour retrouver des séries propres` : `Vise le bas de la fourchette (${floor}${isTime ? ' s' : ''}) ou une version plus facile`;
+    why = '2 séances de suite sous le bas de la fourchette : on baisse un peu pour repartir.';
+  } else if (a.missed) { trend = 'hold'; next = load > 0 ? `Reste à ${kg(load)} : un jour moins bon arrive` : 'Garde la même difficulté : un jour moins bon arrive'; why = 'Une seule séance en dessous : si ça se répète la prochaine fois, on baissera.'; }
+  else if (load > 0) next = `Reste à ${load} kg jusqu'à réussir toutes les séries`;
+  // Charge proposée pour la première série (le lecteur la pré-remplit, modifiable d'un toucher).
+  const nextLoad = load > 0 ? (trend === 'up' ? Math.round((load + 2.5) * 10) / 10 : trend === 'down' ? Math.max(0, Math.round(load * 0.95 * 2) / 2) : load) : 0;
+  return { last, next, load, nextLoad, t: a.t, why, trend };
 }
 
 /* ═════════════ Générateur de séances ═════════════ */
@@ -498,7 +519,7 @@ export function generateSession(opts = {}, ctx = {}) {
   if (['vitesse', 'jambes'].includes(focus) && A.hoursSinceHighLegs < 36) swap('equilibre', `Séance de jambes intense il y a ${Math.round(A.hoursSinceHighLegs)} h : on évite les sauts et on travaille l’équilibre du haut du corps.`);
   if (A.lastRpe >= 4 && A.lastRpeHours < 36) { volume *= 0.85; capIntensity = capIntensity === 'high' ? 'mod' : capIntensity; why.push('Ta dernière séance était très dure : intensité et volume légèrement réduits.'); }
   if (A.n7 >= 5) { volume *= 0.9; why.push(`${A.n7} séances en 7 jours : un peu moins de volume pour bien récupérer.`); }
-  if (!levelSet) why.push('Ton niveau n’est pas renseigné : la séance reste prudente (pas de suspensions maximales). Remplis ton profil dans Réglages pour l’adapter.');
+  if (!levelSet) why.push('Ton niveau n’est pas renseigné : la séance reste prudente (pas de suspensions maximales). Remplis ton profil sportif (Paramètres, « 🧩 Mon profil sportif ») pour l’adapter.');
 
   const rank = { low: 0, mod: 1, high: 2 };
   const allowed = (x) => {

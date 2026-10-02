@@ -1,6 +1,7 @@
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
-import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, subHead, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
+import { personalFit } from './fit.js';
+import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, menuRow, subHead, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
 import { linkSheet } from './share.js';
 import './duo.js';
 import './views-ai.js';
@@ -8,6 +9,9 @@ import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, del
 import { cleanParts } from './format.js';
 import { vClimbPlan } from './views-climbplan.js';
 import { setReturn } from './nav.js';
+import { composePage } from './layout.js';
+import { adaptButton } from './views-adapt.js';
+import { groupButton } from './views-group.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
 import { orderAdvice, similarOptions } from './guide.js';
 import { exWhat, exUse, exWhyHere, sessionWhat, sessionUse, sessionWhy } from './explain.js';
@@ -45,12 +49,14 @@ function metaWhy(m) {
   if (!m?.reasons?.length) return '';
   return h`<details class="how"><summary>🏷 Classée ainsi parce que…</summary><ul>${m.reasons.map((r) => h`<li><b>${r.tag}</b> : ${r.why}</li>`)}</ul><p class="tiny muted">Étiquettes calculées automatiquement à partir des exercices, des phases et de la durée de la séance. Ta copie enregistrée reste indépendante.</p></details>`;
 }
-function levelDetails(lv) {
+function levelDetails(lv, s = null) {
   if (!lv?.criteria) return '';
+  const fit = s ? personalFit(s, ctx()) : null;
   const CAT = { connu: ['✓', 'connu'], estimé: ['≈', 'estimé'], inconnu: ['?', 'inconnu'] };
   return h`<details class="how"><summary>🔎 Pourquoi ce niveau ?</summary><p class="small">${lv.text}</p>
     <ul>${lv.criteria.map((c) => h`<li><span class="tag ${c.cat === 'connu' ? 'ok' : c.cat === 'estimé' ? 'warn' : ''}" title="${CAT[c.cat]?.[1] || ''}">${CAT[c.cat]?.[0] || ''} ${CAT[c.cat]?.[1] || ''}</span> <b>${c.label}</b> : ${c.value} <span class="muted">— ${c.effect}</span></li>`)}</ul>
     ${lv.unknown?.length ? h`<p class="tiny"><b>Ce que l’app ne sait pas :</b></p><ul class="tiny muted">${lv.unknown.slice(0, 6).map((u) => h`<li>${u}</li>`)}</ul>` : ''}
+    ${fit && (fit.lines.length || fit.missing.length) ? h`<p class="tiny"><b>Pour toi :</b></p><ul class="tiny">${fit.lines.map((t) => h`<li>${t}</li>`)}${fit.missing.map((t) => h`<li class="muted">${t}</li>`)}</ul>` : ''}
     <p class="tiny muted">Le niveau conseillé est le prérequis le plus élevé de la séance (fiches d’exercices, cotations écrites) : un seul exercice avancé suffit. Rien n’est rempli au hasard. Jamais un classement de personnes.</p></details>`;
 }
 
@@ -71,15 +77,19 @@ const LIB_INFO = {
   generate: ['🎯', 'Séance sur mesure', () => ''],
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
   climbplan: ['✨', 'Créer une séance', () => draftText() || 'Tous sports : l’app choisit, te guide, ou tu composes'],
-  catalog: ['🗂', 'Séances prêtes', () => `Catalogue officiel : ${CATALOG.length} séances expliquées et sourcées`],
+  catalog: ['📖', 'Carnet de séances', () => `${CATALOG.length} séances prêtes, de débutant à avancé, pour chaque sport`],
   exercises: ['💪', 'Exercices', () => `${LIBRARY.filter((x) => x.role === 'main').length} exercices, et le top pour toi`],
   common: ['🌍', 'Bibliothèque commune', () => 'Séances partagées par les membres (non vérifiées)'],
   search: ['🔍', 'Rechercher', () => 'Une séance, un exercice, une capacité…'],
 };
 /** Bibliothèque : créer une séance, puis la liste des rubriques (même format que les paramètres). */
 function vLibHome() {
-  return h`<h1>📚 Bibliothèque</h1><button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>
-    ${draftBanner()}${menuList(Object.entries(LIB_INFO).filter(([k]) => k !== 'generate').map(([k, [ic, t, d]]) => ['libSub', k, ic, t, d()]))}`;
+  // Chaque élément se déplace, se masque ou se colore avec ✏️ « Organiser » (mise en page de la Bibliothèque).
+  const row = (k) => () => { const [ic, t, d] = LIB_INFO[k]; return menuRow(['libSub', k, ic, t, d()]); };
+  return h`<h1>📚 Bibliothèque</h1><p class="tiny muted pagehelp">Tes séances, et tout pour en créer : par l’app, guidée, prête à l’emploi ou à la main.</p>${composePage('library', {
+    newbtn: () => h`<button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>`, draft: () => draftBanner(),
+    'r-seances': row('seances'), 'r-climbplan': row('climbplan'), 'r-catalog': row('catalog'), 'r-exercises': row('exercises'), 'r-common': row('common'), 'r-search': row('search'),
+  })}`;
 }
 ACT.libSub = (el) => { closeSheet(); S.sel = null; window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
@@ -112,7 +122,7 @@ function vSeances() {
 function seanceCard(s) {
   const sel = S.sel?.includes(s.id); const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card ${sel ? 'on-b' : ''}"><div class="row">${S.sel ? h`<button class="selbox ${sel ? 'on' : ''}" data-act="selTog" data-id="${s.id}" aria-pressed="${!!sel}" aria-label="Sélectionner">${sel ? '✓' : ''}</button>` : ''}<div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
       <div class="tiny muted">${s.context?.env ? placeName(s.context.env) + ' · ' : ''}${cats.map(catName).join(' · ')}</div></div></div>
-      ${S.sel ? '' : h`<div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button></div>`}</div>`;
+      ${S.sel ? '' : h`<div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button>${adaptButton(s.id)}${groupButton(s.id)}</div>`}</div>`;
 }
 const groupName = (by, k) => (by === 'place' ? placeName(k) : by === 'sport' ? (k === 'none' ? '🏷 Sans sport' : sportName(k)) : k === 'none' ? '🗂 Sans catégorie' : catName(k));
 /** « C'est quoi ? · À quoi ça sert ? · Pourquoi ? » d'une séance, en trois lignes courtes. */
@@ -143,7 +153,7 @@ function sfSheet() {
   const count = filterSessions(S.seances.items, { ...f, status: S.filters.seances || 'active' }, S.history).length;
   const group = (k, ids, name) => h`<div class="chips">${ids.map((x) => chip(f[k].includes(x), name(x), `data-act="sfTog" data-k="${k}" data-v="${x}"`))}</div>`;
   openSheet(h`<div class="stack"><h2 style="margin:0">⇅ Trier et filtrer</h2>
-    <span class="kicker">Lieu</span>${places.length ? group('places', places, placeName) : h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>`}
+    <span class="kicker">Lieu</span>${places.length ? group('places', places, placeName) : h`<p class="tiny muted">Ajoute tes lieux dans Profil › Mes lieux.</p>`}
     <span class="kicker">Sports (un ou plusieurs)</span>${group('sports', sports, sportName)}
     <span class="kicker">Catégories</span>${cats.length ? group('cats', cats, catName) : h`<p class="tiny muted">Aucune catégorie pour l’instant.</p>`}
     <span class="kicker">Regrouper par</span><div class="chips">${Object.entries(GROUPS).map(([k, [e, l]]) => chip((f.group || 'none') === k, `${e} ${l}`, `data-act="sfGroup" data-id="${k}"`))}</div>
@@ -173,7 +183,7 @@ ACT.selBulk = (el) => {
     : [...new Set([...Object.keys(CATS), ...S.seances.items.flatMap((s) => s.tags || [])])].map((k) => [k, catName(k)]);
   openSheet(h`<div class="stack"><h2 style="margin:0">${what === 'place' ? '📍 Lieu' : what === 'sport' ? '🏷 Ajouter un sport' : '🗂 Ajouter une catégorie'}</h2><p class="small muted">Pour les ${n} séance(s) sélectionnée(s).</p>
     <div class="setmenu">${rows.map(([id, l]) => h`<button class="setrow" data-act="selApply" data-k="${what}" data-id="${id}"><span class="grow"><b>${l}</b></span><span class="chev">›</span></button>`)}</div>
-    ${what === 'place' && !c.envs.length ? h`<p class="tiny muted">Ajoute tes lieux dans Profil › Matériel et lieux.</p>` : ''}</div>`);
+    ${what === 'place' && !c.envs.length ? h`<p class="tiny muted">Ajoute tes lieux dans Profil › Mes lieux.</p>` : ''}</div>`);
 };
 ACT.selApply = (el) => {
   const k = el.dataset.k, id = el.dataset.id, env = ctx().envs.find((e) => e.id === id), list = selected();
@@ -197,7 +207,7 @@ ACT.exMore = () => { S.exMore = true; render(); };
 ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>${draftBanner()}
   ${[['cpNew', '', '✨', 'Créer une séance', 'Tous sports. L’app choisit tout, te guide, ou tu composes toi-même.'], ['newSeance', '', '📄', 'Page blanche', 'Une séance vide : tu ajoutes tes exercices un par un.'], ['libSub', 'seances', '📂', 'Reprendre une de mes séances', 'La relancer, la modifier ou la dupliquer.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
     ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
-    ...(S.user?.guest ? [] : [['duoJoinAsk', '', '👥', 'Rejoindre un ami', 'Faire la séance d’un ami, avec les chronos en même temps.']])]
+    ...(S.user?.guest ? [] : [['groupMenu', '', '👥', 'Séance à plusieurs', 'Rejoindre avec un code, chrono à plusieurs (ex. 7 s / 3 s), ou une séance pour un groupe.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
 /** Séance en cours de création (brouillon gardé) : on peut la reprendre où on en était. */
 function draftText() { const d = S.cp || ls.get('sea:climbplan', null); return d && (d.step || 1) > 1 ? `En cours : étape ${d.v === 2 ? d.step : Math.max(1, d.step - 1)}/6` : ''; }
@@ -280,7 +290,8 @@ function editing() {
 function vEditor(s, mode) {
   const c = ctx(), lv = estimateLevel(s), shared = mode === 'shared';
   const intents = new Map((s.intentions || []).map((x) => [x.id, x.p]));
-  return h`<div class="row"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
+  return h`<h1 class="sr-only">${s.emoji || ''} ${s.name}</h1><div class="row wrapf"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`${adaptButton(s.id, 'seance', 'btn')}${groupButton(s.id, 'seance', 'btn')}<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
+    ${shared ? '' : h`<p class="tiny muted">🔁 « Adapter » fait une version pour cette fois (durée, matériel, douleur, échauffement, intensité) sans toucher à cette séance. Pour la changer pour de bon, modifie-la ci-dessous.</p>`}
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
     ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
     ${sessionBrief(s, { edit: !shared })}
@@ -295,7 +306,7 @@ function vEditor(s, mode) {
       <form data-submit="sAdapt" class="row"><label class="grow">Adapter la durée à<span class="unitbox"><input type="number" inputmode="numeric" name="minutes" min="5" max="240" value="${s.context.plannedMin || sessionMinutes(s)}"><em>min</em></span></label><button class="btn" type="submit">⏱ Reconstruire</button></form>
       <label>Notes<textarea data-change="sNotes" maxlength="1200" placeholder="Consignes générales, objectifs, remarques…">${s.notes.find((n) => n.title === 'Notes')?.text || ''}</textarea></label>
       ${s.notes.filter((n) => n.title !== 'Notes').map((n) => h`<details class="how"><summary>${n.title}</summary><pre class="txt">${n.text}</pre></details>`)}
-      ${howBox(s.explain)}${levelDetails(lv)}</div>
+      ${howBox(s.explain)}${levelDetails(lv, s)}</div>
     <div class="card">${s.exercises.length ? blocksOf(s, 'edit') : h`<p class="muted">Aucun exercice. Ajoute-en un.</p>`}
       <div class="row wrapf"><button class="btn pri" data-act="exAdd">＋ Ajouter un exercice</button><button class="btn" data-act="sEquip">🧰 Matériel indisponible</button></div></div>
     ${shared ? '' : h`<div class="row wrapf"><button class="btn" data-act="sDup" data-id="${s.id}">⧉ Dupliquer</button><button class="btn" data-act="sTemplate" data-id="${s.id}">${s.template ? '★ Retirer des modèles' : '☆ Enregistrer comme modèle'}</button><button class="btn" data-act="sArchive" data-id="${s.id}">${s.archived ? '↩ Désarchiver' : '🗄 Archiver'}</button>
@@ -474,7 +485,7 @@ ACT.sPublish = (el) => {
   openSheet(h`<h2 style="margin:0">Partager « ${s.name} »</h2>
     <p class="small">Ce qui sera publié : le titre, l’activité, les exercices et leurs prescriptions, les intentions, le matériel et la durée.</p>
     <p class="small muted">Retiré automatiquement : tes notes de progression personnelles (${notes}), les charges chiffrées issues de tes performances (${loads}), les explications liées à ton profil, ton lieu et ton objectif. Aucun historique ni performance n’est partagé.</p>
-    <p class="small">Niveau estimé : ${levelTag(lv)}</p>${levelDetails(lv)}
+    <p class="small">Niveau estimé : ${levelTag(lv)}</p>${levelDetails(lv, s)}
     <div class="row wrapf"><button class="btn pri" data-act="sPublishDo" data-id="${s.id}" data-scope="common">📚 Bibliothèque commune</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="link">🔗 Lien et QR code</button><button class="btn" data-act="sPublishDo" data-id="${s.id}" data-scope="public">🌍 Mon profil public</button><button class="btn" data-act="closeSheet">Annuler</button></div>`, { wide: true });
 };
 ACT.sPublishDo = async (el) => {

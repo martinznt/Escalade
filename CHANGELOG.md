@@ -1,5 +1,89 @@
 # CHANGELOG — Séances entraînement
 
+## 8.30.0 — Mesures précises, coach qui apprend, planning automatique, pendant la séance, outils par sport, mon parcours, communauté et accessibilité
+
+Base : 8.29.0 et 8.28.0 (incluses dans cette même Pull Request).
+
+### Mesures précises
+- Composition corporelle (masse musculaire, masse maigre, masse grasse, eau, masse osseuse, graisse viscérale, métabolisme de base) et mensurations complètes (cou, épaules, poitrine, bras relâché / contracté, avant-bras, poignet, taille, ventre, hanches, cuisse, mollet), chacune avec sa façon de bien mesurer.
+- Calculs utiles (IMC, masse maigre, indice de masse maigre FFMI, rapports tour de taille / hauteur, taille / hanches, épaules / taille, envergure / taille), chacun avec ce qu’il mesure et ses limites ; saisie de toutes les valeurs d'une pesée d'un coup, mesures personnelles. Toujours toi par rapport à toi, jamais de norme imposée.
+
+### Coach qui apprend
+- Forme du jour : check-in du matin (sommeil, énergie, courbatures, stress, pouls au repos facultatif) ; forme / fatigue (moyennes 42 / 7 jours) ; la séance légère passe en premier quand il le faut.
+- Douleurs : carte sur le bonhomme, zone ménagée d'office par le générateur, reprise en 4 étapes, guérison notée.
+- « Ce que l'app a appris sur toi » : plateaux et 3 pistes, équilibre pousser / tirer, règles apprises (repos, horaires, sommeil, stress, cycle seulement si activé), charge par zone, prévisions avec fourchette et niveau de confiance, récupération sourcée.
+- Progression des charges par la règle des 2 séances (monter, confirmer, garder, redescendre).
+
+### Planning
+- Semaine automatique proposée (créneaux, horaires des lieux, forme, événements), validée par toi ; test mensuel planifié.
+- Objectif daté construit à rebours (fondation, spécifique, affûtage, semaine allégée toutes les 4 semaines) et recalculé ; courses types (5 km, 10 km, semi, marathon).
+- Conflits détectés (veille d'une course, double séance, horaires, pause, jours enchaînés) avec correction en un toucher ; séances non faites à décaler ; « Ta semaine en 10 secondes ».
+- Pause vacances / blessure (rappels coupés, série de semaines gardée) ; abonnement agenda par lien secret (empreinte seule gardée côté serveur) ; rappels qui annoncent la séance prévue.
+
+### Pendant la séance
+- Ressenti de chaque série (facile / bien / dur / échec) qui ajuste la suivante ; conseil de repos utile.
+- « ⋯ Outils » : j'ai mal (suite adaptée + douleur notée), il me reste peu de temps (suite raccourcie, enchaîner par deux), note par exercice, mode nuit rouge, commandes vocales, remplacer un exercice, réglage de machine mémorisé ; disques à mettre affichés pour la barre ; échauffement des doigts ajouté avant un exercice de doigts intense.
+- Reprise d'une séance interrompue (12 h) ; refaire une séance passée (« la même que mardi ») ; « Je n'ai rien prévu » en 3 questions.
+
+### Outils par sport
+- Escalade : « à vue », mes styles, envies par site, point le plus haut, sections, raisons des chutes et séance ciblée, mode compétition (tops / zones / essais, chrono 4 / 4), pan maison (blocs générés depuis une photo), conditions en falaise (Open-Meteo, coordonnées arrondies, limité côté serveur), matériel, dynamomètre Bluetooth (expérimental).
+- Muscu : charges max estimées (1RM) et pourcentages, disques sur la barre. Course : allures depuis la VMA, prévisions (Riegel). Natation : compteur de longueurs. Import GPX / TCX.
+
+### Mon parcours
+- Saison de 4 semaines autour d'un thème (proposé d'après tes habitudes, réussie à 3 semaines sur 4), lettre à toi-même scellée, ton année en sport, avant / après 3-6-12 mois, rapport du mois à imprimer ou enregistrer en PDF, photos de progrès gardées uniquement sur le téléphone (jamais envoyées).
+- Badges utiles : check-ins, bonnes nuits, variété dans le mois, mobilité, saison réussie, reprise après une pause.
+- Carnet : favoris, déjà faites, jamais essayées, sans matériel. Lieux : lien vers la carte (OpenStreetMap).
+
+### Communauté, site, administration
+- Encouragements entre partenaires (abonnés l'un à l'autre, abonnements acceptés des deux côtés), messages tout faits uniquement, limités par jour.
+- Idées à voter (publiées par un administrateur « contenu », vote anonyme, un par personne) ; séance reçue par lien : la garder et l'adapter à son niveau.
+- Démo avec données d'exemple (identifiant à part, effacée en quittant) ; rappel de sauvegarde chaque semaine ; signalement avec l'état de la page (pages visitées, écran, dernières erreurs ; aucune donnée d'entraînement).
+- Admin : bandeau de maintenance (annonce), statistiques anonymes (groupes de moins de 3 masqués), sauvegarde du contenu commun, « voir l'app comme un nouveau membre ». Chaque action d'administration est notée au Journal.
+
+### Accessibilité et confort
+- Lecture facile, gros boutons, contraste renforcé, couleurs pour daltonisme, taille du texte — dès le premier écran. Contour de focus visible au clavier.
+- Raccourci d'icône « Forme du jour » ; glisser entre les étapes du créateur ; icône de notification monochrome (plus de carré blanc dans la barre d'état Android).
+
+### Corrections
+- Le résultat « à vue » est compté partout (badges, bilan, lieux, objectifs) ; badge de synchronisation qui débordait à 320 px pendant un envoi ; échappement du point-virgule dans l'export agenda.
+- « Mon parcours » accessible même avant la première séance ; boutons en haut d'une séance (‹, Adapter, À plusieurs, Lancer) qui débordaient à 320 / 390 px ; raccourcis contextuels qui passent à la ligne.
+
+### Limites connues (honnêtes)
+- Comptage des répétitions à la caméra et baisse automatique de la musique : non faits (impossibles ou non fiables depuis une page web).
+- Dynamomètre Bluetooth : expérimental, Chrome / Edge sur Android ou ordinateur seulement (pas Safari / iPhone).
+- Montres : pas de lien direct Strava / Garmin, ni fichiers `.fit` ; import GPX / TCX seulement.
+- Anglais : version « beta » partielle ; espagnol non fait. Mode club / coach : non fait.
+- Conditions en falaise : dépendent d'Open-Meteo (service externe gratuit).
+
+## 8.29.0 — Plusieurs sports et lieux, objectifs classés ou sans hiérarchie, horaires réels, silhouette visée, salle de sport complète
+
+Base : 8.28.0 (incluse dans cette même Pull Request).
+
+### Créer une séance
+- Plusieurs sports dans une séance, chacun dans son lieu ; trajets comptés.
+- Étape 2 « Tes objectifs » : plusieurs objectifs (familles expliquées, intentions précises, objectifs du profil, ou écrits avec ses mots et compris par l'IA, avec repli par mots-clés), classés ↑ ↓ — ou **⚖️ Sans hiérarchie** (même part de temps, ordre selon l'effort).
+- Étape 3 : moment de chaque objectif (auto, début, milieu, fin). Un n°1 exigeant placé à la fin réorganise toute la séance (échauffement plus long, phases d'avant modérées, doigts ménagés, montée progressive juste avant) ; chaque adaptation est écrite dans « 🧠 Comment la séance s'adapte ».
+- **🕒 Horaires précis** : arrivée et départ par lieu (ex. voie 18:00–19:30, bloc 20:00–21:00). Le temps entre deux lieux devient le trajet, une remise en route est ajoutée après un arrêt, le renfo / gainage / doigts / mobilité vont là où il y a le matériel (et après la grimpe). Chevauchements et heures invalides refusés avec un message.
+- Étape 6 « 📋 Ta structure finale » : chronologie (vraies heures si horaires), lieu, intensité, objectif servi, exercices et « Pourquoi ici ? ». Chaque étape a une phrase d'explication.
+
+### Planning
+- Heure de chaque séance planifiée (modifiable, envoyée au serveur, utilisée dans l'export agenda .ics) ; affichée dans « Prochaines séances ».
+- **✗ Pas faite** après coup : sur une séance enregistrée (retirée de l'historique et des statistiques, après confirmation) ou sur un événement marqué fait.
+
+### Silhouette et salle de sport
+- « Ce que tu aimerais changer » : forme en V, abdos visibles, bras, pectoraux, épaules, jambes, fessiers, corps plus sec, silhouette affinée, posture. Muscles prioritaires dans les séances générées, séries de 8 à 12 et 1–2 min de repos pour la prise de muscle.
+- Nouveaux objectifs « Prendre du muscle » et « Changer ma silhouette » ; petite question sur la silhouette visée ; bilan physique avec les mensurations qui vont avec.
+- Mensurations : tour d'épaules, de poitrine, de bras, de cuisse, de mollet, de hanches, masse grasse (avec protocole). Carte « 🪞 Ma silhouette » : évolution, rapport épaules / taille (suivi, pas une norme), séries par muscle sur 7 jours vs repère 10–20. Sources : Schoenfeld 2017, Vispute 2011 (pas de perte de gras localisée). Rien n'est présenté comme garanti.
+- ~100 exercices de plus (machines de salle une par une, poids libres, cardio machines, course, natation, escalade, mobilité) ; matériel de salle détaillé par groupes.
+- 10 séances prêtes de salle : full body machines, push, pull, jambes, haut, bas, forme en V, abdos, fessiers, cardio aux machines.
+
+### Admin et fiabilité
+- Assistant du site : connaît chaque écran ; propose de petites modifications du code de l'interface (remplacements exacts revérifiés côté serveur, motifs dangereux refusés, diff recalculé), validées par un autre admin (ou seul admin avec confirmation explicite, noté au journal), puis Pull Request GitHub — jamais fusionnée ni déployée par l'app.
+- Bibliothèque et Profil organisables (✏️ « Organiser », masquable dans Affichage).
+- Notifications de mise à jour envoyées par la tâche planifiée du serveur même sans ouvrir l'app ; état de la tâche visible dans l'admin.
+- Toutes les indications « Profil › … » vérifiées par un test automatique (24 fausses corrigées).
+- Santé des données : plus d'alerte injustifiée.
+
 ## 8.28.0 — Simple mais précis : l'essentiel d'abord, un bilan physique selon tes objectifs, un niveau de séance factuel
 
 Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures relues écran par écran) : `docs/AUDIT_8_28.md` (19 défauts relevés). Plan du niveau factuel : `docs/PLAN_NIVEAU_SEANCE.md`.
@@ -37,6 +121,14 @@ Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures
 - **✨ Faite pour toi**, en tête de la séance proposée : ce qui vient réellement de ton profil (durée habituelle, objectif et son moment, lieu et matériel, zones ménagées, niveau pris en compte et sa raison, forme du jour) ; et, si l'app te connaît mal, le lien vers les tests du bilan.
 - Correction : passer de « L'app choisit » à « Je compose moi-même » gardait les exercices choisis avant ; changer qui choisit repart maintenant de zéro (et le dit).
 
+### Après la séance : ce qui change pour la suivante (boucle visible)
+- Sur l'accueil, **🔁 Ce que ta dernière séance change pour la suivante** : uniquement des règles que l'app applique vraiment — doigts ou jambes sollicités intensément (exercices intenses écartés jusqu'à telle heure), gêne aux doigts signalée (travail des doigts écarté 3 jours), séance jugée dure (option légère proposée), exercice réussi en entier (marche suivante), exercice aimé ou à éviter (classement).
+- Correction : « à éviter » / « j'aime » enregistrés par le questionnaire étaient ignorés par les propositions du créateur (vocabulaire différent) ; ils comptent maintenant partout.
+
+### Niveau d'une séance : « Pour toi »
+- Dans « 🔎 Pourquoi ce niveau ? », **Pour toi** : volume et durée comparés à TES séances des 90 derniers jours (à partir de 5), exercices au-dessus de ton niveau dans leur capacité (nommés), charges écrites en % de ton poids de corps (s'il est connu). Jamais comparé à d'autres membres.
+- Les **charges écrites** (« +10 kg ») sont maintenant lues et rapportées telles quelles (« connu »), sans changer le niveau par un seuil arbitraire.
+
 ### Exercices vraiment adaptés
 - **Niveau par capacité** : le niveau pris en compte pour un exercice est celui de sa capacité principale quand il est connu (fort en tirage mais débutant en poussée → tractions avancées et pompes accessibles), au lieu d'une moyenne ; jamais au-dessus du plafond de forme, pas en mode léger.
 
@@ -57,7 +149,7 @@ Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures
 - Brouillon « En cours : étape x/5 » faux → numéro réel ; anciens brouillons (7 étapes) renumérotés.
 
 ### Fichiers
-- **Ajoutés** : `public/assess.js`, `public/views-assistant.js`, `server/assistant.js`, `tests/profile828.test.mjs`, `tests/assistant.test.mjs`, `docs/AUDIT_8_28.md`, `docs/PLAN_NIVEAU_SEANCE.md`.
+- **Ajoutés** : `public/loop.js`, `public/fit.js`, `tests/loop.test.mjs`, `public/assess.js`, `public/views-assistant.js`, `server/assistant.js`, `tests/profile828.test.mjs`, `tests/assistant.test.mjs`, `docs/AUDIT_8_28.md`, `docs/PLAN_NIVEAU_SEANCE.md`.
 - **Modifiés** : `public/estimate.js` (réécrit), `public/views-climbplan.js`, `public/views-profile.js`, `public/views-setup.js`, `public/views-library.js`, `public/views-progress.js`, `public/views-studio.js`, `public/views-settings.js`, `public/content.js`, `public/news.js`, `public/state.js`, `public/generator.js`, `public/phaseplan.js`, `public/climbplan.js`, `public/brain.js`, `public/hints.js`, `public/model.js`, `public/ui.js`, `public/style.css`, `public/i18n.js`, `public/sw.js`, `worker.js`, `tests/e2e.mjs`, `tests/data.test.mjs`, `tests/hints.test.mjs`.
 
 ### Migrations
@@ -65,7 +157,7 @@ Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures
 
 ### Fonctions réutilisées / nouvelles
 - **Réutilisées** : Studio (`csCreate`, `csLoad`, `cleanChange`, `cleanGlobal`, `diffChange`, `currentOf`), `extractJson`, limites de débit, journal d'audit ; `capacityState`, `levelFor`, `candidates`, `proposeForPhase`, `placeObjective`, `toReference`, `levelFromReference`, `availableEquipment`, `putItem` / outbox, `testReminders` (rebranché), `METRICS` (tests existants).
-- **Nouvelles** : `findContext`, `buildAssistant`, `cleanAssistant`, `mergeItems` (server/assistant.js), route `POST /api/admin/assistant` (rôle contenu) ; `vAssistant`, `vAdminLook`, `vAdminChanges`, `vAdminBugs`, `vAdminPush`, `forYou` ; `batteryFor`, `assessment`, `conditionFacts`, `nextStep`, `suggestedGoals`, `guidedTests` (assess.js) ; `exerciseLevel` (generator.js) ; `askText` (ui.js) ; `prefill`, `placeFor`, `freshStructure`, `vBase` (créateur) ; `vBilan` (profil).
+- **Nouvelles** : `nextImpact` (loop.js), `personalFit` (fit.js), `impactCard` ; `findContext`, `buildAssistant`, `cleanAssistant`, `mergeItems` (server/assistant.js), route `POST /api/admin/assistant` (rôle contenu) ; `vAssistant`, `vAdminLook`, `vAdminChanges`, `vAdminBugs`, `vAdminPush`, `forYou` ; `batteryFor`, `assessment`, `conditionFacts`, `nextStep`, `suggestedGoals`, `guidedTests` (assess.js) ; `exerciseLevel` (generator.js) ; `askText` (ui.js) ; `prefill`, `placeFor`, `freshStructure`, `vBase` (créateur) ; `vBilan` (profil).
 
 ### Déploiement / retour arrière
 - Déployer comme d'habitude ; aucune étape de base de données.
@@ -74,7 +166,7 @@ Base : 8.27.0. Audit préalable, fait comme un vrai nouvel utilisateur (captures
 ### Limites et risques
 - L'assistant du site utilise le modèle de Workers AI (Llama 3.3 70B par défaut) : moins capable que Claude, il peut mal comprendre ou proposer une modification inutile. C'est pourquoi rien n'est publié sans ta relecture. Testé ici avec des réponses simulées ; sa qualité réelle n'est pas vérifiable dans ce dépôt.
 - Il ne modifie pas encore les séances prêtes, les formats, les cotations ni la mise en page (formats trop complexes pour une proposition fiable) : ces types restent modifiables à la main.
-- Niveau de séance : une charge ajoutée écrite dans un exercice (« +10 kg ») n'est pas encore lue ; seule la cotation l'est.
+- Niveau de séance : une charge écrite est rapportée (et en % du poids si connu) mais ne change pas le niveau conseillé : aucun seuil fiable n'existe sans connaître la personne.
 - Les repères de niveau (tiers) restent des repères indicatifs courants, pas des normes scientifiques par âge ou sexe ; les nouvelles mesures de santé n'en ont pas, volontairement.
 - Le pré-remplissage de l'objectif part de la première envie qui correspond ; il est signalé et modifiable.
 - La comparaison au ressenti des autres membres (bibliothèque commune) n'est **pas** faite : elle demande ta décision (données partagées, même anonymes).

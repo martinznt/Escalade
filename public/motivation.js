@@ -16,13 +16,17 @@ export function activeDays(history, ascents = []) {
  * Série de semaines « bienveillante » : semaines consécutives avec au moins `goal` jours actifs.
  * La semaine en cours ne casse jamais la série (elle n'est pas finie) : elle s'ajoute dès que l'objectif est atteint.
  */
-export function weekStreak(history, ascents = [], { goal = 2, now = Date.now() } = {}) {
+export function weekStreak(history, ascents = [], { goal = 2, now = Date.now(), pause = null } = {}) {
   const perWeek = new Map();
   for (const d of activeDays(history, ascents)) { const w = weekStart(new Date(d).getTime()); perWeek.set(w, (perWeek.get(w) || 0) + 1); }
   const cur = weekStart(now), thisWeek = perWeek.get(cur) || 0;
+  // 8.30 : une semaine de pause (vacances, blessure) ne casse pas la série (et ne compte pas).
+  const pFrom = /^\d{4}-\d{2}-\d{2}$/.test(pause?.from || '') ? new Date(pause.from + 'T00:00:00').getTime() : null;
+  const pTo = /^\d{4}-\d{2}-\d{2}$/.test(pause?.to || '') ? new Date(pause.to + 'T23:59:59').getTime() : now;
+  const paused = (w) => pFrom != null && pFrom < w + 7 * DAY && pTo >= w;
   // décalage d'heure été / hiver : on recalcule le lundi à chaque pas
   let streak = 0, w = weekStart(cur - 3 * DAY);
-  while ((perWeek.get(w) || 0) >= goal) { streak++; w = weekStart(w - 3 * DAY); }
+  for (let k = 0; k < 600; k++) { if ((perWeek.get(w) || 0) >= goal) streak++; else if (!paused(w)) break; w = weekStart(w - 3 * DAY); }
   let best = 0, run = 0;
   const weeks = [...perWeek.keys()].sort((a, b) => a - b);
   if (weeks.length) for (let x = weeks[0]; x <= cur; x = weekStart(x + 10 * DAY)) { run = (perWeek.get(x) || 0) >= goal ? run + 1 : 0; best = Math.max(best, run); }
@@ -30,16 +34,28 @@ export function weekStreak(history, ascents = [], { goal = 2, now = Date.now() }
   return { streak: streak + (done ? 1 : 0), thisWeek, goal, left: Math.max(0, goal - thisWeek), done, best: Math.max(best, streak + (done ? 1 : 0)) };
 }
 
-const SENT = new Set(['flash', 'send', 'work', 'top']);
+const SENT = new Set(['onsight', 'flash', 'send', 'work', 'top']);
 const hoursOf = (history) => history.reduce((t, h) => t + (Number(h.durationSeconds) || 0), 0) / 3600;
+const MOBILITY = /étir|etir|mobilit|souplesse|yoga|stretch|assouplis/i;
+function bestMonthVariety(hist) {
+  const by = new Map();
+  for (const h of hist) { const a = h.data?.activity; if (!a) continue; const d = new Date(h.startedAt), k = d.getFullYear() * 12 + d.getMonth(); if (!by.has(k)) by.set(k, new Set()); by.get(k).add(a); }
+  return Math.max(0, ...[...by.values()].map((x) => x.size));
+}
+function comebacks(hist) {
+  const t = hist.map((h) => h.startedAt).sort((a, b) => a - b); let n = 0;
+  for (let i = 1; i < t.length; i++) if (t[i] - t[i - 1] >= 14 * DAY) n++;
+  return n;
+}
 /** Badges personnels : chacun dit comment l'obtenir et où tu en es. */
 export function badges(ctx, { now = Date.now(), goal = 2 } = {}) {
   const hist = ctx.history || [], asc = ctx.ascents || [], perfs = ctx.perfs || [], projects = ctx.projects || [];
-  const n = hist.length, hrs = hoursOf(hist), sent = asc.filter((a) => SENT.has(a.result)), flashes = asc.filter((a) => a.result === 'flash');
+  const n = hist.length, hrs = hoursOf(hist), sent = asc.filter((a) => SENT.has(a.result)), flashes = asc.filter((a) => a.result === 'flash' || a.result === 'onsight');
   const st = weekStreak(hist, asc, { goal, now });
   const hourOf = (h) => new Date(h.startedAt).getHours();
   const acts = new Set(hist.map((h) => h.data?.activity).filter(Boolean));
   const records = ctx.recordsCount || 0;
+  const well = ctx.wellness || [];
   const B = (id, icon, name, how, value, target) => ({ id, icon, name, how, value: Math.min(value, target), target, got: value >= target });
   return [
     B('first', '🌱', 'Premier pas', 'Faire ta première séance', n, 1),
@@ -60,6 +76,13 @@ export function badges(ctx, { now = Date.now(), goal = 2 } = {}) {
     B('early', '🌅', 'Lève-tôt', 'Une séance commencée avant 8 h', hist.filter((h) => hourOf(h) < 8 && hourOf(h) >= 4).length, 1),
     B('night', '🌙', 'Oiseau de nuit', 'Une séance commencée après 21 h', hist.filter((h) => hourOf(h) >= 21).length, 1),
     B('multi', '🎨', 'Touche-à-tout', '3 sports différents', acts.size, 3),
+    // 8.30 : badges utiles (récupération, variété, reprise), pas seulement du volume.
+    B('checkin', '🔋', 'À l’écoute', '10 check-ins du matin (Forme du jour)', well.length, 10),
+    B('sleep', '😴', 'Bonnes nuits', '7 nuits de 7 h ou plus notées au check-in', well.filter((w) => Number(w.sleep) >= 7).length, 7),
+    B('variety', '🌈', 'Varié', '3 sports différents dans le même mois', bestMonthVariety(hist), 3),
+    B('mobility', '🧘', 'Souple', '10 séances avec de la mobilité ou des étirements', hist.filter((h) => (h.data?.exercises || []).some((e) => MOBILITY.test(`${e.name} ${e.libId || ''}`))).length, 10),
+    B('season', '🗓️', 'Saison réussie', 'Réussir une saison de 4 semaines (3 semaines sur 4)', (ctx.seasons || []).filter((x) => x.won).length, 1),
+    B('comeback', '🌤️', 'Le retour', 'Reprendre après une pause de 2 semaines ou plus', comebacks(hist), 1),
   ];
 }
 
@@ -75,6 +98,6 @@ export function monthRecap(ctx, at = Date.now()) {
   const byAct = {}; for (const h of hist) { const k = h.data?.activity || 'autre'; byAct[k] = (byAct[k] || 0) + 1; }
   return {
     label: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }), sessions: hist.length, minutes: Math.round(hist.reduce((t, h) => t + (Number(h.durationSeconds) || 0), 0) / 60),
-    sets, days, sends: sent.length, flashes: sent.filter((a) => a.result === 'flash').length, best, byAct,
+    sets, days, sends: sent.length, flashes: sent.filter((a) => a.result === 'flash' || a.result === 'onsight').length, best, byAct,
   };
 }

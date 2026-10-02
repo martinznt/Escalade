@@ -2,7 +2,7 @@
 // Le serveur est l'autorité pour toutes les permissions : l'utilisateur est toujours déterminé par sa session
 // (jamais par un identifiant envoyé par le client), et chaque requête SQL est paramétrée.
 import { SCHEMA, ADD_COLUMNS } from './schema.js';
-import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid } from './public/shared.js';
+import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid, CHEERS } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
 import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, extractJson, DEFAULT_MODEL as AI_MODEL } from './server/ai.js';
@@ -14,15 +14,18 @@ import { sanitizeForPublication } from './server/publish.js';
 import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server/global.js';
 import { cleanChange, diffState, diffChange, afterOf, runChecks, buildAdminDraft, cleanAdminDraft, buildLab, cleanLab, AI_KINDS } from './server/studio.js';
 import { dataHealth, groupBugs, buildMaintenance, cleanMaintenance, analyzeDiff } from './server/health.js';
+import { CODE_FILES, searchCode, buildCodeEdit, cleanEdits, openPullRequest, REPO_OK } from './server/codeedit.js';
 import { findContext, buildAssistant, cleanAssistant, mergeItems, ASSIST_KINDS } from './server/assistant.js';
 import { LIBRARY } from './public/library.js';
 import { FAQ } from './public/help.js';
 import { SPORT_INTENTS } from './public/intentions.js';
-import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX } from './server/duo.js';
+import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX, cleanGroupState, GROUP_TTL } from './server/duo.js';
+import { cleanConfig as cleanGroupConfig, GROUP_MAX } from './public/group.js';
 import { changesRoute } from './server/changes.js';
-import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
+import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES, b64u } from './server/push.js';
+import { buildIcs } from './public/ics.js';
 
-const APP_VERSION = '8.28.0';
+const APP_VERSION = '8.30.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -31,9 +34,9 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/planning.js', '/views-planning.js', '/live.js', '/sports.js', '/views-sports.js', '/story.js', '/views-story.js', '/views-community.js', '/demo.js', '/library-more.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
-  '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
+  '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/badge-96.png', '/robots.txt']);
 
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
@@ -59,7 +62,7 @@ export default {
     const url = new URL(request.url);
     announceSoon(env, ctx);
     try {
-      const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : await serveAsset(request, env, url);
+      const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : url.pathname.startsWith('/ical/') ? await icalFeed(request, env, url) : await serveAsset(request, env, url);
       if (url.protocol === 'https:') { const h = new Headers(res.headers); h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h }); }
       return res;
     } catch (err) {
@@ -67,13 +70,34 @@ export default {
       return json({ ok: false, error: 'Erreur serveur. Réessaie dans un instant.' }, 500);
     }
   },
-  /** Tâche planifiée (cron, voir wrangler.json) : rappels d'entraînement. */
+  /** Tâche planifiée (cron, voir wrangler.json — chaque minute) : rappels d'entraînement et annonce d'une nouvelle
+   * version, même si personne n'ouvre l'app. Chaque passage est noté (last_cron) : l'admin voit si la tâche tourne. */
   async scheduled(event, env, ctx) {
     if (!env.DB) return;
-    const job = (async () => { await ensureSchema(env); const n = await runReminders(env); if (n) console.log('rappels envoyés', n); const u = await updateNotice(env, buildId(env)); if (u) console.log('mise à jour annoncée', u); })().catch((e) => console.error('rappels', e?.message || e));
+    const job = (async () => {
+      await ensureSchema(env);
+      let n = 0, u = 0, err = '';
+      try { n = await runReminders(env); if (n) console.log('rappels envoyés', n); u = await updateNotice(env, buildId(env)); if (u) console.log('mise à jour annoncée', u); }
+      catch (e) { err = String(e?.message || e).slice(0, 200); console.error('tâche planifiée', err); }
+      await db(env, "INSERT INTO system_state(key,value) VALUES('last_cron',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", JSON.stringify({ t: Date.now(), cron: String(event?.cron || '').slice(0, 40), reminders: n, update: u, build: buildId(env), error: err })).run();
+    })().catch((e) => console.error('tâche planifiée', e?.message || e));
     if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
   },
 };
+
+/* ═════════════ Code de l'interface (pour l'assistant : lecture seule) ═════════════ */
+const githubReady = (env) => !!(env.GITHUB_TOKEN && REPO_OK.test(String(env.GITHUB_REPO || '')));
+let codeCache = null;
+/** Fichiers de l'interface lisibles par l'assistant (via les fichiers statiques déployés), gardés par version. */
+async function codeFiles(env) {
+  const b = buildId(env); if (codeCache?.b === b && codeCache.db === env.DB) return codeCache.files;
+  const files = new Map(), failed = [];
+  await Promise.all([...PUBLIC_FILES].filter((f) => CODE_FILES.test('public' + f)).map(async (f) => {
+    try { const r = await env.ASSETS.fetch(new Request('https://assets.local' + f)); if (r.ok) files.set('public' + f, await r.text()); else failed.push(f); } catch { failed.push(f); }
+  }));
+  if (failed.length) console.error('code: fichiers illisibles', failed.slice(0, 10).join(', '));
+  codeCache = { b, db: env.DB, files }; return files;
+}
 
 /* ═════════════ Fichiers statiques ═════════════ */
 /** Identifiant du déploiement : fourni par Cloudflare (binding version_metadata), sinon la version de l'application. */
@@ -249,7 +273,9 @@ function roleFor(p, m) {
   if (p.startsWith('/api/admin/users')) return 'users';
   if (p.startsWith('/api/admin/bugs') || p === '/api/admin/push-status' || p.startsWith('/api/admin/code') || p === '/api/admin/maintenance') return 'technical';
   if (p === '/api/admin/studio/ai' || p === '/api/admin/lab' || p === '/api/admin/health') return 'intelligence';
+  if (p === '/api/admin/assistant/code') return 'technical';
   if (p === '/api/admin/assistant') return 'content';
+  if (p.startsWith('/api/admin/ideas')) return 'content';
   if (p.startsWith('/api/admin/studio') || p.startsWith('/api/admin/versions') || p.startsWith('/api/admin/global') || p.startsWith('/api/admin/proposals') || p.startsWith('/api/admin/intents')) return 'content';
   return null; // journal : tout administrateur peut le lire
 }
@@ -429,6 +455,11 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/calendar' && m === 'POST') return calendarPost(request, env, u);
   if ((x = p.match(/^\/api\/calendar\/([\w-]{1,64})$/)) && m === 'DELETE') { const r = await db(env, 'DELETE FROM calendar_events WHERE id=? AND user_id=?', x[1], u.id).run(); if (!r.meta?.changes) return fail('Événement introuvable.', 404); return json({ ok: true }); }
 
+  if (p === '/api/weather' && m === 'GET') return weatherGet(url, env, u);
+  if (p === '/api/ical' && m === 'GET') { const r = await db(env, 'SELECT created_at FROM ical_feeds WHERE user_id=?', u.id).first(); return json({ ok: true, active: !!r, created_at: r?.created_at || null }); }
+  if (p === '/api/ical' && m === 'POST') return icalCreate(env, u, url);
+  if (p === '/api/ical' && m === 'DELETE') { await db(env, 'DELETE FROM ical_feeds WHERE user_id=?', u.id).run(); return json({ ok: true }); }
+
   if (p === '/api/history' && m === 'GET') return historyGet(env, u);
   if (p === '/api/history' && m === 'POST') return historyPost(request, env, u);
   if ((x = p.match(/^\/api\/history\/([\w-]{1,64})$/)) && m === 'DELETE') { const r = await db(env, 'DELETE FROM history WHERE id=? AND user_id=?', x[1], u.id).run(); if (!r.meta?.changes) return fail('Historique introuvable.', 404); return json({ ok: true }); }
@@ -492,6 +523,8 @@ async function routeAuthed(request, env, url, auth, secure) {
   // Intentions communes (lecture pour tous) et propositions (envoyées aux administrateurs)
   if (p === '/api/community/intents' && m === 'GET') return json({ ok: true, intents: ((await db(env, 'SELECT id,activity,label,emoji,caps_json FROM community_intents ORDER BY created_at').all()).results || []).map((r) => ({ id: r.id, activityId: r.activity, label: r.label, emoji: r.emoji, caps: safeParse(r.caps_json) || {} })) });
   // Séance à deux : un salon avec un code ; seuls la position et le chrono sont partagés
+  if (p === '/api/group' && m === 'POST') return groupCreate(request, env, u);
+  if ((x = p.match(/^\/api\/group\/([A-Za-z0-9]{6})(\/join)?$/))) return groupRoom(request, env, u, normCode(x[1]), !!x[2], m);
   if (p === '/api/duo' && m === 'POST') return duoCreate(request, env, u);
   if ((x = p.match(/^\/api\/duo\/([A-Za-z0-9]{6})(\/join)?$/))) return duoRoom(request, env, u, normCode(x[1]), !!x[2], m);
   if (p === '/api/proposals' && m === 'POST') return proposalCreate(request, env, u);
@@ -542,39 +575,82 @@ async function routeAuthed(request, env, url, auth, secure) {
       return json({ ok: true, open: bugs.length, groups, findings: findings || [], ai });
     }
     if (p === '/api/admin/code' && m === 'GET') {
-      const r = (await db(env, 'SELECT c.id,c.title,c.summary,c.status,c.impact_json,c.created_at,c.updated_at,c.reviewed_at,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id ORDER BY c.updated_at DESC LIMIT 100').all()).results || [];
+      const r = (await db(env, 'SELECT c.id,c.title,c.summary,c.status,c.impact_json,c.pr_url,c.created_at,c.updated_at,c.reviewed_at,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id ORDER BY c.updated_at DESC LIMIT 100').all()).results || [];
       return json({ ok: true, items: r.map((c) => ({ ...c, impact: safeParse(c.impact_json) || {}, impact_json: undefined })) });
     }
     if (p === '/api/admin/code' && m === 'POST') {
-      const b = await readJson(request, 260000), title = str(b?.title, 120), diff = String(b?.diff ?? '').slice(0, 200000);
+      const b = await readJson(request, 260000), title = str(b?.title, 120);
+      let diff = String(b?.diff ?? '').slice(0, 200000), edits = [];
+      // Remplacements exacts (assistant) : revérifiés ici sur les fichiers actuels ; le diff est recalculé par le serveur.
+      if (Array.isArray(b?.edits) && b.edits.length) {
+        const r = cleanEdits({ edits: b.edits }, await codeFiles(env));
+        if (!r.edits.length || r.errors.length) return fail('Modification refusée : ' + (r.errors.join(' ') || 'rien d’applicable.'), 422);
+        edits = r.edits; diff = r.diff;
+      }
       if (title.length < 3 || diff.length < 10) return fail('Titre et diff requis.');
       const impact = analyzeDiff(diff), id = uid(), now = Date.now();
       if (impact.blocked) return fail('Proposition refusée : ' + impact.flags.filter((f) => /refusé|interdit/.test(f)).join(' '), 422, { impact });
-      await env.DB.batch([db(env, 'INSERT INTO code_proposals(id,title,summary,diff,impact_json,tests,status,author_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)', id, title, str(b?.summary, 2000), diff, JSON.stringify(impact), str(b?.tests, 2000), 'draft', u.id, now, now),
+      await env.DB.batch([db(env, 'INSERT INTO code_proposals(id,title,summary,diff,impact_json,tests,status,author_id,created_at,updated_at,edits_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)', id, title, str(b?.summary, 2000), diff, JSON.stringify(impact), str(b?.tests, 2000), 'draft', u.id, now, now, edits.length ? JSON.stringify(edits) : ''),
         auditStmt(env, u, 'code_propose', { type: 'code', id, after: { title, files: impact.files, flags: impact.flags } })]);
       return json({ ok: true, id, impact });
     }
     if ((x = p.match(/^\/api\/admin\/code\/([\w-]{1,64})(\.patch)?$/)) && m === 'GET') {
       const c = await db(env, 'SELECT c.*,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id WHERE c.id=?', x[1]).first(); if (!c) return fail('Proposition introuvable.', 404);
       if (x[2]) return new Response(`# ${c.title}\n# Statut : ${c.status} — à appliquer et déployer MANUELLEMENT (git, tests, déploiement Cloudflare).\n${c.diff}`, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="proposition-${c.id}.patch"` } });
-      return json({ ok: true, item: { id: c.id, title: c.title, summary: c.summary, diff: c.diff, tests: c.tests, status: c.status, note: c.note, impact: safeParse(c.impact_json) || {}, author: c.author || '', reviewer: c.reviewer || '', createdAt: c.created_at, reviewedAt: c.reviewed_at } });
+      return json({ ok: true, item: { id: c.id, title: c.title, summary: c.summary, diff: c.diff, tests: c.tests, status: c.status, note: c.note, impact: safeParse(c.impact_json) || {}, author: c.author || '', reviewer: c.reviewer || '', createdAt: c.created_at, reviewedAt: c.reviewed_at,
+        prUrl: c.pr_url || '', exact: !!c.edits_json, github: githubReady(env), mine: c.author_id === u.id } });
     }
     if ((x = p.match(/^\/api\/admin\/code\/([\w-]{1,64})\/review$/)) && m === 'POST') {
       const b = await readJson(request, 3000), d = b?.decision === 'approve' ? 'approved' : b?.decision === 'reject' ? 'rejected' : '';
       if (!d) return fail('Décision invalide.');
       const c = await db(env, 'SELECT author_id,status FROM code_proposals WHERE id=?', x[1]).first(); if (!c) return fail('Proposition introuvable.', 404);
       if (c.status !== 'draft') return fail('Déjà examinée.', 409);
-      if (c.author_id === u.id && d === 'approved') return fail('Une proposition doit être validée par un autre administrateur que son auteur.', 409);
+      let solo = false;
+      if (c.author_id === u.id && d === 'approved') {
+        // Deux regards : un autre administrateur valide. Seul administrateur : validation seul, mais explicite et notée.
+        const admins = Number((await db(env, 'SELECT COUNT(*) c FROM users WHERE is_admin=1').first())?.c) || 0;
+        if (admins > 1 || b?.solo !== true) return fail(admins > 1 ? 'Une proposition doit être validée par un autre administrateur que son auteur.' : 'Tu es le seul administrateur : confirme que tu valides seul (« Je valide seul »).', 409, { soloPossible: admins <= 1 });
+        solo = true;
+      }
       const now = Date.now();
-      await env.DB.batch([db(env, 'UPDATE code_proposals SET status=?,reviewer_id=?,reviewed_at=?,note=?,updated_at=? WHERE id=?', d, u.id, now, str(b?.note, 600), now, x[1]), auditStmt(env, u, 'code_' + d, { type: 'code', id: x[1], after: { note: str(b?.note, 200) } })]);
-      return json({ ok: true, status: d, deployed: false });
+      await env.DB.batch([db(env, 'UPDATE code_proposals SET status=?,reviewer_id=?,reviewed_at=?,note=?,updated_at=? WHERE id=?', d, u.id, now, str(b?.note, 600), now, x[1]), auditStmt(env, u, solo ? 'code_self_approved' : 'code_' + d, { type: 'code', id: x[1], after: { note: str(b?.note, 200), solo } })]);
+      return json({ ok: true, status: d, deployed: false, solo });
+    }
+    if ((x = p.match(/^\/api\/admin\/code\/([\w-]{1,64})\/pr$/)) && m === 'POST') {
+      // Pull Request GitHub d'une proposition validée : une branche, les remplacements, la PR. JAMAIS fusionnée ni déployée ici.
+      const c = await db(env, 'SELECT * FROM code_proposals WHERE id=?', x[1]).first(); if (!c) return fail('Proposition introuvable.', 404);
+      if (c.pr_url) return json({ ok: true, url: c.pr_url, already: true, merged: false, deployed: false });
+      if (c.status !== 'approved') return fail('La proposition doit d’abord être validée.', 409);
+      const edits = safeParse(c.edits_json) || [];
+      if (!Array.isArray(edits) || !edits.length) return fail('Cette proposition n’a pas de remplacements exacts : télécharge le fichier .patch et applique-le à la main.', 409);
+      if (!githubReady(env)) return json({ error: 'GitHub n’est pas relié : ajoute au Worker les secrets GITHUB_TOKEN (jeton avec droits « contents » et « pull requests ») et GITHUB_REPO (propriétaire/dépôt). En attendant, télécharge le fichier .patch.', unavailable: true }, 503);
+      if (await limited(env, 'gh-pr:' + u.id, 6, 600000)) return fail('Beaucoup de demandes : réessaie dans quelques minutes.', 429);
+      let pr;
+      try { pr = await openPullRequest({ repo: env.GITHUB_REPO, token: env.GITHUB_TOKEN, id: c.id, title: c.title, edits, body: `${c.summary || c.title}\n\n---\nProposée avec l’assistant du site et validée par un administrateur dans l’app.\n**Rien n’est fusionné ni déployé automatiquement** : relis le diff, laisse passer les tests, puis fusionne toi-même.\n\nFichiers : ${[...new Set(edits.map((e) => e.path))].join(', ')}` }); }
+      catch (e) { console.error('github-pr', e?.message); return fail(String(e?.message || 'GitHub a refusé la Pull Request.').slice(0, 300), 502); }
+      await env.DB.batch([db(env, "UPDATE code_proposals SET status='pr',pr_url=?,updated_at=? WHERE id=?", pr.url, Date.now(), c.id), auditStmt(env, u, 'code_pr', { type: 'code', id: c.id, after: { url: pr.url, branch: pr.branch } })]);
+      return json({ ok: true, url: pr.url, number: pr.number, merged: false, deployed: false });
+    }
+    if (p === '/api/admin/assistant/code' && m === 'POST') {
+      // « Le faire dans le code » : l'IA propose des remplacements exacts dans l'interface ; tout est revérifié ; rien n'est enregistré ici.
+      const b = await readJson(request, 30000), msgs = (Array.isArray(b?.messages) ? b.messages : []).slice(-8);
+      const last = [...msgs].reverse().find((y) => y?.role === 'user');
+      if (!last || str(last.content, 1500).length < 3) return fail('Écris ce que tu veux changer.');
+      if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur (Workers AI).', unavailable: true }, 503);
+      if (await limited(env, 'ai-code:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie dans quelques minutes.', 429);
+      const files = await codeFiles(env), convo = msgs.filter((y) => y?.role === 'user').slice(-3).map((y) => str(y.content, 600)).join(' ');
+      const snippets = searchCode(files, convo);
+      let out;
+      try { out = cleanEdits(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildCodeEdit(msgs, snippets), max_tokens: 1600, temperature: 0.2 }), files); }
+      catch (e) { console.error('ai-code', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+      return json({ ok: true, ...out, impact: out.diff ? analyzeDiff(out.diff) : null, snippets: snippets.map(({ path, start, end }) => ({ path, start, end })), github: githubReady(env) });
     }
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
     if (p === '/api/admin/push-status' && m === 'GET') {
       const st = async (k) => (await db(env, 'SELECT value FROM system_state WHERE key=?', k).first())?.value || '';
-      let last = null; try { last = JSON.parse(await st('last_notify') || 'null'); } catch { last = null; }
+      const parse = async (k) => { try { return JSON.parse(await st(k) || 'null'); } catch { return null; } };
       const n = await db(env, 'SELECT COUNT(*) c FROM push_subs').first();
-      return json({ ok: true, build: buildId(env), lastBuild: await st('last_build'), last, devices: Number(n?.c) || 0 });
+      return json({ ok: true, build: buildId(env), lastBuild: await st('last_build'), last: await parse('last_notify'), cron: await parse('last_cron'), now: Date.now(), devices: Number(n?.c) || 0 });
     }
     if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
     if ((x = p.match(/^\/api\/admin\/users\/([\w-]{1,64})\/role$/)) && m === 'POST') {
@@ -601,9 +677,18 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (p === '/api/admin/intents' && m === 'POST') { const b = await readJson(request, 4000); const r = await intentCreate(env, u, b); if (r.error) return fail(r.error); await auditStmt(env, u, 'intent_create', { type: 'intent', id: r.id, after: { label: str(b?.label, 60) } }).run(); return json({ ok: true, id: r.id }); }
     if ((x = p.match(/^\/api\/admin\/intents\/([\w-]{1,64})$/)) && m === 'DELETE') { const old = await db(env, 'SELECT label,activity,caps_json FROM community_intents WHERE id=?', x[1]).first(); await env.DB.batch([db(env, 'DELETE FROM community_intents WHERE id=?', x[1]), auditStmt(env, u, 'intent_delete', { type: 'intent', id: x[1], before: old ? { label: old.label, activity: old.activity, caps: safeParse(old.caps_json) } : null })]); return json({ ok: true }); }
     if ((x = p.match(/^\/api\/admin\/bugs\/([\w-]{1,64})$/)) && m === 'POST') return adminBugStatus(request, env, u, x[1]);
+    if (p === '/api/admin/stats' && m === 'GET') return adminStats(env);
+    if (p === '/api/admin/ideas' && m === 'POST') return ideaSave(request, env, u);
+    if ((x = p.match(/^\/api\/admin\/ideas\/([\w-]{1,64})$/)) && m === 'DELETE') {
+      const old = await db(env, 'SELECT title FROM ideas WHERE id=?', x[1]).first(); if (!old) return fail('Idée introuvable.', 404);
+      await env.DB.batch([db(env, 'DELETE FROM idea_votes WHERE idea_id=?', x[1]), db(env, 'DELETE FROM ideas WHERE id=?', x[1]), auditStmt(env, u, 'idea-delete', { type: 'idea', id: x[1], before: old })]);
+      return json({ ok: true });
+    }
     return fail('Route inconnue.', 404);
   }
 
+  if (p === '/api/ideas' && m === 'GET') return ideasList(env, u);
+  if ((x = p.match(/^\/api\/ideas\/([\w-]{1,64})\/vote$/)) && m === 'POST') return ideaVote(env, u, x[1]);
   if (p.startsWith('/api/social/')) return social(request, env, url, u);
   return fail('Route inconnue.', 404);
 }
@@ -670,12 +755,15 @@ async function deleteAccount(request, env, auth, secure) {
   if (!b || !row || !safeEq(await passHash(String(b.password ?? ''), row.password_salt), row.password_hash)) return fail('Mot de passe incorrect.', 403);
   const id = auth.user.id;
   // Données privées supprimées ; contributions à la bibliothèque commune conservées de façon anonyme (auteur : compte supprimé).
-  await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs', 'proposals'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
+  await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs', 'proposals', 'ical_feeds'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
     .concat([
       db(env, 'DELETE FROM follows WHERE follower_id=? OR followee_id=?', id, id),
+      db(env, 'DELETE FROM cheers WHERE from_id=? OR to_id=?', id, id),
+      db(env, 'DELETE FROM idea_votes WHERE user_id=?', id),
       db(env, 'UPDATE common_exercises SET created_by=NULL WHERE created_by=?', id),
       db(env, "DELETE FROM shared_sessions WHERE owner_id=? AND scope IN ('public','link')", id),
       db(env, 'DELETE FROM duo_rooms WHERE owner_id=?', id),
+      db(env, 'DELETE FROM group_rooms WHERE owner_id=?', id),
       db(env, 'UPDATE global_content SET updated_by=NULL WHERE updated_by=?', id),
       // Studio : l'historique reste, l'auteur devient « compte supprimé ».
       db(env, 'UPDATE change_sets SET author_id=NULL WHERE author_id=?', id), db(env, 'UPDATE change_sets SET published_by=NULL WHERE published_by=?', id), db(env, 'UPDATE change_sets SET rolled_back_by=NULL WHERE rolled_back_by=?', id),
@@ -786,7 +874,7 @@ function cleanSettings(o) {
   if (o.equipment && typeof o.equipment === 'object') out.equipment = Object.fromEntries(['wall', 'hangboard', 'bar', 'dips', 'weights', 'band'].map((k) => [k, bool(o.equipment[k])]));
   if (o.avoid && typeof o.avoid === 'object') out.avoid = Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, bool(o.avoid[k])]));
   if (Array.isArray(o.climbingLogs)) out.climbingLogs = o.climbingLogs.slice(0, 500).map((x) => ({ id: str(x?.id, 64) || uid(), date: clamp(x?.date, 0, 9e15, Date.now()), type: str(x?.type, 30), grade: str(x?.grade, 20), result: ['send', 'attempt', 'flash', 'top', 'fail', 'work'].includes(x?.result) ? x.result : 'attempt', attempts: clamp(x?.attempts, 1, 999, 1), style: str(x?.style, 60), note: str(x?.note, 500) }));
-  for (const k of ['sound', 'vibration', 'voice', 'keepAwake', 'handsFree', 'onboarded', 'autoBase', 'bigMode', 'autoWarm', 'season']) if (k in o) out[k] = bool(o[k]);
+  for (const k of ['sound', 'vibration', 'voice', 'keepAwake', 'handsFree', 'onboarded', 'autoBase', 'bigMode', 'autoWarm', 'season', 'redMode']) if (k in o) out[k] = bool(o[k]);
   if ('soundStyle' in o) out.soundStyle = ['bip', 'cloche', 'bois', 'doux'].includes(o.soundStyle) ? o.soundStyle : 'bip';
   if ('notifSound' in o) out.notifSound = ['aucun', 'bip', 'cloche', 'bois', 'doux'].includes(o.notifSound) ? o.notifSound : 'doux';
   if ('volume' in o) out.volume = clamp(o.volume, 0, 100, 60);
@@ -820,10 +908,24 @@ async function settingsPost(request, env, u) {
 }
 
 /* ═════════════ Calendrier ═════════════ */
-const rowToEvent = (r) => ({ id: r.id, date: r.event_date, sessionId: r.session_id, title: r.title || '', completed: !!r.completed, recurrence: r.recurrence_json ? safeParse(r.recurrence_json) : null });
+const rowToEvent = (r) => ({ id: r.id, date: r.event_date, sessionId: r.session_id, title: r.title || '', time: r.event_time || '', completed: !!r.completed, recurrence: r.recurrence_json ? safeParse(r.recurrence_json) : null, meta: r.meta_json ? cleanEventMeta(safeParse(r.meta_json)) : null });
+/** 8.30 — infos d'une séance prévue, nettoyées (liste blanche) : kind auto (séance à préparer) | race (événement
+ * important) | test | rest, durée, sport, intention, lieu, légère, note. Rien d'autre n'est gardé. */
+function cleanEventMeta(m) {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
+  const out = {}, idOk = (v) => /^[\w:.-]{1,80}$/.test(String(v || ''));
+  if (['auto', 'race', 'test', 'rest'].includes(m.kind)) out.kind = m.kind;
+  const mins = Number(m.minutes); if (Number.isFinite(mins) && mins >= 5 && mins <= 300) out.minutes = Math.round(mins);
+  if (idOk(m.activityId)) out.activityId = String(m.activityId);
+  if (idOk(m.envId)) out.envId = String(m.envId);
+  if (/^[a-z_]{1,30}$/.test(String(m.intent || ''))) out.intent = String(m.intent);
+  if (m.light) out.light = true;
+  const note = str(m.note, 200); if (note) out.note = note;
+  return Object.keys(out).length ? out : null;
+}
 async function calendarGet(url, env, u) {
   const from = url.searchParams.get('from'), to = url.searchParams.get('to');
-  let sql = 'SELECT id,event_date,session_id,title,completed,recurrence_json FROM calendar_events WHERE user_id=?';
+  let sql = 'SELECT id,event_date,event_time,session_id,title,completed,recurrence_json,meta_json FROM calendar_events WHERE user_id=?';
   const args = [u.id];
   if (isDate(from)) { sql += ' AND (event_date>=? OR recurrence_json IS NOT NULL)'; args.push(from); }
   if (isDate(to)) { sql += ' AND event_date<=?'; args.push(to); }
@@ -838,13 +940,59 @@ async function calendarPost(request, env, u) {
   if (b.recurrence && b.recurrence.freq === 'weekly') rec = { freq: 'weekly', until: isDate(b.recurrence.until) ? b.recurrence.until : null };
   const count = await db(env, 'SELECT COUNT(*) c FROM calendar_events WHERE user_id=?', u.id).first();
   if (Number(count?.c) > 3000) return fail('Trop d’événements.', 413);
-  const now = Date.now();
-  const r = await db(env, `INSERT INTO calendar_events(id,user_id,event_date,session_id,title,completed,recurrence_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,updated_at=excluded.updated_at
+  const now = Date.now(), time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.time || '')) ? b.time : '', meta = cleanEventMeta(b.meta);
+  const r = await db(env, `INSERT INTO calendar_events(id,user_id,event_date,event_time,session_id,title,completed,recurrence_json,meta_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,event_time=excluded.event_time,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,meta_json=excluded.meta_json,updated_at=excluded.updated_at
     WHERE calendar_events.user_id=excluded.user_id`,
-    id, u.id, b.date, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, now, now).run();
+    id, u.id, b.date, time, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, meta ? JSON.stringify(meta) : '', now, now).run();
   if (!r.meta || r.meta.changes === 0) return fail('Identifiant déjà utilisé.', 409);
-  return json({ ok: true, event: { id, date: b.date, sessionId: b.sessionId || null, title: str(b.title, 120), completed: !!b.completed, recurrence: rec } });
+  return json({ ok: true, event: { id, date: b.date, time, sessionId: b.sessionId || null, title: str(b.title, 120), completed: !!b.completed, recurrence: rec, meta } });
+}
+
+/* ═════════════ 8.30 : conditions en falaise (météo Open-Meteo, via le serveur) ═════════════ */
+// Le serveur demande la prévision (coordonnées arrondies au centième : ~1 km) : l'adresse de l'appareil n'est pas
+// transmise au service météo. Données Open-Meteo.com (licence CC BY 4.0), attribution affichée dans l'app.
+async function weatherGet(url, env, u) {
+  const la = url.searchParams.get('lat'), lo = url.searchParams.get('lon'), lat = Number(la), lon = Number(lo);
+  if (!la || !lo || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return fail('Coordonnées invalides.');
+  if (await limited(env, 'wx:' + u.id, 60, 3600000)) return fail('Trop de demandes météo : réessaie dans un moment.', 429);
+  const q = `latitude=${lat.toFixed(2)}&longitude=${lon.toFixed(2)}&hourly=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&past_days=1&forecast_days=3&timezone=auto`;
+  let r; try { r = await (env.FETCH || fetch)(`https://api.open-meteo.com/v1/forecast?${q}`, { headers: { 'User-Agent': 'seances-entrainement (conditions en falaise)' } }); } catch { return fail('Météo indisponible pour le moment.', 502); }
+  if (!r?.ok) return fail('Météo indisponible pour le moment.', 502);
+  const H = (await r.json().catch(() => null))?.hourly;
+  if (!H || !Array.isArray(H.time)) return fail('Météo indisponible pour le moment.', 502);
+  const keep = (a) => (Array.isArray(a) ? a.slice(0, 120).map((x) => (x == null || !Number.isFinite(Number(x)) ? null : Math.round(Number(x) * 10) / 10)) : []);
+  return json({ ok: true, source: 'Open-Meteo.com', hourly: { time: H.time.slice(0, 120).map((t) => String(t).slice(0, 16)).filter((t) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(t)), temperature_2m: keep(H.temperature_2m), relative_humidity_2m: keep(H.relative_humidity_2m), precipitation: keep(H.precipitation), wind_speed_10m: keep(H.wind_speed_10m) } });
+}
+
+/* ═════════════ 8.30 : abonnement agenda (lien secret en lecture seule) ═════════════ */
+// Le jeton (256 bits) n'est montré qu'une fois ; seule son empreinte SHA-256 est gardée. Régénérer le lien coupe l'ancien.
+const sha256hex = async (t) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+async function icalCreate(env, u, url) {
+  const token = b64u(crypto.getRandomValues(new Uint8Array(32))), now = Date.now();
+  await db(env, 'INSERT INTO ical_feeds(user_id,token_hash,created_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,created_at=excluded.created_at', u.id, await sha256hex(token), now).run();
+  return json({ ok: true, url: `${url.origin}/ical/${token}.ics`, created_at: now });
+}
+async function icalFeed(request, env, url) {
+  const m = url.pathname.match(/^\/ical\/([A-Za-z0-9_-]{40,64})\.ics$/);
+  if (!m || (request.method !== 'GET' && request.method !== 'HEAD')) return new Response('Introuvable', { status: 404, headers: SECURITY_HEADERS });
+  await ensureSchema(env);
+  const row = await db(env, 'SELECT user_id FROM ical_feeds WHERE token_hash=?', await sha256hex(m[1])).first();
+  if (!row) return new Response('Lien d’agenda inconnu ou remplacé.', { status: 404, headers: SECURITY_HEADERS });
+  const now = Date.now(), from = new Date(now - 30 * 86400000).toISOString().slice(0, 10), out = [];
+  const evs = (await db(env, 'SELECT id,event_date,event_time,session_id,title,recurrence_json,meta_json FROM calendar_events WHERE user_id=? AND (event_date>=? OR recurrence_json IS NOT NULL) ORDER BY event_date LIMIT 1500', row.user_id, from).all()).results || [];
+  for (const r of evs) {
+    const e = rowToEvent(r), race = e.meta?.kind === 'race';
+    out.push({ uid: 'ev-' + e.id, title: `${race ? '🏁 ' : '🏋️ '}${e.title || (race ? 'Événement' : 'Séance')}`, date: e.date, time: e.time || '', minutes: e.meta?.minutes || 60, allDay: race && !e.time, weekly: e.recurrence?.freq === 'weekly', until: e.recurrence?.until || '', desc: e.meta?.note || '' });
+  }
+  const progs = (await db(env, "SELECT id,data_json FROM user_items WHERE user_id=? AND collection='program' AND deleted=0", row.user_id).all()).results || [];
+  for (const r of progs) {
+    const p = safeParse(r.data_json); if (p?.status !== 'active' || !Array.isArray(p.sessions)) continue;
+    for (const s of p.sessions.slice(0, 200)) if (/^\d{4}-\d{2}-\d{2}$/.test(String(s.date)) && s.date >= from) out.push({ uid: `pg-${r.id}-${Number(s.i) || 0}`, title: `📆 ${String(p.name || 'Programme').split(' · ')[0].slice(0, 60)} · S${Number(s.week) || 1}`, date: s.date, time: '', minutes: Number(s.minutes) || 45, allDay: true });
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(p.eventDate || '')) && p.eventDate >= from) out.push({ uid: `pg-${r.id}-event`, title: `🏁 ${String(p.eventLabel || 'Mon objectif').slice(0, 60)}`, date: p.eventDate, allDay: true });
+  }
+  const body = buildIcs(out.slice(0, 2000), now, { feed: true });
+  return new Response(request.method === 'HEAD' ? null : body, { headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'private, max-age=900', 'Content-Disposition': 'inline; filename="seances.ics"' } });
 }
 
 /* ═════════════ Historique des séances effectuées ═════════════ */
@@ -872,7 +1020,8 @@ function cleanHistoryData(d) {
       intensity: ['low', 'mod', 'high'].includes(e?.intensity) ? e.intensity : '', risk: ['finger', 'shoulder', 'elbow', 'knee'].includes(e?.risk) ? e.risk : '',
       muscles: (Array.isArray(e?.muscles) ? e.muscles : []).slice(0, 12).map((m) => str(m, 40)).filter(Boolean),
       caps: caps(e?.caps), prim: idList(e?.prim, 8), sec: idList(e?.sec, 10),
-      sets: (Array.isArray(e?.sets) ? e.sets : []).slice(0, 40).map((s) => ({ reps: clamp(s?.reps, 0, 9999, 0), seconds: clamp(s?.seconds, 0, 86400, 0), load: clamp(s?.load, 0, 1000, 0), done: s?.done !== false })),
+      sets: (Array.isArray(e?.sets) ? e.sets : []).slice(0, 40).map((s) => ({ reps: clamp(s?.reps, 0, 9999, 0), seconds: clamp(s?.seconds, 0, 86400, 0), load: clamp(s?.load, 0, 1000, 0), done: s?.done !== false, ...(clamp(s?.feel, 0, 4, 0) ? { feel: Math.round(clamp(s?.feel, 0, 4, 0)) } : {}) })),
+      ...(str(e?.note, 200) ? { note: str(e?.note, 200) } : {}), // 8.30 : ressenti par série (1 facile → 4 échec) et note rapide
     })).filter((e) => e.name),
   };
 }
@@ -1073,6 +1222,63 @@ async function intentCreate(env, u, b) {
   return { id };
 }
 /* ═════════════ Séance à deux ═════════════ */
+/* ═════════════ Séance à plusieurs : salon, organisateur, lancement pour tous ═════════════ */
+// Seul l'organisateur règle (format, matériel, intervalles) et pilote (lancer, pause, étape suivante, fin).
+// Chaque membre ne voit que les pseudos des autres membres du salon ; aucune autre donnée n'est partagée.
+async function groupCreate(request, env, u) {
+  const b = await readJson(request, 200000);
+  if (!b || !b.session || typeof b.session !== 'object') return fail('Données invalides.');
+  if (await limited(env, 'group:' + u.id, 20, DAY)) return fail('Trop de salons créés aujourd’hui. Réessaie demain.', 429);
+  const s = sanitizeForPublication(b.session);
+  if (!s.exercises.length) return fail('La séance est vide.');
+  const data = JSON.stringify(s); if (data.length > 150000) return fail('Séance trop volumineuse.', 413);
+  const now = Date.now();
+  await db(env, 'DELETE FROM group_rooms WHERE expires_at<?', now).run();
+  for (let k = 0; k < 5; k++) {
+    const code = duoCode();
+    const r = await db(env, 'INSERT INTO group_rooms(code,owner_id,members_json,session_json,config_json,state_json,v,updated_at,expires_at) VALUES(?,?,?,?,?,?,1,?,?) ON CONFLICT(code) DO NOTHING',
+      code, u.id, JSON.stringify([u.id]), data, JSON.stringify(cleanGroupConfig(b.config)), JSON.stringify(cleanGroupState({}, now)), now, now + GROUP_TTL).run();
+    if (r.meta?.changes) return json({ ok: true, code, v: 1, now });
+  }
+  return fail('Salon indisponible, réessaie.', 503);
+}
+async function groupView(env, u, r, members, now, withSession = false) {
+  const rows = (await db(env, `SELECT id,username FROM users WHERE id IN (${members.map(() => '?').join(',')})`, ...members).all()).results || [];
+  const name = Object.fromEntries(rows.map((x) => [x.id, x.username]));
+  return { code: r.code, v: r.v, host: r.owner_id === u.id, hostName: name[r.owner_id] || '', me: name[u.id] || '', members: members.map((id) => name[id]).filter(Boolean),
+    state: safeParse(r.state_json) || {}, config: safeParse(r.config_json) || {}, now, ...(withSession ? { session: safeParse(r.session_json) || {} } : {}) };
+}
+async function groupRoom(request, env, u, code, join, m) {
+  const now = Date.now();
+  const r = await db(env, 'SELECT * FROM group_rooms WHERE code=? AND expires_at>?', code, now).first();
+  if (!r) return fail('Séance introuvable ou terminée. Vérifie le code.', 404);
+  const members = safeParse(r.members_json) || [], isMember = members.includes(u.id), host = r.owner_id === u.id;
+  if (join) {
+    if (m !== 'POST') return fail('Méthode non autorisée.', 405);
+    if (!isMember) {
+      if (members.length >= GROUP_MAX) return fail('Cette séance est complète (30 personnes).', 409);
+      if (await limited(env, 'groupj:' + u.id, 30, 3600000)) return fail('Trop d’essais. Réessaie plus tard.', 429);
+      members.push(u.id);
+      await db(env, 'UPDATE group_rooms SET members_json=?,v=v+1 WHERE code=?', JSON.stringify(members), code).run();
+    }
+    return json({ ok: true, ...(await groupView(env, u, r, members, now, true)) });
+  }
+  if (!isMember) return fail('Rejoins d’abord la séance avec son code.', 403);
+  if (m === 'GET') return json({ ok: true, ...(await groupView(env, u, r, members, now, new URL(request.url).searchParams.get('full') === '1')) });
+  if (m === 'PUT') {
+    if (!host) return fail('Seul l’organisateur peut régler ou lancer la séance.', 403);
+    const b = await readJson(request, 20000);
+    const state = b?.state ? JSON.stringify(cleanGroupState(b.state, now)) : r.state_json, config = b?.config ? JSON.stringify(cleanGroupConfig(b.config)) : r.config_json;
+    const row = await db(env, 'UPDATE group_rooms SET state_json=?,config_json=?,v=v+1,updated_at=?,expires_at=? WHERE code=? RETURNING v', state, config, now, now + GROUP_TTL, code).first();
+    return json({ ok: true, v: row?.v || 0, now });
+  }
+  if (m === 'DELETE') {
+    if (host) await db(env, 'DELETE FROM group_rooms WHERE code=?', code).run();
+    else await db(env, 'UPDATE group_rooms SET members_json=?,v=v+1 WHERE code=?', JSON.stringify(members.filter((x) => x !== u.id)), code).run();
+    return json({ ok: true });
+  }
+  return fail('Méthode non autorisée.', 405);
+}
 async function duoCreate(request, env, u) {
   const b = await readJson(request, 200000);
   if (!b || !b.session || typeof b.session !== 'object') return fail('Données invalides.');
@@ -1579,11 +1785,26 @@ async function social(request, env, url, u) {
     const r = p === 'unfollow' ? await db(env, 'DELETE FROM follows WHERE follower_id=? AND followee_id=?', u.id, other.id).run() : await db(env, 'DELETE FROM follows WHERE follower_id=? AND followee_id=?', other.id, u.id).run();
     return json({ ok: true, changed: !!r.meta?.changes });
   }
+  if (p === 'cheer' && m === 'POST') {
+    const b = await readJson(request, 2000), msg = String(b?.msg || '');
+    if (!CHEERS[msg]) return fail('Message inconnu.');
+    const other = await db(env, 'SELECT id FROM users WHERE lower(username)=lower(?)', str(b?.username, 40)).first();
+    if (!other || other.id === u.id || !(await mutual(env, u.id, other.id))) return fail('Tu peux encourager seulement un partenaire : vous vous suivez tous les deux.', 403);
+    if (await limited(env, 'cheer:' + u.id, 30, DAY) || await limited(env, `cheer:${u.id}:${other.id}`, 3, DAY)) return fail('Assez d’encouragements pour aujourd’hui 🙂', 429);
+    await db(env, 'INSERT INTO cheers(id,from_id,to_id,msg,created_at,seen) VALUES(?,?,?,?,?,0)', uid(), u.id, other.id, msg, Date.now()).run();
+    return json({ ok: true });
+  }
+  if (p === 'cheers' && m === 'GET') {
+    const since = Date.now() - 60 * DAY;
+    const r = (await db(env, 'SELECT c.id,c.msg,c.created_at,c.seen,us.username FROM cheers c JOIN users us ON us.id=c.from_id WHERE c.to_id=? AND c.created_at>? ORDER BY c.created_at DESC LIMIT 50', u.id, since).all()).results || [];
+    if (r.some((x) => !x.seen)) await db(env, 'UPDATE cheers SET seen=1 WHERE to_id=? AND seen=0', u.id).run();
+    return json({ ok: true, cheers: r.map((x) => ({ id: x.id, from: x.username, text: CHEERS[x.msg] || '', at: x.created_at, fresh: !x.seen })).filter((x) => x.text) });
+  }
   const tz = clamp(url.searchParams.get('tz'), -840, 840, 0);
   if (p === 'feed' && m === 'GET') {
     const r = await db(env, "SELECT us.id,us.username FROM follows f JOIN users us ON us.id=f.followee_id WHERE f.follower_id=? AND f.status='accepted' ORDER BY us.username LIMIT 30", u.id).all();
     const people = [];
-    for (const t of r.results) { const c = await cardFor(env, u.id, t.id, t.username, tz); if (c) people.push(c); }
+    for (const t of r.results) { const c = await cardFor(env, u.id, t.id, t.username, tz); if (c) people.push({ ...c, mutual: await mutual(env, u.id, t.id) }); }
     return json({ ok: true, people });
   }
   const one = p.match(/^user\/([^/]{1,40})$/);
@@ -1593,6 +1814,59 @@ async function social(request, env, url, u) {
     return card ? json({ ok: true, person: card }) : fail('Profil introuvable ou privé.', 404);
   }
   return fail('Route inconnue.', 404);
+}
+
+/** Partenaires : chacun suit l'autre, et les deux abonnements sont acceptés (accord des deux personnes). */
+async function mutual(env, a, b) {
+  const r = await db(env, "SELECT COUNT(*) AS n FROM follows WHERE status='accepted' AND ((follower_id=? AND followee_id=?) OR (follower_id=? AND followee_id=?))", a, b, b, a).first();
+  return (r?.n || 0) >= 2;
+}
+
+/* ═════════════ Idées à voter (publiées par les administrateurs) ═════════════ */
+const IDEA_STATUS = ['open', 'planned', 'done'];
+async function ideasList(env, u) {
+  const r = (await db(env, 'SELECT i.id,i.title,i.detail,i.status,i.updated_at,(SELECT COUNT(*) FROM idea_votes v WHERE v.idea_id=i.id) AS votes,(SELECT COUNT(*) FROM idea_votes v WHERE v.idea_id=i.id AND v.user_id=?) AS mine FROM ideas i ORDER BY i.status, votes DESC, i.updated_at DESC LIMIT 100', u.id).all()).results || [];
+  return json({ ok: true, ideas: r.map((x) => ({ id: x.id, title: x.title, detail: x.detail, status: x.status, votes: x.votes, mine: !!x.mine, updatedAt: x.updated_at })) });
+}
+async function ideaVote(env, u, id) {
+  if (u.guest) return fail('Compte nécessaire.', 403);
+  const idea = await db(env, 'SELECT status FROM ideas WHERE id=?', id).first();
+  if (!idea) return fail('Idée introuvable.', 404);
+  if (idea.status !== 'open') return fail('Cette idée n’est plus ouverte au vote.', 409);
+  if (await limited(env, 'vote:' + u.id, 60, DAY)) return fail('Trop de votes aujourd’hui.', 429);
+  const had = await db(env, 'DELETE FROM idea_votes WHERE idea_id=? AND user_id=?', id, u.id).run();
+  if (!had.meta?.changes) await db(env, 'INSERT INTO idea_votes(idea_id,user_id,created_at) VALUES(?,?,?)', id, u.id, Date.now()).run();
+  const n = await db(env, 'SELECT COUNT(*) AS n FROM idea_votes WHERE idea_id=?', id).first();
+  return json({ ok: true, voted: !had.meta?.changes, votes: n?.n || 0 });
+}
+async function ideaSave(request, env, u) {
+  const b = await readJson(request, 6000), title = str(b?.title, 120), detail = str(b?.detail, 1000), status = IDEA_STATUS.includes(b?.status) ? b.status : 'open';
+  if (title.length < 3) return fail('Titre trop court.');
+  const id = b?.id && /^[\w-]{1,64}$/.test(b.id) ? b.id : 'idea-' + uid().slice(0, 16), now = Date.now();
+  const old = await db(env, 'SELECT title,detail,status FROM ideas WHERE id=?', id).first();
+  await env.DB.batch([
+    db(env, 'INSERT INTO ideas(id,title,detail,status,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,detail=excluded.detail,status=excluded.status,updated_at=excluded.updated_at', id, title, detail, status, now, now),
+    auditStmt(env, u, old ? 'idea-edit' : 'idea-create', { type: 'idea', id, before: old || null, after: { title, detail, status } }),
+  ]);
+  return json({ ok: true, id });
+}
+
+/* ═════════════ Statistiques anonymes (administrateurs) ═════════════ */
+// Uniquement des totaux sur l'ensemble des comptes ; un groupe de moins de 3 personnes est affiché « moins de 3 ».
+const SMALL = 3;
+const hide = (n) => (n > 0 && n < SMALL ? null : n);
+async function adminStats(env) {
+  const now = Date.now(), d7 = now - 7 * DAY, d30 = now - 30 * DAY;
+  const one = async (sql, ...a) => (await db(env, sql, ...a).first())?.n || 0;
+  const users = await one('SELECT COUNT(*) AS n FROM users'), active7 = await one('SELECT COUNT(*) AS n FROM users WHERE last_seen>?', d7), active30 = await one('SELECT COUNT(*) AS n FROM users WHERE last_seen>?', d30);
+  const sessions7 = await one('SELECT COUNT(*) AS n FROM history WHERE started_at>?', d7), sessions30 = await one('SELECT COUNT(*) AS n FROM history WHERE started_at>?', d30);
+  const people30 = await one('SELECT COUNT(DISTINCT user_id) AS n FROM history WHERE started_at>?', d30);
+  const minutes30 = Math.round(((await db(env, 'SELECT COALESCE(SUM(duration_seconds),0) AS n FROM history WHERE started_at>?', d30).first())?.n || 0) / 60);
+  const acts = ((await db(env, "SELECT json_extract(data_json,'$.activity') AS a, COUNT(*) AS n, COUNT(DISTINCT user_id) AS p FROM history WHERE started_at>? GROUP BY a ORDER BY n DESC LIMIT 12", d30).all()).results || [])
+    .map((x) => ({ activity: x.a || 'autre', label: ACTIVITIES[x.a]?.label || (x.a ? 'Activité personnelle' : 'Sans activité'), sessions: x.p < SMALL ? null : x.n, people: hide(x.p) }));
+  const weeks = [];
+  for (let k = 7; k >= 0; k--) { const to = now - k * 7 * DAY, from = to - 7 * DAY; weeks.push({ from, newUsers: hide(await one('SELECT COUNT(*) AS n FROM users WHERE created_at>? AND created_at<=?', from, to)), sessions: await one('SELECT COUNT(*) AS n FROM history WHERE started_at>? AND started_at<=?', from, to) }); }
+  return json({ ok: true, at: now, users: hide(users), active7: hide(active7), active30: hide(active30), sessions7, sessions30, people30: hide(people30), minutes30: people30 < SMALL ? null : minutes30, activities: acts, weeks, small: SMALL });
 }
 
 /** Ce que `viewer` a le droit de voir de `targetId` : le serveur applique le choix de la personne (jamais l'interface). */

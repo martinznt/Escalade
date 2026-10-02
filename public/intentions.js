@@ -24,6 +24,9 @@ export const SPORT_INTENTS = {
     I('poussee', '💪', 'Pectoraux et poussée', { poussee_horizontale: 1, poussee_verticale: 0.6 }), I('epaules-f', '🏋️', 'Épaules', { poussee_verticale: 0.8, stabilite_epaules: 0.8 }), shared.gainage, shared.explosivite, I('bras', '💪', 'Bras', { blocage: 0.6, poussee_horizontale: 0.4, tirage_vertical: 0.4 })],
   conditioning: [I('cardio', '❤️', 'Cardio', { endurance_aerobie: 1 }), I('fullbody', '🔄', 'Tout le corps', { force_jambes: 0.6, tirage_vertical: 0.6, poussee_horizontale: 0.6, gainage_anterieur: 0.6 }), shared.gainage, shared.mobilite,
     I('equilibre', '⚖️', 'Équilibre', { equilibre: 1 }), I('figures', '🤸', 'Figures (front lever, drapeau…)', { controle_scapulaire: 1, gainage_anterieur: 0.7, tirage_vertical: 0.5 }), shared.explosivite, shared.epaules],
+  calisthenics: [I('figures', '🤸', 'Figures (front lever, planche, drapeau…)', { controle_scapulaire: 1, gainage_anterieur: 0.8, tirage_vertical: 0.5 }), I('tirage', '🧗', 'Tractions et tirage', { tirage_vertical: 1, blocage: 0.5, tirage_unilateral: 0.4 }),
+    I('poussee', '🙌', 'Dips, pompes, poussée', { poussee_horizontale: 1, poussee_verticale: 0.8 }), I('muscleup', '🔝', 'Muscle-up et explosivité', { puissance_haut: 1, tirage_vertical: 0.6, poussee_verticale: 0.5 }),
+    I('handstand', '🙃', 'Équilibre sur les mains', { equilibre: 1, poussee_verticale: 0.6, stabilite_epaules: 0.6 }), I('unbras', '☝️', 'Un bras (traction, pompe)', { tirage_unilateral: 1, blocage: 0.6 }), shared.gainage, shared.mobilite, shared.epaules],
   running: [I('fondamentale', '🐢', 'Endurance fondamentale', { endurance_aerobie: 1 }), I('fractionne', '⚡', 'Fractionné / VMA', { vitesse: 1, seuil: 0.6 }), I('seuil', '🔥', 'Seuil', { seuil: 1 }),
     I('cotes', '⛰️', 'Côtes', { force_jambes: 0.8, seuil: 0.6 }), I('foulee', '👟', 'Technique de foulée', { technique_course: 1 }), I('renfo', '🦵', 'Renfo du coureur', { force_jambes: 0.7, chaine_posterieure: 0.6, gainage_lateral: 0.5 })],
   swimming: [I('technique', '🏊', 'Technique', { technique_nage: 1 }), I('respiration', '🫧', 'Respiration', { technique_nage: 0.8, endurance_aerobie: 0.4 }), I('endurance', '🔋', 'Endurance', { endurance_aerobie: 1 }), I('vitesse', '⚡', 'Vitesse', { vitesse: 1 })],
@@ -34,7 +37,7 @@ export function intentsFor(activityId, extra = []) {
   const more = extra.filter((x) => x && x.label && (!x.activityId || x.activityId === activityId)).map((x) => ({ id: x.id, emoji: x.emoji || '📌', label: x.label, caps: x.caps || {}, custom: x.source || 'perso' }));
   return [...base, ...more];
 }
-export const MUSCLE_GROUPS = [['bras', 'Bras', ['biceps', 'triceps']], ['avantbras', 'Avant-bras et doigts', ['avant_bras_flech', 'avant_bras_ext']], ['epaules', 'Épaules', ['deltoide_ant', 'deltoide_post', 'coiffe']],
+export const MUSCLE_GROUPS = [['bras', 'Bras', ['biceps', 'triceps']], ['avantbras', 'Avant-bras et doigts', ['avant_bras_flech', 'avant_bras_ext']], ['epaules', 'Épaules', ['deltoide_ant', 'deltoide_lat', 'deltoide_post', 'coiffe']],
   ['dos', 'Dos', ['grand_dorsal', 'trapezes', 'rhomboides']], ['pecs', 'Pectoraux', ['pectoraux', 'grand_dentele']], ['abdos', 'Abdos', ['grand_droit', 'obliques']], ['lombaires', 'Lombaires', ['lombaires']],
   ['fessiers', 'Fessiers', ['grand_fessier', 'moyen_fessier']], ['cuisses', 'Cuisses', ['quadriceps', 'ischios', 'adducteurs']], ['mollets', 'Mollets', ['mollets', 'tibial']]];
 /** Groupes de muscles → capacités (d'après le lien muscle → capacité du modèle). */

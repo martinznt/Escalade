@@ -85,6 +85,8 @@ export function parseCommand(raw, now = new Date()) {
   let m;
   if ((m = text.match(/\b(?:cherche|recherche|trouve|retrouve)\s+(.+)$/))) add({ type: 'search', query: cleanQuery(m[1]), summary: `Rechercher « ${cleanQuery(m[1])} ».` }, 2.5);
 
+  // 8.30 : refaire une séance passée (« refais ma dernière séance », « la même que mardi », « celle d'hier »).
+  if (/\b(refai\w*|refaire|recommence\w*|la meme (?:que|qu'|seance)|celle d'hier|celle de (?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche))\b/.test(text) && !/\bsupprim|\befface/.test(text)) add({ type: 'redo', query: text, summary: 'Refaire une séance de ton historique (mêmes exercices et charges).' }, 3.6);
   // Modifications de la séance ouverte
   if (/\bsupprim|\befface/.test(text) && /\bderniere seance\b/.test(text)) add({ type: 'deleteLastHistory', confirm: true, summary: 'Supprimer la dernière séance de ton historique.' }, 4);
   if ((m = text.match(/\b(?:remplace|change|echange)\s+(.+?)(?:\s+par\s+(.+))?$/))) { const q = cleanQuery(m[1]); if (q && !/^(la seance|ma seance)$/.test(q)) add({ type: 'swapExercise', query: q, by: m[2] ? cleanQuery(m[2]) : '', summary: `Remplacer « ${q} » dans la séance ouverte.` }, 3); }

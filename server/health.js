@@ -14,7 +14,8 @@ export function dataHealth(items = [], { library = LIBRARY, caps = CAPACITIES, m
   const issues = [], add = (x) => issues.push(x);
   const libIds = new Set(library.map((x) => x.id));
   // 1. Exercices sans capacités (bibliothèque et exercices communs).
-  for (const x of library) if (!Object.keys(x.caps || {}).length) add({ type: 'no-caps', severity: 'mid', target: `exercise/${x.id}`, text: `Exercice « ${x.name} » sans capacité liée : il ne peut pas être proposé selon un objectif.` });
+  // Échauffement et retour au calme sont placés par la structure de la séance, pas choisis pour un objectif : non concernés.
+  for (const x of library) if (x.role === 'main' && !Object.keys(x.caps || {}).length) add({ type: 'no-caps', severity: 'mid', target: `exercise/${x.id}`, text: `Exercice « ${x.name} » sans capacité liée : il ne peut pas être proposé selon un objectif.` });
   for (const g of items.filter((i) => i.kind === 'exercise' && !i.hidden && i.data)) if (!Object.keys(g.data.caps || {}).length) add({ type: 'no-caps', severity: 'mid', target: `exercise/${g.id}`, text: `Exercice commun « ${g.data.name} » sans capacité liée.` });
   // 2. Relations contradictoires : capacités inconnues dans les liens.
   for (const x of library) for (const c of Object.keys(x.caps || {})) if (!caps[c]) add({ type: 'bad-relation', severity: 'high', target: `exercise/${x.id}`, text: `« ${x.name} » renvoie à une capacité inconnue (« ${c} »).` });

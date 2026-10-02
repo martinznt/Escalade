@@ -24,3 +24,14 @@ export function cleanDuoState(s, now = Date.now()) {
     why: x.why === 'skip' ? 'skip' : 'set',
   };
 }
+
+/* ───── Séance à plusieurs (groupe, 2 à 30 personnes, un organisateur) ───── */
+export const GROUP_TTL = 6 * 3600000;
+/** État partagé du groupe, écrit par l'organisateur seul : salle d'attente, déroulé lancé, pause, fin. */
+export function cleanGroupState(s, now = Date.now()) {
+  const x = s && typeof s === 'object' ? s : {};
+  const phase = ['lobby', 'run', 'done'].includes(x.phase) ? x.phase : 'lobby';
+  const end = Number(x.end);
+  const roster = (Array.isArray(x.roster) ? x.roster : []).map((n) => String(n ?? '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 40)).filter(Boolean).slice(0, 30);
+  return { phase, step: int(x.step, 0, 5000), end: Number.isFinite(end) && Math.abs(end - now) < 6 * 3600000 ? Math.round(end) : 0, paused: !!x.paused, remaining: int(x.remaining, 0, 3600000), roster, startedAt: int(x.startedAt, 0, 9e15) };
+}

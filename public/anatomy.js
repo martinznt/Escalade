@@ -11,6 +11,7 @@ const UPPERARM = 'M30,58 C28,64 28,72 30,78 C32,78 34,74 35,70 C35,65 35,60 33,5
 // [muscle, chemin, symétrique ?]
 const FRONT = [
   ['deltoide_ant', 'M44,40 C37,41 31,44 30,51 C31,56 33,58 35,58 C37,52 40,46 45,43 Z', true],
+  ['deltoide_lat', 'M33,44 C30,47 29,51 29,55 C31,57 33,58 34,57 C33,53 33,49 35,45 Z', true],
   ['pectoraux', 'M45,43 C50,41 56,41 59,42 L59,58 C54,61 46,60 40,57 C40,51 42,46 45,43 Z', true],
   ['biceps', UPPERARM, true],
   ['avant_bras_flech', FOREARM, true],
@@ -25,6 +26,7 @@ const FRONT = [
 const BACK = [
   ['trapezes', 'M50,34 C54,32 58,31 60,31 C62,31 66,32 70,34 C73,38 76,40 78,41 L70,46 L66,64 L60,70 L54,64 L50,46 L42,41 C44,40 47,38 50,34 Z', false],
   ['deltoide_post', 'M42,41 C36,42 31,45 30,52 C31,57 33,58 35,58 C37,52 40,47 44,44 Z', true],
+  ['deltoide_lat', 'M33,44 C30,47 29,51 29,55 C31,57 33,58 34,57 C33,53 33,49 35,45 Z', true],
   ['coiffe', 'M44,46 C41,48 40,52 41,55 L47,55 C48,51 47,48 44,46 Z', true],
   ['rhomboides', 'M52,48 L57,50 L57,62 L54,62 Z', true],
   ['grand_dorsal', 'M41,56 C40,66 41,76 44,86 C48,92 53,95 57,96 L57,74 C53,68 47,62 41,56 Z', true],
@@ -68,3 +70,26 @@ export function anatomySvg({ primary = [], secondary = [], heat = null } = {}) {
 }
 export const FRONT_IDS = FRONT.map((x) => x[0]);
 export const BACK_IDS = BACK.map((x) => x[0]);
+
+/* ───────── 8.30 : carte des douleurs (articulations sur la silhouette de face) ───────── */
+// Positions des zones sur la vue de face (côté droit de la personne = gauche de l'image). « dos » : marque au centre.
+const JOINTS = { neck: [[60, 31]], shoulders: [[36, 46], [84, 46]], elbows: [[29, 80], [91, 80]], wrists: [[25, 113], [95, 113]], fingers: [[24, 128], [96, 128]],
+  back: [[60, 84]], hips: [[46, 107], [74, 107]], knees: [[48, 172], [72, 172]], ankles: [[48, 236], [72, 236]] };
+export const PAIN_ZONES = Object.keys(JOINTS);
+/**
+ * marks : { zone: { level 0–10, side '', 'gauche', 'droite', 'deux', label } }. Chaque zone est un bouton (data-act) ;
+ * la note est écrite dans le rond (jamais la couleur seule). Aucune donnée libre dans le SVG : zones connues, nombres.
+ */
+export function painMapSvg(marks = {}, labels = {}) {
+  const parts = [`<path class="sil" d="${HALF}"/><path class="sil" d="${HALF}" transform="${MIRROR}"/><ellipse class="sil" cx="60" cy="17" rx="10" ry="12.5"/>`];
+  for (const [z, pts] of Object.entries(JOINTS)) {
+    const m = marks[z], lv = m ? Math.max(0, Math.min(10, Math.round(Number(m.level) || 0))) : null, cls = lv == null ? 'l0' : lv >= 7 ? 'l3' : lv >= 4 ? 'l2' : lv >= 1 ? 'l1' : 'l0 ok';
+    // Vue de face : la droite de la personne est à gauche de l'image.
+    const which = pts.length < 2 || !m || !m.side || m.side === 'deux' ? pts : m.side === 'droite' ? [pts[0]] : [pts[1]];
+    const name = esc(labels[z] || z), t = `<title>${name}${lv != null ? ` : ${lv}/10` : ' : toucher pour noter une douleur'}</title>`;
+    const dots = (lv == null ? pts : which).map(([x, y]) => `<circle class="pz ${cls}" cx="${x}" cy="${y}" r="${lv == null ? 5 : 7}"/>${lv ? `<text x="${x}" y="${y + 2.4}" class="pzt ${cls}" text-anchor="middle">${lv}</text>` : ''}`).join('');
+    const hits = pts.map(([x, y]) => `<circle class="pzhit" cx="${x}" cy="${y}" r="7.5"/>`).join(''); // zone de toucher plus grande que le rond
+    parts.push(`<g class="pzg" data-act="painTap" data-id="${z}">${t}${hits}${dots}</g>`);
+  }
+  return `<svg class="painmap" viewBox="0 0 120 252" role="img" aria-label="Carte des douleurs (vue de face)">${parts.join('')}</svg>`;
+}

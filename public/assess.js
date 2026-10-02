@@ -5,6 +5,7 @@
 
 import { METRICS, SKILLS } from './model.js';
 import { sortedLevels, gradeSnapshot, toReference, levelFromReference } from './grading.js';
+import { physiqueMeasures } from './physique.js';
 
 const DAY = 86400000;
 /** Envies du questionnaire (config.main.goals) : libellé et ce qu'on cherche à savoir. */
@@ -16,6 +17,8 @@ export const ENVIES = {
   forme: { label: 'Rester en forme', emoji: '🙂', know: 'un état général : force, gainage, cardio, souplesse' },
   figure: { label: 'Réussir une figure', emoji: '🤸', know: 'les prérequis de la figure choisie' },
   poids: { label: 'Perdre du poids', emoji: '⚖️', know: 'l’évolution de ton poids, de ton tour de taille et de ton cardio' },
+  muscle: { label: 'Prendre du muscle', emoji: '🏋️', know: 'tes mensurations, ton poids et ta force sur les grands mouvements' },
+  physique: { label: 'Changer ma silhouette', emoji: '🪞', know: 'les mensurations qui correspondent à la silhouette que tu vises' },
   sante: { label: 'Être en meilleure santé', emoji: '❤️', know: 'des repères simples de santé et de forme' },
 };
 /** Protocoles pour les métriques qui n'en ont pas dans le modèle. */
@@ -44,6 +47,7 @@ const BATTERY = {
   mobilite: [['souplesse_avant', 'la souplesse de l’arrière des jambes et des hanches'], ['mains_dos', 'la mobilité de tes épaules'], ['pistol_squat', 'la mobilité des chevilles et des hanches en charge']],
   forme: [['max_pompes', 'ta force générale'], ['planche_avant_bras', 'ton gainage'], ['cooper_12', 'ton cardio'], ['souplesse_avant', 'ta souplesse'], ['fc_repos', 'ton cœur au repos']],
   poids: [['body_weight', 'l’évolution de ton poids'], ['tour_taille', 'l’évolution de ton tour de taille (souvent plus parlant que le poids)'], ['cooper_12', 'ton cardio'], ['fc_repos', 'ton cœur au repos']],
+  muscle: [['body_weight', 'l’évolution de ton poids (la prise de muscle se voit aussi sur la balance)'], ['tour_bras', 'ton tour de bras'], ['tour_poitrine', 'ton tour de poitrine'], ['tour_cuisse', 'ton tour de cuisse'], ['max_tractions', 'ta force de tirage'], ['max_pompes', 'ta force de poussée'], ['squat_1rm', 'ta charge max au squat', ['strength']], ['couche_1rm', 'ta charge max au développé couché', ['strength']]],
   sante: [['fc_repos', 'ton cœur au repos'], ['planche_avant_bras', 'ton gainage (dos)'], ['souplesse_avant', 'ta souplesse'], ['cooper_12', 'ton cardio']],
 };
 /** Tests déconseillés quand une zone est à ménager, avec leur remplaçant (ou rien). */
@@ -62,19 +66,20 @@ export const ZONE_WORD = { fingers: 'doigts', shoulders: 'épaules', elbows: 'co
  * envies : ids d'ENVIES ; acts : activités ; avoid : { fingers: true, … } ; skillIds : figures visées.
  * Retourne [{ metricId, why, envie, swapped?:{ from, zone } }] sans doublon, dans l'ordre d'importance.
  */
-export function batteryFor({ envies = [], acts = [], avoid = {}, skillIds = [] } = {}) {
+export function batteryFor({ envies = [], acts = [], avoid = {}, skillIds = [], physique = [] } = {}) {
   const out = [], seen = new Set();
   const zones = Object.keys(ZONE_BLOCK).filter((z) => avoid?.[z]);
   const add = (metricId, why, envie, swapped = null) => {
     if (!METRICS[metricId] || seen.has(metricId)) return;
     seen.add(metricId); out.push({ metricId, why, envie, ...(swapped ? { swapped } : {}) });
   };
-  const list = [...new Set(envies.filter((e) => BATTERY[e] || e === 'figure'))];
+  const list = [...new Set(envies.filter((e) => BATTERY[e] || e === 'figure' || e === 'physique'))];
   if (!list.length && acts.some((a) => a.startsWith('climbing'))) list.push('climb');
   if (!list.length) list.push('forme');
   for (const e of list) {
     const rows = e === 'figure'
       ? skillIds.flatMap((id) => (SKILLS[id]?.criteria || []).map((c) => [c.metric, `un prérequis de « ${SKILLS[id].label} »`]))
+      : e === 'physique' ? (physique.length ? physiqueMeasures(physique) : [['tour_taille', 'ta taille'], ['tour_epaules', 'tes épaules'], ['body_weight', 'ton poids']])
       : BATTERY[e];
     for (const [id, why, when] of rows) {
       if (when && !when.some((a) => acts.includes(a))) continue;
@@ -98,7 +103,7 @@ export function profileInputs(ctx) {
   const envies = Array.isArray(main.goals) ? main.goals.filter((g) => ENVIES[g]) : [];
   const skillIds = (ctx.goals || []).filter((g) => g.type === 'skill' && (g.status || 'active') === 'active' && SKILLS[g.skillId]).map((g) => g.skillId);
   if (skillIds.length && !envies.includes('figure')) envies.push('figure');
-  return { envies, acts: Object.keys(ctx.activities || {}), avoid: ctx.settings?.avoid || {}, skillIds };
+  return { envies, acts: Object.keys(ctx.activities || {}), avoid: ctx.settings?.avoid || {}, skillIds, physique: Array.isArray(ctx.config?.body?.physique) ? ctx.config.body.physique : [] };
 }
 
 /**

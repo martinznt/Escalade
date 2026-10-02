@@ -178,7 +178,7 @@ export async function seanceToCatalog(s) {
 ACT.seanceToCatalog = (el) => { const s = S.seances.items.find((x) => x.id === el.dataset.id); if (s) seanceToCatalog(s); };
 
 /* ───────── Intentions et formats (écran administrateur) ───────── */
-// Admin › Modifier l'app sans code : trois pages claires (contenu, textes et apparence, ce qui a été modifié).
+// Paramètres › Admin, groupe « Modifier l’app sans code » : trois pages claires (contenu, textes et apparence, ce qui a été modifié).
 const CHANGE_KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', hint: '💡 Raccourci', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
 export const globalChanges = () => GL.items.slice().sort((a, b) => b.updatedAt - a.updatedAt);
 /** Contenu de l'app : où modifier chaque type, et les intentions par sport. */
@@ -189,7 +189,7 @@ export function vAdminContent() {
     ${menuList([
       ['allGo', '', '💪', 'Exercices', 'Ouvre un exercice puis ✏️ Modifier ; ou crée-en un pour tout le monde', 'library/exercises'],
       ['exNewGlobal', '', '＋', 'Nouvel exercice pour tout le monde', 'Fiche complète : consignes, erreurs, matériel, capacités'],
-      ['allGo', '', '🗂', 'Séances prêtes', 'Ouvre une séance du catalogue puis ✏️ Modifier', 'library/catalog'],
+      ['allGo', '', '📖', 'Carnet de séances', 'Ouvre une séance du carnet puis ✏️ Modifier', 'library/catalog'],
       ['allGo', '', '❓', 'Questions fréquentes et sources', 'Dans Aide : ✏️ sur chaque question et chaque source, ＋ pour en ajouter', 'settings/help'],
       ['allGo', '', '🧗', 'Cotations et styles', 'Dans Profil › Mes sports : crée un système ou un style, puis « 🌍 Pour tout le monde »', 'profile/activities'],
     ])}
@@ -215,7 +215,7 @@ export function vAdminChanges() {
 }
 ACT.admAct = (el) => { S.admAct = el.dataset.v; render(); };
 /* Raccourcis ajoutés par un administrateur : sur une page, une indication qui mène à une autre (pour tout le monde). */
-const ROUTES = [['home/dash', 'Accueil'], ['progress/summary', 'Progrès'], ['library/home', 'Bibliothèque'], ['library/seances', 'Mes séances'], ['library/climbplan', 'Créer une séance'], ['library/exercises', 'Exercices'], ['library/catalog', 'Séances prêtes'], ['profile/home', 'Profil'], ['profile/goals', 'Objectifs'], ['profile/perfs', 'Mesures'], ['profile/climbing', 'Carnet'], ['profile/equipment', 'Mes lieux'], ['settings/main', 'Paramètres']];
+const ROUTES = [['home/dash', 'Accueil'], ['progress/summary', 'Progrès'], ['library/home', 'Bibliothèque'], ['library/seances', 'Mes séances'], ['library/climbplan', 'Créer une séance'], ['library/exercises', 'Exercices'], ['library/catalog', 'Carnet de séances'], ['profile/home', 'Profil'], ['profile/goals', 'Objectifs'], ['profile/perfs', 'Mesures'], ['profile/climbing', 'Carnet'], ['profile/equipment', 'Mes lieux'], ['settings/main', 'Paramètres']];
 ACT.hintNew = () => { if (!isAdmin()) return; const opt = (sel) => ROUTES.map(([k, l]) => h`<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`);
   openSheet(h`<form data-submit="hintGo" class="stack"><h2 style="margin:0">💡 Nouveau raccourci</h2><p class="small muted">Il s’affiche en haut de la page choisie, pour tout le monde ; chacun peut le masquer.</p>
     <label>Sur la page<select name="where">${opt('home/dash')}</select></label><label>Texte<input name="text" required maxlength="120" placeholder="Ex. Note ton max en bloc ici"></label>
@@ -337,7 +337,7 @@ ACT.propBack = () => { propBar(false); if (S.propCur) ACT.propOpen({ dataset: { 
 /** Modifier l'endroit joint : la fiche de l'exercice ou de la séance prête s'il s'agit de l'une d'elles, sinon le texte. */
 ACT.propEditPlace = () => {
   const el = placeEl(S.propCur?.payload?.sel || ''); propBar(false);
-  if (!el) { toast('Endroit introuvable sur cette page : va le chercher, puis utilise Paramètres › Admin › Modifier les textes.', 5000); return; }
+  if (!el) { toast('Endroit introuvable sur cette page : va le chercher, puis utilise Paramètres › Admin › Textes et apparence.', 5000); return; }
   const ex = el.closest('[data-act=libInfo][data-id], [data-act=gxEdit][data-id]'), cat = el.closest('[data-act=catOpen][data-id]');
   if (ex && byId(ex.dataset.id)) { closeSheet(); ACT.gxEdit({ dataset: { id: ex.dataset.id } }); return; }
   if (cat) { closeSheet(); ACT.gcEdit?.({ dataset: { id: cat.dataset.id } }); return; }
@@ -401,13 +401,15 @@ ACT.announceNew = () => {
     <label>Titre<input name="title" maxlength="100" required placeholder="Ex. Nouvelle salle ajoutée"></label>
     <label>Message<textarea name="body" rows="4" maxlength="1200" placeholder="Ce qui change, et à quoi ça sert"></textarea></label>
     <label class="chk"><input type="checkbox" name="update"> C’est une note de mise à jour (elle apparaît aussi dans « Toutes les mises à jour »)</label>
+    <label class="chk"><input type="checkbox" name="banner"> Afficher aussi en bandeau en haut de l’app (ex. maintenance prévue)</label>
+    <label>Bandeau affiché jusqu’au (facultatif)<input type="date" name="until"></label>
     <p class="tiny muted">Tout le monde la reçoit dans ses notifications 🔔, et sur son téléphone s’il a activé les nouveautés.</p>
     <button class="btn pri big">Envoyer à tout le monde</button></form>`);
 };
 SUBMIT.announceGo = async (f) => {
   const d = Object.fromEntries(new FormData(f));
   if (!(await ask('Envoyer cette annonce à tout le monde ?', { ok: 'Envoyer' }))) return;
-  try { await putGlobal('announce', 'g-' + uid().slice(0, 12), { data: { title: d.title.trim(), body: (d.body || '').trim(), update: !!d.update } }); closeSheet(); toast('Annonce envoyée à tout le monde'); }
+  try { await putGlobal('announce', 'g-' + uid().slice(0, 12), { data: { title: d.title.trim(), body: (d.body || '').trim(), update: !!d.update, ...(d.banner ? { banner: true, until: d.until ? new Date(d.until + 'T23:59:59').getTime() : 0 } : {}) } }); closeSheet(); toast('Annonce envoyée à tout le monde'); }
   catch (e) { toast(e.message, 4500, 'bad'); }
 };
 export { announcements };
