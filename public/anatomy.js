@@ -70,3 +70,26 @@ export function anatomySvg({ primary = [], secondary = [], heat = null } = {}) {
 }
 export const FRONT_IDS = FRONT.map((x) => x[0]);
 export const BACK_IDS = BACK.map((x) => x[0]);
+
+/* ───────── 8.30 : carte des douleurs (articulations sur la silhouette de face) ───────── */
+// Positions des zones sur la vue de face (côté droit de la personne = gauche de l'image). « dos » : marque au centre.
+const JOINTS = { neck: [[60, 31]], shoulders: [[36, 46], [84, 46]], elbows: [[29, 80], [91, 80]], wrists: [[25, 113], [95, 113]], fingers: [[24, 128], [96, 128]],
+  back: [[60, 84]], hips: [[46, 107], [74, 107]], knees: [[48, 172], [72, 172]], ankles: [[48, 236], [72, 236]] };
+export const PAIN_ZONES = Object.keys(JOINTS);
+/**
+ * marks : { zone: { level 0–10, side '', 'gauche', 'droite', 'deux', label } }. Chaque zone est un bouton (data-act) ;
+ * la note est écrite dans le rond (jamais la couleur seule). Aucune donnée libre dans le SVG : zones connues, nombres.
+ */
+export function painMapSvg(marks = {}, labels = {}) {
+  const parts = [`<path class="sil" d="${HALF}"/><path class="sil" d="${HALF}" transform="${MIRROR}"/><ellipse class="sil" cx="60" cy="17" rx="10" ry="12.5"/>`];
+  for (const [z, pts] of Object.entries(JOINTS)) {
+    const m = marks[z], lv = m ? Math.max(0, Math.min(10, Math.round(Number(m.level) || 0))) : null, cls = lv == null ? 'l0' : lv >= 7 ? 'l3' : lv >= 4 ? 'l2' : lv >= 1 ? 'l1' : 'l0 ok';
+    // Vue de face : la droite de la personne est à gauche de l'image.
+    const which = pts.length < 2 || !m || !m.side || m.side === 'deux' ? pts : m.side === 'droite' ? [pts[0]] : [pts[1]];
+    const name = esc(labels[z] || z), t = `<title>${name}${lv != null ? ` : ${lv}/10` : ' : toucher pour noter une douleur'}</title>`;
+    const dots = (lv == null ? pts : which).map(([x, y]) => `<circle class="pz ${cls}" cx="${x}" cy="${y}" r="${lv == null ? 5 : 7}"/>${lv ? `<text x="${x}" y="${y + 2.4}" class="pzt ${cls}" text-anchor="middle">${lv}</text>` : ''}`).join('');
+    const hits = pts.map(([x, y]) => `<circle class="pzhit" cx="${x}" cy="${y}" r="7.5"/>`).join(''); // zone de toucher plus grande que le rond
+    parts.push(`<g class="pzg" data-act="painTap" data-id="${z}">${t}${hits}${dots}</g>`);
+  }
+  return `<svg class="painmap" viewBox="0 0 120 252" role="img" aria-label="Carte des douleurs (vue de face)">${parts.join('')}</svg>`;
+}

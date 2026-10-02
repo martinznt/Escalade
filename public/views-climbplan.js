@@ -16,6 +16,7 @@ import { byId } from './library.js';
 import { startPlayer } from './player.js';
 import { surprise, surpriseClimbParts, AIMS } from './surprise.js';
 import { intentsFor, AVOID_ZONES, FORMES } from './intentions.js';
+import { activePains, readiness, ZONE_LABEL } from './coachbrain.js';
 import { activeGoals, goalLabel } from './brain.js';
 import { presetParts } from './format.js';
 import { extraIntents } from './views-gen.js';
@@ -65,6 +66,10 @@ function prefill(c) {
   const mins = Number(S.settings.defaultMinutes) || Number(main.durations?.[0]) || 0;
   if (mins) c.minutes = Math.max(10, Math.min(240, mins));
   c.zones = Object.entries(S.settings.avoid || {}).filter(([, v]) => v).map(([k]) => k);
+  // 8.30 : douleurs notées (7 derniers jours, 3/10 ou plus) → zones pré-cochées ; check-in du matin → forme pré-remplie.
+  c.painZones = activePains(x.pains, x.now).map((p) => p.zone).filter((z) => AVOID_ZONES.some(([k]) => k === z) && !c.zones.includes(z));
+  c.zones = [...c.zones, ...c.painZones];
+  const rd = readiness(x); if (rd.checked) { c.forme = rd.level === 'low' ? 'tired' : rd.level === 'top' ? 'fresh' : 'ok'; c.formeFrom = 'checkin'; }
   // Envies du questionnaire → objectifs classés (dans l'ordre où elles ont été choisies), modifiables à l'étape 2.
   const fams = [...new Set((main.goals || []).map((g) => ENVIE_FAMILY[g]).filter(Boolean))].slice(0, 2);
   if (!c.aims.length && fams.length) { c.aims = fams.map((f) => familyAim(f, c.sport, x.activities)).filter(Boolean).map((a) => ({ ...a, source: 'profile' })); c.objFromProfile = true; }
@@ -206,7 +211,7 @@ function vWhere() {
     ${winCard()}
     ${sportsOf(c).map(wallWarn)}
     ${isClimb(c.sport) ? sysSelect(kindOf(c.sport)) : ''}
-    <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>
+    <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>${c.formeFrom === 'checkin' ? h`<p class="tiny muted">Pré-rempli d’après ton check-in du matin : change-le si besoin.</p>` : ''}
     ${winOn(c) ? h`<p class="small">⏱ Temps disponible : <b>${fmtMin(c.minutes)}</b> <span class="tiny muted">(calculé d’après tes horaires)</span></p>` : h`<span class="kicker">Temps disponible${more.length ? ' (trajets compris)' : ''}</span>
     <div class="chips">${[30, 45, 60, 90, 120, 150, 180].map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="240" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
 }
@@ -269,6 +274,7 @@ function vWhy() {
     <div class="setmenu">${OTHER.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : '›'}</span></button>`)}</div>
     <div class="card stack"><span class="kicker">🛡️ Zones à ménager <span class="tiny muted">(facultatif)</span></span>
       <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div>
+      ${(c.painZones || []).filter((z) => (c.zones || []).includes(z)).length ? h`<p class="tiny warn-t">🩹 Pré-coché d’après tes douleurs notées (${c.painZones.filter((z) => (c.zones || []).includes(z)).map((z) => ZONE_LABEL[z]).join(', ')}). Décoche si c’est passé.</p>` : ''}
       <p class="tiny muted">Les exercices qui les chargent fort sont écartés de cette séance.</p></div>
     <div class="card stack"><label>📝 Mon intention pour aujourd’hui <span class="tiny muted">(facultatif)</span><textarea data-change="cpIntentText" maxlength="240" rows="2" placeholder="Ex. « Aujourd’hui je veux performer le plus possible en voie »">${c.intentText || ''}</textarea></label>
       <p class="tiny muted">Elle sert à cette séance seulement : ce n’est pas un objectif de ton profil.</p>
@@ -659,7 +665,7 @@ CHG.cpEnvFor = (el) => { if (el.value === '__new') { keep(); setReturn('Retour �
 CHG.cpTravel = (el) => { const c = CP(); c.travel = Math.max(0, Math.min(120, Math.round(Number(el.value) || 0))); c.result = null; c.built = null; keep(); render(); };
 /** Aller directement à une étape (depuis un résumé) ; la structure est (re)calculée si on avance au-delà des objectifs. */
 ACT.cpStepTo = (el) => { const c = CP(), n = Math.max(1, Math.min(NSTEPS, Number(el.dataset.id) || 1)); if (n >= SI.structure && c.step <= SI.why) freshStructure(); if (n > SI.structure && !c.built) buildNow(); if (n < NSTEPS) c.generated = false; c.step = n; keep(); render(); window.scrollTo(0, 0); };
-ACT.cpForme = (el) => { CP().forme = el.dataset.id; keep(); render(); };
+ACT.cpForme = (el) => { CP().forme = el.dataset.id; CP().formeFrom = ''; keep(); render(); };
 ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id; c.result = null; c.built = null; keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };

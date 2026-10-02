@@ -671,3 +671,13 @@ details.fold>input,details.fold>select,details.fold>textarea{width:calc(100% - 3
 .grpwrap.run{text-align:center}.grprole{font-size:1.6rem;font-weight:800}.grpex{font-size:1.25rem;font-weight:700}.grptime{font-size:5rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
 .grpwrap.run.work .grprole{color:var(--ok)}.grpwrap.run.rest .grprole{color:var(--accent)}.grpwrap.run.change .grprole{color:var(--warn,#d9a400)}
 .grpothers{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}.grpothers span{padding:2px 8px;border-radius:10px;border:1px solid var(--line)}.grpothers .work{border-color:var(--ok)}
+/* 8.30 — coach qui apprend : forme du jour, carte des douleurs, étapes de reprise */
+.painwrap{max-width:220px;margin:0 auto;width:100%}
+.painmap{width:100%;height:auto;display:block}.painmap .sil{fill:var(--body);stroke:var(--bodyline);stroke-width:.6}
+.painmap .pzg{cursor:pointer}.painmap .pz{fill:transparent;stroke:var(--muted);stroke-width:.8;stroke-dasharray:2 1.6}
+.painmap .pz.l1{fill:var(--warn);stroke:none;opacity:.6}.painmap .pz.l2{fill:var(--warn);stroke:none}.painmap .pz.l3{fill:var(--bad);stroke:none}.painmap .pz.ok{fill:var(--ok);stroke:none;opacity:.6}
+.painmap .pzt{font-size:7px;font-weight:700;fill:#111;pointer-events:none}.painmap .pzt.l3{fill:#fff}
+.painmap .pzg:hover .pz,.painmap .pzg:focus .pz{stroke:var(--accent);stroke-width:1.2;stroke-dasharray:none}
+.setrow.on{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+div.setrow{cursor:default}
+.painmap .pzhit{fill:transparent;stroke:none}

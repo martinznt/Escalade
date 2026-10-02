@@ -14,6 +14,7 @@ import { LIBRARY, byId, FOCUS } from './library.js';
 import { CAPACITIES, ACTIVITIES, INTENTIONS, EQUIPMENT } from './model.js';
 import { bodyAdjust } from './body-rules.js';
 import { muscleCaps, zoneRisk } from './intentions.js';
+import { activePains, muscleBalance, ZONE_LABEL } from './coachbrain.js';
 import { PART_TYPES, cleanParts, totalMinutes, partLabel, stretchBeforeEffort } from './format.js';
 import { generateSession as climbGenerate, exMinutes, sessionMinutes, progressHint, analyze, levelFrom } from './engine.js';
 import { profileCapacities, strengthsWeaknesses, availableEquipment, goalCaps, goalLabel, capVolume, relevantCaps, undertrained, exCaps, capacityState, perfsOf, confWord, STATUS_WORD, DAY } from './brain.js';
@@ -80,6 +81,7 @@ function climbSettings(ctx, eq) {
 /* ───────── Candidats (filtrés et justifiés) ───────── */
 const SHOULDER = new Set(['dips', 'pike-pushup', 'shoulder-press', 'dynos', 'ring-dips', 'overhead-press', 'wall-handstand', 'flag-full', 'flag-tuck', 'shoulder-press-machine', 'arnold-press', 'handstand-pushup-wall', 'freestanding-handstand', 'korean-dips', 'straight-bar-dips', 'strict-muscle-up', 'muscle-up-band', 'tuck-planche', 'back-lever-tuck', 'skin-the-cat', 'flag-negative', 'flag-vertical', 'campus-ladders']);
 const ELBOW = new Set(['pullup-heavy', 'lockoff', 'explosive-pullup', 'wrist-extension', 'oap', 'oap-negative', 'archer-pullup', 'typewriter-pullup', 'skull-crusher', 'strict-muscle-up', 'back-lever-tuck', 'campus-ladders']);
+const AVOID_IDS = new Set(['fingers', 'shoulders', 'elbows', 'wrists', 'back', 'knees', 'ankles']);
 const KNEE = new Set(['bulgarian', 'cossack', 'jump-vertical', 'skater-jumps', 'step-up-explosive', 'squat-loaded', 'pistol', 'box-jump', 'back-squat', 'run-hills', 'run-intervals', 'front-squat', 'hack-squat', 'leg-extension', 'pistol-box', 'walking-lunge', 'split-squat', 'smith-squat', 'db-step-up', 'burpee', 'dynos']);
 function customPool(activityId, ctx) {
   const cats = Object.values(ctx.categories).filter((c) => c.activityId === activityId);
@@ -200,6 +202,12 @@ export function planSession(opts = {}, ctx) {
   if (light) { add('mobilite_hanches', 0.6, 'mode léger / récupération'); add('mobilite_epaules', 0.5, 'mode léger / récupération'); }
   for (const [id, p] of Object.entries(opts.priorities || {})) { if (Number(p) <= 0) delete targets[id]; else targets[id] = Number(p); if (!reasons[id]) reasons[id] = ['priorité choisie']; else reasons[id].push('priorité modifiée par toi'); }
 
+  // 8.30 : sans choix explicite des zones, les douleurs notées récemment (3/10 ou plus, 7 jours) sont ménagées d'office.
+  const painZones = opts.avoidZones === undefined ? activePains(ctx.pains || [], ctx.now).map((p) => p.zone).filter((z) => AVOID_IDS.has(z)) : [];
+  if (painZones.length) { opts = { ...opts, avoidZones: painZones }; bodyAdj.reasons.push(`🩹 Douleur notée récemment (${painZones.map((z) => ZONE_LABEL[z]).join(', ')}) : les exercices qui chargent cette zone sont écartés. Touche « C’est passé » dans Profil › Mon corps et mes préférences quand ça va mieux.`); }
+  // 8.30 : poussée et tirage très déséquilibrés sur 4 semaines → un peu plus du côté le moins travaillé (raison affichée).
+  const bal = isClimbing(activityId) || parts.length || custom || opts.capId || light ? null : muscleBalance(ctx);
+  if (bal?.unbalanced) { const rel = relevantCaps(ctx, activityId), side = bal.ratio > 2 ? ['poussee_horizontale', 'poussee_verticale'] : ['tirage_horizontal', 'tirage_vertical']; let added = false; for (const c of side) if (rel[c] != null) { add(c, 0.35, 'équilibre poussée / tirage'); added = true; } if (added) bodyAdj.reasons.push(`⚖️ ${bal.text}`); }
   const { ok, excluded } = isClimbing(activityId) ? { ok: [], excluded: [] } : candidates(activityId, ctx, { eq, level, light, noPlyo: bodyAdj.noPlyo, zones: opts.avoidZones || [], levelCap: bodyAdj.levelCap ?? null });
   const trainable = (id) => isClimbing(activityId) || ok.some((x) => (x.caps?.[id] || 0) >= 0.3);
   const missing = [];

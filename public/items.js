@@ -126,6 +126,13 @@ export const SCHEMAS = {
     activity: ['s', 40], goalId: ['id'], styles: ['ids', 12], date: ['n', 0, 9e15, 0], hasPhoto: ['b'] },
   // Remplacement d'exercice effectué (sert à détecter « exercice souvent remplacé »).
   swap: { from: ['s', 80], to: ['s', 80], date: ['n', 0, 9e15, 0], where: ['e', ['generator', 'seance', 'player'], 'seance'] },
+  // 8.30 — douleur notée (zone, intensité 0 à 10, côté, moment) : sert à ménager la zone et à suivre la reprise.
+  pain: { zone: ['e', ['fingers', 'shoulders', 'elbows', 'wrists', 'back', 'knees', 'ankles', 'hips', 'neck', 'other'], 'other'], level: ['n', 0, 10, 0],
+    side: ['e', ['', 'gauche', 'droite', 'deux'], ''], when: ['e', ['', 'repos', 'effort', 'apres', 'matin'], ''], date: ['n', 0, 9e15, 0], note: ['s', 300], healed: ['b'] },
+  // 8.30 — check-in du matin (un item par jour, id « wb-AAAA-MM-JJ ») : sommeil, énergie, courbatures, stress,
+  // pouls au repos (facultatif), cycle (facultatif, seulement si activé par la personne).
+  wellness: { day: ['day'], at: ['n', 0, 9e15, 0], sleep: ['n', 0, 16, null], energy: ['n', 1, 5, null], soreness: ['n', 1, 5, null], stress: ['n', 1, 5, null],
+    hr: ['n', 25, 220, null], period: ['b'], note: ['s', 300] },
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
   habit: { key: ['s', 120], decision: ['e', ['accepted', 'dismissed'], 'dismissed'] },
   // Configuration personnelle (tableau de bord, environnement par défaut…) : un item par clé.
@@ -140,7 +147,7 @@ export const SCHEMAS = {
     // Objectifs (plusieurs) et profil corporel (item « body ») : déclarés, tous facultatifs.
     goals: ['strs', 8, 20], age: ['n', 8, 100, null], height: ['n', 100, 230, null], weight: ['n', 25, 300, null], sex: ['e', ['f', 'h', 'x', ''], ''],
     shape: ['e', ['mince', 'athletique', 'moyen', 'costaud', 'rond', ''], ''], muscled: ['strs', 8, 20], physique: ['strs', 10, 20], fitness: ['n', 1, 5, null],
-    breath: ['e', ['jamais', 'effort', 'escaliers', 'souvent', ''], ''], daily: ['e', ['assis', 'debout', 'physique', ''], ''],
+    breath: ['e', ['jamais', 'effort', 'escaliers', 'souvent', ''], ''], daily: ['e', ['assis', 'debout', 'physique', ''], ''], cycle: ['b'],
     // Mise en page personnalisée (item « layout ») : JSON validé à la lecture (layout.js).
     lay: ['s', 9000],
     // Formats de séance gardés (item « formats ») : JSON validé à la lecture (format.js).

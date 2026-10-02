@@ -10,6 +10,7 @@ import { anatomySvg } from './anatomy.js';
 import { compressPhoto } from './views-climb.js';
 import { streakCard, badgesCard } from './views-motiv.js';
 import { composePage } from './layout.js';
+import { learnedCard } from './views-forme.js';
 
 const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
 const SUB_INFO = {
@@ -68,6 +69,7 @@ function vSummary() {
     muscles: () => h`<section class="card"><div class="row between"><h3>🫀 Muscles travaillés</h3>${seg('muscleDays', String(S.muscleDays || 7), [['7', '7 j'], ['30', '30 j']])}</div>${raw(anatomySvg({ heat: muscleVolume(c, S.muscleDays || 7) }))}${menuList([['allGo', '', '🪞', 'Séries par muscle et mensurations', 'Repère de la semaine, silhouette visée (dans Mon corps et mes préférences)', 'profile/body']])}</section>`,
     badges: () => badgesCard(),
     weeksum: () => SUM(),
+    learned: () => learnedCard(),
   });
 }
 ACT.benchDays = (el) => { S.benchDays = Number(el.dataset.id); render(); };

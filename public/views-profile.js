@@ -1,6 +1,6 @@
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
-import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG } from './ui.js';
+import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG, ymd } from './ui.js';
 import { composePage } from './layout.js';
 import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
@@ -26,6 +26,7 @@ import { strategies } from './strategy.js';
 import { assessment, conditionFacts, suggestedGoals, guidedTests, ENVIES, ZONE_WORD } from './assess.js';
 import { levelFor } from './generator.js';
 import { COMPOSITION, MEASURES, lastValue, evolution, indices, checkWeighIn } from './bodycomp.js';
+import { painCard } from './views-forme.js';
 import { PHYSIQUE, PHYSIQUE_SOURCES, physiqueGroups, physiqueMeasures, physiqueTrack, weeklySets, SETS_RANGE } from './physique.js';
 
 const SUBS = [['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
@@ -349,6 +350,7 @@ function vBody() {
       ${weights.length ? h`<p class="small">Dernière pesée : <b>${weights.at(-1).value} kg</b> (${fmtDay(weights.at(-1).date)})${weights.length >= 2 ? h` · ${(() => { const d = Math.round((weights.at(-1).value - weights[0].value) * 10) / 10; return d > 0 ? `+${d} kg` : `${d} kg`; })()} depuis le ${fmtDay(weights[0].date)}` : ''}</p>` : h`<p class="small muted">Note ton poids de temps en temps (même heure, même conditions) pour voir la tendance.</p>`}</section>
     ${compositionCard()}
     ${silhouetteCard(b, goals)}
+    ${painCard()}
     <section class="card"><h3>Ce que ça change dans tes séances</h3>${adj.reasons.length ? h`<ul class="small">${adj.reasons.map((r) => h`<li>${r}</li>`)}</ul>` : h`<p class="small muted">Rien de spécial : les séances suivent ton niveau et tes objectifs.</p>`}${sourcesLine(adj.sources)}</section>`;
 }
 /** Composition et mensurations : dernières valeurs, évolution, indices calculés (avec leurs limites), saisie en une fois. */
@@ -369,7 +371,7 @@ const MFIELD = (id, extra = '') => { const m = ctx().metrics[id], l = lastValue(
 ACT.weighFull = () => openSheet(h`<form class="stack" data-submit="bodySaveMany" data-kind="composition"><h2 style="margin:0">⚖️ Pesée complète</h2>
   <p class="tiny muted">Remplis seulement ce que ta balance (ou ta mesure) donne. Le chiffre gris est ta dernière valeur.</p>
   <div class="grid2">${COMPOSITION.map((id) => MFIELD(id))}</div>
-  <label class="small">Appareil <span class="tiny muted">(facultatif, pour comparer ce qui est comparable)</span><input name="device" maxlength="60" placeholder="Ex. balance de la salle, Withings…"></label>
+  <label class="small">Appareil <span class="tiny muted">(facultatif, pour comparer ce qui est comparable)</span><input name="device" maxlength="60" placeholder="Ex. balance de la salle, balance connectée…"></label>
   <button class="btn pri big">Enregistrer</button></form>`, { wide: true });
 ACT.measureAll = () => openSheet(h`<form class="stack" data-submit="bodySaveMany" data-kind="measures"><h2 style="margin:0">📏 Mensurations</h2>
   <p class="tiny muted">Mètre ruban souple, sans serrer, en fin d’expiration. Remplis ce que tu veux ; touche ❓ pour savoir où mesurer.</p>
@@ -380,7 +382,7 @@ SUBMIT.bodySaveMany = (f) => {
   if (!ids.length) return toast('Remplis au moins une valeur.');
   const errs = f.dataset.kind === 'composition' ? checkWeighIn(d) : ids.filter((id) => !(Number(String(d[id]).replace(',', '.')) > 0)).map((id) => `${ctx().metrics[id].label} : valeur invalide.`);
   if (errs.length) return toast(errs[0], 4000, 'bad');
-  const now = Date.now(), day = new Date().toISOString().slice(0, 10), note = String(d.device || '').trim().slice(0, 60);
+  const now = Date.now(), day = ymd(new Date()), note = String(d.device || '').trim().slice(0, 60);
   for (const id of ids) { const m = ctx().metrics[id]; putItem('perf', `bc-${id}-${day}`, { metricId: id, value: Math.round(Number(String(d[id]).replace(',', '.')) * 100) / 100, unit: m.unit, date: now, source: 'measured', note: note || (f.dataset.kind === 'composition' ? 'Pesée complète' : 'Mensurations') }); }
   if (ids.includes('body_weight')) putItem('config', 'body', { ...(item('config', 'body') || {}), weight: Number(String(d.body_weight).replace(',', '.')) });
   if (ids.includes('taille_corps')) putItem('config', 'body', { ...(item('config', 'body') || {}), height: Number(String(d.taille_corps).replace(',', '.')) });

@@ -24,7 +24,9 @@ export function nextImpact(ctx) {
     for (const ex of s.exercises || []) {
       if (n >= 3) break;
       const ph = progressHint(ex, ctx.history);
-      if (ph?.next && /Essaie|ajoute/.test(ph.next)) { items.push({ icon: '📈', text: `« ${ex.name} » : tout réussi la dernière fois (${ph.last}) → ${ph.next.charAt(0).toLowerCase() + ph.next.slice(1)}.` }); n++; }
+      const low = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+      if (ph?.trend === 'up') { items.push({ icon: '📈', text: `« ${ex.name} » : tout réussi la dernière fois (${ph.last}) → ${low(ph.next)}.` }); n++; }
+      else if (ph?.trend === 'confirm' || ph?.trend === 'down') { items.push({ icon: ph.trend === 'down' ? '📉' : '🔁', text: `« ${ex.name} » (${ph.last}) : ${low(ph.why)} → ${low(ph.next)}.` }); n++; }
     }
   }
   for (const l of (last.data?.questionnaire?.likes || []).slice(0, 4)) {

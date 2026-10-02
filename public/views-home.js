@@ -20,6 +20,7 @@ import { programCard, fingerCard, activeProgram } from './views-program.js';
 import { programStatus } from './program.js';
 import { buildIcs } from './ics.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard } from './views-setup.js';
+import { formeBlock } from './views-forme.js';
 
 export const DASH_BLOCKS = {
   today: 'Que faire aujourd’hui ?', command: 'Commande', next: 'Prochaines séances', progress: 'Progression', goals: 'Objectifs', records: 'Records',
@@ -97,7 +98,7 @@ function vDash() {
       cal: safe('calendar'), coach: safe('command'), program: () => programCard() || '', finger: () => fingerCard() || '',
       streak: () => (S.history.length || ctx().ascents.length ? streakCard() : ''),
       question: () => questionCard(), today: safe('today'), next: safe('next'), goals: safe('goals'), reco: safe('reco'), weekprog: safe('progress'), records: safe('records'),
-      regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'),
+      regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'), forme: () => formeBlock(),
     })}</div>`;
 }
 /** Boucle visible : ce que la dernière séance change pour la suivante (règles réellement appliquées, rien d'inventé). */

@@ -27,10 +27,12 @@ export const FEATURES = {
     program: F('Programme', ['big', 'icon']), finger: F('Alerte doigts', ['big']), streak: F('Ma série', ['big', 'icon']), today: F('Que faire aujourd’hui ?', ['big']), question: F('Petite question', ['big']),
     next: F('Prochaines séances', ['big']), goals: F('Objectifs', ['big']), reco: F('Recommandations', ['big']), weekprog: F('Progression 7 jours', ['big']),
     records: F('Records', ['big']), regularity: F('Régularité', ['big']), capacities: F('Capacités', ['big']), load: F('Charge récente', ['big']), summary: F('Résumé de la semaine', ['big']),
+    forme: F('Forme du jour', ['big']),
   },
   progress: {
     search: F('Recherche', ['icon']), streak: F('Ma série', ['big']), kpis: F('Chiffres clés', ['big']), wins: F('Bonnes nouvelles', ['big']), goalsdone: F('Objectifs réussis', ['big']), work: F('Ce que tu as travaillé', ['big']),
     regularity: F('Régularité', ['big']), load: F('Charge', ['big']), muscles: F('Muscles travaillés', ['big']), badges: F('Badges', ['big']), weeksum: F('Résumé de la période', ['big']),
+    learned: F('Ce que l’app a appris sur toi', ['big']),
     recap: F('Bilan du mois', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']),
   },
   // 8.29 : la Bibliothèque et le Profil se personnalisent aussi (ordre, masquer, couleur), pas seulement leurs icônes.
@@ -50,8 +52,8 @@ export const FEATURES = {
 };
 // Mise en page de base : simple au départ.
 export const DEFAULTS = {
-  home: [['search', 'icon'], ['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['today', 'big'], ['question', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
-  progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['goalsdone', 'big'], ['work', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['notif', 'icon'], ['all', 'icon']],
+  home: [['search', 'icon'], ['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['forme', 'big'], ['today', 'big'], ['question', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['goalsdone', 'big'], ['work', 'big'], ['learned', 'big'], ['regularity', 'big'], ['badges', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['notif', 'icon'], ['all', 'icon']],
   library: [['search', 'icon'], ['newbtn', 'big'], ['draft', 'big'], ['r-seances', 'big'], ['r-climbplan', 'big'], ['r-catalog', 'big'], ['r-exercises', 'big'], ['r-common', 'big'], ['r-search', 'big'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   profile: [['search', 'icon'], ['hero', 'big'], ['sw', 'big'], ['bilan', 'big'], ['complete', 'big'], ['g-moi', 'big'], ['g-res', 'big'], ['g-why', 'big'], ['g-share', 'big'], ['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   settings: [['search', 'icon'], ['notif', 'icon'], ['all', 'icon']],

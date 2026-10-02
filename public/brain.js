@@ -6,6 +6,7 @@
 //  - une séance datée dans le futur n'est jamais traitée comme réalisée.
 // Pur JavaScript, sans DOM : testé avec Node (tests/brain.test.mjs).
 
+import { readiness } from './coachbrain.js';
 import { batteryFor, profileInputs, ENVIES, PROTOCOL } from './assess.js';
 import { CAPACITIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, BUILTIN_STYLES, metricTierText, skillCaps, MACHINES } from './model.js';
 import { LIBRARY, byId } from './library.js';
@@ -72,7 +73,7 @@ export function buildContext(raw = {}) {
     now, tz, history, future, events: arr(raw.events).filter((e) => e && typeof e === 'object'), seances, seanceById, personal, personalByKey, settings: raw.settings || {},
     activities, categories, metrics, perfs, goals, gradesys, systems, styles, envs, defEnv, unavailable, config, prefs, capdecl,
     ascents: Object.values(get('ascent')).sort((a, b) => (b.date || 0) - (a.date || 0)),
-    swaps: Object.values(get('swap')), labs: Object.values(get('lab')), jnotes: Object.values(get('jnote')), habitDecisions: Object.fromEntries(Object.values(get('habit')).map((h) => [h.key, h.decision])),
+    swaps: Object.values(get('swap')), labs: Object.values(get('lab')), jnotes: Object.values(get('jnote')), pains: Object.values(get('pain')).sort((a, b) => (a.date || 0) - (b.date || 0)), wellness: Object.values(get('wellness')).sort((a, b) => (a.at || 0) - (b.at || 0)), habitDecisions: Object.fromEntries(Object.values(get('habit')).map((h) => [h.key, h.decision])),
   };
 }
 
@@ -758,7 +759,14 @@ export function todayOptions(ctx, { todayEvents = [], minutes = null } = {}) {
   if (!opts.some((o) => o.kind === 'generate')) opts.push({ kind: 'generate', id: 'gen:decouverte', title: ctx.history.length ? 'Séance du jour' : 'Séance découverte', reason: ctx.history.length ? 'Équilibrée selon ce que tu as le moins travaillé récemment.' : (ctx.perfs.some((p) => !p.unknown) || Object.keys(ctx.capdecl).length ? 'Première séance : courte, calée sur le niveau et les repères que tu as indiqués.' : 'Pas encore d’historique : une séance courte pour commencer, sans présumer de ton niveau.'), mode: 'weaknesses', minutes: ctx.history.length ? dur : 20, how });
   if (last?.data?.rpe >= 4 && hoursSince < 48 && !opts.some((o) => o.light)) opts.push({ kind: 'generate', id: 'gen:leger', title: 'Version légère (technique / mobilité)', reason: `Ta dernière séance était ressentie comme dure (${last.data.rpe}/5) il y a ${Math.round(hoursSince)} h : une alternative plus douce si tu ne te sens pas frais.`, light: true, mode: 'weaknesses', minutes: Math.min(dur, 25), how });
   opts.push({ kind: 'express', id: 'express', title: 'Express 10 minutes', reason: 'Peu de temps ? Une séance courte reconstruite pour 10 minutes.', minutes: 10, mode: 'weaknesses', how: ['Durée choisie : 10 min'] });
-  return { options: opts.slice(0, 4), note: 'Je ne connais pas ta forme du jour : choisis l’option qui te correspond.' };
+  // 8.30 : check-in du matin → la forme du jour passe avant le reste (version légère en tête si fatigué).
+  const rd = readiness(ctx);
+  if (rd.checked && rd.level === 'low') {
+    const i = opts.findIndex((o) => o.light && o.kind !== 'rest'), light = i >= 0 ? opts.splice(i, 1)[0] : { kind: 'generate', id: 'gen:leger', title: 'Version légère (technique / mobilité)', light: true, mode: 'weaknesses', minutes: Math.min(dur, 25), how };
+    light.reason = `Check-in du matin : ${rd.word.toLowerCase()}. ${rd.why.filter((w) => !/^⚠️/.test(w)).slice(0, 2).join(' ')}`.trim();
+    opts.splice(opts.filter((o) => o.kind === 'event').length, 0, light);
+  }
+  return { options: opts.slice(0, 4), note: rd.checked ? `Ta forme du jour (check-in) : ${rd.emoji} ${rd.word} — ${rd.advice}` : 'Fais le check-in du matin (Accueil › Forme du jour) pour que les propositions tiennent compte de ta forme ; sinon, choisis l’option qui te correspond.' };
 }
 
 /* ═════════════ Diagnostics avancés (descriptifs) ═════════════ */
