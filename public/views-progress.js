@@ -13,6 +13,7 @@ import { composePage } from './layout.js';
 import { FEELS, sessionFromHistory } from './live.js';
 import { startPlayer } from './player.js';
 import { learnedCard } from './views-forme.js';
+import { storyCard } from './views-story.js';
 
 const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
 const SUB_INFO = {
@@ -72,6 +73,7 @@ function vSummary() {
     badges: () => badgesCard(),
     weeksum: () => SUM(),
     learned: () => learnedCard(),
+    story: () => storyCard(),
   });
 }
 ACT.benchDays = (el) => { S.benchDays = Number(el.dataset.id); render(); };

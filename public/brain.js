@@ -304,7 +304,7 @@ export function goalProgress(g, ctx) {
     return { pct: g.target ? Math.min(100, Math.round((n / g.target) * 100)) : null, current: n, text: `${n} séance(s) depuis le ${fmtDay(since || ctx.now)} · cible ${g.target}` };
   }
   if (g.type === 'ascents') {
-    const since = g.startedAt || 0, n = ctx.ascents.filter((a) => a.date >= since && ['flash', 'send', 'top'].includes(a.result)).length;
+    const since = g.startedAt || 0, n = ctx.ascents.filter((a) => a.date >= since && ['onsight', 'flash', 'send', 'top'].includes(a.result)).length;
     return { pct: g.target ? Math.min(100, Math.round((n / g.target) * 100)) : null, current: n, text: `${n} réussite(s) enregistrée(s) depuis le ${fmtDay(since || ctx.now)} · cible ${g.target}` };
   }
   if (g.type === 'skill') {
@@ -698,7 +698,7 @@ export function timeline(ctx) {
 }
 
 /* ═════════════ Journal (uniquement des données existantes) ═════════════ */
-const RESULT_FR = { flash: '⚡ flash', send: '✓ réussi', work: '💪 réussi après travail', top: 'top', attempt: 'essai', fail: 'pas encore' };
+const RESULT_FR = { onsight: '👀 à vue', flash: '⚡ flash', send: '✓ réussi', work: '💪 réussi après travail', top: 'top', attempt: 'essai', fail: 'pas encore' };
 export function journal(ctx, limit = 80) {
   const out = [];
   for (const h of ctx.history) {
@@ -710,7 +710,7 @@ export function journal(ctx, limit = 80) {
     out.push({ t: h.startedAt, kind: 'session', icon: '✅', title: h.sessionName, text: bits.join(' · '), more, note: [h.data?.note, q.comment].filter(Boolean).join(' — '), id: h.id });
   }
   for (const p of ctx.perfs) out.push({ t: p.date, kind: 'perf', icon: p.unknown ? '❔' : '📏', title: ctx.metrics[p.metricId]?.label || 'Performance', text: perfText(p, ctx) + (p.styles?.length ? ' · ' + p.styles.map((s) => ctx.styles[s]?.label || s).join(', ') : ''), note: p.note || '' });
-  for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [RESULT_FR[a.result] || a.result, a.attempts > 1 ? a.attempts + ' essais' : a.result === 'flash' ? '' : a.attempts ? '1 essai' : ''].filter(Boolean).join(' · '), note: a.note || '' });
+  for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [RESULT_FR[a.result] || a.result, a.attempts > 1 ? a.attempts + ' essais' : a.result === 'flash' || a.result === 'onsight' ? '' : a.attempts ? '1 essai' : ''].filter(Boolean).join(' · '), note: a.note || '' });
   for (const n of ctx.jnotes) out.push({ t: n.date, kind: 'note', icon: '📝', title: 'Note', text: n.text, note: '' });
   return out.filter((x) => x.t && x.t <= ctx.now + 5 * 60000).sort((a, b) => b.t - a.t).slice(0, limit);
 }

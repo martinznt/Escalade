@@ -40,6 +40,11 @@ export function vCatalog() {
   if (f.time) list = list.filter((r) => (f.time === 's' ? r.entry.minutes <= 20 : f.time === 'm' ? r.entry.minutes > 20 && r.entry.minutes <= 40 : r.entry.minutes > 40));
   if (f.level !== '' && f.level != null) list = list.filter((r) => String(r.entry.level) === String(f.level));
   if (f.onlyEq) list = list.filter((r) => !r.missing.length);
+  const favs = catFavs(), done = catDone();
+  if (f.noEq) list = list.filter((r) => !needsOf(r.entry).length);
+  if (f.mine === 'fav') list = list.filter((r) => favs.has(r.entry.id));
+  else if (f.mine === 'done') list = list.filter((r) => done.has(r.entry.id));
+  else if (f.mine === 'new') list = list.filter((r) => !done.has(r.entry.id));
   const sports = [['', 'Tous'], ['climbing', '🧗 Escalade'], ['calisthenics', '🤸 Calisthenics'], ['running', '🏃 Course'], ['strength', '🏋️ Muscu'], ['conditioning', '💪 Renfo'], ['swimming', '🏊 Natation']];
   const view = ['book', 'focus', 'rank'].includes(f.view) ? f.view : 'book', book = view === 'book';
   if (view === 'focus' && f.focus) list = list.filter((r) => { const [k, id] = f.focus.split(':'), fo = focusOf(r.entry); return (k === 'm' ? fo.muscles : fo.skills).includes(id); });
@@ -48,7 +53,8 @@ export function vCatalog() {
     <div class="card catf"><div class="chips">${sports.map(([k, l]) => chip(f.sport === k, l, `data-act="catF" data-k="sport" data-v="${k}"`))}</div>
       <div class="chips">${[['', 'Tous niveaux'], ['0', '🌱 Débutant'], ['1', '🌿 Intermédiaire'], ['2', '🌳 Avancé']].map(([k, l]) => chip(String(f.level ?? '') === k, l, `data-act="catF" data-k="level" data-v="${k}"`))}</div>
       <div class="chips">${chip(!f.goal, 'Tous objectifs', 'data-act="catF" data-k="goal" data-v=""')}${Object.entries(GOAL_L).map(([k, l]) => chip(f.goal === k, l, `data-act="catF" data-k="goal" data-v="${k}"`))}</div>
-      <div class="chips">${[['', 'Toutes durées'], ['s', '≤ 20 min'], ['m', '20–40 min'], ['l', '> 40 min']].map(([k, l]) => chip(f.time === k, l, `data-act="catF" data-k="time" data-v="${k}"`))}${chip(f.onlyEq, '🧰 Faisable avec mon matériel', 'data-act="catEq"')}</div></div>
+      <div class="chips">${[['', 'Toutes durées'], ['s', '≤ 20 min'], ['m', '20–40 min'], ['l', '> 40 min']].map(([k, l]) => chip(f.time === k, l, `data-act="catF" data-k="time" data-v="${k}"`))}${chip(f.onlyEq, '🧰 Faisable avec mon matériel', 'data-act="catEq"')}${chip(!!f.noEq, '🙌 Sans matériel', 'data-act="catNoEq"')}</div>
+      <div class="chips">${[['', 'Toutes'], ['fav', '⭐ Mes favoris'], ['done', '✅ Déjà faites'], ['new', '🆕 Jamais essayées']].map(([k, l]) => chip((f.mine || '') === k, l, `data-act="catF" data-k="mine" data-v="${k}"`))}</div></div>
     <p class="tiny muted">${book ? 'Le carnet : des séances toutes prêtes pour chaque sport, du niveau débutant à avancé. Touche une séance pour voir ses exercices, puis lance-la ou garde-la.' : view === 'focus' ? 'Les séances qui travaillent le muscle ou la compétence choisi, du niveau débutant à avancé, tous sports confondus.' : 'Triées pour toi : ton sport, tes objectifs, tes points faibles et ton niveau.'} Chaque séance cite ses sources.</p>
     ${view === 'focus' ? (f.focus ? focusList(list) : h`<p class="small muted">Choisis un muscle ou une compétence ci-dessus : toutes les séances qui le travaillent s’affichent, du niveau débutant à avancé.</p>`) : book ? bookView(list) : list.length ? list.map((r, i) => h`<button class="card pick catcard" data-act="catOpen" data-id="${r.entry.id}"><div class="row"><span class="catemoji">${r.entry.emoji}</span><div class="grow"><b>${r.entry.name}</b>
         <div class="tiny muted">${ACTIVITIES[r.entry.activity]?.label || r.entry.activity} · ${r.entry.minutes} min · ${['débutant', 'intermédiaire', 'avancé'][r.entry.level]}</div></div>${i < 3 && r.why.length ? h`<span class="tag acc">pour toi</span>` : ''}</div>
@@ -81,10 +87,25 @@ ACT.catFocus = (el) => { S.catF.focus = S.catF.focus === el.dataset.id ? '' : el
 ACT.catView = (el) => { S.catF.view = el.dataset.id; render(); };
 ACT.catF = (el) => { S.catF[el.dataset.k] = S.catF[el.dataset.k] === el.dataset.v ? '' : el.dataset.v; render(); };
 ACT.catEq = () => { S.catF.onlyEq = !S.catF.onlyEq; render(); };
+ACT.catNoEq = () => { S.catF.noEq = !S.catF.noEq; render(); };
+/** Favoris (gardés avec ton compte) et séances du carnet déjà faites (d'après ton journal). */
+const catFavs = () => new Set(item('config', 'catalog')?.favs || []);
+function catDone() {
+  const by = new Map(CATALOG.map((e) => [e.name, e.id])), out = new Map();
+  for (const x of ctx().history) { const id = String(x.sessionId || '').startsWith('cat-') ? x.sessionId.slice(4) : by.get(x.sessionName); if (id) { const o = out.get(id) || { n: 0, last: 0 }; o.n++; o.last = Math.max(o.last, x.startedAt); out.set(id, o); } }
+  return out;
+}
+ACT.catFav = (el) => {
+  const id = el.dataset.id, favs = catFavs();
+  if (favs.has(id)) favs.delete(id); else favs.add(id);
+  putItem('config', 'catalog', { ...(item('config', 'catalog') || {}), favs: [...favs].slice(-300) });
+  toast(favs.has(id) ? '⭐ Ajoutée à tes favoris' : 'Retirée de tes favoris'); ACT.catOpen(el); render();
+};
 ACT.catOpen = (el) => {
   const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return;
   const s = buildSession(e), p = profileNeeds(), miss = needsOf(e).filter((n) => !p.equipment.has(n));
   openSheet(h`<div class="catd"><div class="row"><span class="catemoji">${e.emoji}</span><div class="grow"><h2>${e.name}</h2><div class="tiny muted">${ACTIVITIES[e.activity]?.label || ''} · ${e.minutes} min · ${['débutant', 'intermédiaire', 'avancé'][e.level]}</div></div></div>
+    ${(() => { const d = catDone().get(e.id), fav = catFavs().has(e.id); return h`<div class="row wrapf"><button class="btn sm" data-act="catFav" data-id="${e.id}" aria-pressed="${fav}">${fav ? '★ Dans mes favoris' : '☆ Mettre en favori'}</button><span class="tiny muted">${d ? `✅ Faite ${d.n} fois, la dernière ${new Date(d.last).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}` : '🆕 Jamais essayée'}</span></div>`; })()}
     ${sessionBrief(s, { minutes: e.minutes })}${sourcesLine(e.sources)}
     <b class="small">Ça travaille</b><div class="chips">${e.works.map((c) => h`<span class="chip static">${CAPACITIES[c]?.label || c}</span>`)}</div>
     ${focusText(e) ? h`<p class="tiny muted">🎯 Surtout : ${focusText(e)} (d’après ses exercices)</p>` : ''}

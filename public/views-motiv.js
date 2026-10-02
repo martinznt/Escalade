@@ -9,7 +9,7 @@ const goalPerWeek = () => Math.max(1, Math.min(4, Number(item('config', 'main')?
 export function motivCtx() {
   const c = ctx();
   let rec = 0; try { rec = timeline(c).filter((e) => e.kind === 'record').length; } catch { /* rien */ }
-  return { ...c, projects: itemsOf('project'), recordsCount: rec };
+  return { ...c, projects: itemsOf('project'), seasons: itemsOf('season'), recordsCount: rec };
 }
 
 export function streakCard() {

@@ -39,7 +39,7 @@ function syncBadge() {
   const n = pendingCount();
   if (S.user?.guest) return h`<button class="syncbadge guest" data-act="goAccount" aria-label="Mode invité : créer un compte">👀 Invité</button>`;
   const label = { ok: 'Synchronisé', sync: 'Synchronisation…', pending: `${n} modification(s) en attente`, offline: `Hors ligne${n ? ` · ${n} en attente` : ''}`, error: 'Erreur de synchronisation', auth: 'Reconnexion nécessaire', idle: '' }[S.sync] || '';
-  return h`<button class="syncbadge ${S.sync}" data-act="goSync" aria-label="${label}" title="${label}"><span class="dot"></span>${SYNC_WORD[S.sync]?.(n) || ''}</button>`;
+  return h`<button class="syncbadge ${S.sync}" data-act="goSync" aria-label="${label}" title="${label}"><span class="dot"></span><span class="sw">${SYNC_WORD[S.sync]?.(n) || ''}</span></button>`;
 }
 function doRender() {
   const app = $('#app');

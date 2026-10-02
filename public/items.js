@@ -146,6 +146,9 @@ export const SCHEMAS = {
     hr: ['n', 25, 220, null], period: ['b'], note: ['s', 300] },
   // 8.30 — réglages d'une machine ou d'un exercice (siège, dossier, prise…), affichés pendant la séance.
   exsetup: { key: ['s', 80], label: ['s', 80], setup: ['s', 160] },
+  // 8.30 — saison de 4 semaines autour d'un thème, et lettre à soi-même (scellée jusqu'à openAt).
+  season: { theme: ['e', ['regularite', 'doigts', 'mobilite', 'endurance', 'recup', 'variete'], 'regularite'], start: ['n', 0, 9e15, 0], closed: ['b'], won: ['b'] },
+  letter: { text: ['s', 3000], writtenAt: ['n', 0, 9e15, 0], openAt: ['n', 0, 9e15, 0], openedAt: ['n', 0, 9e15, 0], snap: ['s', 300] },
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
   habit: { key: ['s', 120], decision: ['e', ['accepted', 'dismissed'], 'dismissed'] },
   // Configuration personnelle (tableau de bord, environnement par défaut…) : un item par clé.
@@ -170,6 +173,8 @@ export const SCHEMAS = {
     // 8.30 — disponibilités (item « availability ») et pause vacances / blessure (item « pause »).
     slots: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 21],
     pauseMode: ['e', ['', 'vacances', 'blesse'], ''], pauseFrom: ['day'], pauseTo: ['day'], pauseNote: ['s', 120],
+    // 8.30 — séances du carnet mises en favori (item « catalog »).
+    favs: ['strs', 300, 60],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);
