@@ -436,7 +436,9 @@ export function progressHint(ex, history) {
     why = '2 séances de suite sous le bas de la fourchette : on baisse un peu pour repartir.';
   } else if (a.missed) { trend = 'hold'; next = load > 0 ? `Reste à ${kg(load)} : un jour moins bon arrive` : 'Garde la même difficulté : un jour moins bon arrive'; why = 'Une seule séance en dessous : si ça se répète la prochaine fois, on baissera.'; }
   else if (load > 0) next = `Reste à ${load} kg jusqu'à réussir toutes les séries`;
-  return { last, next, load, t: a.t, why, trend };
+  // Charge proposée pour la première série (le lecteur la pré-remplit, modifiable d'un toucher).
+  const nextLoad = load > 0 ? (trend === 'up' ? Math.round((load + 2.5) * 10) / 10 : trend === 'down' ? Math.max(0, Math.round(load * 0.95 * 2) / 2) : load) : 0;
+  return { last, next, load, nextLoad, t: a.t, why, trend };
 }
 
 /* ═════════════ Générateur de séances ═════════════ */

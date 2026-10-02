@@ -79,4 +79,8 @@ ok('findExerciseInSession renvoie null si rien ne correspond', () => {
   assert.equal(findExerciseInSession(session, 'zzzzzzz improbable'), null);
 });
 
+ok('refaire une séance passée : « refais ma dernière séance », « la même que mardi » ; supprimer reste une autre commande', () => {
+  for (const t of ['refais ma dernière séance', 'la même que mardi', 'refaire celle d’hier', 'recommence la séance de lundi']) assert.equal(parseCommand(t).type, 'redo', t);
+  assert.equal(parseCommand('supprime ma dernière séance').type, 'deleteLastHistory');
+});
 console.log(`\n${n} tests OK`);

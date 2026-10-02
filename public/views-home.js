@@ -13,7 +13,8 @@ import { todayOptions, regularity, benchmarks, activeGoals, goalLabel, goalProgr
 import { adaptDuration, alternatives, replaceExercise, BODY_WORDS } from './generator.js';
 import { addExerciseToSession, findExerciseInSession } from './engine.js';
 import { blocksOf } from './views-library.js';
-import { startPlayer } from './player.js';
+import { startPlayer, resumeCard } from './player.js';
+import { findHistory, sessionFromHistory } from './live.js';
 import { streakCard } from './views-motiv.js';
 import { composePage } from './layout.js';
 import { programCard, fingerCard, activeProgram } from './views-program.js';
@@ -86,7 +87,7 @@ function vDash() {
     ? h`<button class="qa pri" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><span class="qt"><b>${title}</b><small>${sub}</small></span><span class="qgo" aria-hidden="true">▶</span></button>`
     : h`<button class="qa" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><b>${title}</b><small>${sub}</small></button>`);
   const safe = (b) => () => BLOCK_VIEWS[b]();
-  return h`${setupCard()}${installCard()}
+  return h`${resumeCard()}${setupCard()}${installCard()}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
     ${impactCard()}
     <div class="${S.lay?.page === 'home' ? '' : 'home-grid'}">${composePage('home', {
@@ -109,6 +110,25 @@ function impactCard() {
   return h`<details class="card flat acc-b" open><summary><b class="small">🔁 Ce que ta dernière séance change pour la suivante</b></summary><ul class="clean tight small">${r.items.map((x) => h`<li>${x.icon} ${x.text}</li>`)}</ul>
     <div class="row between wrapf"><span class="tiny muted">Calculé depuis « ${r.last.sessionName || 'ta séance'} » et ton questionnaire.</span><button class="btn sm ghost" data-act="impactHide">Masquer</button></div></details>`;
 }
+/* ───────── 8.30 : « Je n'ai rien prévu » — 3 questions, puis la séance ───────── */
+const ENVIES = [['force', '💪 Force'], ['endurance', '🔋 Cardio, endurance'], ['mobilite', '🧘 Souplesse, mobilité'], ['technique', '🎯 Technique'], ['surprise', '🎲 Surprends-moi']];
+const ENVIE_CAPS = { force: { tirage_vertical: 0.8, poussee_horizontale: 0.8, force_jambes: 0.8, gainage_anterieur: 0.5 }, endurance: { endurance_aerobie: 1, seuil: 0.5 }, mobilite: { mobilite_hanches: 1, mobilite_epaules: 0.8 }, technique: { technique_escalade: 1, technique_pieds: 0.8, coordination: 0.5 } };
+function nothingSheet() {
+  const q = S.np, c = ctx(), envs = c.envs.filter((e) => !e.archived);
+  openSheet(h`<div class="stack"><h2 style="margin:0">⚡ Je n’ai rien prévu</h2>
+    <span class="small"><b>1 · Combien de temps ?</b></span><div class="chips">${[10, 20, 30, 45, 60].map((m) => chip(q.min === m, `${m} min`, `data-act="npSet" data-k="min" data-v="${m}"`))}</div>
+    <span class="small"><b>2 · Où ?</b></span><div class="chips">${envs.slice(0, 6).map((e) => chip(q.env === e.id, e.name, `data-act="npSet" data-k="env" data-v="${e.id}"`))}${chip(q.env === 'none', '🧍 Ici, sans matériel', 'data-act="npSet" data-k="env" data-v="none"')}</div>
+    <span class="small"><b>3 · Envie de quoi ?</b></span><div class="chips">${ENVIES.map(([k, l]) => chip(q.envie === k, l, `data-act="npSet" data-k="envie" data-v="${k}"`))}</div>
+    <button class="btn pri big" data-act="npGo">▶ Préparer ma séance</button></div>`);
+}
+ACT.nothingPlanned = () => { const c = ctx(); S.np = { min: Number(S.settings.defaultMinutes) || 30, env: c.defEnv?.id || 'none', envie: 'surprise' }; nothingSheet(); };
+ACT.npSet = (el) => { S.np[el.dataset.k] = el.dataset.k === 'min' ? Number(el.dataset.v) : el.dataset.v; nothingSheet(); };
+ACT.npGo = () => {
+  const q = S.np, c = ctx(), acts = Object.keys(c.activities), climb = acts.find((a) => /^climbing/.test(a));
+  const sport = q.envie === 'technique' && climb ? climb : q.envie === 'endurance' ? (acts.find((a) => ['running', 'conditioning', 'swimming'].includes(a)) || acts[0]) : q.envie === 'mobilite' ? (acts.find((a) => a === 'conditioning') || acts[0]) : (acts.find((a) => ['strength', 'calisthenics', 'conditioning'].includes(a)) || acts[0]);
+  closeSheet();
+  openWizard({ sport: sport || 'conditioning', minutes: q.min, envId: q.env, focus: ENVIE_CAPS[q.envie] ? { label: ENVIES.find(([k]) => k === q.envie)[1].replace(/^\S+\s/, ''), caps: ENVIE_CAPS[q.envie] } : null });
+};
 ACT.impactHide = () => { S.impactHidden = ctx().history[0]?.id || ''; render(); };
 ACT.goLib = () => go('library', 'seances');
 ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
@@ -131,7 +151,7 @@ const BLOCK_VIEWS = {
   today() {
     const today = ymd(new Date()), evs = eventsOn(today).filter((e) => !doneOnDay(today).some((d) => d.sessionId === e.sessionId && e.sessionId));
     const t = todayOptions(ctx(), { todayEvents: evs });
-    return card('☀️ Que faire aujourd’hui ?', h`${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
+    return card('☀️ Que faire aujourd’hui ?', h`<button class="btn sm" data-act="nothingPlanned">⚡ Je n’ai rien prévu : 3 questions</button>${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
       <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="tiny">${(o.how || []).map((x) => h`<li>${x}</li>`)}</ul></details></div>
       ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}" aria-label="Préparer cette séance">▶</button>`}</div>`)}`);
   },
@@ -238,6 +258,11 @@ export async function runCommand(c, raw) {
   if (c.confirm && !(await ask(`Confirmer : ${c.summary}`, { ok: 'Confirmer', danger: true }))) return;
   const cs = currentSession();
   switch (c.type) {
+    case 'redo': {
+      const hh = findHistory(ctx().history, c.query); if (!hh) { toast('Je n’ai pas trouvé cette séance dans ton historique (14 derniers jours pour un jour de la semaine).', 4500); return; }
+      if (!(await ask(`Refaire « ${hh.sessionName} » du ${fmtDate(hh.startedAt)} ?`, { ok: '▶ C’est parti', detail: 'Mêmes exercices, même nombre de séries, dernière charge utilisée.' }))) return;
+      startPlayer(sessionFromHistory(hh, hh.sessionId ? getSeance(hh.sessionId) : null)); return;
+    }
     case 'generate': {
       const pr = {}; for (const f of c.focuses || []) for (const [k, v] of Object.entries(BODY_WORDS[f] || {})) pr[k] = Math.max(pr[k] || 0, v);
       const act = c.activity || (Object.keys(pr).length && !Object.keys(pr).some((k) => ['technique_escalade', 'technique_pieds'].includes(k)) ? (Object.keys(ctx().activities).find((a) => ['conditioning', 'strength'].includes(a)) || Object.keys(ctx().activities)[0] || 'conditioning') : Object.keys(ctx().activities)[0] || 'conditioning');

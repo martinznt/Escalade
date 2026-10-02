@@ -852,11 +852,12 @@ ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
  * une commande au coach… ouvrent toutes l'assistant, déjà rempli. auto : directement à la dernière validation (étape 7) :
  * un toucher sur « Générer », ou retour aux étapes d'avant pour modifier.
  */
-export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true } = {}) {
+export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true, envId = '' } = {}) {
   closeSheet();
   const help = CP().help || 'auto'; S.cp = null; ls.set(KEY, {}); const c = CP(), x = ctx();
   c.help = help; c.sport = sport || c.sport || Object.keys(x.activities)[0] || 'conditioning'; placeFor(c); c.minutes = Math.max(10, Math.min(240, minutes || S.settings.defaultMinutes || 45));
   c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = 'goals'; if (forme) c.forme = forme;
+  if (envId && x.envs.some((v) => v.id === envId)) { c.envId = envId; c.envPicked = true; } else if (envId === 'none') { c.envId = ''; c.envPicked = true; }
   // Une demande précise (objectif, intention, capacité) remplace les objectifs tirés du profil ; sinon ceux-ci suivent le sport.
   if (c.goalIds.length || intents.length || c.focus) c.aims = [];
   else c.aims = (c.aims || []).filter((a) => a.source === 'profile').map((a) => familyAim(a.family, c.sport, x.activities)).filter(Boolean).map((a) => ({ ...a, source: 'profile' }));

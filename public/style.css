@@ -683,3 +683,8 @@ div.setrow{cursor:default}
 .painmap .pzhit{fill:transparent;stroke:none}
 .hoursrow{display:grid;grid-template-columns:2.6em minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center}.hoursrow input{min-width:0}
 .slotrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.slotrow b{min-width:6.5em;text-transform:capitalize;font-size:.9rem}
+/* 8.30 — pendant la séance : ressenti par série, conseil de repos, mode nuit (écran rouge), paysage */
+.feelrow{display:grid;gap:4px;justify-items:center}.feelrow .chips{justify-content:center}
+.resttip{color:var(--muted);margin:2px 0}
+#player.redmode{background:#000}#player.redmode .pl{filter:grayscale(1) brightness(.85)}#player.redmode::after{content:'';position:fixed;inset:0;background:#ff1a00;mix-blend-mode:multiply;pointer-events:none;z-index:5}
+@media (orientation:landscape) and (max-height:520px){#player .timer{font-size:min(24vh,5rem)}#player .figbox{display:none}#player .pl .cues{max-height:38vh;overflow:auto}}

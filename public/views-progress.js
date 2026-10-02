@@ -2,7 +2,7 @@
 // timeline, journal, analyses descriptives et mode Lab. Toujours par rapport à soi-même, jamais aux autres.
 import { doneList } from './views-profile.js';
 import { h, raw, $, toast, openSheet, closeSheet, ask, askText, seg, chip, menuList, subHead, tag, empty, howBox, meter, bars, lineChart, fmtDay, fmtDate, fmtDateTime, relDate, numberField, buzzOk, fmtDur } from './ui.js';
-import { S, ACT, SUBMIT, CHG, ctx, go, render, deleteHistory, updateHistory, putItem, delItem, item, itemsOf } from './state.js';
+import { S, ACT, SUBMIT, CHG, ctx, go, render, deleteHistory, updateHistory, putItem, delItem, item, itemsOf, getSeance } from './state.js';
 import { uid, exKey } from './shared.js';
 import { CAPACITIES, MUSCLES, METRICS } from './model.js';
 import { benchmarks, periodSummary, regularity, loadAnalysis, records, timeline, journal, diagnostics, atypicalSessions, undertrained, forgottenGoals, whyNoProgress, activeGoals, goalLabel, labReport, entryActivity, activityLabel, perfText, muscleVolume, achievements, capacityState, confWord } from './brain.js';
@@ -10,6 +10,8 @@ import { anatomySvg } from './anatomy.js';
 import { compressPhoto } from './views-climb.js';
 import { streakCard, badgesCard } from './views-motiv.js';
 import { composePage } from './layout.js';
+import { FEELS, sessionFromHistory } from './live.js';
+import { startPlayer } from './player.js';
 import { learnedCard } from './views-forme.js';
 
 const SUBS = [['summary', '📊 Résumé'], ['history', '📋 Historique'], ['records', '🏆 Records'], ['timeline', '🕰️ Timeline'], ['journal', '📝 Journal'], ['analyses', '🔍 Analyses'], ['lab', '🧪 Lab']];
@@ -82,6 +84,8 @@ function vHistory() {
   S.jf = 'session'; setTimeout(() => go('progress', 'journal'), 0); return '';
 }
 ACT.histOpen = (el) => go('progress', 'history', el.dataset.id);
+const FEEL_E = Object.fromEntries(FEELS.map(([v, e]) => [v, e]));
+ACT.histRedo = (el) => { const e = S.history.find((x) => x.id === el.dataset.id); if (!e) return; startPlayer(sessionFromHistory(e, e.sessionId ? getSeance(e.sessionId) : null)); };
 function vEntry(e) {
   const q = e.data?.questionnaire || {}, d = e.data || {};
   return h`<h2 style="margin:0">${e.sessionName}</h2>
@@ -89,9 +93,9 @@ function vEntry(e) {
       ${d.context?.envName ? h`<p class="small">Lieu : ${d.context.envName}</p>` : ''}${d.aborted ? h`<p class="small warn-t">Séance interrompue avant la fin.</p>` : ''}
       ${q.felt?.length ? h`<p class="small">Muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}</p>` : ''}${q.hardest ? h`<p class="small">Plus difficile : ${q.hardest}</p>` : ''}${q.easiest ? h`<p class="small">Plus facile : ${q.easiest}</p>` : ''}
       ${d.rpe ? h`<p class="small">Ressenti : ${d.rpe}/5</p>` : ''}${d.note ? h`<p class="small">📝 ${d.note}</p>` : ''}${(q.answers || []).map((a) => h`<p class="small">${a.q} : ${a.a}</p>`)}${(d.swaps || []).length ? h`<p class="small">Remplacements : ${d.swaps.map((s) => `${s.from} → ${s.to}`).join(', ')}</p>` : ''}</div>
-    <div class="card">${(d.exercises || []).map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${(x.sets || []).map((s) => s.seconds ? `${s.seconds} s` : `${s.reps}${s.load ? ' × ' + s.load + ' kg' : ''}`).join(' · ')}</div></div></div>`)}</div>
+    <div class="card">${(d.exercises || []).map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${(x.sets || []).map((s) => (s.seconds ? `${s.seconds} s` : `${s.reps}${s.load ? ' × ' + s.load + ' kg' : ''}`) + (s.feel ? ' ' + (FEEL_E[s.feel] || '') : '')).join(' · ')}</div>${x.note ? h`<div class="tiny">📝 ${x.note}</div>` : ''}</div></div>`)}</div>
     ${mediaCard(e)}
-    <div class="row wrapf"><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
+    <div class="row wrapf"><button class="btn pri" data-act="histRedo" data-id="${e.id}">🔁 Refaire cette séance</button><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
 }
 /* Journal visuel : photos (réduites, synchronisées), liens vidéo, captures et notes liés à une séance. Privé au compte. */
 function mediaCard(e) {
