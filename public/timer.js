@@ -13,6 +13,7 @@ export const PRESETS = [
   { id: 'tabata', name: 'Tabata', emoji: '🔥', work: 20, rest: 10, reps: 8, sets: 1, setRest: 0, note: '20 s à fond, 10 s de pause, 8 fois. 4 minutes qui piquent.', src: ['tabata1996'] },
   { id: 'emom', name: 'Chaque minute (EMOM)', emoji: '⏱', work: 60, rest: 0, reps: 10, sets: 1, setRest: 0, note: 'Un bip chaque minute : fais tes répétitions, récupère le reste de la minute.' },
   { id: 'plank', name: 'Gainage 40 / 20', emoji: '🧱', work: 40, rest: 20, reps: 6, sets: 1, setRest: 0, note: 'Enchaîne planche, côtés, hollow… 40 s chacun.' },
+  { id: 'comp', name: 'Compétition de bloc 4 / 4', emoji: '🏆', work: 240, rest: 240, reps: 5, sets: 1, setRest: 0, note: '4 minutes pour essayer chaque bloc, 4 minutes de repos (format des compétitions). Note tes tops et zones dans Carnet › Mode compétition.' },
 ];
 const T = { cfg: null, phases: [], i: 0, end: 0, paused: 0, raf: 0, tickId: 0, wake: null, startedAt: 0, lastBeep: -1 };
 

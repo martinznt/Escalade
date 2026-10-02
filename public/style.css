@@ -688,3 +688,8 @@ div.setrow{cursor:default}
 .resttip{color:var(--muted);margin:2px 0}
 #player.redmode{background:#000}#player.redmode .pl{filter:grayscale(1) brightness(.85)}#player.redmode::after{content:'';position:fixed;inset:0;background:#ff1a00;mix-blend-mode:multiply;pointer-events:none;z-index:5}
 @media (orientation:landscape) and (max-height:520px){#player .timer{font-size:min(24vh,5rem)}#player .figbox{display:none}#player .pl .cues{max-height:38vh;overflow:auto}}
+/* 8.30 — outils par sport */
+.comprow{display:grid;grid-template-columns:4.2em auto auto auto auto;gap:4px 8px;align-items:center}.comprow .stepper b{min-width:1.6em;text-align:center}
+@media (max-width:360px){.comprow{grid-template-columns:auto auto;}.comprow b:first-child{grid-column:1/-1}}
+.photo-wrap .bnum{font-size:4px;font-weight:800;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:.8px}
+.laptap{min-height:120px;font-size:1.5rem}

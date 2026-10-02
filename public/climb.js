@@ -1,6 +1,6 @@
 // climb.js — calculs du carnet d'escalade (sans DOM, testés) : pyramide de cotations, projets, test de doigts.
-export const SENT = new Set(['flash', 'send', 'work', 'top']);
-export const RESULT_WORD = { flash: 'flash', send: 'réussi', work: 'réussi après travail', top: 'top', attempt: 'essai', fail: 'pas encore' };
+export const SENT = new Set(['flash', 'send', 'work', 'top', 'onsight']);
+export const RESULT_WORD = { onsight: 'à vue', flash: 'flash', send: 'réussi', work: 'réussi après travail', top: 'top', attempt: 'essai', fail: 'pas encore' };
 
 /** Système de cotation le plus utilisé pour ce type (bloc / voie) parmi les réussites. */
 export function mainSystem(ascents, kind) {
@@ -19,7 +19,7 @@ export function pyramid(ascents, { kind = 'bloc', since = 0, systemId = '' } = {
   for (const a of ascents) {
     if (a.kind !== kind || !SENT.has(a.result) || (a.date || 0) < since || a.grade?.systemId !== sys) continue;
     const k = a.grade.levelId || a.grade.label, r = rows.get(k) || { label: a.grade.label, order: a.grade.order ?? 0, color: a.grade.color || '', flash: 0, send: 0 };
-    if (a.result === 'flash') r.flash++; else r.send++;
+    if (a.result === 'flash' || a.result === 'onsight') r.flash++; else r.send++; // premier essai (flash ou à vue)
     rows.set(k, r);
   }
   const list = [...rows.values()].sort((x, y) => y.order - x.order);

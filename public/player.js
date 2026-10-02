@@ -7,13 +7,14 @@
 //  - temps de pause = somme des pauses (jamais compté comme temps actif) ;
 //  - une série chronométrée mise en pause ne compte pas le temps de pause dans sa durée.
 import { h, raw, $, toast, ask, fmtDur, mmss, rng, buzzOk, tag, openSheet, closeSheet, askText, chip } from './ui.js';
-import { S, ACT, CHG, INPUT, render, getSeance, saveSeance, addHistory, saveEvent, putItem, ctx, go, saveSettings, ls } from './state.js';
+import { S, ACT, CHG, INPUT, render, getSeance, saveSeance, addHistory, saveEvent, putItem, ctx, go, saveSettings, ls, item } from './state.js';
 import { normalizeSession, uid, exKey, parseKg, norm } from './shared.js';
 import { progressHint, applyPerformedBase, exMinutes, sessionMinutes } from './engine.js';
 import { MUSCLES, CAPACITIES } from './model.js';
 import { byId } from './library.js';
 import { exCaps, exMuscles, entryActivity, activeGoals, goalCaps, goalLabel } from './brain.js';
-import { warmupFor } from './generator.js';
+import { warmupFor, alternatives, replaceExercise } from './generator.js';
+import { plates, withFingerWarm } from './sports.js';
 import { hrSupported, hrConnect, hrConnected, hrNow, onHr } from './hr.js';
 import { celebrate } from './fx.js';
 import { figure } from './anim.js';
@@ -69,6 +70,9 @@ export function startPlayer(session, { eventId = null, fromGenerator = false, pr
     const w = warmupFor(s.activity || '', 5);
     if (w.length) { s.exercises = [...w, ...s.exercises]; warmAdded = w.length; }
   }
+  // 8.30 : avant un effort de doigts intense, un échauffement progressif des doigts est ajouté s'il manque.
+  const fw = withFingerWarm(s.exercises, byId);
+  if (fw.added) { s.exercises = fw.exercises; setTimeout(() => toast(`🖐️ Échauffement des doigts ajouté avant « ${fw.before} » (passe-le si tu es déjà chaud).`, 4500), 400); }
   S.player = {
     s, eventId, fromGenerator, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pauseStart: 0, pausedMs: 0,
     workStart: 0, workPausedMs: 0, restStart: 0, restMs: 0, remaining: 0, lastBeep: 0, swaps: [...(fromGenerator ? S.gen.swaps || [] : [])],
@@ -177,10 +181,10 @@ function vSet(p) {
   const ex = cur(), t = ex.mode === 'time', working = p.phase === 'work';
   const usesLoad = p.load > 0 || !!String(ex.load || '').trim() || p.hint?.load > 0;
   const next = p.s.exercises[p.i + 1];
-  return h`<div class="row"><div class="figbox">${raw(figure(ex, { size: 84 }))}</div><div class="grow">${ex.part ? h`<div class="tiny acc-t">${ex.part}</div>` : ''}<h1 style="margin:0">${ex.emoji} ${ex.name}</h1><div class="muted">Série ${p.set + 1} / ${ex.sets}${ex.perSide ? ` · côté ${p.side + 1} / 2` : ''}</div></div></div>
+  return h`<div class="row"><div class="figbox">${raw(figure(ex, { size: 84 }))}</div><div class="grow">${ex.part ? h`<div class="tiny acc-t">${ex.part}</div>` : ''}<h1 style="margin:0">${ex.emoji} ${ex.name}</h1><div class="muted">Série ${p.set + 1} / ${ex.sets}${ex.perSide ? ` · côté ${p.side + 1} / 2` : ''}</div>${item('exsetup', setupId(ex))?.setup ? h`<div class="tiny acc-t">⚙️ ${item('exsetup', setupId(ex)).setup}</div>` : ''}</div></div>
     <div class="center"><b class="presc">${t ? (ex.secMin >= 120 ? fmtDur(ex.secMin) + (ex.secMax !== ex.secMin ? ' à ' + fmtDur(ex.secMax) : '') : rng(ex.secMin, ex.secMax) + ' s') : rng(ex.repsMin, ex.repsMax) + (ex.unit ? ' ' + ex.unit : ' rép.')}</b>${ex.load ? h`<div class="muted">${ex.load}</div>` : ''}${p.hint ? h`<div class="small acc-t">Dernière fois : ${p.hint.last}${p.hint.next ? ' · ' + p.hint.next : ''}</div>` : ''}${ex.rest ? h`<div class="tiny muted">Repos prévu : ${fmtDur(ex.rest)}</div>` : ''}</div>
     ${working ? h`<div class="timer" id="ptimer">${mmss(Math.max(0, Math.ceil(((p.paused ? p.remaining : p.end - Date.now())) / 1000)))}</div><div class="bar"><i id="pbar2" style="width:0%"></i></div><button class="btn big pri" data-act="pWorkDone">✓ Terminer la série</button>`
-      : h`${t ? stepper('secs', p.secs, 's', 'Durée') : stepper('reps', p.reps, ex.unit || 'rép.', 'Répétitions faites')}${!t && usesLoad ? stepper('load', p.load, 'kg', 'Charge') : ''}
+      : h`${t ? stepper('secs', p.secs, 's', 'Durée') : stepper('reps', p.reps, ex.unit || 'rép.', 'Répétitions faites')}${!t && usesLoad ? stepper('load', p.load, 'kg', 'Charge') : ''}${!t && usesLoad && isBarbell(ex) && p.load >= 20 ? h`<div class="tiny muted center">⚖️ ${plates(p.load).text}</div>` : ''}
         <button class="btn pri big" data-act="pGo" ${p.paused ? 'disabled' : ''}>${t ? `▶ Démarrer (${mmss(p.secs)})` : '✓ Série faite'}</button>`}
     ${cues(ex, p.s)}
     ${next ? h`<p class="tiny muted center">Ensuite : ${next.name}${partLeft(p)}</p>` : ''}`;
@@ -265,6 +269,8 @@ Object.assign(ACT, {
 });
 /* ───────── 8.30 : outils pendant la séance (ressenti, j'ai mal, il me reste X min, note, mode nuit, voix) ───────── */
 const SNAP_KEY = 'sea:player-snap';
+const setupId = (ex) => 'es-' + String(ex?.libId || exKey(ex?.name || '')).replace(/[^\w.-]/g, '_').slice(0, 60);
+const isBarbell = (ex) => (ex.needs || byId(ex.libId)?.needs || []).includes('barbell') || (/\b(barre|squat|soulevé de terre|développé couché|rowing barre)\b/i.test(ex.name || '') && !/haltère|machine|traction|kettlebell/i.test(ex.name || ''));
 Object.assign(ACT, {
   pFeel: (el) => {
     const p = S.player, last = p?.log[p.i]?.sets?.at(-1); if (!last) return;
@@ -277,10 +283,31 @@ Object.assign(ACT, {
     openSheet(h`<div class="stack"><h2 style="margin:0">⋯ Outils de la séance</h2><div class="setmenu">
       <button class="setrow" data-act="pHurt"><span class="sic">🩹</span><span class="grow"><b>J’ai mal</b><small>La suite de la séance ménage la zone (pour cette fois)</small></span><span class="chev">›</span></button>
       <button class="setrow" data-act="pTime"><span class="sic">⏱</span><span class="grow"><b>Il me reste peu de temps</b><small>La suite tient dans le temps qu’il te reste</small></span><span class="chev">›</span></button>
+      <button class="setrow" data-act="pSwap"><span class="sic">🔄</span><span class="grow"><b>Remplacer cet exercice</b><small>Machine prise, matériel absent : un exercice qui travaille la même chose</small></span><span class="chev">›</span></button>
+      <button class="setrow" data-act="pSetup"><span class="sic">⚙️</span><span class="grow"><b>Mes réglages pour cet exercice</b><small>${item('exsetup', setupId(cur()))?.setup || 'Siège, dossier, prise… affichés à chaque fois'}</small></span><span class="chev">›</span></button>
       <button class="setrow" data-act="pNote"><span class="sic">📝</span><span class="grow"><b>Note sur cet exercice</b><small>${p.log[p.i]?.note ? p.log[p.i].note : 'Gardée dans ton journal avec la séance'}</small></span><span class="chev">›</span></button>
       <button class="setrow" data-act="pRed"><span class="sic">🔴</span><span class="grow"><b>Mode nuit ${S.settings.redMode ? '(activé)' : ''}</b><small>Écran rouge et sombre : n’éblouit pas (falaise, soir, bivouac)</small></span><span class="chev">${S.settings.redMode ? '✓' : '›'}</span></button>
       <button class="setrow" data-act="pHands"><span class="sic">🎙️</span><span class="grow"><b>Commandes vocales ${S.settings.handsFree ? '(activées)' : ''}</b><small>« Suivant », « pause », « facile », « j’ai mal », « il me reste 10 minutes »… selon le navigateur</small></span><span class="chev">${S.settings.handsFree ? '✓' : '›'}</span></button>
     </div><button class="btn" data-act="closeSheet">Fermer</button></div>`);
+  },
+  pSetup: async () => {
+    const ex = cur(); if (!ex) return; closeSheet(); const id = setupId(ex), old = item('exsetup', id);
+    const t = await askText(`Réglages pour « ${ex.name} »`, { value: old?.setup || '', placeholder: 'Ex. siège 4, dossier 2, prise large', max: 160, ok: 'Garder' });
+    if (t == null) return; putItem('exsetup', id, { key: ex.libId || exKey(ex.name), label: ex.name, setup: String(t).trim().slice(0, 160) }); toast(String(t).trim() ? 'Réglages gardés : affichés à chaque séance' : 'Réglages effacés'); draw();
+  },
+  pSwap: () => {
+    const p = S.player, ex = cur(); if (!ex) return;
+    const alts = alternatives(ex, ctx(), { session: p.s }).filter((o) => o.available).slice(0, 8);
+    openSheet(h`<div class="stack"><h2 style="margin:0">🔄 Remplacer « ${ex.name} »</h2>${alts.length ? h`<div class="setmenu">${alts.map((o) => h`<button class="setrow" data-act="pSwapTo" data-id="${o.lib.id}"><span class="sic">${o.lib.emoji || '💪'}</span><span class="grow"><b>${o.lib.name}</b><small>${o.reasons[0] || ''}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small">Aucun autre exercice possible avec ton matériel : passe celui-ci (⏭) si besoin.</p>`}<button class="btn" data-act="closeSheet">Annuler</button></div>`);
+  },
+  pSwapTo: (el) => {
+    const p = S.player, ex = cur(); if (!ex) return;
+    const r = replaceExercise(p.s, ex.id, el.dataset.id, 'pendant la séance'); if (!r.change) return closeSheet();
+    const nx = r.session.exercises[p.i], keepSets = p.log[p.i].sets.length ? p.log[p.i] : null;
+    p.s = { ...p.s, exercises: r.session.exercises }; p.adapted = true; p.swaps.push({ from: r.change.from, to: r.change.to });
+    if (keepSets) { p.s.exercises.splice(p.i + 1, 0, nx); p.s.exercises[p.i] = ex; p.log.splice(p.i + 1, 0, { name: nx.name, libId: nx.libId, group: nx.group, intensity: nx.intensity, risk: nx.risk, muscles: nx.muscles, caps: nx.caps, prim: nx.prim, sec: nx.sec, sets: [] }); closeSheet(); nextExercise(); }
+    else { p.log[p.i] = { name: nx.name, libId: nx.libId, group: nx.group, intensity: nx.intensity, risk: nx.risk, muscles: nx.muscles, caps: nx.caps, prim: nx.prim, sec: nx.sec, isNew: nx.isNew, sets: [] }; p.set = 0; p.phase = 'ready'; initInputs(false); closeSheet(); draw(true); }
+    toast(`Remplacé par « ${r.change.to} »`);
   },
   pRed: () => { S.settings.redMode = !S.settings.redMode; saveSettings(); closeSheet(); draw(); },
   pHands: () => { S.settings.handsFree = !S.settings.handsFree; saveSettings(); closeSheet(); if (S.settings.handsFree) { voiceStart(); toast('Commandes vocales : dis « suivant », « pause », « facile », « j’ai mal »…', 4000); } else voiceStop(); draw(); },

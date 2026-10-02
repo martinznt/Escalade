@@ -75,16 +75,19 @@ export const SCHEMAS = {
   // Journal d'escalade : un bloc / une voie tenté(e) ou réussi(e), avec la cotation au moment de la saisie.
   ascent: {
     kind: ['e', ['bloc', 'voie'], 'bloc'], name: ['s', 80], grade: ['obj', GRADE_SNAPSHOT], gradeText: ['s', 20],
-    result: ['e', ['flash', 'send', 'work', 'top', 'attempt', 'fail'], 'attempt'], attempts: ['n', 1, 999, 1], styles: ['ids', 12], styleText: ['s', 60],
+    result: ['e', ['onsight', 'flash', 'send', 'work', 'top', 'attempt', 'fail'], 'attempt'], attempts: ['n', 1, 999, 1], styles: ['ids', 12], styleText: ['s', 60],
     nuance: ['e', ['', 'facile', 'moyen', 'dur'], ''],
     date: ['n', 0, 9e15, 0], context: ['obj', CONTEXT], note: ['s', 300],
   },
   // Projet d'escalade : un bloc / une voie qu'on travaille sur plusieurs séances, jusqu'à la réussite.
   project: {
     kind: ['e', ['bloc', 'voie'], 'bloc'], name: ['s', 80], grade: ['obj', GRADE_SNAPSHOT], gradeText: ['s', 20], place: ['s', 80],
-    status: ['e', ['active', 'done', 'archived'], 'active'], tries: ['list', { date: ['n', 0, 9e15, 0], n: ['n', 1, 99, 1] }, 200],
-    holds: ['list', { x: ['n', 0, 1, 0], y: ['n', 0, 1, 0], t: ['e', ['main', 'pied', 'depart', 'top'], 'main'] }, 80],
+    status: ['e', ['active', 'done', 'archived', 'wish'], 'active'], tries: ['list', { date: ['n', 0, 9e15, 0], n: ['n', 1, 99, 1] }, 200],
+    holds: ['list', { x: ['n', 0, 1, 0], y: ['n', 0, 1, 0], t: ['e', ['main', 'pied', 'depart', 'top', 'chute'], 'main'] }, 120],
     hasPhoto: ['b'], startedAt: ['n', 0, 9e15, 0], doneAt: ['n', 0, 9e15, 0], note: ['s', 300],
+    // 8.30 : point le plus haut atteint (%), sections, pourquoi on tombe ; pan maison (photo + prises) et blocs générés.
+    high: ['n', 0, 100, 0], sections: ['list', { name: ['s', 40], done: ['b'] }, 12], fallWhy: ['strs', 6, 20],
+    board: ['b'], problems: ['list', { name: ['s', 40], idx: ['strs', 20, 4], level: ['s', 10] }, 30],
   },
   // Programme sur plusieurs semaines : calendrier des séances (générées au moment de les faire).
   program: {
@@ -110,7 +113,9 @@ export const SCHEMAS = {
     sectors: ['strs', 30, 60],
     city: ['s', 60], gradeSys: ['id'], areas: ['list', { id: ['e', ['bloc', 'voie', 'entrainement', 'muscu', 'etirement'], 'bloc'], items: ['ids', 30], note: ['s', 120] }, 8],
     // 8.30 : horaires d'ouverture (0 = lundi, « HH:MM »), pour caler les séances proposées.
-    hours: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 14] },
+    hours: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 14],
+    // 8.30 : coordonnées d'une falaise (facultatives) pour les conditions météo.
+    lat: ['n', -90, 90, null], lon: ['n', -180, 180, null] },
   // Préférence explicite ou confirmée : aime / neutre / évite (jamais une suppression automatique).
   pref: { key: ['s', 80], label: ['s', 80], value: ['e', ['aime', 'neutre', 'evite'], 'neutre'], source: ['e', ['explicit', 'habit', 'questionnaire'], 'explicit'], reason: ['s', 200] },
   // Niveau déclaré par l'utilisateur pour une capacité (-1 = « je ne sais pas »).
@@ -139,6 +144,8 @@ export const SCHEMAS = {
   // pouls au repos (facultatif), cycle (facultatif, seulement si activé par la personne).
   wellness: { day: ['day'], at: ['n', 0, 9e15, 0], sleep: ['n', 0, 16, null], energy: ['n', 1, 5, null], soreness: ['n', 1, 5, null], stress: ['n', 1, 5, null],
     hr: ['n', 25, 220, null], period: ['b'], note: ['s', 300] },
+  // 8.30 — réglages d'une machine ou d'un exercice (siège, dossier, prise…), affichés pendant la séance.
+  exsetup: { key: ['s', 80], label: ['s', 80], setup: ['s', 160] },
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
   habit: { key: ['s', 120], decision: ['e', ['accepted', 'dismissed'], 'dismissed'] },
   // Configuration personnelle (tableau de bord, environnement par défaut…) : un item par clé.

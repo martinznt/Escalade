@@ -27,6 +27,7 @@ import { assessment, conditionFacts, suggestedGoals, guidedTests, ENVIES, ZONE_W
 import { levelFor } from './generator.js';
 import { COMPOSITION, MEASURES, lastValue, evolution, indices, checkWeighIn } from './bodycomp.js';
 import { painCard } from './views-forme.js';
+import { sportTools } from './views-sports.js';
 import { PHYSIQUE, PHYSIQUE_SOURCES, physiqueGroups, physiqueMeasures, physiqueTrack, weeklySets, SETS_RANGE } from './physique.js';
 
 const SUBS = [['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
@@ -204,6 +205,7 @@ function vPerfs() {
   return h`<div class="row wrapf"><button class="btn pri" data-act="perfAdd">＋ Saisir une performance</button><button class="btn" data-act="metricNew">＋ Métrique personnalisée</button></div>
     ${recordsCards()}
     ${climber ? h`<span class="kicker">🧗 Escalade</span>${climbMaxima()}${pyramidCard()}${fingerCard()}` : ''}
+    ${sportTools()}
     ${rem.length ? h`<div class="card flat"><h3>📏 À mesurer</h3>${rem.map((t) => h`<div class="item"><div class="grow"><b class="small">${t.label}</b><div class="tiny muted">${t.unknown ? 'tu ne sais pas encore' : t.age != null ? `il y a ${t.age} j` : 'jamais mesuré'} · pour ${t.why}</div>${t.test ? h`<details class="how mini"><summary>Comment faire le test ?</summary><p class="tiny">${t.test}</p></details>` : ''}</div><button class="btn sm pri" data-act="perfAdd" data-id="${t.metricId}">Saisir</button></div>`)}</div>` : ''}
     ${groups.size ? [...groups.entries()].map(([mid, list]) => { const m = c.metrics[mid] || { label: mid, unit: '' }; const t = metricTrend(mid, c); const pts = list.filter((p) => !p.unknown && p.value != null).sort((a, b) => a.date - b.date).map((p) => ({ v: p.value })); return h`<div class="card"><div class="row between"><h3>${m.label}</h3><button class="btn sm" data-act="perfAdd" data-id="${mid}">＋</button></div>
       ${m.tiers ? h`<p class="tiny muted">${metricTierText(m)}</p>` : ''}${t ? h`<p class="small">${t.dir > 0 ? '📈' : t.dir < 0 ? '📉' : '➖'} ${t.text}</p>` : ''}${pts.length >= 2 ? lineChart(pts, m.unit) : ''}
@@ -728,7 +730,8 @@ function envForm(e) {
     const c = ctx(), systems = Object.values(c.systems).filter((x) => !x.archived);
     body = h`<label>Région ou ville <span class="tiny muted">(facultatif)</span><input name="city" maxlength="60" value="${e?.city || ''}" placeholder="Ex. Fontainebleau, Céüse"></label>
       <label>Cotation utilisée<select name="gradeSys"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select></label>
-      <label>Secteurs <span class="tiny muted">(un par ligne : tu les choisiras en notant tes blocs et tes voies)</span><textarea name="sectors" rows="4" placeholder="Ex. Bas Cuvier&#10;Apremont&#10;Secteur des dalles">${(e?.sectors || []).join('\n')}</textarea></label>`;
+      <label>Secteurs <span class="tiny muted">(un par ligne : tu les choisiras en notant tes blocs et tes voies)</span><textarea name="sectors" rows="4" placeholder="Ex. Bas Cuvier&#10;Apremont&#10;Secteur des dalles">${(e?.sectors || []).join('\n')}</textarea></label>
+      <label>Coordonnées GPS <span class="tiny muted">(facultatif : pour la météo des conditions, ex. « 48.40, 2.63 »)</span><input name="gps" maxlength="40" inputmode="decimal" value="${Number.isFinite(e?.lat) && Number.isFinite(e?.lon) ? `${e.lat}, ${e.lon}` : ''}" placeholder="latitude, longitude"></label>`;
   } else { const grouped = new Set(EQUIPMENT_GROUPS.flatMap(([, k]) => k)), rest = Object.keys(EQUIPMENT).filter((k) => !grouped.has(k));
     body = h`<label>Matériel disponible</label><p class="tiny muted">« Machines de musculation (toutes) » suffit pour une salle classique ; sinon coche machine par machine.</p>
       ${EQUIPMENT_GROUPS.map(([t, keys]) => h`<span class="kicker">${t}</span>${eqChips('eq', keys.filter((k) => EQUIPMENT[k]), eq)}`)}${rest.length ? h`<span class="kicker">Autre</span>${eqChips('eq', rest, eq)}` : ''}`; }
@@ -757,7 +760,9 @@ SUBMIT.envSave = (f) => {
     putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', areas, equipment: [...new Set(areas.flatMap((a) => a.items))] });
   } else if (d.type === 'falaise') {
     const sectors = [...new Set(String(d.sectors || '').split('\n').map((x) => x.trim()).filter(Boolean))].slice(0, 30);
-    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', sectors, equipment: ['wall'] });
+    const g = String(d.gps || '').match(/^\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*$/), lat = g ? Number(g[1].replace(',', '.')) : null, lon = g ? Number(g[2].replace(',', '.')) : null;
+    if (String(d.gps || '').trim() && !(g && Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return toast('Coordonnées GPS : écris « latitude, longitude », par exemple 48.40, 2.63.', 4500, 'bad');
+    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', sectors, equipment: ['wall'], ...(g ? { lat: Math.round(lat * 1e4) / 1e4, lon: Math.round(lon * 1e4) / 1e4 } : {}) });
   } else putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, equipment: fd.getAll('eq') });
   closeSheet(); buzzOk(); toast({ escalade: 'Salle enregistrée', falaise: 'Falaise enregistrée' }[d.type] || 'Lieu enregistré'); render();
 };

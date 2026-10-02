@@ -34,9 +34,9 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/planning.js', '/views-planning.js', '/live.js', '/library-more.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/planning.js', '/views-planning.js', '/live.js', '/sports.js', '/views-sports.js', '/library-more.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
-  '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
+  '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/badge-96.png', '/robots.txt']);
 
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
@@ -454,6 +454,7 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/calendar' && m === 'POST') return calendarPost(request, env, u);
   if ((x = p.match(/^\/api\/calendar\/([\w-]{1,64})$/)) && m === 'DELETE') { const r = await db(env, 'DELETE FROM calendar_events WHERE id=? AND user_id=?', x[1], u.id).run(); if (!r.meta?.changes) return fail('Événement introuvable.', 404); return json({ ok: true }); }
 
+  if (p === '/api/weather' && m === 'GET') return weatherGet(url, env, u);
   if (p === '/api/ical' && m === 'GET') { const r = await db(env, 'SELECT created_at FROM ical_feeds WHERE user_id=?', u.id).first(); return json({ ok: true, active: !!r, created_at: r?.created_at || null }); }
   if (p === '/api/ical' && m === 'POST') return icalCreate(env, u, url);
   if (p === '/api/ical' && m === 'DELETE') { await db(env, 'DELETE FROM ical_feeds WHERE user_id=?', u.id).run(); return json({ ok: true }); }
@@ -934,6 +935,22 @@ async function calendarPost(request, env, u) {
     id, u.id, b.date, time, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, meta ? JSON.stringify(meta) : '', now, now).run();
   if (!r.meta || r.meta.changes === 0) return fail('Identifiant déjà utilisé.', 409);
   return json({ ok: true, event: { id, date: b.date, time, sessionId: b.sessionId || null, title: str(b.title, 120), completed: !!b.completed, recurrence: rec, meta } });
+}
+
+/* ═════════════ 8.30 : conditions en falaise (météo Open-Meteo, via le serveur) ═════════════ */
+// Le serveur demande la prévision (coordonnées arrondies au centième : ~1 km) : l'adresse de l'appareil n'est pas
+// transmise au service météo. Données Open-Meteo.com (licence CC BY 4.0), attribution affichée dans l'app.
+async function weatherGet(url, env, u) {
+  const la = url.searchParams.get('lat'), lo = url.searchParams.get('lon'), lat = Number(la), lon = Number(lo);
+  if (!la || !lo || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return fail('Coordonnées invalides.');
+  if (await limited(env, 'wx:' + u.id, 60, 3600000)) return fail('Trop de demandes météo : réessaie dans un moment.', 429);
+  const q = `latitude=${lat.toFixed(2)}&longitude=${lon.toFixed(2)}&hourly=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&past_days=1&forecast_days=3&timezone=auto`;
+  let r; try { r = await (env.FETCH || fetch)(`https://api.open-meteo.com/v1/forecast?${q}`, { headers: { 'User-Agent': 'seances-entrainement (conditions en falaise)' } }); } catch { return fail('Météo indisponible pour le moment.', 502); }
+  if (!r?.ok) return fail('Météo indisponible pour le moment.', 502);
+  const H = (await r.json().catch(() => null))?.hourly;
+  if (!H || !Array.isArray(H.time)) return fail('Météo indisponible pour le moment.', 502);
+  const keep = (a) => (Array.isArray(a) ? a.slice(0, 120).map((x) => (x == null || !Number.isFinite(Number(x)) ? null : Math.round(Number(x) * 10) / 10)) : []);
+  return json({ ok: true, source: 'Open-Meteo.com', hourly: { time: H.time.slice(0, 120).map((t) => String(t).slice(0, 16)).filter((t) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(t)), temperature_2m: keep(H.temperature_2m), relative_humidity_2m: keep(H.relative_humidity_2m), precipitation: keep(H.precipitation), wind_speed_10m: keep(H.wind_speed_10m) } });
 }
 
 /* ═════════════ 8.30 : abonnement agenda (lien secret en lecture seule) ═════════════ */

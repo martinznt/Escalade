@@ -1,7 +1,7 @@
 // views-climb.js — le carnet d'escalade : ajout rapide d'un bloc / d'une voie, pyramide de cotations, projets
 // (essais, photo avec les prises dessinées au doigt, réussite fêtée), test de doigts mensuel, journal.
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, fmtDay, relDate, buzzOk, mmss } from './ui.js';
-import { S, ACT, SUBMIT, CHG, ctx, render, putItem, delItem, item, itemsOf, go } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, ctx, render, putItem, delItem, item, itemsOf, go } from './state.js';
 import { setReturn } from './nav.js';
 import { uid } from './shared.js';
 import { sortedLevels, gradeSnapshot, REFERENCE } from './grading.js';
@@ -9,10 +9,13 @@ import { pyramid, projectStats, addTries, fingerTest, SENT, RESULT_WORD } from '
 import { celebrate } from './fx.js';
 import { startTimer } from './timer.js';
 import { sourcesLine } from './srcui.js';
+import { FALL_WHY, fallTraining } from './sports.js';
+import { climbTools } from './views-sports.js';
+import { openWizard } from './views-climbplan.js';
 
 const C = () => (S.carnet ||= { kind: 'bloc', period: 'year', hold: 'main' });
 const PERIODS = [['3m', '3 mois', 90], ['year', '1 an', 365], ['all', 'Tout', 0]];
-const HOLD = { main: ['Main', '#f5b642'], pied: ['Pied', '#5fa8d3'], depart: ['Départ', '#5cb87a'], top: ['Top', '#ef6f5e'] };
+const HOLD = { main: ['Main', '#f5b642'], pied: ['Pied', '#5fa8d3'], depart: ['Départ', '#5cb87a'], top: ['Top', '#ef6f5e'], chute: ['Là où je tombe', '#c084fc'] };
 const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
 
 /** Système de cotation proposé pour un type (le dernier utilisé, sinon la référence). */
@@ -24,10 +27,11 @@ const gradeChips = (sys, levelId, act) => h`<div class="chips grades">${sortedLe
 
 export function vCarnet() {
   const c = ctx();
-  const nProj = itemsOf('project').filter((p) => p.status === 'active').length;
+  const nProj = itemsOf('project').filter((p) => p.status === 'active' && !p.board).length;
   return h`<section class="card carnet-hero"><h2>🧗 Mon carnet</h2>
       <div class="grid2"><button class="btn pri big" data-act="ascQuick">＋ Bloc ou voie</button><button class="btn big" data-act="projNew">📌 Nouveau projet</button></div></section>
     <div class="setmenu">${[['goProjects', '', '📌', 'Mes projets', nProj ? `${nProj} en cours · rangés avec tes objectifs` : 'Rangés avec tes objectifs'], ['allGo', 'profile/perfs', '🏆', 'Pyramide, maxima et test de doigts', 'Dans Records et mesures']].map(([act, to, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${to ? raw(`data-to="${to}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
+    ${climbTools()}
     <section class="card"><div class="row between wrapf"><h3>Mes blocs et voies</h3><button class="btn sm ghost" data-act="jOpenClimb">Tout le journal ›</button></div>
       ${c.ascents.length ? h`${c.ascents.slice(0, 6).map(ascRow)}${c.ascents.length > 6 ? h`<details class="how mini"><summary>Tout voir (${c.ascents.length})</summary>${c.ascents.slice(6, 200).map(ascRow)}</details>` : ''}` : h`<p class="small muted">Rien pour l’instant.</p>`}</section>
     `;
@@ -59,12 +63,12 @@ export function pyramidCard() {
 }
 /** Projets d'escalade : rangés avec les objectifs (ce sont des objectifs « réussir ce bloc / cette voie »). */
 export function projectsSection(status = 'active') {
-  const list = itemsOf('project').filter((p) => p.status === status).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+  const list = itemsOf('project').filter((p) => p.status === status && !p.board).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
   if (!list.length) return '';
   return h`<span class="kicker">🧗 Projets d’escalade</span>${list.map(projRow)}`;
 }
 /** Projets réussis, pour la liste des objectifs réussis. */
-export const doneProjects = () => itemsOf('project').filter((p) => p.status === 'done');
+export const doneProjects = () => itemsOf('project').filter((p) => p.status === 'done' && !p.board);
 /** Test de doigts : avec les mesures (il enregistre des mesures). */
 export function fingerCard() {
   const ft = fingerTest(ctx().perfs);
@@ -85,7 +89,7 @@ const NUANCE = [['facile', '😌 facile'], ['moyen', '🙂 moyen'], ['dur', '�
 function aqBody() {
   const q = S.aq, c = ctx(), sys = c.systems[q.systemId] || sysFor(q.kind), gl = gyms(), lv = sortedLevels(sys).find((l) => l.id === q.levelId);
   const styles = Object.values(c.styles).filter((x) => !x.archived && (!x.activity || /climb|escalade/.test(x.activity)));
-  const results = [['flash', '⚡ Flash'], ['send', '✓ Réussi'], ['work', '💪 Après travail'], ['attempt', '… Pas encore']];
+  const results = [['onsight', '👀 À vue'], ['flash', '⚡ Flash'], ['send', '✓ Réussi'], ['work', '💪 Après travail'], ['attempt', '… Pas encore']];
   return h`<div class="aq"><h2>Bloc ou voie</h2>${seg('aqKind', q.kind, [['bloc', '🪨 Bloc'], ['voie', '🧗 Voie']])}
     <label>Où ?</label><div class="chips">${[['salle', '🏢 En salle'], ['falaise', '🌄 En falaise']].map(([k, l]) => chip(q.where === k, l, `data-act="aqWhere" data-v="${k}"`))}</div>
     ${q.where ? (() => { const list = gl.filter((e) => whereOf(e) === q.where), cur = c.envs.find((e) => e.id === q.env);
@@ -95,7 +99,8 @@ function aqBody() {
     ${lv ? h`<label>Pour un ${lv.label}, c’était…</label><div class="chips">${NUANCE.map(([k, l]) => chip(q.nuance === k, l, `data-act="aqNuance" data-v="${k}"`))}</div>` : ''}
     <label>Style <span class="tiny muted">(plusieurs choix)</span></label><div class="chips">${styles.sort((a, b) => a.label.localeCompare(b.label, 'fr')).map((st) => chip((q.styles || []).includes(st.id), st.label, `data-act="aqStyle" data-v="${st.id}"`))}<input class="chipin" data-change="styleQuick" data-target="aq" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
     <label>Résultat</label><div class="chips">${results.map(([k, l]) => h`<button type="button" class="chip ${q.result === k ? 'on' : ''}" data-act="aqResult" data-v="${k}">${l}</button>`)}</div>
-    ${q.result !== 'flash' ? h`<label>Essais</label><div class="stepper sm"><button type="button" data-act="aqAtt" data-d="-1" aria-label="Moins">−</button><b>${q.attempts}</b><button type="button" data-act="aqAtt" data-d="1" aria-label="Plus">+</button></div>` : ''}
+    ${q.result === 'onsight' || q.result === 'flash' ? h`<p class="tiny muted">${q.result === 'onsight' ? 'À vue : du premier coup, sans rien savoir de la voie à l’avance.' : 'Flash : du premier coup, en ayant vu quelqu’un ou eu des infos.'}</p>` : ''}
+    ${q.result !== 'flash' && q.result !== 'onsight' ? h`<label>Essais</label><div class="stepper sm"><button type="button" data-act="aqAtt" data-d="-1" aria-label="Moins">−</button><b>${q.attempts}</b><button type="button" data-act="aqAtt" data-d="1" aria-label="Plus">+</button></div>` : ''}
     <details class="how mini"><summary>Plus de détails</summary><label>Nom<input id="aq-name" maxlength="80" value="${q.name || ''}" placeholder="Le jaune du dévers…"></label>
       <label>Système de cotation<select data-change="aqSys">${Object.values(c.systems).filter((s) => !s.archived).map((s) => h`<option value="${s.id}" ${s.id === sys?.id ? 'selected' : ''}>${s.name}</option>`)}</select></label></details>
     <button class="btn pri big" data-act="aqSave" ${q.levelId ? '' : 'disabled'}>Enregistrer</button></div>`;
@@ -128,7 +133,7 @@ ACT.aqNuance = (el) => { S.aq.nuance = S.aq.nuance === el.dataset.v ? '' : el.da
 ACT.aqStyle = (el) => { const l = (S.aq.styles ||= []), i = l.indexOf(el.dataset.v); if (i >= 0) l.splice(i, 1); else l.push(el.dataset.v); aqDraw(); };
 ACT.aqKind = (el) => { S.aq.kind = el.dataset.id; S.aq.systemId = sysFor(el.dataset.id)?.id; S.aq.levelId = ''; aqDraw(); };
 ACT.aqGrade = (el) => { S.aq.levelId = el.dataset.v; aqDraw(); };
-ACT.aqResult = (el) => { S.aq.result = el.dataset.v; if (el.dataset.v === 'flash') S.aq.attempts = 1; aqDraw(); };
+ACT.aqResult = (el) => { S.aq.result = el.dataset.v; if (el.dataset.v === 'flash' || el.dataset.v === 'onsight') S.aq.attempts = 1; aqDraw(); };
 ACT.aqAtt = (el) => { S.aq.attempts = Math.max(1, Math.min(99, S.aq.attempts + Number(el.dataset.d))); aqDraw(); };
 CHG.aqSys = (el) => { S.aq.systemId = el.value; S.aq.levelId = ''; aqDraw(); };
 ACT.aqSave = () => {
@@ -137,7 +142,7 @@ ACT.aqSave = () => {
   const gym = c.envs.find((e) => e.id === q.env), sc = $('#aq-sector'); if (sc && sc.value.trim()) q.sector = sc.value.trim();
   // Nouveau secteur tapé : ajouté à la falaise pour la prochaine fois.
   if (gym && whereOf(gym) === 'falaise' && q.sector && !(gym.sectors || []).includes(q.sector)) putItem('env', gym.id, { ...gym, sectors: [...(gym.sectors || []), q.sector].slice(0, 30) });
-  putItem('ascent', 'asc-' + uid().slice(0, 14), { kind: q.kind, name: q.name.trim(), grade, result: q.result, attempts: q.result === 'flash' ? 1 : q.attempts, styles: q.styles || [], nuance: q.nuance || '', date: Date.now(), note: '', context: gym ? { env: gym.id, place: whereOf(gym) === 'falaise' ? q.sector || '' : '', kind: whereOf(gym) } : q.where ? { kind: q.where } : null });
+  putItem('ascent', 'asc-' + uid().slice(0, 14), { kind: q.kind, name: q.name.trim(), grade, result: q.result, attempts: q.result === 'flash' || q.result === 'onsight' ? 1 : q.attempts, styles: q.styles || [], nuance: q.nuance || '', date: Date.now(), note: '', context: gym ? { env: gym.id, place: whereOf(gym) === 'falaise' ? q.sector || '' : '', kind: whereOf(gym) } : q.where ? { kind: q.where } : null });
   C().kind = q.kind; closeSheet(); buzzOk(); render();
   toast(SENT.has(q.result) ? `${grade.label} ajouté à ton carnet` : 'Essai noté. Tu l’auras la prochaine fois.');
 };
@@ -145,16 +150,18 @@ ACT.aqSave = () => {
 /* ───────── Projets ───────── */
 function projForm() {
   const q = S.pj, sys = ctx().systems[q.systemId] || sysFor(q.kind);
-  return h`<div class="aq"><h2>📌 Nouveau projet</h2>${seg('pjKind', q.kind, [['bloc', '🪨 Bloc'], ['voie', '🧗 Voie']])}
+  return h`<div class="aq"><h2>${q.wish ? '⭐ Nouvelle envie' : '📌 Nouveau projet'}</h2>${seg('pjKind', q.kind, [['bloc', '🪨 Bloc'], ['voie', '🧗 Voie']])}
+    <label class="chk"><input type="checkbox" data-change="pjWish" ${q.wish ? 'checked' : ''}> ⭐ Une envie (pas encore essayé) : rangée par site dans « Mes envies »</label>
     <label>Nom<input id="pj-name" maxlength="80" value="${q.name}" placeholder="Le toit rouge, la 6c de la falaise…"></label>
     <label>Niveau</label>${gradeChips(sys, q.levelId, 'pjGrade')}
     <label>Où ?<input id="pj-place" maxlength="80" value="${q.place}" placeholder="Salle, falaise… (facultatif)"></label>
     <label class="btn filebtn">📷 ${q.photo ? 'Photo ajoutée ✓' : 'Ajouter une photo (facultatif)'}<input type="file" accept="image/*" capture="environment" data-change="pjPhoto" class="hidden"></label>
-    <button class="btn pri big" data-act="pjSave">Créer le projet</button></div>`;
+    <button class="btn pri big" data-act="pjSave">${q.wish ? 'Ajouter à mes envies' : 'Créer le projet'}</button></div>`;
 }
+CHG.pjWish = (el) => { pjKeep(); S.pj.wish = el.checked; openSheet(projForm()); };
 const pjKeep = () => { const n = $('#pj-name'), p = $('#pj-place'); if (n) S.pj.name = n.value; if (p) S.pj.place = p.value; };
 const pjDraw = () => { pjKeep(); openSheet(projForm()); };
-ACT.projNew = () => { const kind = C().kind; S.pj = { kind, systemId: sysFor(kind)?.id, levelId: '', name: '', place: '', photo: null }; openSheet(projForm()); };
+ACT.projNew = () => { const kind = C().kind; S.pj = { kind, systemId: sysFor(kind)?.id, levelId: '', name: '', place: '', photo: null, wish: !!S.pjWish }; S.pjWish = false; openSheet(projForm()); };
 ACT.pjKind = (el) => { S.pj.kind = el.dataset.id; S.pj.systemId = sysFor(el.dataset.id)?.id; S.pj.levelId = ''; pjDraw(); };
 ACT.pjGrade = (el) => { S.pj.levelId = el.dataset.v; pjDraw(); };
 CHG.pjPhoto = async (el) => { pjKeep(); try { S.pj.photo = await compressPhoto(el.files?.[0]); } catch (e) { toast(e.message); } pjDraw(); };
@@ -162,7 +169,8 @@ ACT.pjSave = () => {
   pjKeep(); const q = S.pj, grade = gradeSnapshot(ctx().systems[q.systemId], q.levelId);
   const id = 'pj-' + uid().slice(0, 14);
   if (q.photo) putItem('photo', id, q.photo);
-  putItem('project', id, { kind: q.kind, name: q.name.trim() || (q.kind === 'voie' ? 'Ma voie projet' : 'Mon bloc projet'), grade, gradeText: '', place: q.place.trim(), status: 'active', tries: [], holds: [], hasPhoto: !!q.photo, startedAt: Date.now(), doneAt: 0, note: '' });
+  putItem('project', id, { kind: q.kind, name: q.name.trim() || (q.kind === 'voie' ? 'Ma voie projet' : 'Mon bloc projet'), grade, gradeText: '', place: q.place.trim(), status: q.wish ? 'wish' : 'active', tries: [], holds: [], hasPhoto: !!q.photo, startedAt: Date.now(), doneAt: 0, note: '' });
+  if (q.wish) { closeSheet(); buzzOk(); toast('Ajouté à tes envies ⭐'); ACT.wishOpen(); return; }
   closeSheet(); buzzOk(); ACT.goProjects(); toast('Projet créé : il est dans tes objectifs. Bonne chance !');
   if (q.photo) setTimeout(() => ACT.projOpen({ dataset: { id } }), 150);
 };
@@ -189,10 +197,24 @@ ACT.projOpen = (el) => {
       : h`<label class="btn filebtn">📷 Ajouter une photo<input type="file" accept="image/*" capture="environment" data-change="projPhoto" data-id="${p.id}" class="hidden"></label>`}
     <div class="grid3"><div class="stat"><b>${s.attempts}</b><span>essais</span></div><div class="stat"><b>${s.sessions}</b><span>séances</span></div><div class="stat"><b>${s.days}</b><span>jours</span></div></div>
     ${p.place ? h`<p class="small muted">📍 ${p.place}</p>` : ''}
+    <label class="small"><b>Point le plus haut atteint</b> : <output id="pjhi">${p.high || 0}</output> %<input type="range" min="0" max="100" step="5" value="${p.high || 0}" data-change="projHigh" data-input="projHighLive" data-id="${p.id}" aria-label="Point le plus haut atteint, en pourcentage"></label>
+    <details class="how mini" ${(p.sections || []).length ? 'open' : ''}><summary>🧩 Sections (${(p.sections || []).filter((x) => x.done).length}/${(p.sections || []).length})</summary>
+      <div class="stack tight">${(p.sections || []).map((x, i) => h`<label class="chk"><input type="checkbox" data-change="projSec" data-id="${p.id}" data-i="${i}" ${x.done ? 'checked' : ''}> ${x.name}</label>`)}</div>
+      <div class="row"><input id="pjsec" maxlength="40" placeholder="Ex. départ, le crux, la sortie" class="grow"><button class="btn sm" data-act="projSecAdd" data-id="${p.id}">＋</button></div></details>
+    <details class="how mini" ${(p.fallWhy || []).length ? 'open' : ''}><summary>🪂 Où et pourquoi je tombe</summary>
+      <p class="tiny muted">Marque l’endroit sur la photo (type « Là où je tombe »), puis la raison : l’app propose quoi travailler.</p>
+      <div class="chips">${Object.entries(FALL_WHY).map(([k, [ic, l]]) => chip((p.fallWhy || []).includes(k), `${ic} ${l}`, `data-act="projWhy" data-id="${p.id}" data-v="${k}"`))}</div>
+      ${(p.fallWhy || []).length ? h`<ul class="clean tight small">${fallTraining(p.fallWhy).tips.map((t) => h`<li>${t}</li>`)}</ul><button class="btn sm pri" data-act="projTrain" data-id="${p.id}">✨ Séance ciblée pour ce projet</button>` : ''}</details>
     ${p.status === 'active' ? h`<div class="grid2"><button class="btn big" data-act="projTry" data-id="${p.id}">＋1 essai</button><button class="btn pri big" data-act="projDone" data-id="${p.id}">✓ Réussi !</button></div>` : h`<p class="ok-t">🎉 Réussi le ${fmtDay(p.doneAt)}</p>`}
     <div class="row wrapf"><button class="btn sm ghost" data-act="projArchive" data-id="${p.id}">${p.status === 'archived' ? 'Réactiver' : 'Mettre de côté'}</button><button class="btn sm ghost danger" data-act="projDel" data-id="${p.id}">Supprimer</button><span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`, { wide: true });
 };
 ACT.holdType = (el) => { C().hold = el.dataset.v; ACT.projOpen(el); };
+CHG.projHigh = (el) => { const p = item('project', el.dataset.id); if (p) putItem('project', p.id, { ...p, high: Math.max(0, Math.min(100, Number(el.value) || 0)) }); };
+INPUT.projHighLive = (el) => { const o = document.getElementById('pjhi'); if (o) o.textContent = el.value; };
+CHG.projSec = (el) => { const p = item('project', el.dataset.id); if (!p) return; const l = [...(p.sections || [])]; const i = Number(el.dataset.i); if (l[i]) l[i] = { ...l[i], done: el.checked }; putItem('project', p.id, { ...p, sections: l }); };
+ACT.projSecAdd = (el) => { const p = item('project', el.dataset.id), i = $('#pjsec'), name = String(i?.value || '').trim().slice(0, 40); if (!p || !name) return; putItem('project', p.id, { ...p, sections: [...(p.sections || []), { name, done: false }].slice(0, 12) }); ACT.projOpen(el); };
+ACT.projWhy = (el) => { const p = item('project', el.dataset.id); if (!p) return; const l = new Set(p.fallWhy || []); l.has(el.dataset.v) ? l.delete(el.dataset.v) : l.add(el.dataset.v); putItem('project', p.id, { ...p, fallWhy: [...l].slice(0, 6) }); ACT.projOpen(el); };
+ACT.projTrain = (el) => { const p = item('project', el.dataset.id); if (!p) return; const t = fallTraining(p.fallWhy || []); closeSheet(); openWizard({ sport: p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder', focus: { label: `projet « ${p.name} »`, caps: t.caps } }); };
 ACT.holdAdd = (el, e) => {
   const ev = e || window.event, img = el.querySelector('img'); if (!img || !ev) return;
   const r = img.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;

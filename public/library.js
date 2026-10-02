@@ -207,6 +207,9 @@ E('wu-mob-lower', 'Mobilité hanches et chevilles', '🤸', { role: 'warmup', ki
   cues: ['Fentes dynamiques avec rotation, cercles de hanche, genoux au-dessus des orteils.'], why: 'Hanches libres = pieds hauts et réceptions sûres.', src: 'Échauffement RAMP (mobiliser)' });
 E('wu-wrists', 'Poignets et doigts', '🤲', { role: 'warmup', kind: 'mobilize', group: 'doigts', muscles: ['poignets', 'doigts'], mode: 'reps', sets: 2, repsMin: 10, repsMax: 10, rest: 0,
   cues: ['Cercles de poignets, flexions-extensions, ouvre et ferme les mains.', 'Masse doucement l’avant-bras.'], why: 'Préparer les fléchisseurs et les poulies.', src: 'Échauffement RAMP (mobiliser)' });
+E('wu-fingers', 'Échauffement des doigts (progressif)', '🖐️', { role: 'warmup', kind: 'activate', group: 'doigts', needs: ['hangboard'], muscles: ['doigts', 'avant-bras'], mode: 'time', sets: 4, secMin: 10, secMax: 10, rest: 30,
+  cues: ['Grosse prise, pieds au sol ou sur une chaise : 10 s à environ 50 % de ton effort, puis 60, 70 et 80 %.', 'Main ouverte ou semi-arquée : jamais arquée à fond pendant l’échauffement.', '30 s de pause entre chaque, secoue les mains.'],
+  bad: ['Passer directement sur une petite réglette à froid.'], why: 'Monter progressivement la charge sur les doigts avant un exercice de doigts intense.', src: 'Échauffement RAMP (augmenter progressivement)' });
 E('wu-scap-bar', 'Activation des omoplates (barre)', '⤴️', { role: 'warmup', kind: 'activate', group: 'epaules', needs: ['bar'], muscles: ['omoplates', 'grand dorsal'], mode: 'reps', sets: 2, repsMin: 8, repsMax: 8, rest: 20,
   cues: ['Suspension bras tendus, abaisse les épaules sans plier les coudes.'], why: 'Réveiller les stabilisateurs.', src: 'Échauffement RAMP (activer)' });
 E('wu-scap-band', 'Activation des omoplates (élastique)', '🎗️', { role: 'warmup', kind: 'activate', group: 'epaules', needs: ['band'], muscles: ['omoplates'], mode: 'reps', sets: 2, repsMin: 12, repsMax: 12, rest: 20,
@@ -530,6 +533,7 @@ const ANN = {
   'wu-mob-upper': ['mobilite_epaules:.6', ['deltoide_ant', 'trapezes'], ['rhomboides'], 'BVSCN', 'echauffement', 1],
   'wu-mob-lower': ['mobilite_hanches:.6', ['grand_fessier', 'adducteurs'], ['mollets'], 'BVSCR', 'echauffement', 1],
   'wu-wrists': ['force_doigts:.1', ['avant_bras_flech'], ['avant_bras_ext'], 'BVSC', 'echauffement', 1],
+  'wu-fingers': ['force_doigts:.3 endurance_doigts:.1', ['avant_bras_flech'], ['avant_bras_ext'], 'BVK', 'echauffement', 1],
   'wu-scap-bar': ['controle_scapulaire:.4', ['trapezes'], ['grand_dorsal'], 'BVSC', 'echauffement', 1],
   'wu-scap-band': ['controle_scapulaire:.4 stabilite_epaules:.3', ['trapezes', 'deltoide_post'], ['rhomboides'], 'BVSCN', 'echauffement', 1],
   'wu-scap-floor': ['controle_scapulaire:.4 stabilite_epaules:.3', ['trapezes'], ['deltoide_post'], 'BVSC', 'echauffement', 1],
