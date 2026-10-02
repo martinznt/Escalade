@@ -21,6 +21,7 @@ import { programStatus } from './program.js';
 import { buildIcs } from './ics.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard } from './views-setup.js';
 import { formeBlock } from './views-forme.js';
+import { planTools, planAlerts, weekReviewCard } from './views-planning.js';
 
 export const DASH_BLOCKS = {
   today: 'Que faire aujourd’hui ?', command: 'Commande', next: 'Prochaines séances', progress: 'Progression', goals: 'Objectifs', records: 'Records',
@@ -42,7 +43,7 @@ const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}<p class="tiny muted pagehelp">Touche un jour pour planifier une séance (avec son heure), voir ce que tu as fait, ou dire qu’une séance n’a pas été faite.</p>${vCalendar()}`;
+  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}<p class="tiny muted pagehelp">Touche un jour pour planifier une séance ou un événement important. En dessous : ta semaine proposée automatiquement, un objectif daté, tes disponibilités, une pause, l’abonnement agenda.</p>${vCalendar()}`;
   return h`${reinstallCard()}${vDash()}`;
 }
 function hero() {
@@ -98,7 +99,7 @@ function vDash() {
       cal: safe('calendar'), coach: safe('command'), program: () => programCard() || '', finger: () => fingerCard() || '',
       streak: () => (S.history.length || ctx().ascents.length ? streakCard() : ''),
       question: () => questionCard(), today: safe('today'), next: safe('next'), goals: safe('goals'), reco: safe('reco'), weekprog: safe('progress'), records: safe('records'),
-      regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'), forme: () => formeBlock(),
+      regularity: safe('regularity'), capacities: safe('capacities'), load: safe('load'), summary: safe('summary'), forme: () => formeBlock(), weekreview: () => weekReviewCard(),
     })}</div>`;
 }
 /** Boucle visible : ce que la dernière séance change pour la suivante (règles réellement appliquées, rien d'inventé). */
@@ -310,8 +311,9 @@ function vCalendar() {
   const inMonth = c.history.filter((x) => { const d = new Date(x.startedAt); return d.getFullYear() === y && d.getMonth() === m; });
   const acts = {}; for (const x of inMonth) { const a = entryActivity(x, c); acts[a] = (acts[a] || 0) + 1; }
   const reg = regularity(c);
-  return h`<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
-    ${menuList([['icsExport', '', '📲', 'Ajouter mes séances à l’agenda du téléphone', 'Programme et séances prévues, sur 90 jours'], ['allGo', '', '⏰', 'Rappels d’entraînement', 'Quels jours, à quelle heure (dans Notifications)', 'settings/notifs']])}
+  return h`${planAlerts()}<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
+    ${planTools()}
+    ${menuList([['icsExport', '', '📲', 'Ajouter mes séances à l’agenda du téléphone', 'Un fichier, une fois (programme et séances prévues, 90 jours)'], ['allGo', '', '⏰', 'Rappels d’entraînement', 'Quels jours, à quelle heure (dans Notifications)', 'settings/notifs']])}
     ${activeProgram() ? programCard() : h`<section class="card prog"><b>📆 Un objectif sur plusieurs semaines ?</b><p class="small muted">4 questions, et ton calendrier se remplit tout seul.</p><button class="btn pri" data-act="progNew">Créer un programme</button></section>`}
     <div class="card"><h3>Ce mois-ci</h3><p class="small">${inMonth.length} séance(s) réalisée(s)${Object.keys(acts).length ? ' · ' + Object.entries(acts).map(([a, n]) => `${activityLabel(a, c)} ×${n}`).join(', ') : ''}.</p><p class="small muted">${reg.text}</p>
       ${activeGoals(c).length ? h`<p class="tiny muted">Objectifs suivis : ${activeGoals(c).map(goalLabel).join(', ')}.</p>` : ''}</div>`;
@@ -337,9 +339,9 @@ export function openPlanSheet(date, seanceId) {
   const list = S.seances.items.filter((s) => !s.archived);
   openSheet(h`<h2 style="margin:0">${new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
     ${done.length ? h`<b class="small ok-t">Réalisé</b><p class="tiny muted">Pas faite en vrai ? Touche « Pas faite » : elle sort de ton historique et de tes statistiques.</p>${done.map((x) => h`<div class="item"><div class="ico sm">✅</div><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">à ${hhmm(x.startedAt)} · ${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.aborted ? ' · interrompue' : ''}</div></div><button class="btn sm" data-act="notDone" data-id="${x.id}">✗ Pas faite</button></div>`)}` : ''}
-    ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${[e.recurrence ? 'se répète chaque semaine' : '', e.completed ? 'marquée faite' : future ? 'à venir' : ''].filter(Boolean).join(' · ')}</div>
-        <label class="tiny row" style="gap:6px;margin-top:4px">Heure <input type="time" value="${e.time || ''}" data-change="evTime" data-id="${e.id}" aria-label="Heure de la séance" style="width:auto"></label></div>
-        ${e.completed ? h`<button class="btn sm" data-act="evUndone" data-id="${e.id}">✗ Pas faite</button>` : s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}" aria-label="Lancer">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
+    ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId), race = e.meta?.kind === 'race', auto = e.meta?.kind === 'auto' || e.meta?.kind === 'test'; return h`<div class="item"><div class="ico sm">${race ? '🏁' : e.meta?.kind === 'test' ? '📏' : auto ? '🤖' : '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${[race ? 'événement important : repos la veille' : '', auto ? (e.meta.kind === 'test' ? 'tes mesures du mois (Mon bilan physique)' : `séance proposée · ${e.meta.minutes || 45} min${e.meta.light ? ' · légère' : ''} · préparée le jour même`) : '', e.recurrence ? 'se répète chaque semaine' : '', e.completed ? 'marquée faite' : future && !race ? 'à venir' : ''].filter(Boolean).join(' · ')}</div>
+        <label class="tiny row" style="gap:6px;margin-top:4px">Heure <input type="time" value="${e.time || ''}" data-change="evTime" data-id="${e.id}" aria-label="Heure" style="width:auto"></label></div>
+        ${e.completed ? h`<button class="btn sm" data-act="evUndone" data-id="${e.id}">✗ Pas faite</button>` : s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}" aria-label="Lancer">▶</button>` : auto && !future ? h`<button class="btn pri sm" data-act="autoPlay" data-id="${e.id}" aria-label="Préparer cette séance">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
     ${programOn(date).map((x) => h`<div class="item"><div class="ico sm">📆</div><div class="grow"><b>${x.name.split(' · ')[0]} · S${x.week}</b><div class="tiny muted">${x.minutes} min · programme${x.status === 'missed' ? ' · manquée' : ''}</div></div>${date <= ymd(new Date()) ? h`<button class="btn pri sm" data-act="progPlay" data-id="${x.pid}" data-i="${x.i}">▶</button>` : ''}</div>`)}
     ${!done.length && !evs.length && !programOn(date).length ? h`<p class="muted small">Rien ce jour-là.</p>` : ''}
     ${list.length ? h`<form data-submit="addEvent" class="card flat"><h3>Planifier une séance</h3>
@@ -347,6 +349,9 @@ export function openPlanSheet(date, seanceId) {
       <label>Heure <span class="tiny muted">(facultatif : sert au rappel dans l’agenda du téléphone)</span><input type="time" name="time"></label>
       <label class="chk"><input type="checkbox" name="weekly"> Répéter chaque semaine</label>
       <button class="btn pri" type="submit">Planifier le ${date.split('-').reverse().join('/')}</button></form>` : h`<p class="muted small">Crée d’abord une séance pour la planifier.</p>`}
+    <details class="card flat"><summary><b>🏁 Ajouter un événement important</b> <span class="tiny muted">(compétition, course, sortie…)</span></summary>
+      <form data-submit="addRace" class="stack"><label>Quoi ?<input name="title" maxlength="80" required placeholder="Ex. Contest de bloc, 10 km, sortie à Bleau"></label><label>Heure <span class="tiny muted">(facultatif)</span><input type="time" name="time"></label>
+        <p class="tiny muted">Le planning garde un jour de repos la veille et te prévient s’il y a une séance dure.</p><button class="btn" type="submit">Ajouter</button></form></details>
     <button class="btn" data-act="closeSheet">Fermer</button>`);
 }
 CHG.evTime = (el) => { const e = S.events.find((x) => x.id === el.dataset.id), t = el.value; if (!e || (t && !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) return; saveEvent({ ...e, time: t }); toast(t ? `Heure : ${t}` : 'Heure retirée'); render(); };
@@ -362,6 +367,12 @@ ACT.notDone = async (el) => {
 ACT.evUndone = (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; saveEvent({ ...e, completed: false }); toast('Remise « à faire »'); openPlanSheet(S.selDay); render(); };
 ACT.planSeance = (el) => openPlanSheet(ymd(new Date()), el.dataset.id);
 ACT.delEvent = async (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; if (!(await ask(e.recurrence ? 'Supprimer toute la série hebdomadaire ?' : 'Supprimer cet événement ?', { ok: 'Supprimer', danger: true }))) return; deleteEvent(e.id); openPlanSheet(S.selDay); render(); };
+SUBMIT.addRace = (form) => {
+  const f = Object.fromEntries(new FormData(form)), title = String(f.title || '').trim().slice(0, 80); if (!title) return;
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || '') ? f.time : '';
+  saveEvent({ id: uid(), date: S.selDay, time, title, sessionId: null, completed: false, recurrence: null, meta: { kind: 'race' } });
+  buzzOk(); toast('Événement ajouté : repos prévu la veille'); openPlanSheet(S.selDay); render();
+};
 SUBMIT.addEvent = (form) => {
   const f = Object.fromEntries(new FormData(form)), s = getSeance(f.sid); if (!s) return;
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || '') ? f.time : '';

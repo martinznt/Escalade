@@ -16,13 +16,17 @@ export function activeDays(history, ascents = []) {
  * Série de semaines « bienveillante » : semaines consécutives avec au moins `goal` jours actifs.
  * La semaine en cours ne casse jamais la série (elle n'est pas finie) : elle s'ajoute dès que l'objectif est atteint.
  */
-export function weekStreak(history, ascents = [], { goal = 2, now = Date.now() } = {}) {
+export function weekStreak(history, ascents = [], { goal = 2, now = Date.now(), pause = null } = {}) {
   const perWeek = new Map();
   for (const d of activeDays(history, ascents)) { const w = weekStart(new Date(d).getTime()); perWeek.set(w, (perWeek.get(w) || 0) + 1); }
   const cur = weekStart(now), thisWeek = perWeek.get(cur) || 0;
+  // 8.30 : une semaine de pause (vacances, blessure) ne casse pas la série (et ne compte pas).
+  const pFrom = /^\d{4}-\d{2}-\d{2}$/.test(pause?.from || '') ? new Date(pause.from + 'T00:00:00').getTime() : null;
+  const pTo = /^\d{4}-\d{2}-\d{2}$/.test(pause?.to || '') ? new Date(pause.to + 'T23:59:59').getTime() : now;
+  const paused = (w) => pFrom != null && pFrom < w + 7 * DAY && pTo >= w;
   // décalage d'heure été / hiver : on recalcule le lundi à chaque pas
   let streak = 0, w = weekStart(cur - 3 * DAY);
-  while ((perWeek.get(w) || 0) >= goal) { streak++; w = weekStart(w - 3 * DAY); }
+  for (let k = 0; k < 600; k++) { if ((perWeek.get(w) || 0) >= goal) streak++; else if (!paused(w)) break; w = weekStart(w - 3 * DAY); }
   let best = 0, run = 0;
   const weeks = [...perWeek.keys()].sort((a, b) => a - b);
   if (weeks.length) for (let x = weeks[0]; x <= cur; x = weekStart(x + 10 * DAY)) { run = (perWeek.get(x) || 0) >= goal ? run + 1 : 0; best = Math.max(best, run); }

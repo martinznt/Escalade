@@ -56,6 +56,8 @@ export const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, at INTEGER NOT NULL, actor_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL DEFAULT '', target_id TEXT NOT NULL DEFAULT '', change_set_id TEXT, before_json TEXT, after_json TEXT, checks_json TEXT)",
   "CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_events(at)",
   // V2 : propositions de code (diff, impact, tests déclarés, validation). JAMAIS appliquées ni déployées par l'app.
+  // 8.30 : abonnement agenda (lien secret). Seule l'empreinte SHA-256 du jeton est gardée ; un jeton par compte.
+  "CREATE TABLE IF NOT EXISTS ical_feeds (user_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE TABLE IF NOT EXISTS code_proposals (id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', diff TEXT NOT NULL DEFAULT '', impact_json TEXT NOT NULL DEFAULT '{}', tests TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft', author_id TEXT, reviewer_id TEXT, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, reviewed_at INTEGER)",
 ];
 // Colonnes ajoutées aux tables existantes (migration idempotente : ajoutées seulement si absentes).
@@ -76,4 +78,6 @@ export const ADD_COLUMNS = [
   // 8.29 : propositions de code de l'assistant (remplacements exacts vérifiés) et lien de la Pull Request GitHub.
   ['code_proposals', 'edits_json', "TEXT NOT NULL DEFAULT ''"],
   ['code_proposals', 'pr_url', "TEXT NOT NULL DEFAULT ''"],
+  // 8.30 : infos d'une séance prévue (séance à préparer, événement important, durée, sport, lieu, légère).
+  ['calendar_events', 'meta_json', "TEXT NOT NULL DEFAULT ''"],
 ];

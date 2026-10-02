@@ -62,7 +62,7 @@ await ok('suppression du compte : abonnements supprimés', async () => {
 await ok('agenda .ics : événements valides, heure locale, rappel 30 min avant ; lien Google', async () => {
   const ics = buildIcs([{ uid: 'a1', title: 'Force, semaine 2; bonne séance', date: '2026-09-28', time: '18:30', minutes: 45 }], Date.UTC(2026, 8, 1));
   assert.match(ics, /^BEGIN:VCALENDAR\r\n/); assert.match(ics, /DTSTART:20260928T183000\r\n/); assert.match(ics, /DTEND:20260928T191500\r\n/);
-  assert.match(ics, /SUMMARY:Force\\, semaine 2\; bonne séance/); assert.match(ics, /TRIGGER:-PT30M/); assert.ok(ics.split('\r\n').every((l) => l.length <= 75));
+  assert.match(ics, /SUMMARY:Force\\, semaine 2\\; bonne séance/); assert.match(ics, /TRIGGER:-PT30M/); assert.ok(ics.split('\r\n').every((l) => l.length <= 75));
   assert.match(gcalLink({ title: 'X', date: '2026-09-28', time: '23:30', minutes: 60 }), /dates=20260928T233000\/20260929T003000/);
 });
 await ok('types : rappel non voulu = pas de rappel ; mise à jour annoncée une fois par déploiement ; message selon ce qui l’a déclenché', async () => {

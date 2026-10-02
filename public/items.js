@@ -90,7 +90,11 @@ export const SCHEMAS = {
   program: {
     name: ['s', 80], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'poids', 'goal'], 'forme'], goalId: ['id'], activityId: ['s', 40],
     weeks: ['n', 1, 24, 6], perWeek: ['n', 1, 7, 3], days: ['strs', 7, 1], minutes: ['n', 10, 180, 45], start: ['day'], status: ['e', ['active', 'done', 'stopped'], 'active'],
-    sessions: ['list', { i: ['n', 0, 999, 0], week: ['n', 1, 24, 1], date: ['day'], phase: ['e', ['build', 'deload', 'test'], 'build'], light: ['b'], boost: ['n', 0, 3, 0], minutes: ['n', 10, 180, 45] }, 170],
+    sessions: ['list', { i: ['n', 0, 999, 0], week: ['n', 1, 24, 1], date: ['day'], phase: ['e', ['build', 'deload', 'test', 'specific', 'taper'], 'build'], light: ['b'], boost: ['n', 0, 3, 0], minutes: ['n', 10, 180, 45] }, 170],
+    // 8.30 : objectif daté (programme construit à rebours jusqu'à cette date).
+    eventDate: ['day'], eventLabel: ['s', 80],
+    // 8.30 : programme tiré du carnet (la même séance prête, qui progresse : règle des 2 séances, semaine légère).
+    catalogId: ['s', 60],
   },
   // Photo (JPEG réduit, en data URL) liée à un projet : même identifiant que le projet.
   photo: { data: ['s', 90000], w: ['n', 1, 4000, 1], h: ['n', 1, 4000, 1] },
@@ -104,7 +108,9 @@ export const SCHEMAS = {
     // Salle précise : ville, cotation de la salle, espaces et leur matériel.
     // Falaise / site : ses secteurs (où l'on a grimpé).
     sectors: ['strs', 30, 60],
-    city: ['s', 60], gradeSys: ['id'], areas: ['list', { id: ['e', ['bloc', 'voie', 'entrainement', 'muscu', 'etirement'], 'bloc'], items: ['ids', 30], note: ['s', 120] }, 8] },
+    city: ['s', 60], gradeSys: ['id'], areas: ['list', { id: ['e', ['bloc', 'voie', 'entrainement', 'muscu', 'etirement'], 'bloc'], items: ['ids', 30], note: ['s', 120] }, 8],
+    // 8.30 : horaires d'ouverture (0 = lundi, « HH:MM »), pour caler les séances proposées.
+    hours: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 14] },
   // Préférence explicite ou confirmée : aime / neutre / évite (jamais une suppression automatique).
   pref: { key: ['s', 80], label: ['s', 80], value: ['e', ['aime', 'neutre', 'evite'], 'neutre'], source: ['e', ['explicit', 'habit', 'questionnaire'], 'explicit'], reason: ['s', 200] },
   // Niveau déclaré par l'utilisateur pour une capacité (-1 = « je ne sais pas »).
@@ -154,6 +160,9 @@ export const SCHEMAS = {
     formats: ['s', 6000],
     // Notifications cochées « vu » (item « inbox »).
     seenIds: ['strs', 200, 40],
+    // 8.30 — disponibilités (item « availability ») et pause vacances / blessure (item « pause »).
+    slots: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 21],
+    pauseMode: ['e', ['', 'vacances', 'blesse'], ''], pauseFrom: ['day'], pauseTo: ['day'], pauseNote: ['s', 120],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);

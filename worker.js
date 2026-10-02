@@ -22,7 +22,8 @@ import { SPORT_INTENTS } from './public/intentions.js';
 import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX, cleanGroupState, GROUP_TTL } from './server/duo.js';
 import { cleanConfig as cleanGroupConfig, GROUP_MAX } from './public/group.js';
 import { changesRoute } from './server/changes.js';
-import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES } from './server/push.js';
+import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES, b64u } from './server/push.js';
+import { buildIcs } from './public/ics.js';
 
 const APP_VERSION = '8.29.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
@@ -33,7 +34,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/library-more.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/planning.js', '/views-planning.js', '/library-more.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/robots.txt']);
 
@@ -61,7 +62,7 @@ export default {
     const url = new URL(request.url);
     announceSoon(env, ctx);
     try {
-      const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : await serveAsset(request, env, url);
+      const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : url.pathname.startsWith('/ical/') ? await icalFeed(request, env, url) : await serveAsset(request, env, url);
       if (url.protocol === 'https:') { const h = new Headers(res.headers); h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h }); }
       return res;
     } catch (err) {
@@ -453,6 +454,10 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/calendar' && m === 'POST') return calendarPost(request, env, u);
   if ((x = p.match(/^\/api\/calendar\/([\w-]{1,64})$/)) && m === 'DELETE') { const r = await db(env, 'DELETE FROM calendar_events WHERE id=? AND user_id=?', x[1], u.id).run(); if (!r.meta?.changes) return fail('Événement introuvable.', 404); return json({ ok: true }); }
 
+  if (p === '/api/ical' && m === 'GET') { const r = await db(env, 'SELECT created_at FROM ical_feeds WHERE user_id=?', u.id).first(); return json({ ok: true, active: !!r, created_at: r?.created_at || null }); }
+  if (p === '/api/ical' && m === 'POST') return icalCreate(env, u, url);
+  if (p === '/api/ical' && m === 'DELETE') { await db(env, 'DELETE FROM ical_feeds WHERE user_id=?', u.id).run(); return json({ ok: true }); }
+
   if (p === '/api/history' && m === 'GET') return historyGet(env, u);
   if (p === '/api/history' && m === 'POST') return historyPost(request, env, u);
   if ((x = p.match(/^\/api\/history\/([\w-]{1,64})$/)) && m === 'DELETE') { const r = await db(env, 'DELETE FROM history WHERE id=? AND user_id=?', x[1], u.id).run(); if (!r.meta?.changes) return fail('Historique introuvable.', 404); return json({ ok: true }); }
@@ -739,7 +744,7 @@ async function deleteAccount(request, env, auth, secure) {
   if (!b || !row || !safeEq(await passHash(String(b.password ?? ''), row.password_salt), row.password_hash)) return fail('Mot de passe incorrect.', 403);
   const id = auth.user.id;
   // Données privées supprimées ; contributions à la bibliothèque commune conservées de façon anonyme (auteur : compte supprimé).
-  await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs', 'proposals'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
+  await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs', 'proposals', 'ical_feeds'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
     .concat([
       db(env, 'DELETE FROM follows WHERE follower_id=? OR followee_id=?', id, id),
       db(env, 'UPDATE common_exercises SET created_by=NULL WHERE created_by=?', id),
@@ -890,10 +895,24 @@ async function settingsPost(request, env, u) {
 }
 
 /* ═════════════ Calendrier ═════════════ */
-const rowToEvent = (r) => ({ id: r.id, date: r.event_date, sessionId: r.session_id, title: r.title || '', time: r.event_time || '', completed: !!r.completed, recurrence: r.recurrence_json ? safeParse(r.recurrence_json) : null });
+const rowToEvent = (r) => ({ id: r.id, date: r.event_date, sessionId: r.session_id, title: r.title || '', time: r.event_time || '', completed: !!r.completed, recurrence: r.recurrence_json ? safeParse(r.recurrence_json) : null, meta: r.meta_json ? cleanEventMeta(safeParse(r.meta_json)) : null });
+/** 8.30 — infos d'une séance prévue, nettoyées (liste blanche) : kind auto (séance à préparer) | race (événement
+ * important) | test | rest, durée, sport, intention, lieu, légère, note. Rien d'autre n'est gardé. */
+function cleanEventMeta(m) {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
+  const out = {}, idOk = (v) => /^[\w:.-]{1,80}$/.test(String(v || ''));
+  if (['auto', 'race', 'test', 'rest'].includes(m.kind)) out.kind = m.kind;
+  const mins = Number(m.minutes); if (Number.isFinite(mins) && mins >= 5 && mins <= 300) out.minutes = Math.round(mins);
+  if (idOk(m.activityId)) out.activityId = String(m.activityId);
+  if (idOk(m.envId)) out.envId = String(m.envId);
+  if (/^[a-z_]{1,30}$/.test(String(m.intent || ''))) out.intent = String(m.intent);
+  if (m.light) out.light = true;
+  const note = str(m.note, 200); if (note) out.note = note;
+  return Object.keys(out).length ? out : null;
+}
 async function calendarGet(url, env, u) {
   const from = url.searchParams.get('from'), to = url.searchParams.get('to');
-  let sql = 'SELECT id,event_date,event_time,session_id,title,completed,recurrence_json FROM calendar_events WHERE user_id=?';
+  let sql = 'SELECT id,event_date,event_time,session_id,title,completed,recurrence_json,meta_json FROM calendar_events WHERE user_id=?';
   const args = [u.id];
   if (isDate(from)) { sql += ' AND (event_date>=? OR recurrence_json IS NOT NULL)'; args.push(from); }
   if (isDate(to)) { sql += ' AND event_date<=?'; args.push(to); }
@@ -908,13 +927,43 @@ async function calendarPost(request, env, u) {
   if (b.recurrence && b.recurrence.freq === 'weekly') rec = { freq: 'weekly', until: isDate(b.recurrence.until) ? b.recurrence.until : null };
   const count = await db(env, 'SELECT COUNT(*) c FROM calendar_events WHERE user_id=?', u.id).first();
   if (Number(count?.c) > 3000) return fail('Trop d’événements.', 413);
-  const now = Date.now(), time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.time || '')) ? b.time : '';
-  const r = await db(env, `INSERT INTO calendar_events(id,user_id,event_date,event_time,session_id,title,completed,recurrence_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,event_time=excluded.event_time,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,updated_at=excluded.updated_at
+  const now = Date.now(), time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.time || '')) ? b.time : '', meta = cleanEventMeta(b.meta);
+  const r = await db(env, `INSERT INTO calendar_events(id,user_id,event_date,event_time,session_id,title,completed,recurrence_json,meta_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,event_time=excluded.event_time,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,meta_json=excluded.meta_json,updated_at=excluded.updated_at
     WHERE calendar_events.user_id=excluded.user_id`,
-    id, u.id, b.date, time, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, now, now).run();
+    id, u.id, b.date, time, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, meta ? JSON.stringify(meta) : '', now, now).run();
   if (!r.meta || r.meta.changes === 0) return fail('Identifiant déjà utilisé.', 409);
-  return json({ ok: true, event: { id, date: b.date, time, sessionId: b.sessionId || null, title: str(b.title, 120), completed: !!b.completed, recurrence: rec } });
+  return json({ ok: true, event: { id, date: b.date, time, sessionId: b.sessionId || null, title: str(b.title, 120), completed: !!b.completed, recurrence: rec, meta } });
+}
+
+/* ═════════════ 8.30 : abonnement agenda (lien secret en lecture seule) ═════════════ */
+// Le jeton (256 bits) n'est montré qu'une fois ; seule son empreinte SHA-256 est gardée. Régénérer le lien coupe l'ancien.
+const sha256hex = async (t) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+async function icalCreate(env, u, url) {
+  const token = b64u(crypto.getRandomValues(new Uint8Array(32))), now = Date.now();
+  await db(env, 'INSERT INTO ical_feeds(user_id,token_hash,created_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,created_at=excluded.created_at', u.id, await sha256hex(token), now).run();
+  return json({ ok: true, url: `${url.origin}/ical/${token}.ics`, created_at: now });
+}
+async function icalFeed(request, env, url) {
+  const m = url.pathname.match(/^\/ical\/([A-Za-z0-9_-]{40,64})\.ics$/);
+  if (!m || (request.method !== 'GET' && request.method !== 'HEAD')) return new Response('Introuvable', { status: 404, headers: SECURITY_HEADERS });
+  await ensureSchema(env);
+  const row = await db(env, 'SELECT user_id FROM ical_feeds WHERE token_hash=?', await sha256hex(m[1])).first();
+  if (!row) return new Response('Lien d’agenda inconnu ou remplacé.', { status: 404, headers: SECURITY_HEADERS });
+  const now = Date.now(), from = new Date(now - 30 * 86400000).toISOString().slice(0, 10), out = [];
+  const evs = (await db(env, 'SELECT id,event_date,event_time,session_id,title,recurrence_json,meta_json FROM calendar_events WHERE user_id=? AND (event_date>=? OR recurrence_json IS NOT NULL) ORDER BY event_date LIMIT 1500', row.user_id, from).all()).results || [];
+  for (const r of evs) {
+    const e = rowToEvent(r), race = e.meta?.kind === 'race';
+    out.push({ uid: 'ev-' + e.id, title: `${race ? '🏁 ' : '🏋️ '}${e.title || (race ? 'Événement' : 'Séance')}`, date: e.date, time: e.time || '', minutes: e.meta?.minutes || 60, allDay: race && !e.time, weekly: e.recurrence?.freq === 'weekly', until: e.recurrence?.until || '', desc: e.meta?.note || '' });
+  }
+  const progs = (await db(env, "SELECT id,data_json FROM user_items WHERE user_id=? AND collection='program' AND deleted=0", row.user_id).all()).results || [];
+  for (const r of progs) {
+    const p = safeParse(r.data_json); if (p?.status !== 'active' || !Array.isArray(p.sessions)) continue;
+    for (const s of p.sessions.slice(0, 200)) if (/^\d{4}-\d{2}-\d{2}$/.test(String(s.date)) && s.date >= from) out.push({ uid: `pg-${r.id}-${Number(s.i) || 0}`, title: `📆 ${String(p.name || 'Programme').split(' · ')[0].slice(0, 60)} · S${Number(s.week) || 1}`, date: s.date, time: '', minutes: Number(s.minutes) || 45, allDay: true });
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(p.eventDate || '')) && p.eventDate >= from) out.push({ uid: `pg-${r.id}-event`, title: `🏁 ${String(p.eventLabel || 'Mon objectif').slice(0, 60)}`, date: p.eventDate, allDay: true });
+  }
+  const body = buildIcs(out.slice(0, 2000), now, { feed: true });
+  return new Response(request.method === 'HEAD' ? null : body, { headers: { ...SECURITY_HEADERS, 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'private, max-age=900', 'Content-Disposition': 'inline; filename="seances.ics"' } });
 }
 
 /* ═════════════ Historique des séances effectuées ═════════════ */

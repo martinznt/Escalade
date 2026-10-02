@@ -8,9 +8,12 @@ import { planSession, generateFromPlan } from './generator.js';
 import { startPlayer } from './player.js';
 import { activeGoals, goalLabel } from './brain.js';
 import { buildProgram, programStatus, reschedule, fingerLoad, boostSession, PROGRAM_GOALS, DAY_NAMES, defaultDays, ymd } from './program.js';
+import { eventPhase } from './planning.js';
+import { CATALOG, buildSession } from './catalog.js';
+import { readiness } from './coachbrain.js';
 
 export const activeProgram = () => itemsOf('program').filter((p) => p.status === 'active').sort((a, b) => (b._u || 0) - (a._u || 0))[0] || null;
-const PHASE = { build: '', deload: 'semaine légère', test: 'semaine bilan' };
+const PHASE = { build: '', deload: 'semaine légère', test: 'semaine bilan', specific: 'spécifique', taper: 'affûtage' };
 
 /* ───────── Carte d'accueil ───────── */
 export function programCard() {
@@ -21,7 +24,8 @@ export function programCard() {
   return h`<section class="card prog"><div class="row between"><b>📆 ${p.name}</b><button class="btn sm ghost" data-act="progOpen" data-id="${p.id}">Voir</button></div>
     <div class="meter"><i style="width:${st.pct}%"></i></div>
     <div class="tiny muted">Semaine ${st.week} / ${p.weeks} · ${st.done} séance${st.done > 1 ? 's' : ''} sur ${st.total}</div>
-    ${st.missed.length ? h`<div class="row warnrow"><span class="grow small">${st.missed.length} séance${st.missed.length > 1 ? 's' : ''} manquée${st.missed.length > 1 ? 's' : ''}. On décale la suite ?</span><button class="btn sm" data-act="progShift" data-id="${p.id}">Décaler</button></div>` : ''}
+    ${p.eventDate ? (() => { const ep = eventPhase(p); return ep ? h`<div class="small acc-t">🏁 ${ep.text}</div>` : ''; })() : ''}
+    ${st.missed.length ? h`<div class="row warnrow"><span class="grow small">${st.missed.length} séance${st.missed.length > 1 ? 's' : ''} manquée${st.missed.length > 1 ? 's' : ''}. ${p.eventDate ? 'On recalcule jusqu’à la date ?' : 'On décale la suite ?'}</span><button class="btn sm" data-act="progShift" data-id="${p.id}">${p.eventDate ? 'Recalculer' : 'Décaler'}</button></div>` : ''}
     ${n ? h`<div class="row nextrow"><div class="grow"><b>${n.status === 'today' ? 'Aujourd’hui' : fmtDay(new Date(n.date + 'T12:00').getTime())}</b> · ${n.minutes} min${PHASE[n.phase] ? ` · ${PHASE[n.phase]}` : ''}</div>${n.status === 'today' ? h`<button class="btn pri" data-act="progPlay" data-id="${p.id}" data-i="${n.i}">▶ C’est parti</button>` : h`<button class="btn sm" data-act="progPlay" data-id="${p.id}" data-i="${n.i}">Faire maintenant</button>`}</div>` : ''}</section>`;
 }
 
@@ -77,17 +81,22 @@ ACT.progOpen = (el) => {
   const p = item('program', el.dataset.id); if (!p) return;
   const st = programStatus(p, S.history), weeks = [...new Set(st.list.map((s) => s.week))];
   const icon = { done: '✓', missed: '✗', today: '●', next: '○' };
+  const ep = p.eventDate ? eventPhase(p) : null;
   openSheet(h`<div class="pview"><h2>${p.name}</h2><div class="meter"><i style="width:${st.pct}%"></i></div><p class="small muted">${st.done} / ${st.total} séances · ${p.minutes} min · ${p.perWeek} par semaine</p>
+    ${ep ? h`<p class="small acc-t">🏁 ${ep.text}</p>${sourcesLine(['bosquet2007', 'issurin2010'])}` : ''}
     ${weeks.map((wk) => { const ss = st.list.filter((s) => s.week === wk), ph = ss[0]?.phase; return h`<div class="pweek"><span class="small"><b>S${wk}</b>${PHASE[ph] ? h` <span class="tiny muted">${PHASE[ph]}</span>` : ''}</span><div class="pdots">${ss.map((s) => h`<span class="pd ${s.status}" title="${s.date}">${icon[s.status]}</span>`)}</div></div>`; })}
-    <div class="row wrapf">${st.missed.length ? h`<button class="btn" data-act="progShift" data-id="${p.id}">Décaler les séances manquées</button>` : ''}<button class="btn ghost danger" data-act="progClose" data-id="${p.id}">Arrêter le programme</button><span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`, { wide: true });
+    <div class="row wrapf">${st.missed.length ? h`<button class="btn" data-act="progShift" data-id="${p.id}">${p.eventDate ? '🔁 Recalculer jusqu’à la date' : 'Décaler les séances manquées'}</button>` : ''}<button class="btn ghost danger" data-act="progClose" data-id="${p.id}">Arrêter le programme</button><span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`, { wide: true });
 };
-ACT.progShift = (el) => { const p = item('program', el.dataset.id); if (!p) return; putItem('program', p.id, reschedule(p, S.history)); closeSheet(); render(); toast('C’est décalé : le programme reprend à partir d’aujourd’hui.'); };
+ACT.progShift = (el) => { const p = item('program', el.dataset.id); if (!p) return; if (p.eventDate) return ACT.progRecalc(el); const { id, _u, ...data } = reschedule(p, S.history); putItem('program', p.id, data); closeSheet(); render(); toast('C’est décalé : le programme reprend à partir d’aujourd’hui.'); };
 ACT.progClose = async (el) => { const p = item('program', el.dataset.id); if (p && (await ask('Arrêter ce programme ?', { ok: 'Arrêter', detail: 'Tes séances faites restent dans ton historique.' }))) { putItem('program', p.id, { ...p, status: 'stopped' }); closeSheet(); render(); } };
 
 /* ───────── Séance du programme, avec la forme du jour ───────── */
 ACT.progPlay = (el) => {
   const p = item('program', el.dataset.id), s = p?.sessions?.find((x) => x.i === Number(el.dataset.i)); if (!s) return;
   S.progRun = { id: p.id, i: s.i };
+  // 8.30 : check-in du matin déjà fait → on ne repose pas la question.
+  const rd = readiness(ctx());
+  if (rd.checked) { toast(`D’après ton check-in : ${rd.emoji} ${rd.word.toLowerCase()}`, 2500); return ACT.progGo({ dataset: { f: rd.level === 'low' ? 'tired' : rd.level === 'top' ? 'fresh' : 'ok' } }); }
   openSheet(h`<div class="forme"><h2>Comment tu te sens aujourd’hui ?</h2><div class="formes">
     <button class="forme-b" data-act="progGo" data-f="tired"><span>😴</span><b>Fatigué</b><small>Séance plus douce</small></button>
     <button class="forme-b" data-act="progGo" data-f="ok"><span>🙂</span><b>Normal</b><small>Comme prévu</small></button>
@@ -96,9 +105,19 @@ ACT.progPlay = (el) => {
 ACT.progGo = (el) => {
   const r = S.progRun, p = item('program', r?.id), s = p?.sessions?.find((x) => x.i === r.i); if (!s) return closeSheet();
   const f = el.dataset.f, c = ctx(), g = PROGRAM_GOALS[p.goal] || PROGRAM_GOALS.forme;
-  const plan = planSession({ activityId: p.activityId, mode: p.goal === 'goal' ? 'goal' : g.mode, goalId: p.goalId, minutes: f === 'tired' ? Math.max(10, Math.round(s.minutes * 0.8)) : s.minutes, light: s.light || f === 'tired', intentions: g.intent ? [{ id: g.intent, p: 2 }] : [], seed: Math.floor(Math.random() * 1e9) }, c);
+  // Programme tiré du carnet : la même séance prête ; plus légère une semaine sur 4 (un tiers de séries en moins).
+  if (p.catalogId) {
+    const e = CATALOG.find((x) => x.id === p.catalogId); if (!e) { closeSheet(); return toast('Cette séance n’existe plus dans le carnet.', 4000, 'bad'); }
+    let session = buildSession(e);
+    if (s.light || f === 'tired') session = { ...session, exercises: session.exercises.map((x) => (x.block === 'main' || !x.block ? { ...x, sets: Math.max(1, Math.round((x.sets || 1) * 0.67)) } : x)) };
+    else if (f === 'fresh') session = boostSession(session, 1);
+    closeSheet(); return startPlayer({ ...session, name: `${e.name} · S${s.week}` }, { fromGenerator: true, program: { id: p.id, i: s.i } });
+  }
+  // Objectif daté : la phase « spécifique » colle à l'objectif ; l'affûtage garde l'intensité avec moins de volume (durée réduite).
+  const intents = [...(g.intent ? [{ id: g.intent, p: 2 }] : []), ...(s.phase === 'specific' ? [{ id: 'specifique', p: 3 }] : [])];
+  const plan = planSession({ activityId: p.activityId, mode: p.goal === 'goal' ? 'goal' : g.mode, goalId: p.goalId, minutes: f === 'tired' ? Math.max(10, Math.round(s.minutes * 0.8)) : s.minutes, light: s.light || f === 'tired', intentions: intents, seed: Math.floor(Math.random() * 1e9) }, c);
   let session = generateFromPlan(plan, c).session;
-  const extra = (f === 'fresh' ? 1 : 0) + (s.boost >= 2 && f !== 'tired' ? 1 : 0);
+  const extra = s.phase === 'taper' ? 0 : (f === 'fresh' ? 1 : 0) + (s.boost >= 2 && f !== 'tired' ? 1 : 0);
   if (extra) session = boostSession(session, extra);
   session = { ...session, name: `${p.name.split(' · ')[0]} · S${s.week}` };
   closeSheet(); startPlayer(session, { fromGenerator: true, program: { id: p.id, i: s.i } });

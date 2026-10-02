@@ -732,8 +732,13 @@ function envForm(e) {
   } else { const grouped = new Set(EQUIPMENT_GROUPS.flatMap(([, k]) => k)), rest = Object.keys(EQUIPMENT).filter((k) => !grouped.has(k));
     body = h`<label>Matériel disponible</label><p class="tiny muted">« Machines de musculation (toutes) » suffit pour une salle classique ; sinon coche machine par machine.</p>
       ${EQUIPMENT_GROUPS.map(([t, keys]) => h`<span class="kicker">${t}</span>${eqChips('eq', keys.filter((k) => EQUIPMENT[k]), eq)}`)}${rest.length ? h`<span class="kicker">Autre</span>${eqChips('eq', rest, eq)}` : ''}`; }
+  // 8.30 : horaires d'ouverture (lieux qui ferment : salles, piscines, pistes…) — la semaine automatique cale l'heure dessus.
+  const H = new Map((e?.hours || []).map((x) => [x.d, x])), hours = ['escalade', 'salle', 'piscine', 'piste', 'autre'].includes(t) ? h`<details class="card flat" ${e?.hours?.length ? 'open' : ''}><summary><b>🕒 Horaires d’ouverture</b> <span class="tiny muted">(facultatif)</span></summary>
+      <p class="tiny muted">Laisse vide un jour où c’est fermé. Sans aucun horaire, l’app ne suppose rien.</p>
+      <div class="stack tight">${['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((dn, d) => h`<div class="hoursrow"><b class="small">${dn}</b><input type="time" name="hf_${d}" value="${H.get(d)?.from || ''}" aria-label="${dn} : ouverture"><span class="tiny muted">→</span><input type="time" name="ht_${d}" value="${H.get(d)?.to || ''}" aria-label="${dn} : fermeture"></div>`)}</div>
+      <button class="btn sm" type="button" data-act="hoursCopy">Copier lundi sur tous les jours</button></details>` : '';
   return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle d’escalade' : t === 'falaise' ? 'Nouvelle falaise' : 'Nouveau lieu'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
-    ${head}${body}
+    ${head}${body}${hours}
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${e ? h`<button class="btn danger" type="button" data-act="envDel" data-id="${e.id}">Supprimer</button>` : ''}</div></form>`;
 }
 ACT.envNew = () => { S.envType = 'maison'; openSheet(envForm(null), { wide: true }); };
@@ -741,9 +746,12 @@ ACT.envNewGym = () => { S.envType = 'escalade'; openSheet(envForm(null), { wide:
 ACT.envNewCrag = () => { S.envType = 'falaise'; openSheet(envForm(null), { wide: true }); };
 ACT.envEdit = (el) => { const e = item('env', el.dataset.id); if (e) openSheet(envForm(e), { wide: true }); };
 CHG.envType = (el) => { if (!el.form.id.value) { S.envType = el.value; openSheet(envForm(null), { wide: true }); } };
+ACT.hoursCopy = (el) => { const f = el.closest('form'), a = f.elements.hf_0?.value, b = f.elements.ht_0?.value; if (!a || !b) return toast('Remplis d’abord lundi.'); for (let d = 1; d < 7; d++) { f.elements['hf_' + d].value = a; f.elements['ht_' + d].value = b; } };
 SUBMIT.envSave = (f) => {
   const fd = new FormData(f), d = Object.fromEntries(fd), first = !ctx().envs.length;
-  const base = { name: d.name, type: d.type, isDefault: d.id ? item('env', d.id)?.isDefault : first };
+  const hours = [0, 1, 2, 3, 4, 5, 6].map((k) => ({ d: k, from: String(fd.get('hf_' + k) || ''), to: String(fd.get('ht_' + k) || '') })).filter((x) => /^\d\d:\d\d$/.test(x.from) && /^\d\d:\d\d$/.test(x.to));
+  if (hours.some((x) => x.to <= x.from)) return toast('Horaires : la fermeture doit être après l’ouverture.', 3500, 'bad');
+  const base = { name: d.name, type: d.type, isDefault: d.id ? item('env', d.id)?.isDefault : first, hours };
   if (d.type === 'escalade') {
     const areas = fd.getAll('areaOn').filter((id) => GYM_AREAS[id]).map((id) => ({ id, items: fd.getAll('ar_' + id), note: String(fd.get('arn_' + id) || '') }));
     putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', areas, equipment: [...new Set(areas.flatMap((a) => a.items))] });

@@ -12,6 +12,8 @@ import { painMapSvg, PAIN_ZONES } from './anatomy.js';
 import { sourcesLine } from './srcui.js';
 import { activeGoals, goalLabel } from './brain.js';
 import { openWizard } from './views-climbplan.js';
+import { pauseState } from './planning.js';
+import { pauseBanner } from './views-planning.js';
 
 const DAY = 86400000;
 const num = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
@@ -25,7 +27,9 @@ const zoneName = (z) => `${ZONE_EMOJI[z] || ''} ${(ZONE_LABEL[z] || z).replace(/
 /* ═════════ Accueil : Forme du jour ═════════ */
 export function formeBlock() {
   const c = ctx(), r = readiness(c), upd = painToUpdate(c.pains, c.now)[0], known = r.checked || r.ff.enough;
-  return h`<section class="card stack forme">
+  const P = pauseState(item('config', 'pause') || {});
+  if (P.active && P.mode === 'vacances') return pauseBanner();
+  return h`${pauseBanner()}<section class="card stack forme">
     <div class="row between wrapf"><h3 style="margin:0">🔋 Forme du jour</h3>${known ? h`<span class="tag ${LEVEL_TAG[r.level]}">${r.emoji} ${r.word}</span>` : ''}</div>
     <p class="small">${r.checked ? r.advice : known ? `D’après tes séances : ${r.advice.charAt(0).toLowerCase() + r.advice.slice(1)} Fais le check-in pour une estimation plus juste.` : '10 secondes pour dire comment tu te sens : les séances proposées s’adaptent.'}</p>
     <div class="row wrapf"><button class="btn ${r.checked ? 'sm' : 'pri'}" data-act="checkin">${r.checked ? '✏️ Modifier mon check-in' : '☀️ Check-in du matin'}</button>

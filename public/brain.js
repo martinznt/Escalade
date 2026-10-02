@@ -7,6 +7,7 @@
 // Pur JavaScript, sans DOM : testé avec Node (tests/brain.test.mjs).
 
 import { readiness } from './coachbrain.js';
+import { pauseState } from './planning.js';
 import { batteryFor, profileInputs, ENVIES, PROTOCOL } from './assess.js';
 import { CAPACITIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, BUILTIN_STYLES, metricTierText, skillCaps, MACHINES } from './model.js';
 import { LIBRARY, byId } from './library.js';
@@ -73,7 +74,7 @@ export function buildContext(raw = {}) {
     now, tz, history, future, events: arr(raw.events).filter((e) => e && typeof e === 'object'), seances, seanceById, personal, personalByKey, settings: raw.settings || {},
     activities, categories, metrics, perfs, goals, gradesys, systems, styles, envs, defEnv, unavailable, config, prefs, capdecl,
     ascents: Object.values(get('ascent')).sort((a, b) => (b.date || 0) - (a.date || 0)),
-    swaps: Object.values(get('swap')), labs: Object.values(get('lab')), jnotes: Object.values(get('jnote')), pains: Object.values(get('pain')).sort((a, b) => (a.date || 0) - (b.date || 0)), wellness: Object.values(get('wellness')).sort((a, b) => (a.at || 0) - (b.at || 0)), habitDecisions: Object.fromEntries(Object.values(get('habit')).map((h) => [h.key, h.decision])),
+    swaps: Object.values(get('swap')), labs: Object.values(get('lab')), jnotes: Object.values(get('jnote')), pains: Object.values(get('pain')).sort((a, b) => (a.date || 0) - (b.date || 0)), wellness: Object.values(get('wellness')).sort((a, b) => (a.at || 0) - (b.at || 0)), programs: Object.values(get('program')), habitDecisions: Object.fromEntries(Object.values(get('habit')).map((h) => [h.key, h.decision])),
   };
 }
 
@@ -430,7 +431,11 @@ export function regularity(ctx, weeksN = 12) {
   if (sinceLast != null && sinceLast >= 7) gaps.push({ from: sorted[sorted.length - 1], to: null, days: Math.round(sinceLast) });
   const last4 = weeks.slice(-4).reduce((a, b) => a + b, 0) / 4, prev4 = weeks.slice(-8, -4).reduce((a, b) => a + b, 0) / 4;
   const change = prev4 === 0 && last4 === 0 ? null : prev4 === 0 ? 'reprise' : last4 > prev4 * 1.3 ? 'hausse' : last4 < prev4 * 0.7 ? 'baisse' : 'stable';
-  let streakWeeks = 0; for (let i = weeksN - 1; i >= 0 && weeks[i] > 0; i--) streakWeeks++;
+  // Série : la semaine en cours ne la casse pas (elle n'est pas finie), une semaine de pause non plus (8.30).
+  const P = ctx.config?.pause, day0 = (s) => dayNum(Date.parse(s + 'T12:00:00'), ctx.tz), okDay = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+  const pF = P?.pauseMode && okDay(P.pauseFrom) ? day0(P.pauseFrom) : null, pT = okDay(P?.pauseTo) ? day0(P.pauseTo) : dayNum(ctx.now, ctx.tz);
+  const paused = (i) => { if (pF == null) return false; const mon = thisMon - (weeksN - 1 - i) * 7; return pF <= mon + 6 && pT >= mon; };
+  let streakWeeks = 0; for (let i = weeksN - 1; i >= 0; i--) { if (weeks[i] > 0) streakWeeks++; else if (i === weeksN - 1 || paused(i)) continue; else break; }
   // Périodes d'activité : suites de semaines consécutives avec au moins une séance.
   const periods = []; let startW = null;
   for (let i = 0; i <= weeksN; i++) { if (i < weeksN && weeks[i] > 0) { if (startW == null) startW = i; } else if (startW != null) { periods.push({ fromWeek: startW, toWeek: i - 1, weeks: i - startW }); startW = null; } }
@@ -759,6 +764,14 @@ export function todayOptions(ctx, { todayEvents = [], minutes = null } = {}) {
   if (!opts.some((o) => o.kind === 'generate')) opts.push({ kind: 'generate', id: 'gen:decouverte', title: ctx.history.length ? 'Séance du jour' : 'Séance découverte', reason: ctx.history.length ? 'Équilibrée selon ce que tu as le moins travaillé récemment.' : (ctx.perfs.some((p) => !p.unknown) || Object.keys(ctx.capdecl).length ? 'Première séance : courte, calée sur le niveau et les repères que tu as indiqués.' : 'Pas encore d’historique : une séance courte pour commencer, sans présumer de ton niveau.'), mode: 'weaknesses', minutes: ctx.history.length ? dur : 20, how });
   if (last?.data?.rpe >= 4 && hoursSince < 48 && !opts.some((o) => o.light)) opts.push({ kind: 'generate', id: 'gen:leger', title: 'Version légère (technique / mobilité)', reason: `Ta dernière séance était ressentie comme dure (${last.data.rpe}/5) il y a ${Math.round(hoursSince)} h : une alternative plus douce si tu ne te sens pas frais.`, light: true, mode: 'weaknesses', minutes: Math.min(dur, 25), how });
   opts.push({ kind: 'express', id: 'express', title: 'Express 10 minutes', reason: 'Peu de temps ? Une séance courte reconstruite pour 10 minutes.', minutes: 10, mode: 'weaknesses', how: ['Durée choisie : 10 min'] });
+  // 8.30 : pause (vacances / blessure) : rien d'obligatoire en vacances, seulement du doux en cas de blessure.
+  const P = pauseState(ctx.config?.pause || {}, ctx.now);
+  if (P.active && P.mode === 'vacances') return { options: [{ kind: 'rest', id: 'rest', title: 'Profite de tes vacances 🏖️', reason: `${P.text}`, light: true, minutes: 15, how: ['Pause enregistrée dans Planning'] }, opts.find((o) => o.kind === 'express')].filter(Boolean), note: P.text };
+  if (P.active && P.mode === 'blesse') {
+    const keep = opts.filter((o) => o.kind === 'event' || o.kind === 'rest' || o.light);
+    if (!keep.some((o) => o.light && o.kind !== 'rest')) keep.push({ kind: 'generate', id: 'gen:leger', title: 'Séance douce (mobilité, technique)', reason: 'Blessure en cours : la zone notée est ménagée, rien d’intense.', light: true, mode: 'weaknesses', minutes: Math.min(dur, 25), how });
+    return { options: keep.slice(0, 4), note: P.text };
+  }
   // 8.30 : check-in du matin → la forme du jour passe avant le reste (version légère en tête si fatigué).
   const rd = readiness(ctx);
   if (rd.checked && rd.level === 'low') {

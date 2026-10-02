@@ -681,3 +681,5 @@ details.fold>input,details.fold>select,details.fold>textarea{width:calc(100% - 3
 .setrow.on{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 div.setrow{cursor:default}
 .painmap .pzhit{fill:transparent;stroke:none}
+.hoursrow{display:grid;grid-template-columns:2.6em minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center}.hoursrow input{min-width:0}
+.slotrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.slotrow b{min-width:6.5em;text-transform:capitalize;font-size:.9rem}

@@ -52,12 +52,26 @@ export function isDue(sub, now = Date.now()) {
 }
 const safeDays = (s) => { try { const d = JSON.parse(s); return Array.isArray(d) ? d.filter((x) => Number.isInteger(x) && x >= 0 && x <= 6) : []; } catch { return []; } };
 
-/** Tâche planifiée : envoie les rappels dus. */
+/**
+ * 8.30 — rappel inutile aujourd'hui ? En pause (vacances ou blessure, item « config/pause ») ou séance déjà faite
+ * aujourd'hui (dans le fuseau de la personne). Lecture des seules données de la personne concernée.
+ */
+export async function quietToday(env, userId, tz = 'Europe/Paris', now = Date.now()) {
+  const l = localNow(tz, now);
+  const row = await q(env, "SELECT data_json FROM user_items WHERE user_id=? AND collection='config' AND id='pause' AND deleted=0", userId).first();
+  let p = null; try { p = row ? JSON.parse(row.data_json) : null; } catch { p = null; }
+  if (p && ['vacances', 'blesse'].includes(p.pauseMode) && /^\d{4}-\d{2}-\d{2}$/.test(String(p.pauseFrom || '')) && p.pauseFrom <= l.ymd && (!p.pauseTo || l.ymd <= p.pauseTo)) return 'pause';
+  const [H, M] = l.hm.split(':').map(Number), midnight = now - (H * 60 + M + 1) * 60000;
+  const done = await q(env, 'SELECT COUNT(*) c FROM history WHERE user_id=? AND started_at>=?', userId, midnight).first();
+  return Number(done?.c) > 0 ? 'done' : '';
+}
+/** Tâche planifiée : envoie les rappels dus (sauf en pause ou si la séance du jour est déjà faite). */
 export async function runReminders(env, now = Date.now(), fetchFn = fetch) {
   const subs = (await q(env, 'SELECT endpoint,user_id,days,hour,tz,last_day,types FROM push_subs').all()).results || [];
   let sent = 0;
   for (const s of subs) {
     if (!wants(s, 'reminder') || !isDue(s, now)) continue;
+    if (await quietToday(env, s.user_id, s.tz, now).catch(() => '')) { await q(env, 'UPDATE push_subs SET last_day=? WHERE endpoint=?', localNow(s.tz, now).ymd, s.endpoint).run(); continue; }
     await q(env, 'UPDATE push_subs SET pending=? WHERE endpoint=?', 'reminder', s.endpoint).run();
     const r = await sendPush(env, s.endpoint, fetchFn);
     if (r === 'gone') await q(env, 'DELETE FROM push_subs WHERE endpoint=?', s.endpoint).run();
@@ -116,9 +130,15 @@ export async function messageFor(env, endpoint, userId, tz, now = Date.now()) {
   return { ...(userId ? await reminderText(env, userId, tz, now) : { title: 'Séances entraînement', body: 'Petit rappel : un peu d’entraînement aujourd’hui ?', url: '/' }), silent };
 }
 
-/** Texte du rappel pour une personne : la séance du programme si elle est prévue aujourd'hui, sinon un mot simple. */
+/** Texte du rappel pour une personne : la séance prévue aujourd'hui (calendrier), sinon celle du programme, sinon un mot simple. */
 export async function reminderText(env, userId, tz = 'Europe/Paris', now = Date.now()) {
-  const today = localNow(tz, now).ymd;
+  const L = localNow(tz, now), today = L.ymd;
+  const evs = (await q(env, 'SELECT title,event_time,event_date,recurrence_json,meta_json FROM calendar_events WHERE user_id=? AND (event_date=? OR (recurrence_json IS NOT NULL AND event_date<=?)) LIMIT 50', userId, today, today).all().catch(() => ({ results: [] }))).results || [];
+  const wd = (d) => (new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7;
+  const todays = evs.filter((e) => { let rec = null, meta = null; try { rec = e.recurrence_json ? JSON.parse(e.recurrence_json) : null; meta = e.meta_json ? JSON.parse(e.meta_json) : null; } catch { /* rien */ }
+    if (meta?.kind === 'race' || meta?.kind === 'rest') return false;
+    return e.event_date === today || (rec?.freq === 'weekly' && wd(e.event_date) === wd(today) && (!rec.until || today <= rec.until)); }).sort((a, b) => String(a.event_time || '99').localeCompare(String(b.event_time || '99')));
+  if (todays.length) { const e = todays[0]; return { title: 'Séance prévue aujourd’hui 💪', body: `${String(e.title || 'Ta séance').slice(0, 80)}${e.event_time ? ` à ${e.event_time}` : ''}. On y va ?`, url: '/#/home/dash' }; }
   const rows = (await q(env, "SELECT data_json FROM user_items WHERE user_id=? AND collection='program' AND deleted=0", userId).all()).results || [];
   for (const r of rows) {
     let p; try { p = JSON.parse(r.data_json); } catch { continue; }

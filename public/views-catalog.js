@@ -1,7 +1,10 @@
 // views-catalog.js — Bibliothèque › « Prêtes » (séances sourcées, filtres, tri pour toi), « Top exercices »
 // (classement par catégorie, adapté à ton profil) et la liste des sources scientifiques citées.
-import { h, raw, chip, openSheet, closeSheet, toast, fmtDur, subHead, seg } from './ui.js';
-import { S, ACT, ctx, render, saveSeance, item } from './state.js';
+import { h, raw, chip, openSheet, closeSheet, toast, fmtDur, subHead, seg, ask } from './ui.js';
+import { S, ACT, ctx, render, saveSeance, item, putItem, go } from './state.js';
+import { buildProgram, DAY_NAMES, defaultDays, ymd } from './program.js';
+import { activeProgram } from './views-program.js';
+import { sessionMinutes } from './engine.js';
 import { uid } from './shared.js';
 import { ACTIVITIES, CAPACITIES, EQUIPMENT } from './model.js';
 import { availableEquipment, profileCapacities, strengthsWeaknesses, activeGoals, goalCaps } from './brain.js';
@@ -88,9 +91,37 @@ ACT.catOpen = (el) => {
     ${e.tips?.length ? h`<b class="small">Conseils</b><ul class="small">${e.tips.map((t) => h`<li>${t}</li>`)}</ul>` : ''}
     <b class="small">Déroulé</b><ol class="small catex">${s.exercises.map((x, i) => h`<li><button class="linkish" data-act="catExInfo" data-id="${e.id}" data-i="${i}"><b>${x.emoji} ${x.name}</b> ⓘ</button> — ${x.sets > 1 ? `${x.sets} × ` : ''}${x.mode === 'time' ? fmtDur(x.secMax) : `${x.repsMax} rép.`}${x.rest ? ` · repos ${fmtDur(x.rest)}` : ''}</li>`)}</ol>
     ${miss.length ? h`<p class="small warn-t">Matériel à prévoir : ${miss.map((n) => EQUIPMENT[n] || n).join(', ')}</p>` : ''}
-    <div class="grid2"><button class="btn pri big" data-act="catPlay" data-id="${e.id}">▶ Lancer</button><button class="btn big" data-act="catSave" data-id="${e.id}">💾 Garder</button></div><div class="grid2">${adaptButton(e.id, 'cat', 'btn')}${groupButton(e.id, 'cat', 'btn')}</div><p class="tiny muted">🔁 Adapter : la même séance pour cette fois, avec ta durée, ton matériel, une zone à ménager ou une autre intensité.</p>${catalogEditButtons(e)}</div>`, { wide: true });
+    <div class="grid2"><button class="btn pri big" data-act="catPlay" data-id="${e.id}">▶ Lancer</button><button class="btn big" data-act="catSave" data-id="${e.id}">💾 Garder</button></div><div class="grid2">${adaptButton(e.id, 'cat', 'btn')}${groupButton(e.id, 'cat', 'btn')}</div><button class="btn" data-act="catProgram" data-id="${e.id}">📆 En faire un programme</button><p class="tiny muted">🔁 Adapter : la même séance pour cette fois, avec ta durée, ton matériel, une zone à ménager ou une autre intensité. 📆 Programme : cette séance 2 à 3 fois par semaine pendant 4 à 8 semaines, les charges progressent toutes seules.</p>${catalogEditButtons(e)}</div>`, { wide: true });
 };
 ACT.catExInfo = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; const s = buildSession(e), x = s.exercises[+el.dataset.i]; if (x) openSheet(h`${exerciseSheet(x, h`<button class="btn" data-act="catOpen" data-id="${e.id}">‹ Retour à la séance</button>`, s)}`, { wide: true }); };
+/** 8.30 : une séance du carnet devient un programme (mêmes exercices ; charges qui progressent ; semaine légère toutes les 4). */
+ACT.catProgram = (el) => {
+  const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return;
+  const per = Math.max(1, Math.min(4, Number(item('config', 'main')?.perWeek) || 2));
+  S.cprog = { id: e.id, weeks: 6, days: defaultDays(Math.min(3, per)) };
+  cprogSheet();
+};
+function cprogSheet() {
+  const w = S.cprog, e = CATALOG.find((x) => x.id === w.id); if (!e) return;
+  const s = buildSession(e), plan = buildProgram({ goal: 'forme', weeks: w.weeks, days: w.days, minutes: Math.max(10, Math.round(sessionMinutes(s))), start: ymd(new Date()) });
+  openSheet(h`<div class="stack"><h2 style="margin:0">📆 Programme : ${e.emoji || ''} ${e.name}</h2>
+    <p class="tiny muted">La même séance, 2 à 3 fois par semaine. À chaque fois, l’app propose la charge ou les répétitions d’après tes 2 dernières séances (on monte quand tout est réussi, on baisse un peu après 2 échecs). Une semaine sur 4 est plus légère.</p>
+    <span class="small"><b>Combien de semaines ?</b></span><div class="chips">${[4, 6, 8].map((n) => chip(w.weeks === n, `${n} semaines`, `data-act="cprogSet" data-k="weeks" data-v="${n}"`))}</div>
+    <span class="small"><b>Quels jours ?</b></span><div class="chips days">${DAY_NAMES.map((d, i) => chip(w.days.includes(i), d, `data-act="cprogDay" data-v="${i}"`))}</div>
+    <div class="card flat"><b>${plan.sessions.length} séances</b> · jusqu’au ${new Date(plan.sessions.at(-1).date + 'T12:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}${w.days.length > 3 ? h`<p class="tiny warn-t">Plus de 3 fois par semaine la même séance : garde au moins un jour de repos entre deux.</p>` : ''}</div>
+    <button class="btn pri big" data-act="cprogSave">Créer le programme</button></div>`, { wide: true });
+}
+ACT.cprogSet = (el) => { S.cprog[el.dataset.k] = Number(el.dataset.v); cprogSheet(); };
+ACT.cprogDay = (el) => { const d = Number(el.dataset.v), x = new Set(S.cprog.days); if (x.has(d)) { if (x.size > 1) x.delete(d); } else x.add(d); S.cprog.days = [...x].sort(); cprogSheet(); };
+ACT.cprogSave = async () => {
+  const w = S.cprog, e = CATALOG.find((x) => x.id === w?.id); if (!e) return;
+  const s = buildSession(e), old = activeProgram();
+  if (old && !(await ask('Remplacer ton programme en cours ?', { ok: 'Remplacer', detail: 'L’ancien est archivé, tes séances faites restent dans ton historique.' }))) return;
+  if (old) putItem('program', old.id, { ...old, status: 'stopped' });
+  const plan = buildProgram({ goal: 'forme', weeks: w.weeks, days: w.days, minutes: Math.max(10, Math.round(sessionMinutes(s))), start: ymd(new Date()), activityId: s.activity || '', name: `${e.name} · ${w.weeks} semaines` });
+  putItem('program', 'pg-' + uid().slice(0, 14), { ...plan, catalogId: e.id }); closeSheet(); go('home', 'cal'); render();
+  toast(`Programme créé : ${plan.sessions.length} séances.`, 4000);
+};
 ACT.catPlay = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; closeSheet(); startPlayer(buildSession(e), { fromGenerator: true }); };
 ACT.catSave = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return; saveSeance({ ...buildSession(e), id: uid() }); closeSheet(); toast('Ajoutée à Mes séances'); };
 
