@@ -45,7 +45,7 @@ const doneOnDay = (date) => ctx().history.filter((x) => ymd(new Date(x.startedAt
 export function vHome() {
   if (S.sub.home === 'setup') return vSetup();
   const sub = S.sub.home === 'cal' ? 'cal' : 'dash';
-  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}<p class="tiny muted pagehelp">Touche un jour pour planifier une séance ou un événement important. En dessous : ta semaine proposée automatiquement, un objectif daté, tes disponibilités, une pause, l’abonnement agenda.</p>${vCalendar()}`;
+  if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}<p class="tiny muted pagehelp">Touche un jour pour planifier une séance (avec son heure) ou un événement important. En dessous : ta semaine proposée automatiquement, un objectif daté, tes disponibilités, une pause, l’abonnement agenda.</p>${vCalendar()}`;
   return h`${reinstallCard()}${vDash()}`;
 }
 function hero() {

@@ -1162,6 +1162,22 @@ async function twoSites() {
   });
   const P = await c.newPage(); watch(P, 'M'); cur = P; return { c, P };
 }
+await step('8.30 : forme du jour (check-in), mon parcours (saison, lettre scellée), outils par sport, accessibilité, sans débordement', async () => {
+  await g.tab('home'); await G.evaluate(async () => (await import('/state.js')).ACT.checkin()); await G.waitForSelector('#sheet form[data-submit=checkinSave]');
+  await g.click('#sheet [data-act=ciPick][data-k=sleep][data-v="8"]'); await g.click('#sheet [data-act=ciPick][data-k=energy][data-v="4"]'); await g.click('#sheet form[data-submit=checkinSave] button.pri');
+  await G.waitForSelector('#sheet.open', { state: 'detached' }).catch(() => {});
+  assert.equal(await G.evaluate(async () => (await import('/state.js')).itemsOf('wellness').length), 1, 'check-in enregistré');
+  await g.tab('progress'); await G.waitForSelector('#main [data-act=seasonOpen]'); await g.noOverflow('progrès + mon parcours');
+  await g.click('#main [data-act=seasonOpen]'); await g.click('#sheet [data-act=seasonGo]'); assert.equal(await G.evaluate(async () => (await import('/state.js')).itemsOf('season').length), 1);
+  await g.click('#main [data-act=letterOpen]'); await G.fill('#sheet textarea[name=text]', 'Salut moi <b>du futur</b>'); await g.click('#sheet form[data-submit=letterSave] button.pri');
+  await G.waitForSelector('#sheet [data-act=letterRead]'); await g.click('#sheet [data-act=letterRead]'); assert.match(await g.text('#sheet'), /Lettre scellée/, 'pas lisible avant la date');
+  await G.keyboard.press('Escape');
+  await G.evaluate(async () => (await import('/state.js')).go('profile', 'perfs')); await G.waitForSelector('#main [data-act=platesOpen]');
+  await g.click('#main [data-act=platesOpen]'); assert.match(await g.text('#sheet'), /de chaque côté|barre seule/); await G.keyboard.press('Escape');
+  await G.evaluate(async () => (await import('/state.js')).go('settings', 'display')); await G.waitForSelector('#main [data-act=a11ySet][data-k=big]');
+  await g.click('#main [data-act=a11ySet][data-k=big]'); assert.equal(await G.evaluate(() => document.documentElement.dataset.big), 'on'); await g.noOverflow('gros boutons');
+  await g.click('#main [data-act=a11ySet][data-k=big]'); assert.equal(await G.evaluate(() => document.documentElement.dataset.big), 'off');
+});
 await step('ancienne adresse → nouvelle : compte, réglages et séances retrouvés après confirmation', async () => {
   const { c, P } = await twoSites(); const m = H(P);
   await P.goto(NEWO + '/'); await P.waitForSelector('[data-act=authPick]'); // la nouvelle adresse ne redirige pas

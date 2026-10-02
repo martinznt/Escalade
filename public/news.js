@@ -157,6 +157,15 @@ export const NEWS = [
     ['profile', 'body', '#main h1', '🪞 Ma silhouette', 'Forme en V, abdos visibles, bras, jambes… : les bons muscles en priorité, les mensurations à prendre, et tes séries par muscle dans la semaine. Rien n’est promis : l’app dit aussi ce qui ne dépend pas de l’entraînement.'],
     ['library', 'catalog', '#main h1', '🏢 La salle de sport dans l’app', 'Plus de 100 exercices en plus, chaque machine de salle, et des séances prêtes : full body machines, push / pull / jambes, haut / bas, forme en V, abdos, fessiers, cardio.'],
   ] },
+  { v: '8.30.0', date: '2026-10-02', title: 'Un vrai coach, du début à la fin', why: 'Des mesures précises (masse musculaire, masse grasse, mensurations…), une forme du jour qui adapte la séance, des douleurs ménagées d’office, un planning qui s’organise tout seul autour de tes créneaux et de tes objectifs datés, des outils pour chaque sport, ton parcours (saison, lettre à toi-même, année en sport, avant / après) et une app plus accessible.', steps: [
+    ['profile', 'body', '#main h1', '📏 Mesures précises', 'Masse musculaire, masse grasse, eau, mensurations complètes… avec les calculs utiles (IMC, masse maigre, rapports) et comment bien mesurer. Toujours toi par rapport à toi.'],
+    ['home', 'dash', '#main', '🔋 Forme du jour', 'Un check-in de 10 secondes le matin (sommeil, énergie, courbatures, stress) : la séance du jour s’adapte, et une douleur notée est ménagée d’office.'],
+    ['home', 'cal', '#main h1', '🤖 Ta semaine automatique', 'D’après tes créneaux, les horaires de tes lieux et tes événements. Un objectif daté (course, compétition) se construit à rebours, et les conflits se corrigent en un toucher.'],
+    ['', '', '', '▶️ Pendant la séance', 'Dis si la série était facile ou dure : la suivante s’ajuste. « ⋯ Outils » : j’ai mal, il me reste peu de temps, note, mode nuit, remplacer un exercice. Une séance interrompue se reprend.'],
+    ['profile', 'climbing', '#main h1', '🧗 Outils par sport', 'Escalade : styles, envies par site, compétition, pan maison, conditions en falaise. Muscu : disques, charge max. Course : allures. Natation : longueurs. Import GPX / TCX.'],
+    ['progress', 'summary', '#main', '🌟 Mon parcours', 'Saison de 4 semaines, lettre à toi-même, ton année en sport, avant / après, rapport du mois à imprimer et photos de progrès gardées sur ton téléphone.'],
+    ['settings', 'display', '#main h1', '♿ Accessibilité', 'Lecture facile, gros boutons, contraste renforcé, couleurs pour daltonisme. Et : encouragements entre partenaires, idées à voter, démo sans compte.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

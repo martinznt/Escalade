@@ -25,7 +25,7 @@ import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES, b64u } from './server/push.js';
 import { buildIcs } from './public/ics.js';
 
-const APP_VERSION = '8.29.0';
+const APP_VERSION = '8.30.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;

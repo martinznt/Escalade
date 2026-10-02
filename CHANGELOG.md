@@ -1,5 +1,60 @@
 # CHANGELOG — Séances entraînement
 
+## 8.30.0 — Mesures précises, coach qui apprend, planning automatique, pendant la séance, outils par sport, mon parcours, communauté et accessibilité
+
+Base : 8.29.0 et 8.28.0 (incluses dans cette même Pull Request).
+
+### Mesures précises
+- Composition corporelle (masse musculaire, masse maigre, masse grasse, eau, masse osseuse, graisse viscérale, métabolisme de base) et mensurations complètes (cou, épaules, poitrine, bras relâché / contracté, avant-bras, poignet, taille, ventre, hanches, cuisse, mollet), chacune avec sa façon de bien mesurer.
+- Calculs utiles (IMC, masse maigre, indice de masse maigre FFMI, rapports tour de taille / hauteur, taille / hanches, épaules / taille, envergure / taille), chacun avec ce qu’il mesure et ses limites ; saisie de toutes les valeurs d'une pesée d'un coup, mesures personnelles. Toujours toi par rapport à toi, jamais de norme imposée.
+
+### Coach qui apprend
+- Forme du jour : check-in du matin (sommeil, énergie, courbatures, stress, pouls au repos facultatif) ; forme / fatigue (moyennes 42 / 7 jours) ; la séance légère passe en premier quand il le faut.
+- Douleurs : carte sur le bonhomme, zone ménagée d'office par le générateur, reprise en 4 étapes, guérison notée.
+- « Ce que l'app a appris sur toi » : plateaux et 3 pistes, équilibre pousser / tirer, règles apprises (repos, horaires, sommeil, stress, cycle seulement si activé), charge par zone, prévisions avec fourchette et niveau de confiance, récupération sourcée.
+- Progression des charges par la règle des 2 séances (monter, confirmer, garder, redescendre).
+
+### Planning
+- Semaine automatique proposée (créneaux, horaires des lieux, forme, événements), validée par toi ; test mensuel planifié.
+- Objectif daté construit à rebours (fondation, spécifique, affûtage, semaine allégée toutes les 4 semaines) et recalculé ; courses types (5 km, 10 km, semi, marathon).
+- Conflits détectés (veille d'une course, double séance, horaires, pause, jours enchaînés) avec correction en un toucher ; séances non faites à décaler ; « Ta semaine en 10 secondes ».
+- Pause vacances / blessure (rappels coupés, série de semaines gardée) ; abonnement agenda par lien secret (empreinte seule gardée côté serveur) ; rappels qui annoncent la séance prévue.
+
+### Pendant la séance
+- Ressenti de chaque série (facile / bien / dur / échec) qui ajuste la suivante ; conseil de repos utile.
+- « ⋯ Outils » : j'ai mal (suite adaptée + douleur notée), il me reste peu de temps (suite raccourcie, enchaîner par deux), note par exercice, mode nuit rouge, commandes vocales, remplacer un exercice, réglage de machine mémorisé ; disques à mettre affichés pour la barre ; échauffement des doigts ajouté avant un exercice de doigts intense.
+- Reprise d'une séance interrompue (12 h) ; refaire une séance passée (« la même que mardi ») ; « Je n'ai rien prévu » en 3 questions.
+
+### Outils par sport
+- Escalade : « à vue », mes styles, envies par site, point le plus haut, sections, raisons des chutes et séance ciblée, mode compétition (tops / zones / essais, chrono 4 / 4), pan maison (blocs générés depuis une photo), conditions en falaise (Open-Meteo, coordonnées arrondies, limité côté serveur), matériel, dynamomètre Bluetooth (expérimental).
+- Muscu : charges max estimées (1RM) et pourcentages, disques sur la barre. Course : allures depuis la VMA, prévisions (Riegel). Natation : compteur de longueurs. Import GPX / TCX.
+
+### Mon parcours
+- Saison de 4 semaines autour d'un thème (proposé d'après tes habitudes, réussie à 3 semaines sur 4), lettre à toi-même scellée, ton année en sport, avant / après 3-6-12 mois, rapport du mois à imprimer ou enregistrer en PDF, photos de progrès gardées uniquement sur le téléphone (jamais envoyées).
+- Badges utiles : check-ins, bonnes nuits, variété dans le mois, mobilité, saison réussie, reprise après une pause.
+- Carnet : favoris, déjà faites, jamais essayées, sans matériel. Lieux : lien vers la carte (OpenStreetMap).
+
+### Communauté, site, administration
+- Encouragements entre partenaires (abonnés l'un à l'autre, abonnements acceptés des deux côtés), messages tout faits uniquement, limités par jour.
+- Idées à voter (publiées par un administrateur « contenu », vote anonyme, un par personne) ; séance reçue par lien : la garder et l'adapter à son niveau.
+- Démo avec données d'exemple (identifiant à part, effacée en quittant) ; rappel de sauvegarde chaque semaine ; signalement avec l'état de la page (pages visitées, écran, dernières erreurs ; aucune donnée d'entraînement).
+- Admin : bandeau de maintenance (annonce), statistiques anonymes (groupes de moins de 3 masqués), sauvegarde du contenu commun, « voir l'app comme un nouveau membre ». Chaque action d'administration est notée au Journal.
+
+### Accessibilité et confort
+- Lecture facile, gros boutons, contraste renforcé, couleurs pour daltonisme, taille du texte — dès le premier écran. Contour de focus visible au clavier.
+- Raccourci d'icône « Forme du jour » ; glisser entre les étapes du créateur ; icône de notification monochrome (plus de carré blanc dans la barre d'état Android).
+
+### Corrections
+- Le résultat « à vue » est compté partout (badges, bilan, lieux, objectifs) ; badge de synchronisation qui débordait à 320 px pendant un envoi ; échappement du point-virgule dans l'export agenda.
+- « Mon parcours » accessible même avant la première séance ; boutons en haut d'une séance (‹, Adapter, À plusieurs, Lancer) qui débordaient à 320 / 390 px ; raccourcis contextuels qui passent à la ligne.
+
+### Limites connues (honnêtes)
+- Comptage des répétitions à la caméra et baisse automatique de la musique : non faits (impossibles ou non fiables depuis une page web).
+- Dynamomètre Bluetooth : expérimental, Chrome / Edge sur Android ou ordinateur seulement (pas Safari / iPhone).
+- Montres : pas de lien direct Strava / Garmin, ni fichiers `.fit` ; import GPX / TCX seulement.
+- Anglais : version « beta » partielle ; espagnol non fait. Mode club / coach : non fait.
+- Conditions en falaise : dépendent d'Open-Meteo (service externe gratuit).
+
 ## 8.29.0 — Plusieurs sports et lieux, objectifs classés ou sans hiérarchie, horaires réels, silhouette visée, salle de sport complète
 
 Base : 8.28.0 (incluse dans cette même Pull Request).
