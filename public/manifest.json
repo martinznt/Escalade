@@ -49,6 +49,18 @@
       ]
     },
     {
+      "name": "Forme du jour (check-in)",
+      "short_name": "Forme",
+      "url": "/?do=checkin#/home/dash",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
       "name": "Minuteur",
       "short_name": "Minuteur",
       "url": "/?do=timer#/home/dash",

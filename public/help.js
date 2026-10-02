@@ -38,6 +38,11 @@ export const FAQ = [
   ['Comparer mes mesures ou mes photos dans le temps ?', 'Progrès › « 🌟 Mon parcours » : « Avant / après » compare tes mesures d’il y a 3, 6 ou 12 mois à aujourd’hui ; « Photos de progrès » garde tes photos sur ce téléphone uniquement (jamais envoyées) et les compare côte à côte.'],
   ['Imprimer un bilan ou l’enregistrer en PDF ?', 'Progrès › « 🌟 Mon parcours » › « Rapport du mois » (ou « Mon année en sport ») puis « 🖨️ Imprimer ou enregistrer en PDF » : dans la fenêtre d’impression, choisis « Enregistrer en PDF ».'],
   ['Retrouver mes séances préférées du carnet ?', 'Bibliothèque › Carnet de séances : touche une séance puis « ☆ Mettre en favori ». Les filtres « ⭐ Mes favoris », « ✅ Déjà faites », « 🆕 Jamais essayées » et « 🙌 Sans matériel » trient le carnet.'],
+  ['Encourager un ami ?', 'Si vous vous suivez tous les deux (abonnements acceptés des deux côtés), touche « 💌 Encourager » sur son profil dans Profil › Partage : un petit mot tout fait que lui seul voit. Pas de texte libre, pas de classement.'],
+  ['Voter pour une idée d’amélioration ?', 'Paramètres › « 🗳️ Idées à voter » : les idées retenues par l’équipe. Un vote par personne, anonyme ; touche à nouveau pour retirer ton vote.'],
+  ['Texte plus grand, contraste, lecture facile ?', 'Paramètres › Affichage › « ♿ Accessibilité » (aussi dès le premier écran, avant de créer un compte) : lecture facile, gros boutons, contraste renforcé, couleurs pour daltonisme, taille du texte.'],
+  ['Essayer l’app avant de créer un compte ?', 'Sur le premier écran : « 👀 Essayer sans compte » (tes vraies données, gardées sur ce téléphone) ou « 🎬 Voir une démo » (des données d’exemple, effacées en quittant).'],
+  ['Ne jamais perdre mes données ?', 'Paramètres › Mes données : « 📥 Exporter » télécharge un fichier avec tout. Coche le rappel chaque semaine : une carte sur l’accueil te propose la sauvegarde en un toucher.'],
   ['Partager l’app avec quelqu’un ?', 'Paramètres › « 📲 Partager l’app » : un QR code à scanner, ou le lien à envoyer.'],
   ['Un problème ?', 'Va dans « 🐞 Signaler un bug » et décris ce qui s’est passé : le message arrive directement à l’administrateur.'],
 ];

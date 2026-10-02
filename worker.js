@@ -2,7 +2,7 @@
 // Le serveur est l'autorité pour toutes les permissions : l'utilisateur est toujours déterminé par sa session
 // (jamais par un identifiant envoyé par le client), et chaque requête SQL est paramétrée.
 import { SCHEMA, ADD_COLUMNS } from './schema.js';
-import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid } from './public/shared.js';
+import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid, CHEERS } from './public/shared.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
 import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, extractJson, DEFAULT_MODEL as AI_MODEL } from './server/ai.js';
@@ -34,7 +34,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/planning.js', '/views-planning.js', '/live.js', '/sports.js', '/views-sports.js', '/story.js', '/views-story.js', '/library-more.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/planning.js', '/views-planning.js', '/live.js', '/sports.js', '/views-sports.js', '/story.js', '/views-story.js', '/views-community.js', '/demo.js', '/library-more.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/badge-96.png', '/robots.txt']);
 
@@ -275,6 +275,7 @@ function roleFor(p, m) {
   if (p === '/api/admin/studio/ai' || p === '/api/admin/lab' || p === '/api/admin/health') return 'intelligence';
   if (p === '/api/admin/assistant/code') return 'technical';
   if (p === '/api/admin/assistant') return 'content';
+  if (p.startsWith('/api/admin/ideas')) return 'content';
   if (p.startsWith('/api/admin/studio') || p.startsWith('/api/admin/versions') || p.startsWith('/api/admin/global') || p.startsWith('/api/admin/proposals') || p.startsWith('/api/admin/intents')) return 'content';
   return null; // journal : tout administrateur peut le lire
 }
@@ -676,9 +677,18 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (p === '/api/admin/intents' && m === 'POST') { const b = await readJson(request, 4000); const r = await intentCreate(env, u, b); if (r.error) return fail(r.error); await auditStmt(env, u, 'intent_create', { type: 'intent', id: r.id, after: { label: str(b?.label, 60) } }).run(); return json({ ok: true, id: r.id }); }
     if ((x = p.match(/^\/api\/admin\/intents\/([\w-]{1,64})$/)) && m === 'DELETE') { const old = await db(env, 'SELECT label,activity,caps_json FROM community_intents WHERE id=?', x[1]).first(); await env.DB.batch([db(env, 'DELETE FROM community_intents WHERE id=?', x[1]), auditStmt(env, u, 'intent_delete', { type: 'intent', id: x[1], before: old ? { label: old.label, activity: old.activity, caps: safeParse(old.caps_json) } : null })]); return json({ ok: true }); }
     if ((x = p.match(/^\/api\/admin\/bugs\/([\w-]{1,64})$/)) && m === 'POST') return adminBugStatus(request, env, u, x[1]);
+    if (p === '/api/admin/stats' && m === 'GET') return adminStats(env);
+    if (p === '/api/admin/ideas' && m === 'POST') return ideaSave(request, env, u);
+    if ((x = p.match(/^\/api\/admin\/ideas\/([\w-]{1,64})$/)) && m === 'DELETE') {
+      const old = await db(env, 'SELECT title FROM ideas WHERE id=?', x[1]).first(); if (!old) return fail('Idée introuvable.', 404);
+      await env.DB.batch([db(env, 'DELETE FROM idea_votes WHERE idea_id=?', x[1]), db(env, 'DELETE FROM ideas WHERE id=?', x[1]), auditStmt(env, u, 'idea-delete', { type: 'idea', id: x[1], before: old })]);
+      return json({ ok: true });
+    }
     return fail('Route inconnue.', 404);
   }
 
+  if (p === '/api/ideas' && m === 'GET') return ideasList(env, u);
+  if ((x = p.match(/^\/api\/ideas\/([\w-]{1,64})\/vote$/)) && m === 'POST') return ideaVote(env, u, x[1]);
   if (p.startsWith('/api/social/')) return social(request, env, url, u);
   return fail('Route inconnue.', 404);
 }
@@ -748,6 +758,8 @@ async function deleteAccount(request, env, auth, secure) {
   await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs', 'proposals', 'ical_feeds'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
     .concat([
       db(env, 'DELETE FROM follows WHERE follower_id=? OR followee_id=?', id, id),
+      db(env, 'DELETE FROM cheers WHERE from_id=? OR to_id=?', id, id),
+      db(env, 'DELETE FROM idea_votes WHERE user_id=?', id),
       db(env, 'UPDATE common_exercises SET created_by=NULL WHERE created_by=?', id),
       db(env, "DELETE FROM shared_sessions WHERE owner_id=? AND scope IN ('public','link')", id),
       db(env, 'DELETE FROM duo_rooms WHERE owner_id=?', id),
@@ -1773,11 +1785,26 @@ async function social(request, env, url, u) {
     const r = p === 'unfollow' ? await db(env, 'DELETE FROM follows WHERE follower_id=? AND followee_id=?', u.id, other.id).run() : await db(env, 'DELETE FROM follows WHERE follower_id=? AND followee_id=?', other.id, u.id).run();
     return json({ ok: true, changed: !!r.meta?.changes });
   }
+  if (p === 'cheer' && m === 'POST') {
+    const b = await readJson(request, 2000), msg = String(b?.msg || '');
+    if (!CHEERS[msg]) return fail('Message inconnu.');
+    const other = await db(env, 'SELECT id FROM users WHERE lower(username)=lower(?)', str(b?.username, 40)).first();
+    if (!other || other.id === u.id || !(await mutual(env, u.id, other.id))) return fail('Tu peux encourager seulement un partenaire : vous vous suivez tous les deux.', 403);
+    if (await limited(env, 'cheer:' + u.id, 30, DAY) || await limited(env, `cheer:${u.id}:${other.id}`, 3, DAY)) return fail('Assez d’encouragements pour aujourd’hui 🙂', 429);
+    await db(env, 'INSERT INTO cheers(id,from_id,to_id,msg,created_at,seen) VALUES(?,?,?,?,?,0)', uid(), u.id, other.id, msg, Date.now()).run();
+    return json({ ok: true });
+  }
+  if (p === 'cheers' && m === 'GET') {
+    const since = Date.now() - 60 * DAY;
+    const r = (await db(env, 'SELECT c.id,c.msg,c.created_at,c.seen,us.username FROM cheers c JOIN users us ON us.id=c.from_id WHERE c.to_id=? AND c.created_at>? ORDER BY c.created_at DESC LIMIT 50', u.id, since).all()).results || [];
+    if (r.some((x) => !x.seen)) await db(env, 'UPDATE cheers SET seen=1 WHERE to_id=? AND seen=0', u.id).run();
+    return json({ ok: true, cheers: r.map((x) => ({ id: x.id, from: x.username, text: CHEERS[x.msg] || '', at: x.created_at, fresh: !x.seen })).filter((x) => x.text) });
+  }
   const tz = clamp(url.searchParams.get('tz'), -840, 840, 0);
   if (p === 'feed' && m === 'GET') {
     const r = await db(env, "SELECT us.id,us.username FROM follows f JOIN users us ON us.id=f.followee_id WHERE f.follower_id=? AND f.status='accepted' ORDER BY us.username LIMIT 30", u.id).all();
     const people = [];
-    for (const t of r.results) { const c = await cardFor(env, u.id, t.id, t.username, tz); if (c) people.push(c); }
+    for (const t of r.results) { const c = await cardFor(env, u.id, t.id, t.username, tz); if (c) people.push({ ...c, mutual: await mutual(env, u.id, t.id) }); }
     return json({ ok: true, people });
   }
   const one = p.match(/^user\/([^/]{1,40})$/);
@@ -1787,6 +1814,59 @@ async function social(request, env, url, u) {
     return card ? json({ ok: true, person: card }) : fail('Profil introuvable ou privé.', 404);
   }
   return fail('Route inconnue.', 404);
+}
+
+/** Partenaires : chacun suit l'autre, et les deux abonnements sont acceptés (accord des deux personnes). */
+async function mutual(env, a, b) {
+  const r = await db(env, "SELECT COUNT(*) AS n FROM follows WHERE status='accepted' AND ((follower_id=? AND followee_id=?) OR (follower_id=? AND followee_id=?))", a, b, b, a).first();
+  return (r?.n || 0) >= 2;
+}
+
+/* ═════════════ Idées à voter (publiées par les administrateurs) ═════════════ */
+const IDEA_STATUS = ['open', 'planned', 'done'];
+async function ideasList(env, u) {
+  const r = (await db(env, 'SELECT i.id,i.title,i.detail,i.status,i.updated_at,(SELECT COUNT(*) FROM idea_votes v WHERE v.idea_id=i.id) AS votes,(SELECT COUNT(*) FROM idea_votes v WHERE v.idea_id=i.id AND v.user_id=?) AS mine FROM ideas i ORDER BY i.status, votes DESC, i.updated_at DESC LIMIT 100', u.id).all()).results || [];
+  return json({ ok: true, ideas: r.map((x) => ({ id: x.id, title: x.title, detail: x.detail, status: x.status, votes: x.votes, mine: !!x.mine, updatedAt: x.updated_at })) });
+}
+async function ideaVote(env, u, id) {
+  if (u.guest) return fail('Compte nécessaire.', 403);
+  const idea = await db(env, 'SELECT status FROM ideas WHERE id=?', id).first();
+  if (!idea) return fail('Idée introuvable.', 404);
+  if (idea.status !== 'open') return fail('Cette idée n’est plus ouverte au vote.', 409);
+  if (await limited(env, 'vote:' + u.id, 60, DAY)) return fail('Trop de votes aujourd’hui.', 429);
+  const had = await db(env, 'DELETE FROM idea_votes WHERE idea_id=? AND user_id=?', id, u.id).run();
+  if (!had.meta?.changes) await db(env, 'INSERT INTO idea_votes(idea_id,user_id,created_at) VALUES(?,?,?)', id, u.id, Date.now()).run();
+  const n = await db(env, 'SELECT COUNT(*) AS n FROM idea_votes WHERE idea_id=?', id).first();
+  return json({ ok: true, voted: !had.meta?.changes, votes: n?.n || 0 });
+}
+async function ideaSave(request, env, u) {
+  const b = await readJson(request, 6000), title = str(b?.title, 120), detail = str(b?.detail, 1000), status = IDEA_STATUS.includes(b?.status) ? b.status : 'open';
+  if (title.length < 3) return fail('Titre trop court.');
+  const id = b?.id && /^[\w-]{1,64}$/.test(b.id) ? b.id : 'idea-' + uid().slice(0, 16), now = Date.now();
+  const old = await db(env, 'SELECT title,detail,status FROM ideas WHERE id=?', id).first();
+  await env.DB.batch([
+    db(env, 'INSERT INTO ideas(id,title,detail,status,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,detail=excluded.detail,status=excluded.status,updated_at=excluded.updated_at', id, title, detail, status, now, now),
+    auditStmt(env, u, old ? 'idea-edit' : 'idea-create', { type: 'idea', id, before: old || null, after: { title, detail, status } }),
+  ]);
+  return json({ ok: true, id });
+}
+
+/* ═════════════ Statistiques anonymes (administrateurs) ═════════════ */
+// Uniquement des totaux sur l'ensemble des comptes ; un groupe de moins de 3 personnes est affiché « moins de 3 ».
+const SMALL = 3;
+const hide = (n) => (n > 0 && n < SMALL ? null : n);
+async function adminStats(env) {
+  const now = Date.now(), d7 = now - 7 * DAY, d30 = now - 30 * DAY;
+  const one = async (sql, ...a) => (await db(env, sql, ...a).first())?.n || 0;
+  const users = await one('SELECT COUNT(*) AS n FROM users'), active7 = await one('SELECT COUNT(*) AS n FROM users WHERE last_seen>?', d7), active30 = await one('SELECT COUNT(*) AS n FROM users WHERE last_seen>?', d30);
+  const sessions7 = await one('SELECT COUNT(*) AS n FROM history WHERE started_at>?', d7), sessions30 = await one('SELECT COUNT(*) AS n FROM history WHERE started_at>?', d30);
+  const people30 = await one('SELECT COUNT(DISTINCT user_id) AS n FROM history WHERE started_at>?', d30);
+  const minutes30 = Math.round(((await db(env, 'SELECT COALESCE(SUM(duration_seconds),0) AS n FROM history WHERE started_at>?', d30).first())?.n || 0) / 60);
+  const acts = ((await db(env, "SELECT json_extract(data_json,'$.activity') AS a, COUNT(*) AS n, COUNT(DISTINCT user_id) AS p FROM history WHERE started_at>? GROUP BY a ORDER BY n DESC LIMIT 12", d30).all()).results || [])
+    .map((x) => ({ activity: x.a || 'autre', label: ACTIVITIES[x.a]?.label || (x.a ? 'Activité personnelle' : 'Sans activité'), sessions: x.p < SMALL ? null : x.n, people: hide(x.p) }));
+  const weeks = [];
+  for (let k = 7; k >= 0; k--) { const to = now - k * 7 * DAY, from = to - 7 * DAY; weeks.push({ from, newUsers: hide(await one('SELECT COUNT(*) AS n FROM users WHERE created_at>? AND created_at<=?', from, to)), sessions: await one('SELECT COUNT(*) AS n FROM history WHERE started_at>? AND started_at<=?', from, to) }); }
+  return json({ ok: true, at: now, users: hide(users), active7: hide(active7), active30: hide(active30), sessions7, sessions30, people30: hide(people30), minutes30: people30 < SMALL ? null : minutes30, activities: acts, weeks, small: SMALL });
 }
 
 /** Ce que `viewer` a le droit de voir de `targetId` : le serveur applique le choix de la personne (jamais l'interface). */

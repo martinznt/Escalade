@@ -19,7 +19,7 @@ import { vAssistant } from './views-assistant.js';
 import { vSources } from './views-catalog.js';
 import { CAPACITIES, ACTIVITIES } from './model.js';
 
-export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe'];
+export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe', 'easy', 'cb', 'big', 'contrast'];
 export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
 const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition'], ['assistant', 'Assistant du site'], ['content', 'Contenu de l’app'], ['look', 'Textes et apparence'], ['changes', 'Tout ce qui a été modifié'], ['members', 'Propositions des membres'], ['bugs', 'Signalements'], ['users', 'Comptes et rôles'], ['push', 'Notifications de mise à jour']];
@@ -35,6 +35,7 @@ const MENU = [
   ['updates', '🆕', 'Toutes les mises à jour', 'L’évolution de l’app depuis le début, avec une visite pour chacune'],
   ['bug', '🐞', 'Signaler un bug', 'Un problème ? Dis-le nous'],
   ['idea', '💡', 'Proposer une amélioration', 'Une idée, une modification ? Les administrateurs répondent', 'ideaNew'],
+  ['votes', '🗳️', 'Idées à voter', 'Les idées retenues par l’équipe : vote pour celles que tu veux', 'ideasOpen'],
   ['admin', '🛡️', 'Admin', 'Réservé aux administrateurs'],
 ];
 /** Partager le site : QR code qui ouvre l'adresse de l'app, comme si on la tapait. */
@@ -82,7 +83,7 @@ function vMain() {
   return h`${account}
     <label class="findbox"><span aria-hidden="true">🔍</span><input type="search" data-input="setFind" placeholder="Rechercher un paramètre…" aria-label="Rechercher un paramètre" autocomplete="off"></label>
     <div id="setfindres"></div>
-    <div class="setmenu setmain">${MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin', 'idea'].includes(k))).map(([k, ic, t, d, a]) => h`<button class="setrow" data-act="${a || 'setSub'}" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
+    <div class="setmenu setmain">${MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin', 'idea', 'votes'].includes(k))).map(([k, ic, t, d, a]) => h`<button class="setrow" data-act="${a || 'setSub'}" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
     <div class="card"><h3>🧩 Mon profil sportif</h3><p class="small muted">Pour que l’app s’adapte à toi (sports, niveau, temps, matériel, objectif).</p>
       <div class="row wrapf"><button class="btn pri" data-act="setupAgain" data-id="quiz">Répondre aux questions</button><button class="btn" data-act="setupAgain" data-id="form">Remplir la fiche</button><button class="btn ghost" data-act="goProfile" data-id="understand">Voir mon profil</button></div></div>
     ${installCard({ force: true })}
@@ -118,12 +119,30 @@ function vDisplay() {
       ${tog(['season', '🍂 Décor de saison sur l’accueil (neige, fleurs, feuilles…)'])}
       <label>Langue<select data-change="pref" name="lang"><option value="fr" ${st.lang !== 'en' ? 'selected' : ''}>Français</option><option value="en" ${st.lang === 'en' ? 'selected' : ''}>English (beta)</option></select></label>
       <details class="how mini"><summary>Plus d’options d’affichage</summary><label>Espacement</label>${segA('density', [['compact', 'Serré'], ['normal', 'Normal'], ['airy', 'Aéré']])}<label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</details></div>
+    ${a11yCard(a)}
     <div class="card"><h3>✏️ Mise en page</h3><p class="small muted">Pour chaque page : ce qui s’affiche (en grand, en petite icône en haut, ou masqué), dans quel ordre et de quelle couleur. Le bouton ✏️ « Organiser » en haut des pages ouvre la même chose.</p>
       <div class="row wrapf"><button class="btn" data-act="layEditAt" data-to="home/dash">Accueil</button><button class="btn" data-act="layEditAt" data-to="progress/summary">Progrès</button><button class="btn" data-act="layEditAt" data-to="library/home">Bibliothèque</button><button class="btn" data-act="layEditAt" data-to="profile/home">Profil</button></div>
       ${tog(['hideLayEdit', 'Masquer le bouton ✏️ « Organiser » en haut des pages (la mise en page reste ici, et dans ☰ › « Mise en page »)'])}
       <button class="btn ghost" data-act="layReset" data-scope="all">Revenir à la mise en page de base partout</button></div>
 `;
 }
+/** Accessibilité : réglages de CET appareil (et du compte s'il y en a un). Proposés aussi dès le premier écran. */
+export const A11Y = [['easy', '📖', 'Lecture facile', 'Police plus lisible, lignes plus espacées, pas d’italique'], ['big', '👆', 'Gros boutons', 'Boutons et cases plus grands, plus faciles à toucher'],
+  ['contrast', '🔲', 'Contraste renforcé', 'Textes et bordures bien marqués'], ['cb', '🎨', 'Couleurs pour daltonisme', 'Bleu / orange au lieu de vert / rouge']];
+export function a11yCard(a = window.__sea.load()) {
+  return h`<div class="card"><h3>♿ Accessibilité</h3><div class="setmenu">${A11Y.map(([k, ic, t, d]) => h`<button class="setrow ${a[k] === 'on' ? 'on' : ''}" data-act="a11ySet" data-k="${k}" aria-pressed="${a[k] === 'on'}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${a[k] === 'on' ? '✓' : ''}</span></button>`)}</div>
+    <label>Taille du texte</label><div class="chips">${[['s', 'Petit'], ['m', 'Normal'], ['l', 'Grand'], ['xl', 'Très grand']].map(([v, l]) => chip(a.size === v, l, `data-act="a11ySize" data-v="${v}"`))}</div>
+    <p class="tiny muted">Les icônes sont toujours accompagnées d’un texte, et chaque bouton a un nom lu par les lecteurs d’écran. Au clavier : Tab pour avancer, Entrée pour valider, Échap pour fermer.</p></div>`;
+}
+function a11ySave(patch) {
+  const a = { ...window.__sea.load(), ...patch, _t: Date.now(), _owner: S.user?.id || '' };
+  window.__sea.save(a);
+  if (S.user && S.loaded) putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(a[k] ?? '') }), {}));
+  render(); if (document.querySelector('#sheet.open [data-act=a11ySet]')) ACT.a11yOpen();
+}
+ACT.a11ySet = (el) => { const k = el.dataset.k; if (A11Y.some(([x]) => x === k)) a11ySave({ [k]: window.__sea.load()[k] === 'on' ? 'off' : 'on' }); };
+ACT.a11ySize = (el) => { if (['s', 'm', 'l', 'xl'].includes(el.dataset.v)) a11ySave({ size: el.dataset.v }); };
+ACT.a11yOpen = () => openSheet(h`<div class="stack"><h2 style="margin:0">Aa Affichage et accessibilité</h2>${a11yCard()}</div>`);
 /* ═════════ Pendant la séance ═════════ */
 function vSession() {
   const { st, tog } = prefs();
@@ -195,13 +214,17 @@ SUBMIT.delacct = async (f) => { try { const id = S.user.id; await api('POST', '/
 function vData() {
   const c = S.csv;
   return h`<div class="card"><h3>📦 Sauvegarde complète</h3><p class="small muted">Exporte toutes tes données (séances, historique, calendrier, profil, performances, objectifs, cotations, préférences…) dans un fichier JSON réimportable.</p>
-      <div class="row wrapf"><button class="btn pri" data-act="export">📥 Exporter</button><label class="btn">📤 Importer un JSON<input type="file" accept="application/json,.json" data-change="importJson" class="hidden"></label></div></div>
+      <div class="row wrapf"><button class="btn pri" data-act="export">📥 Exporter</button><label class="btn">📤 Importer un JSON<input type="file" accept="application/json,.json" data-change="importJson" class="hidden"></label></div>
+      <label class="chk"><input type="checkbox" data-change="backupWeekly" ${ls.get('sea:backup-weekly', !!S.user?.guest) ? 'checked' : ''}> 🗓️ Me rappeler chaque semaine de faire une sauvegarde (une carte sur l’accueil)</label>
+      ${ls.get('sea:backup-last', 0) ? h`<p class="tiny muted">Dernière sauvegarde depuis cet appareil : ${fmtDay(ls.get('sea:backup-last', 0))}</p>` : ''}</div>
     <div class="card"><h3>📊 Import CSV</h3><p class="small muted">Importe un historique de séances ou des performances depuis un tableur. Tu vérifies la correspondance des colonnes et un aperçu avant tout import.</p>
       <div class="chips">${chip((c?.kind || 'history') === 'history', 'Séances réalisées', 'data-act="csvKind" data-id="history"')}${chip(c?.kind === 'perf', 'Performances', 'data-act="csvKind" data-id="perf"')}</div>
       <label class="btn">Choisir un fichier CSV<input type="file" accept=".csv,text/csv,text/plain" data-change="csvFile" class="hidden"></label>
       ${c?.parsed ? vCsvWizard(c) : ''}</div>`;
 }
+CHG.backupWeekly = (el) => { ls.set('sea:backup-weekly', !!el.checked); toast(el.checked ? 'Rappel chaque semaine activé' : 'Rappel désactivé'); };
 ACT.export = () => {
+  ls.set('sea:backup-last', Date.now());
   const data = { app: 'mes-seances', version: 8, exportedAt: new Date().toISOString(), seances: S.seances, history: S.history, events: S.events, settings: S.settings, personal: S.personal, items: [...S.items.values()].filter((i) => !i.del), appearance: window.__sea?.load?.() || {} };
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   a.download = `mes-seances-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -345,6 +368,9 @@ function vAdmin() {
       ...row('technical', ['setSub', 'bugs', '🐞', 'Signalements', openBugs ? `${openBugs} ouvert${openBugs > 1 ? 's' : ''}` : 'Problèmes signalés par les membres']),
       ...row('users', ['setSub', 'users', '👥', 'Comptes et rôles', 'Dernières connexions, droits d’administration']),
       ['libSub', 'common', '🌍', 'Bibliothèque commune', 'Séances partagées par les membres'],
+      ...row('content', ['adminIdeasOpen', '', '🗳️', 'Idées à voter', 'Publier une idée, suivre les votes, dire quand elle est prévue ou faite']),
+      ['adminStatsOpen', '', '📊', 'Statistiques anonymes', 'Totaux sur tous les comptes, sans aucune donnée personnelle'],
+      ['adminNewbie', '', '🐣', 'Voir l’app comme un nouveau membre', 'Ce que découvre quelqu’un qui arrive'],
     ])}
     <span class="kicker">Surveiller et comprendre</span>
     ${menuList([
@@ -354,6 +380,7 @@ function vAdmin() {
       ...row('technical', ['setSub', 'code', '💻', 'Propositions de code', 'Ce qui demande du code : relu, validé, jamais déployé par l’app']),
       ...row('technical', ['setSub', 'push', '🔔', 'Notifications de mise à jour', 'Envoyées, reçues, appareils abonnés']),
       ['setSub', 'audit', '📜', 'Journal', 'Qui a fait quoi, quand, avant / après'],
+      ...row('content', ['adminGlobalExport', '', '📦', 'Sauvegarder le contenu commun', 'Un fichier avec tout ce qui est publié ; revenir en arrière : Brouillons et publication']),
     ])}`;
 }
 function vAdminBugs() {
@@ -452,13 +479,22 @@ function vBug() {
       <label>Description détaillée<textarea name="description" required minlength="5" maxlength="5000" placeholder="Ce que tu faisais, ce qui s’est passé, ce que tu attendais…"></textarea></label>
       <label>Page concernée<select name="page">${pages.map(([k, l]) => h`<option value="${k}">${l}</option>`)}</select></label>
       <label class="chk"><input type="checkbox" name="device" checked> Joindre les informations techniques de l’appareil (navigateur, version de l’application)</label>
+      <label class="chk"><input type="checkbox" name="state" checked> Joindre l’état de la page (pages visitées juste avant, taille d’écran, connexion, dernières erreurs techniques ; aucune de tes données d’entraînement)</label>
       <p class="tiny muted">Ne mets jamais de mot de passe dans un signalement. Envoyé hors ligne, il part dès le retour de la connexion.</p>
       <button class="btn pri" type="submit">Envoyer</button></form>
     <div class="card"><h3>Mes signalements</h3>${S.myBugs ? (S.myBugs.length ? S.myBugs.map((b) => h`<div class="item"><div class="grow"><b>${b.title}</b><div class="tiny muted">${fmtDateTime(b.createdAt)}</div></div>${tag(b.status === 'done' ? 'traité' : 'reçu', b.status === 'done' ? 'ok' : '')}</div>`) : h`<p class="muted small">Aucun signalement envoyé.</p>`) : h`<p class="muted small">Liste disponible en ligne.</p>`}</div>`;
 }
+/** État de la page joint à un signalement : aucun contenu personnel (ni séances, ni mesures, ni texte saisi). */
+export function pageState() {
+  const routes = (window.__seaRoutes || []).slice(-6).join(' → ') || location.hash || '/';
+  const errs = (window.__seaErrs || []).slice(-5).map((e) => `• ${e}`).join('\n') || 'aucune';
+  return [`Pages : ${routes}`, `Écran : ${innerWidth}×${innerHeight} (${devicePixelRatio || 1}x)`, `Connexion : ${navigator.onLine ? 'en ligne' : 'hors ligne'} · synchro ${S.sync || '?'}`,
+    `Affichage : ${document.documentElement.dataset.mode || ''} · texte ${document.documentElement.dataset.size || 'm'}`, `Version : ${APP_VERSION}`, `Dernières erreurs :\n${errs}`].join('\n');
+}
 SUBMIT.bugSend = (f) => {
   const d = Object.fromEntries(new FormData(f));
-  queue('POST', '/api/bugs', { id: uid(), title: d.title, description: d.description, page: d.page, appVersion: d.device ? APP_VERSION : '', userAgent: d.device ? navigator.userAgent.slice(0, 300) : '' });
+  const description = d.state ? `${d.description}\n\n— État de la page —\n${pageState()}`.slice(0, 5000) : d.description;
+  queue('POST', '/api/bugs', { id: uid(), title: d.title, description, page: d.page, appVersion: d.device ? APP_VERSION : '', userAgent: d.device ? navigator.userAgent.slice(0, 300) : '' });
   f.reset(); buzzOk(); toast('Signalement enregistré : il est envoyé aux administrateurs. Merci !'); setTimeout(loadMyBugs, 2500);
 };
 

@@ -1,7 +1,7 @@
 // views-story.js — Progrès › « 🌟 Mon parcours » : saison de 4 semaines, lettre à toi-même, ton année en sport,
 // avant / après, rapport du mois à imprimer, photos de progrès (gardées sur ce téléphone uniquement).
 import { h, openSheet, closeSheet, toast, menuList, chip, fmtDay, ask } from './ui.js';
-import { S, ACT, SUBMIT, CHG, ctx, render, putItem, delItem, itemsOf, idb } from './state.js';
+import { S, ACT, SUBMIT, CHG, ctx, render, putItem, delItem, itemsOf, idb, ls } from './state.js';
 import { uid } from './shared.js';
 import { SEASON_THEMES, SEASON_WEEKS, seasonProgress, seasonSuggestion, seasonStart, LETTER_DELAYS, letterOpenAt, letterState, beforeAfter, yearInSport, monthReport } from './story.js';
 import { activityLabel } from './brain.js';
@@ -37,8 +37,11 @@ export function storyHome() {
   if (ready.length) rows.push(['letterOpen', '', '📬', 'Une lettre de toi est arrivée', `Écrite le ${fmtDay(ready[0].writtenAt)}`]);
   if (sp?.finished) rows.push(['seasonOpen', '', sp.success ? '🏆' : '🗓️', `Saison « ${sp.label} » terminée`, `${sp.doneWeeks} semaine${sp.doneWeeks > 1 ? 's' : ''} sur ${SEASON_WEEKS} réussie${sp.doneWeeks > 1 ? 's' : ''}`]);
   else if (sp && sp.left && new Date().getDay() === 0) rows.push(['seasonOpen', '', sp.icon, `Saison ${sp.label} : dernier jour de la semaine`, `Encore ${fr(sp.left)} ${sp.unit}${sp.left > 1 && sp.unit !== 'min' ? 's' : ''} pour réussir la semaine ${sp.week}`]);
+  if (ls.get('sea:backup-weekly', !!S.user?.guest) && Date.now() - ls.get('sea:backup-last', 0) > 7 * 86400000) rows.push(['backupNow', '', '💾', 'Sauvegarde de la semaine', S.user?.guest ? 'Sans compte, tes données ne sont que sur ce téléphone : garde-en une copie' : 'Un fichier avec toutes tes données, en un toucher']);
   return rows.length ? menuList(rows) : '';
 }
+
+ACT.backupNow = () => { ACT.export?.(); toast('💾 Sauvegarde téléchargée : garde ce fichier (Paramètres › Mes données pour la réimporter).', 4500); render(); };
 
 /* ───────── Saison ───────── */
 ACT.seasonOpen = () => {

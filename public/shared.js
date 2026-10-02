@@ -269,3 +269,9 @@ export const parseKg = (t) => {
   const m = text.match(/^\s*\+?(\d+(?:\.\d+)?)\s*$/);
   return m ? Number(m[1]) : 0;
 };
+
+/** Encouragements entre partenaires : seulement ces messages tout faits (pas de texte libre, donc rien à modérer). */
+export const CHEERS = {
+  bravo: '👏 Bravo pour ta séance !', courage: '💪 Courage, tu vas y arriver !', regulier: '🔥 Quelle régularité !',
+  ensemble: '🤝 On s’entraîne ensemble bientôt ?', bloc: '🧗 Bien joué pour ce bloc !', repos: '😴 Pense à bien récupérer !',
+};

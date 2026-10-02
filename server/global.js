@@ -49,7 +49,9 @@ export function cleanGlobal(kind, d) {
   }
   if (kind === 'announce') { // annonce ou note de mise à jour écrite dans l'app
     const title = str(d.title, 100), body = str(d.body, 1200); if (!title) return null;
-    return { title, body, update: !!d.update, emoji: str(d.emoji, 8) || (d.update ? '🆕' : '📣') };
+    // 8.30 : bandeau en haut de l'app (message de maintenance), jusqu'à une date (0 = jusqu'à ce qu'on le retire).
+    const until = Number.isFinite(Number(d.until)) ? Math.max(0, Math.min(Number(d.until), 9e15)) : 0;
+    return { title, body, update: !!d.update, emoji: str(d.emoji, 8) || (d.update ? '🆕' : d.banner ? '🛠️' : '📣'), ...(d.banner ? { banner: true, until } : {}) };
   }
   if (kind === 'layout') { // mise en page de base pour tous, et fonctions masquées pour tous (validées côté app par layout.js)
     const pages = {}; for (const [k, v] of Object.entries(d.pages || {}).slice(0, 8)) if (/^\w{1,20}$/.test(k) && Array.isArray(v)) pages[k] = v.slice(0, 40).map((e) => ({ id: str(e?.id, 30), as: ['big', 'icon', 'off'].includes(e?.as) ? e.as : 'off', color: /^#[0-9a-f]{6}$/i.test(String(e?.color || '')) ? e.color : '' })).filter((e) => /^\w{1,30}$/.test(e.id));

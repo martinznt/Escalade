@@ -57,6 +57,12 @@ export const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_events(at)",
   // V2 : propositions de code (diff, impact, tests déclarés, validation). JAMAIS appliquées ni déployées par l'app.
   // 8.30 : abonnement agenda (lien secret). Seule l'empreinte SHA-256 du jeton est gardée ; un jeton par compte.
+  // 8.30 : encouragements entre partenaires (abonnés l'un à l'autre, acceptés des deux côtés) : messages tout faits uniquement.
+  "CREATE TABLE IF NOT EXISTS cheers (id TEXT PRIMARY KEY, from_id TEXT NOT NULL, to_id TEXT NOT NULL, msg TEXT NOT NULL, created_at INTEGER NOT NULL, seen INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(from_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(to_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_cheers_to ON cheers(to_id, created_at)",
+  // 8.30 : idées publiées par les administrateurs (texte écrit par eux, jamais le nom de qui a proposé) et votes.
+  "CREATE TABLE IF NOT EXISTS ideas (id TEXT PRIMARY KEY, title TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS idea_votes (idea_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(idea_id, user_id), FOREIGN KEY(idea_id) REFERENCES ideas(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE TABLE IF NOT EXISTS ical_feeds (user_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE TABLE IF NOT EXISTS code_proposals (id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', diff TEXT NOT NULL DEFAULT '', impact_json TEXT NOT NULL DEFAULT '{}', tests TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft', author_id TEXT, reviewer_id TEXT, note TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, reviewed_at INTEGER)",
 ];

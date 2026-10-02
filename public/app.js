@@ -26,7 +26,16 @@ import { catchLink, pendingLink, clearPending } from './share.js';
 import './duo.js';
 import './views-group.js';
 import './find-ui.js';
+import './views-community.js';
+import { demoBar } from './demo.js';
 import { syncContent, loadGlobal } from './content.js';
+import { activeBanner } from './global.js';
+// Pour les signalements : les dernières pages visitées et les dernières erreurs techniques (messages seulement).
+window.__seaRoutes = []; window.__seaErrs = [];
+const keepRoute = () => { const r = (location.hash || '#/').split('?')[0].slice(0, 60); if (window.__seaRoutes.at(-1) !== r) window.__seaRoutes = [...window.__seaRoutes, r].slice(-10); };
+addEventListener('hashchange', keepRoute); keepRoute();
+addEventListener('error', (e) => { window.__seaErrs = [...window.__seaErrs, String(e.message || 'erreur').slice(0, 160)].slice(-10); });
+addEventListener('unhandledrejection', (e) => { window.__seaErrs = [...window.__seaErrs, String(e.reason?.message || e.reason || 'promesse rejetée').slice(0, 160)].slice(-10); });
 import { setLang } from './i18n.js';
 
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
@@ -57,9 +66,15 @@ function doRender() {
       <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
   }
   app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
-    <main class="wrap" id="main">${returnBar()}${hintsBar()}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}${body}</main>
+    <main class="wrap" id="main">${demoBar()}${bannerBar()}${returnBar()}${hintsBar()}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
 }
+/** Bandeau de l'équipe (ex. maintenance prévue) : affiché jusqu'à sa date de fin, ou jusqu'à « Compris ». */
+function bannerBar() {
+  const b = activeBanner(); if (!b || ls.get('sea:banner-ok', '') === `${b.id}:${b.at}`) return '';
+  return h`<div class="card warn-b banner" role="status"><div class="row between"><b>${b.emoji} ${b.title}</b><button class="btn sm" data-act="bannerOk" data-id="${b.id}:${b.at}">Compris</button></div>${b.body ? h`<p class="small" style="margin:.3em 0 0">${b.body}</p>` : ''}</div>`;
+}
+ACT.bannerOk = (el) => { ls.set('sea:banner-ok', el.dataset.id); render(); };
 /** Apparence liée au compte : la version la plus récente (cet appareil ou le compte) s'applique partout. */
 function syncAppearance() {
   if (!S.user || !S.loaded) return;
@@ -84,7 +99,7 @@ function vAuth() {
       <li><span>▶️</span><div><b>Guidé pendant l’effort</b><small>Chrono, repos, séries : il suffit de suivre l’écran.</small></div></li>
       <li><span>📈</span><div><b>Tu vois tes progrès</b><small>Historique, records et conseils expliqués simplement.</small></div></li></ul>`}
     ${up || S.authMode ? '' : h`<div class="stack"><button class="btn pri big" data-act="authPick" data-id="register">Créer mon compte gratuit</button><button class="btn big" data-act="authPick" data-id="login">J’ai déjà un compte</button>
-      <button class="btn ghost" data-act="guestStart">👀 Essayer sans compte</button><p class="tiny muted center">Sans compte, tes données restent seulement sur cet appareil. Tu pourras créer un compte plus tard sans rien perdre.</p></div>`}
+      <button class="btn ghost" data-act="guestStart">👀 Essayer sans compte</button><button class="btn ghost" data-act="demoStart">🎬 Voir une démo (données d’exemple)</button><p class="tiny muted center">Sans compte, tes données restent seulement sur cet appareil. Tu pourras créer un compte plus tard sans rien perdre.</p></div>`}
     ${up || S.authMode ? h`<form data-submit="${reg ? 'register' : 'login'}" class="card" autocomplete="on"><h2 style="margin:0">${reg ? 'Créer mon compte' : 'Me connecter'}</h2>
       <label>${reg ? 'Choisis un pseudo' : 'Pseudo ou e-mail'}<input type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required minlength="3" maxlength="120" value="${S.prefill || ls.get('sea:lastname', '') || ''}"></label>
       ${reg ? h`<label>E-mail (facultatif)<input type="email" name="email" autocomplete="email" maxlength="120"></label>` : ''}
@@ -94,6 +109,7 @@ function vAuth() {
       <button class="btn pri big" type="submit">${reg ? 'Créer mon compte' : 'Me connecter'}</button>
       ${up ? '' : h`<button class="btn ghost" type="button" data-act="authMode">${reg ? 'J’ai déjà un compte' : 'Créer un compte'}</button>`}</form>
       ${up ? h`<button class="btn ghost" data-act="guestBack">‹ Revenir au mode invité</button>` : h`<button class="btn ghost" data-act="authPick" data-id="">‹ Retour</button>`}` : ''}
+    <button class="btn ghost" data-act="a11yOpen">Aa Texte plus grand, contraste, lecture facile…</button>
     ${installCard()}
     <p class="tiny muted center">Chaque personne a son propre compte. Tes données sont privées par défaut.</p></main>`;
 }
@@ -195,7 +211,7 @@ function vLanding(pl) {
   const it = L.item, s = normalizeSession(it.session);
   return h`<div class="card acc-b"><p class="tiny muted">Séance partagée${it.author ? ` par ${it.author}` : ''}</p><h1 style="margin:.1em 0">${s.emoji || '🏋️'} ${it.title}</h1>
       <p class="small muted">${it.exerciseCount} exercices · environ ${it.durationMin} min</p>
-      ${S.user ? h`<div class="grid2"><button class="btn pri big" data-act="linkSave">💾 Garder</button><button class="btn big" data-act="linkPlay">▶ Faire maintenant</button></div>`
+      ${S.user ? h`<div class="grid2"><button class="btn pri big" data-act="linkSave">💾 Garder</button><button class="btn big" data-act="linkPlay">▶ Faire maintenant</button></div><button class="btn" data-act="linkAdapt">⚖️ La garder et l’adapter à mon niveau (durée, intensité, matériel)</button>`
         : h`<div class="stack"><button class="btn pri big" data-act="linkLogin" data-mode="login">Me connecter pour la garder</button><button class="btn" data-act="linkLogin" data-mode="register">Créer un compte</button><button class="btn ghost" data-act="guestStart">Essayer sans compte</button></div>`}</div>
     <div class="card">${blocksOf(s, 'view')}</div>${out}`;
 }
@@ -206,6 +222,12 @@ ACT.linkSave = () => {
   const now = Date.now(), src = normalizeSession(it.session);
   const s = saveSeance({ ...src, id: uid(), name: it.title, source: 'copy', exercises: src.exercises.map((e) => ({ ...e, id: uid(), note: '' })), origin: { kind: 'link', id: it.id, author: it.author || '', copiedAt: now }, createdAt: now, updatedAt: now });
   clearPending(); S.linkView = null; toast('Gardée dans Mes séances'); go('library', 'seance', s.id);
+};
+ACT.linkAdapt = () => {
+  const it = S.linkView?.item; if (!it) return;
+  const now = Date.now(), src = normalizeSession(it.session);
+  const s = saveSeance({ ...src, id: uid(), name: it.title, source: 'copy', exercises: src.exercises.map((e) => ({ ...e, id: uid(), note: '' })), origin: { kind: 'link', id: it.id, author: it.author || '', copiedAt: now }, createdAt: now, updatedAt: now });
+  clearPending(); S.linkView = null; go('library', 'seance', s.id); setTimeout(() => ACT.adaptOpen?.({ dataset: { id: s.id, src: 'seance' } }), 50);
 };
 ACT.linkPlay = () => { const it = S.linkView?.item; if (!it) return; clearPending(); S.linkView = null; render(); startPlayer(it.session); };
 ACT.pubLogin = () => { location.hash = ''; S.authMode = 'login'; render(); };
@@ -352,7 +374,7 @@ async function start() {
   if (newsParam) { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => ACT.notifOpen?.(), 900); }
   setTimeout(() => refreshInbox({ sound: true }), 1500);
   const doIt = new URLSearchParams(location.search).get('do');
-  if (doIt === 'timer' || doIt === 'gen') { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => { if (S.user) (doIt === 'timer' ? ACT.timerOpen : ACT.genOpen)?.(); }, 900); }
+  if (['timer', 'gen', 'checkin'].includes(doIt)) { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => { if (S.user) ({ timer: ACT.timerOpen, gen: ACT.genOpen, checkin: ACT.checkin })[doIt]?.(); }, 900); }
   registerSW();
   loadGlobal(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadGlobal(); });
   catchLink();

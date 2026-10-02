@@ -1,53 +1,59 @@
-// tests/community.test.mjs — intentions : propositions des utilisateurs, validation par un administrateur, visibles par tous.
+// tests/community.test.mjs — encouragements (seulement entre partenaires, messages tout faits), idées à voter
+// (publiées par un administrateur « contenu », un vote par personne), statistiques anonymes (totaux, petits groupes
+// masqués), bandeau de maintenance, suppression de compte qui efface encouragements et votes.
 import assert from 'node:assert/strict';
 import { Client, makeEnv, ok, done } from './helpers.mjs';
-import { cleanIntent } from '../server/ai.js';
-import { intentsFor, resolveFeel, muscleCaps, zoneRisk, keywordCaps } from '../public/intentions.js';
+import { cleanGlobal } from '../server/global.js';
+console.log('Communauté et administration (8.30)');
+const env = makeEnv(), A = new Client(env), B = new Client(env), C = new Client(env), ADM = new Client(env);
+await A.register('alice'); await B.register('bruno'); await C.register('chloe'); await ADM.register('admin1');
+const pub = (c) => c.post('/api/social/profile', { visibility: 'public', bio: '', shareStats: false, shareRecords: false, shareSessions: false, share: {} });
+for (const c of [A, B, C]) await pub(c);
 
-console.log('Intentions et propositions');
-const env = makeEnv({ AI: { run: async () => ({ response: '{"label":"Talons crochets","emoji":"🦶","summary":"Utiliser le talon pour tirer.","caps":[{"id":"technique_pieds","w":0.9},{"id":"inventee","w":1}]}' }) } });
-const U = new Client(env), A = new Client(env), O = new Client(env);
-await U.register('grimpeur'); await A.register('chef'); await O.register('autre');
-await ok('assistant : une intention écrite est reliée à des capacités connues seulement', async () => {
-  const r = await U.post('/api/ai/intent', { text: 'travailler les talons crochets', activityId: 'climbing_boulder', kind: 'intent' });
-  assert.equal(r.status, 200); assert.equal(r.data.intent.label, 'Talons crochets'); assert.deepEqual(Object.keys(r.data.intent.caps), ['technique_pieds']);
-  assert.equal(cleanIntent({ label: 'x', caps: [{ id: 'nope' }] }), null);
+await ok('encouragement : refusé si vous ne vous suivez pas tous les deux, accepté entre partenaires, messages tout faits seulement', async () => {
+  await A.post('/api/social/follow', { username: 'bruno' });
+  assert.equal((await A.post('/api/social/cheer', { username: 'bruno', msg: 'bravo' })).status, 403, 'B ne suit pas A');
+  await B.post('/api/social/follow', { username: 'alice' });
+  assert.equal((await A.post('/api/social/cheer', { username: 'bruno', msg: '<b>texte libre</b>' })).status, 400);
+  assert.equal((await A.post('/api/social/cheer', { username: 'bruno', msg: 'bravo' })).status, 200);
+  assert.equal((await C.post('/api/social/cheer', { username: 'bruno', msg: 'bravo' })).status, 403, 'C n’est pas partenaire');
+  const r = (await B.get('/api/social/cheers')).data.cheers; assert.equal(r.length, 1); assert.equal(r[0].from, 'alice'); assert.match(r[0].text, /Bravo/); assert.equal(r[0].fresh, true);
+  assert.equal((await B.get('/api/social/cheers')).data.cheers[0].fresh, false, 'marqué vu');
+  assert.equal((await A.get('/api/social/cheers')).data.cheers.length, 0, 'chacun voit seulement les siens');
+  const feed = (await A.get('/api/social/feed')).data.people; assert.equal(feed.find((p) => p.username === 'bruno').mutual, true);
+  for (let i = 0; i < 2; i++) await A.post('/api/social/cheer', { username: 'bruno', msg: 'courage' });
+  assert.equal((await A.post('/api/social/cheer', { username: 'bruno', msg: 'courage' })).status, 429, '3 par jour vers la même personne');
 });
-await ok('proposition : envoyée, visible par l’auteur, jamais par un autre utilisateur ; admin requis pour la liste', async () => {
-  const r = await U.post('/api/proposals', { kind: 'intent', label: 'Talons crochets', emoji: '🦶', caps: { technique_pieds: 0.9, faux: 1 }, activityId: 'climbing_boulder', detail: 'Utile en dévers' });
-  assert.equal(r.status, 200);
-  assert.equal((await U.get('/api/proposals/mine')).data.proposals.length, 1);
-  assert.equal((await O.get('/api/proposals/mine')).data.proposals.length, 0);
-  assert.equal((await U.get('/api/admin/proposals')).status, 403, 'réservé aux administrateurs');
-  assert.equal((await U.post('/api/proposals', { label: 'x' })).status, 400);
+await ok('idées : publiées par un administrateur, un vote par personne (re-toucher retire le vote), fermées une fois prévues', async () => {
+  assert.equal((await A.post('/api/admin/ideas', { title: 'Pirate' })).status, 403, 'membre : refusé');
+  assert.equal((await ADM.post('/api/admin/activate', { password: 'Adm1n-Secret!' })).status, 200);
+  const c = await ADM.post('/api/admin/ideas', { title: 'Mode sombre du minuteur', detail: 'Proposé plusieurs fois' }); assert.equal(c.status, 200);
+  const id = c.data.id;
+  assert.equal((await A.post(`/api/ideas/${id}/vote`)).data.votes, 1); assert.equal((await B.post(`/api/ideas/${id}/vote`)).data.votes, 2);
+  const un = await A.post(`/api/ideas/${id}/vote`); assert.equal(un.data.voted, false); assert.equal(un.data.votes, 1);
+  const list = (await B.get('/api/ideas')).data.ideas; assert.equal(list[0].votes, 1); assert.equal(list[0].mine, true); assert.ok(!('user_id' in list[0]) && !JSON.stringify(list).includes('bruno'), 'aucun nom');
+  await ADM.post('/api/admin/ideas', { id, title: 'Mode sombre du minuteur', status: 'planned' });
+  assert.equal((await C.post(`/api/ideas/${id}/vote`)).status, 409);
+  const audit = (await ADM.get('/api/admin/audit')).data; assert.ok(JSON.stringify(audit).includes('idea-create'), 'noté au journal');
+  assert.equal((await ADM.del(`/api/admin/ideas/${id}`)).status, 200); assert.equal((await A.get('/api/ideas')).data.ideas.length, 0);
 });
-await ok('administrateur : accepte → intention ajoutée pour tout le monde ; une seule fois', async () => {
-  assert.equal((await A.post('/api/admin/activate', { password: 'Adm1n-Secret!' })).status, 200);
-  const list = (await A.get('/api/admin/proposals')).data.proposals; assert.equal(list.length, 1); assert.equal(list[0].username, 'grimpeur'); assert.deepEqual(Object.keys(list[0].payload.caps), ['technique_pieds']);
-  assert.equal((await A.post('/api/admin/proposals/' + list[0].id, { decision: 'accept', reply: 'Merci <b>!</b>' })).status, 200);
-  assert.equal((await A.post('/api/admin/proposals/' + list[0].id, { decision: 'refuse' })).status, 409, 'déjà traitée');
-  const done = (await A.get('/api/admin/proposals?status=done')).data.proposals[0];
-  assert.match(done.reply, /Acceptée\. Merci/); assert.ok(done.reviewer && done.reviewed_at > 0, 'historique : qui et quand');
-  const ci = (await O.get('/api/community/intents')).data.intents; assert.equal(ci.length, 1); assert.equal(ci[0].label, 'Talons crochets'); assert.equal(ci[0].activityId, 'climbing_boulder');
-  assert.match((await U.get('/api/proposals/mine')).data.proposals[0].reply, /Acceptée/);
-  assert.equal((await U.post('/api/admin/intents', { label: 'Pirate', caps: { force_doigts: 1 } })).status, 403);
-  const add = await A.post('/api/admin/intents', { label: 'Mouvements de dalle', emoji: '🧊', caps: { equilibre: 1 }, activityId: '' }); assert.equal(add.status, 200);
-  assert.equal((await A.post('/api/admin/intents', { label: 'Sans capacité', caps: {} })).status, 400);
-  assert.equal((await A.call('DELETE', '/api/admin/intents/' + add.data.id)).status, 200);
-  assert.equal((await O.get('/api/community/intents')).data.intents.length, 1);
+await ok('statistiques anonymes : totaux seulement, petits groupes masqués, réservées aux administrateurs', async () => {
+  assert.equal((await A.get('/api/admin/stats')).status, 403);
+  await A.post('/api/history', { id: 'h1', sessionName: 'Bloc', startedAt: Date.now() - 3600e3, durationSeconds: 3600, data: { activity: 'climbing_boulder', exercises: [] } });
+  const s = (await ADM.get('/api/admin/stats')).data;
+  assert.equal(s.users, 4); assert.equal(s.sessions30, 1); assert.equal(s.people30, null, 'une seule personne : masqué'); assert.equal(s.minutes30, null);
+  assert.equal(s.activities[0].sessions, null, 'moins de 3 personnes : rien'); assert.equal(s.weeks.length, 8);
+  assert.ok(!JSON.stringify(s).match(/alice|bruno|chloe|admin1/), 'aucun pseudo');
 });
-await ok('limite : 10 propositions par jour', async () => {
-  let last = 0; for (let k = 0; k < 11; k++) last = (await O.post('/api/proposals', { kind: 'idea', label: 'Idée ' + k })).status;
-  assert.equal(last, 429);
+await ok('bandeau de maintenance : gardé seulement s’il est demandé, avec une date de fin valide', () => {
+  assert.deepEqual(cleanGlobal('announce', { title: 'Maintenance', body: 'Ce soir', banner: true, until: 1790000000000 }), { title: 'Maintenance', body: 'Ce soir', update: false, emoji: '🛠️', banner: true, until: 1790000000000 });
+  assert.equal(cleanGlobal('announce', { title: 'Info', until: 5 }).banner, undefined);
+  assert.equal(cleanGlobal('announce', { title: 'M', banner: true, until: 'demain' }).until, 0);
 });
-await ok('intentions par sport, muscles, zones, forme × séance voulue', async () => {
-  assert.ok(intentsFor('climbing_boulder').some((i) => i.id === 'pieds' && i.caps.technique_pieds));
-  assert.ok(intentsFor('climbing_boulder', [{ id: 'c1', label: 'X', caps: { equilibre: 1 }, activityId: 'running' }]).every((i) => i.id !== 'c1'), 'intention d’un autre sport ignorée');
-  assert.equal(intentsFor('inconnu').length, intentsFor('conditioning').length);
-  assert.ok(muscleCaps(['avantbras']).force_doigts === 1);
-  assert.deepEqual(zoneRisk({ name: 'Pompes', group: 'pousser' }, ['wrists']).length, 1); assert.equal(zoneRisk({ name: 'Squat' }, ['wrists']).length, 0);
-  assert.deepEqual(resolveFeel('exhausted', 'hard'), { light: true, boost: 0, feel: 'easy', note: 'Tu te sens épuisé : séance douce, même si tu avais demandé plus.' });
-  assert.equal(resolveFeel('tired', 'hard').feel, 'mod'); assert.equal(resolveFeel('top', 'hard').boost, 2); assert.equal(resolveFeel('ok', 'easy').light, true);
-  assert.ok(keywordCaps('je glisse des pieds sur la dalle').technique_pieds);
+await ok('suppression du compte : encouragements et votes effacés', async () => {
+  const id = (await ADM.post('/api/admin/ideas', { title: 'Une autre idée' })).data.id; await B.post(`/api/ideas/${id}/vote`);
+  assert.equal((await B.post('/api/auth/delete', { password: 'motdepasse1' })).status, 200);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM cheers').first()).n, 0);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM idea_votes').first()).n, 0);
 });
-done();
+done('tests communauté et administration');

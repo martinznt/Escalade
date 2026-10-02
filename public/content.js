@@ -401,13 +401,15 @@ ACT.announceNew = () => {
     <label>Titre<input name="title" maxlength="100" required placeholder="Ex. Nouvelle salle ajoutée"></label>
     <label>Message<textarea name="body" rows="4" maxlength="1200" placeholder="Ce qui change, et à quoi ça sert"></textarea></label>
     <label class="chk"><input type="checkbox" name="update"> C’est une note de mise à jour (elle apparaît aussi dans « Toutes les mises à jour »)</label>
+    <label class="chk"><input type="checkbox" name="banner"> Afficher aussi en bandeau en haut de l’app (ex. maintenance prévue)</label>
+    <label>Bandeau affiché jusqu’au (facultatif)<input type="date" name="until"></label>
     <p class="tiny muted">Tout le monde la reçoit dans ses notifications 🔔, et sur son téléphone s’il a activé les nouveautés.</p>
     <button class="btn pri big">Envoyer à tout le monde</button></form>`);
 };
 SUBMIT.announceGo = async (f) => {
   const d = Object.fromEntries(new FormData(f));
   if (!(await ask('Envoyer cette annonce à tout le monde ?', { ok: 'Envoyer' }))) return;
-  try { await putGlobal('announce', 'g-' + uid().slice(0, 12), { data: { title: d.title.trim(), body: (d.body || '').trim(), update: !!d.update } }); closeSheet(); toast('Annonce envoyée à tout le monde'); }
+  try { await putGlobal('announce', 'g-' + uid().slice(0, 12), { data: { title: d.title.trim(), body: (d.body || '').trim(), update: !!d.update, ...(d.banner ? { banner: true, until: d.until ? new Date(d.until + 'T23:59:59').getTime() : 0 } : {}) } }); closeSheet(); toast('Annonce envoyée à tout le monde'); }
   catch (e) { toast(e.message, 4500, 'bad'); }
 };
 export { announcements };

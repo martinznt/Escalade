@@ -28,7 +28,7 @@ export const FEATURES = {
     next: F('Prochaines séances', ['big']), goals: F('Objectifs', ['big']), reco: F('Recommandations', ['big']), weekprog: F('Progression 7 jours', ['big']),
     records: F('Records', ['big']), regularity: F('Régularité', ['big']), capacities: F('Capacités', ['big']), load: F('Charge récente', ['big']), summary: F('Résumé de la semaine', ['big']),
     forme: F('Forme du jour', ['big']), weekreview: F('Ta semaine en 10 secondes (dimanche et lundi)', ['big']),
-    story: F('Lettre à ouvrir et saison en cours', ['big']),
+    story: F('Lettre à ouvrir, saison en cours, sauvegarde de la semaine', ['big']),
   },
   progress: {
     search: F('Recherche', ['icon']), streak: F('Ma série', ['big']), kpis: F('Chiffres clés', ['big']), wins: F('Bonnes nouvelles', ['big']), goalsdone: F('Objectifs réussis', ['big']), work: F('Ce que tu as travaillé', ['big']),

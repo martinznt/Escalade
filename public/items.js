@@ -160,6 +160,7 @@ export const SCHEMAS = {
     // Apparence choisie (item « appearance ») : suit le compte sur tous les appareils.
     mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], shape: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
     vibe: ['s', 20],
+    easy: ['s', 4], cb: ['s', 4], big: ['s', 4], contrast: ['s', 4],
     // Objectifs (plusieurs) et profil corporel (item « body ») : déclarés, tous facultatifs.
     goals: ['strs', 8, 20], age: ['n', 8, 100, null], height: ['n', 100, 230, null], weight: ['n', 25, 300, null], sex: ['e', ['f', 'h', 'x', ''], ''],
     shape: ['e', ['mince', 'athletique', 'moyen', 'costaud', 'rond', ''], ''], muscled: ['strs', 8, 20], physique: ['strs', 10, 20], fitness: ['n', 1, 5, null],

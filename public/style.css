@@ -722,3 +722,17 @@ div.setrow{cursor:default}
 }
 /* Petit écran : le badge de synchronisation garde son point coloré (le mot reste lu par le lecteur d'écran). */
 @media (max-width:380px){.syncbadge:not(.guest) .sw{display:none}.syncbadge:not(.guest){padding:4px 9px}}
+/* 8.30 — Accessibilité (Paramètres › Affichage, ou dès le premier écran) */
+html[data-easy=on] body{font-family:Verdana,"Atkinson Hyperlegible",Tahoma,"Segoe UI",sans-serif;line-height:1.65;letter-spacing:.015em;word-spacing:.06em}
+html[data-easy=on] em,html[data-easy=on] i:not([class]){font-style:normal}
+html[data-easy=on] .tiny{font-size:.82rem}html[data-easy=on] .small{font-size:.92rem}
+html[data-easy=on] p,html[data-easy=on] li{max-width:70ch}
+html[data-big=on]{--tap:52px}
+html[data-big=on] .btn,html[data-big=on] .setrow,html[data-big=on] input,html[data-big=on] select{min-height:52px}
+html[data-big=on] .chip{min-height:44px;padding:8px 14px}
+html[data-big=on] nav.tabs button{min-height:60px}
+html[data-cb=on]{--ok:#0072b2;--bad:#d55e00;--warn:#e69f00;--info:#56b4e9}
+html[data-contrast=on][data-mode=dark]:root{--bg:#000;--card:#0b0b0b;--card2:#161616;--line:#8a8a8a;--text:#fff;--muted:#e2e2e2}
+html[data-contrast=on][data-mode=light]:root{--bg:#fff;--card:#fff;--card2:#f0f0f0;--line:#333;--text:#000;--muted:#222}
+html[data-contrast=on] .btn,html[data-contrast=on] .chip,html[data-contrast=on] .setrow{border-width:2px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}

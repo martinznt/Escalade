@@ -28,6 +28,7 @@ import { levelFor } from './generator.js';
 import { COMPOSITION, MEASURES, lastValue, evolution, indices, checkWeighIn } from './bodycomp.js';
 import { painCard } from './views-forme.js';
 import { sportTools } from './views-sports.js';
+import { cheersCard, loadCheers } from './views-community.js';
 import { PHYSIQUE, PHYSIQUE_SOURCES, physiqueGroups, physiqueMeasures, physiqueTrack, weeklySets, SETS_RANGE } from './physique.js';
 
 const SUBS = [['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
@@ -790,7 +791,7 @@ SUBMIT.avoidSave = (f) => { const d = Object.fromEntries(new FormData(f)); S.set
 /* ═════════ Profil public et communauté ═════════ */
 export async function loadSocial() {
   const so = S.social; so.error = ''; so.loading = true; render();
-  try { so.me = await api('GET', '/api/social/me'); so.feed = await api('GET', '/api/social/feed?tz=' + new Date().getTimezoneOffset()); const [mine, links] = await Promise.all([api('GET', '/api/shared?scope=public&mine=1'), api('GET', '/api/shared?scope=link&mine=1')]); so.mine = mine.items; so.links = links.items; }
+  try { so.me = await api('GET', '/api/social/me'); so.feed = await api('GET', '/api/social/feed?tz=' + new Date().getTimezoneOffset()); await loadCheers(); const [mine, links] = await Promise.all([api('GET', '/api/shared?scope=public&mine=1'), api('GET', '/api/shared?scope=link&mine=1')]); so.mine = mine.items; so.links = links.items; }
   catch (e) { so.error = e.offline ? 'Connexion requise pour le partage.' : e.message; }
   so.loading = false; render();
 }
@@ -816,11 +817,12 @@ function vPublic() {
     <div class="card"><h3>Mes séances publiques</h3>${(so.mine || []).length ? so.mine.map((x) => h`<div class="item"><div class="grow"><b>${x.title}</b><div class="tiny muted">${x.exerciseCount} exercices · modifiée ${relDate(x.updatedAt)}</div></div><button class="btn danger sm" data-act="pubDel" data-id="${x.id}">Retirer</button></div>`) : h`<p class="muted small">Publie une séance depuis son écran (bouton « Partager »).</p>`}</div>
     ${(so.links || []).length ? h`<div class="card"><h3>🔗 Mes liens de partage</h3><p class="tiny muted">Seules les personnes qui ont le lien voient ces séances. Retire un lien quand tu veux.</p>${so.links.map((x) => h`<div class="item"><div class="grow"><b>${x.title}</b><div class="tiny muted">${x.exerciseCount} exercices · créé ${relDate(x.createdAt || x.updatedAt)}</div></div><button class="btn sm" data-act="shShow" data-id="${x.id}" data-name="${x.title}">QR</button><button class="btn danger sm" data-act="pubDel" data-id="${x.id}">Retirer</button></div>`)}</div>` : ''}
     ${so.me.pending.length ? h`<div class="card"><h3>Demandes d’abonnement</h3>${so.me.pending.map((r) => h`<div class="item"><div class="grow"><b>${r.username}</b></div><button class="btn pri sm" data-act="socRespond" data-id="${r.id}" data-accept="1">Accepter</button><button class="btn sm" data-act="socRespond" data-id="${r.id}" data-accept="">Refuser</button></div>`)}</div>` : ''}
+    ${cheersCard()}
     <div class="card"><h3>Trouver quelqu’un</h3><input type="search" data-input="socSearch" placeholder="Pseudo (2 lettres minimum)" aria-label="Chercher un pseudo" autocomplete="off"><div id="socResults"></div></div>
     <h2>Profils suivis</h2>${so.feed?.people?.length ? so.feed.people.map(vPerson) : empty('Tu ne suis personne, ou ils n’ont rien partagé.')}`;
 }
 function vPerson(u) {
-  return h`<div class="card"><div class="row"><div class="ico">👤</div><div class="grow"><b>${u.username}</b>${u.bio ? h`<div class="small">${u.bio}</div>` : ''}</div><button class="btn sm" data-act="socUnfollow" data-user="${u.username}">Ne plus suivre</button></div>
+  return h`<div class="card"><div class="row"><div class="ico">👤</div><div class="grow"><b>${u.username}</b>${u.bio ? h`<div class="small">${u.bio}</div>` : ''}</div>${u.mutual ? h`<button class="btn sm" data-act="cheerOpen" data-user="${u.username}">💌 Encourager</button>` : ''}<button class="btn sm" data-act="socUnfollow" data-user="${u.username}">Ne plus suivre</button></div>
     ${u.activities?.length ? h`<p class="small">${u.activities.map((a) => a.emoji + ' ' + a.label).join(' · ')}</p>` : ''}${u.goals?.length ? h`<p class="small">🎯 ${u.goals.map((g) => g.label).join(', ')}</p>` : ''}${u.perfs?.length ? h`<p class="small">📏 ${u.perfs.map((p) => `${p.label} : ${p.text}`).join(' · ')}</p>` : ''}${u.caps?.length ? h`<p class="small">🧭 ${u.caps.map((x) => `${x.label} (${x.status})`).join(', ')}</p>` : ''}
     ${u.stats ? h`<p class="small">${u.stats.sessions30} séance(s) sur 30 jours · ${u.stats.minutes30} min</p>` : ''}
     ${u.sessions?.length ? h`<b class="small">Séances publiques</b>${u.sessions.map((x) => h`<div class="item"><div class="grow"><b>${x.title}</b><div class="tiny muted">${x.exerciseCount} exercices</div></div><button class="btn sm" data-act="pubCopy" data-id="${x.id}">Enregistrer</button></div>`)}` : ''}</div>`;
@@ -850,7 +852,7 @@ ACT.pubCopy = async (el) => {
     const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`);
     const now = Date.now(), src = normalizeSession(r.item.session);
     const s = saveSeance({ ...src, id: uid(), name: r.item.title, source: 'copy', exercises: src.exercises.map((e) => ({ ...e, id: uid(), note: '' })), origin: { kind: 'public', id: r.item.id, author: r.item.author || '', copiedAt: now }, createdAt: now, updatedAt: now });
-    toast('Copie indépendante enregistrée'); go('library', 'seance', s.id);
+    toast('Copie gardée : adapte-la à ton niveau si besoin', 3500); go('library', 'seance', s.id); setTimeout(() => ACT.adaptOpen?.({ dataset: { id: s.id, src: 'seance' } }), 50);
   } catch (e) { toast(e.offline ? 'Connexion requise.' : e.message); }
 };
 

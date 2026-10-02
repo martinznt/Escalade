@@ -1194,3 +1194,15 @@ ACT.cpEditApply = () => {
   c.changes = [...(c.changes || []), ...pl.changes]; remember('edit', pl.changes.join(' ; ').slice(0, 200), { reason: S.cpEdit.text });
   c.generated = false; if (c.step >= SI.content) rebuild(); keep(); closeSheet(); render(); toast('Modifications appliquées. « ↶ Revenir » annule.');
 };
+
+/* Glisser vers la gauche / la droite sur le créateur : étape suivante / précédente (comme les boutons du bas). */
+let swipe = null;
+document.addEventListener('touchstart', (e) => {
+  const t = e.touches[0], el = e.target;
+  swipe = e.touches.length === 1 && el.closest?.('.steps') && !el.closest('input, textarea, select, svg, canvas, .photo-wrap, .chips, .noswipe') ? { x: t.clientX, y: t.clientY, at: Date.now() } : null;
+}, { passive: true });
+document.addEventListener('touchend', (e) => {
+  if (!swipe) return; const t = e.changedTouches[0], dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, fast = Date.now() - swipe.at < 700; swipe = null;
+  if (!fast || Math.abs(dx) < 80 || Math.abs(dy) > 45 || document.querySelector('#sheet.open, #dialog.open')) return;
+  document.querySelector(`.stepdock [data-act=cpStep][data-d="${dx < 0 ? 1 : -1}"]`)?.click();
+}, { passive: true });
