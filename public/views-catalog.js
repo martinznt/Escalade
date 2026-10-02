@@ -40,6 +40,7 @@ const MINE_F = [['', 'Toutes'], ['fav', '⭐ Mes favoris'], ['done', '✅ Déjà
 const RULES = {
   sport: (r, v) => !v || (v === 'climbing' ? r.entry.activity.startsWith('climbing') : r.entry.activity === v),
   goal: (r, v) => !v || r.entry.goals.includes(v),
+  cap: (r, v) => !v || r.entry.works.includes(v) || r.entry.focusCap === v,
   time: (r, v) => !v || (v === 's' ? r.entry.minutes <= 20 : v === 'm' ? r.entry.minutes > 20 && r.entry.minutes <= 40 : r.entry.minutes > 40),
   level: (r, v) => v === '' || v == null || String(r.entry.level) === String(v),
   onlyEq: (r, v) => !v || !r.missing.length,
@@ -48,14 +49,21 @@ const RULES = {
 };
 /** Les séances qui passent les filtres ; `skip` = filtres ignorés (pour proposer « sans ce filtre → N séances »). */
 function catFiltered(f, p, skip = []) {
-  const m = { favs: catFavs(), done: catDone() };
-  return rankCatalog({ ...p, equipment: p.equipment }).filter((r) => Object.keys(RULES).every((k) => skip.includes(k) || RULES[k](r, f[k], m)));
+  const m = { favs: catFavs(), done: catDone() }, perso = f.perso !== false;
+  // « Tout le carnet » : aucun tri d'après ton profil, aucun filtre de matériel ; le sport puis le niveau.
+  const ranked = perso ? rankCatalog({ ...p, equipment: p.equipment }) : rankCatalog({}).sort((a, b) => a.entry.activity.localeCompare(b.entry.activity) || a.entry.level - b.entry.level || !!a.entry.gen - !!b.entry.gen);
+  return ranked.filter((r) => Object.keys(RULES).every((k) => skip.includes(k) || (k === 'onlyEq' && !perso) || RULES[k](r, f[k], m)));
+}
+/** Qualités qu'on peut cibler pour le sport choisi (celles que ce sport demande), avec le nombre de séances. */
+function capsFor(sport) {
+  const acts = !sport ? [] : sport === 'climbing' ? ['climbing_boulder', 'climbing_route'] : [sport];
+  return [...new Set(acts.flatMap((a) => Object.keys(ACTIVITIES[a]?.caps || {})))].filter((c) => CAPACITIES[c]);
 }
 /** Filtres actifs, chacun avec son libellé (pour le résumé et l'aide quand rien ne correspond). */
 function activeFilters(f) {
   const lab = (opts, v) => opts.find(([k]) => k === String(v ?? ''))?.[1];
   return [f.sport && ['sport', lab(SPORTS_F, f.sport)], f.level !== '' && f.level != null && ['level', lab(LEVELS_F, f.level)], f.goal && ['goal', GOAL_L[f.goal] || f.goal],
-    f.time && ['time', lab(TIMES_F, f.time)], f.onlyEq && ['onlyEq', '🧰 Mon matériel'], f.noEq && ['noEq', '🙌 Sans matériel'], f.mine && ['mine', lab(MINE_F, f.mine)]].filter(Boolean);
+    f.cap && ['cap', `🎯 ${CAPACITIES[f.cap]?.label || f.cap}`], f.time && ['time', lab(TIMES_F, f.time)], f.onlyEq && f.perso !== false && ['onlyEq', '🧰 Mon matériel'], f.noEq && ['noEq', '🙌 Sans matériel'], f.mine && ['mine', lab(MINE_F, f.mine)]].filter(Boolean);
 }
 /** Rien ne correspond : quel filtre retirer pour retrouver des séances (et combien). */
 function emptyHelp(f, p) {
@@ -80,31 +88,43 @@ export function vCatalog() {
   const panel = h`<div class="card catf">
       <div class="row between wrapf"><button class="linkish" data-act="catFToggle" aria-expanded="${!!open}"><b>🔎 Filtres</b> <span class="tiny muted">${list.length} séance${list.length > 1 ? 's' : ''}</span> ${open ? '▴' : '▾'}</button>${act.length ? h`<button class="btn sm ghost" data-act="catClear">Tout effacer</button>` : ''}</div>
       ${act.length && !open ? h`<div class="chips">${act.map(([k, l]) => h`<button type="button" class="chip on" data-act="catDrop" data-k="${k}" aria-label="Retirer le filtre ${l}">${l} ✕</button>`)}</div>` : ''}
-      ${open ? h`<span class="kicker">Sport</span>${row('sport', SPORTS_F)}<span class="kicker">Niveau</span>${row('level', LEVELS_F)}
+      ${open ? h`<span class="kicker">Pour qui ?</span><div class="chips">${chip(f.perso !== false, '✨ Adapté à moi', 'data-act="catPerso" data-id="1"')}${chip(f.perso === false, '📚 Tout le carnet', 'data-act="catPerso" data-id="0"')}</div>
+        <p class="tiny muted">${f.perso !== false ? 'Trié d’après ton sport, tes objectifs, tes points faibles, ton niveau et ton matériel.' : 'Toutes les séances, sans tri d’après ton profil ni filtre de matériel.'}</p>
+        <span class="kicker">Sport</span>${row('sport', SPORTS_F)}
+        ${f.sport ? h`<span class="kicker">Ce que tu veux travailler</span><div class="chips">${chip(!f.cap, 'Tout', 'data-act="catF" data-k="cap" data-v=""')}${capsFor(f.sport).map((c) => { const n = catFiltered({ ...f, cap: c }, p).length; return n || f.cap === c ? chip(f.cap === c, `${CAPACITIES[c].label} · ${n}`, `data-act="catF" data-k="cap" data-v="${c}"`) : ''; })}</div>` : h`<p class="tiny muted">Choisis un sport pour cibler ce que tu veux travailler (technique de pieds, force des doigts, seuil, gainage…).</p>`}
+        <span class="kicker">Niveau</span>${row('level', LEVELS_F)}
         <span class="kicker">Objectif</span><div class="chips">${chip(!f.goal, 'Tous objectifs', 'data-act="catF" data-k="goal" data-v=""')}${Object.entries(GOAL_L).map(([k, l]) => chip(f.goal === k, l, `data-act="catF" data-k="goal" data-v="${k}"`))}</div>
-        <span class="kicker">Durée et matériel</span>${row('time', TIMES_F)}<div class="chips">${chip(f.onlyEq, '🧰 Faisable avec mon matériel', 'data-act="catEq"')}${chip(!!f.noEq, '🙌 Sans matériel', 'data-act="catNoEq"')}</div>
+        <span class="kicker">Durée et matériel</span>${row('time', TIMES_F)}<div class="chips">${f.perso !== false ? chip(f.onlyEq, '🧰 Faisable avec mon matériel', 'data-act="catEq"') : ''}${chip(!!f.noEq, '🙌 Sans matériel', 'data-act="catNoEq"')}</div>
         <span class="kicker">Mes séances</span>${row('mine', MINE_F)}<button class="btn sm pri" data-act="catFToggle">Voir les ${list.length} séance${list.length > 1 ? 's' : ''}</button>` : ''}</div>`;
   const empty = !list.length && (view !== 'focus' || f.focus);
   return h`${seg('catView', view, [['book', '📖 Par sport et niveau'], ['focus', '🎯 Par muscle ou compétence'], ['rank', '✨ Pour toi d’abord']])}
     ${view === 'focus' ? focusPicker() : ''}
     ${panel}
     <p class="tiny muted">${book ? 'Le carnet : des séances toutes prêtes pour chaque sport, du niveau débutant à avancé. Touche une séance pour voir ses exercices, puis lance-la ou garde-la.' : view === 'focus' ? 'Les séances qui travaillent le muscle ou la compétence choisi, du niveau débutant à avancé, tous sports confondus.' : 'Triées pour toi : ton sport, tes objectifs, tes points faibles et ton niveau.'} Chaque séance cite ses sources.</p>
-    ${empty ? emptyHelp(f, p) : view === 'focus' ? (f.focus ? focusList(list) : h`<p class="small muted">Choisis un muscle ou une compétence ci-dessus : toutes les séances qui le travaillent s’affichent, du niveau débutant à avancé.</p>`) : book ? bookView(list) : list.map((r, i) => h`<button class="card pick catcard" data-act="catOpen" data-id="${r.entry.id}"><div class="row"><span class="catemoji">${r.entry.emoji}</span><div class="grow"><b>${r.entry.name}</b>
-        <div class="tiny muted">${ACTIVITIES[r.entry.activity]?.label || r.entry.activity} · ${r.entry.minutes} min · ${['débutant', 'intermédiaire', 'avancé'][r.entry.level]}</div></div>${i < 3 && r.why.length ? h`<span class="tag acc">pour toi</span>` : ''}</div>
-        <p class="small">${r.entry.why}</p>${r.why.length ? h`<div class="tiny acc-t">✓ ${r.why.join(' · ')}</div>` : ''}</button>`)}`;
+    ${empty ? emptyHelp(f, p) : view === 'focus' ? (f.focus ? focusList(list) : h`<p class="small muted">Choisis un muscle ou une compétence ci-dessus : toutes les séances qui le travaillent s’affichent, du niveau débutant à avancé.</p>`) : book ? bookView(list) : h`${list.slice(0, S.catMore || 30).map((r, i) => h`<button class="card pick catcard" data-act="catOpen" data-id="${r.entry.id}"><div class="row"><span class="catemoji">${r.entry.emoji}</span><div class="grow"><b>${r.entry.name}</b>
+        <div class="tiny muted">${ACTIVITIES[r.entry.activity]?.label || r.entry.activity} · ${r.entry.minutes} min · ${['débutant', 'intermédiaire', 'avancé'][r.entry.level]}</div></div>${i < 3 && r.why.length && f.perso !== false ? h`<span class="tag acc">pour toi</span>` : ''}</div>
+        <p class="small">${r.entry.why}</p>${r.why.length && f.perso !== false ? h`<div class="tiny acc-t">✓ ${r.why.join(' · ')}</div>` : ''}</button>`)}${list.length > (S.catMore || 30) ? h`<button class="btn" data-act="catMore">Voir 30 séances de plus (${list.length - (S.catMore || 30)} restantes)</button>` : ''}`}`;
 }
+ACT.catMore = () => { S.catMore = (S.catMore || 30) + 30; render(); };
+ACT.catPerso = (el) => { S.catFOpen = true; S.catF.perso = el.dataset.id === '1'; render(); };
 ACT.catFToggle = () => { const act = activeFilters(S.catF || {}); S.catFOpen = !(S.catFOpen ?? !act.some(([k]) => k !== 'onlyEq')); render(); };
-ACT.catDrop = (el) => { const f = S.catF; if (!f) return; for (const k of String(el.dataset.k).split(',')) { if (k === 'onlyEq' || k === 'noEq') f[k] = false; else if (k in f || ['sport', 'goal', 'time', 'level', 'mine'].includes(k)) f[k] = ''; } render(); };
-ACT.catClear = () => { Object.assign(S.catF, { sport: '', goal: '', time: '', level: '', onlyEq: false, noEq: false, mine: '' }); render(); };
+ACT.catDrop = (el) => { const f = S.catF; if (!f) return; for (const k of String(el.dataset.k).split(',')) { if (k === 'onlyEq' || k === 'noEq') f[k] = false; else if (['sport', 'cap', 'goal', 'time', 'level', 'mine'].includes(k)) f[k] = ''; } render(); };
+ACT.catClear = () => { Object.assign(S.catF, { sport: '', cap: '', goal: '', time: '', level: '', onlyEq: false, noEq: false, mine: '' }); render(); };
 const LEVEL_W = [['🌱', 'Débutant', 'pour commencer ou reprendre'], ['🌿', 'Intermédiaire', 'tu t’entraînes régulièrement'], ['🌳', 'Avancé', 'plusieurs années de pratique']];
 const SPORT_ORDER = ['climbing_boulder', 'climbing_route', 'calisthenics', 'conditioning', 'strength', 'running', 'swimming'];
+/** Lignes du carnet : les séances écrites à la main d'abord, puis les séances ciblées ; au-delà de 6, repliées. */
+const catLine = (r) => h`<button class="setrow" data-act="catOpen" data-id="${r.entry.id}"><span class="sic">${r.entry.emoji}</span><span class="grow"><b>${r.entry.name}</b><small>${r.entry.gen ? `${['débutant', 'intermédiaire', 'avancé'][r.entry.level]} · ${r.entry.ex.filter((x) => !x.block).length} exercices ciblés` : `${r.entry.minutes} min · ${r.entry.why.split(/[.:]/)[0]}`}</small></span><span class="chev">›</span></button>`;
+function catRows(g) {
+  const list = [...g.filter((r) => !r.entry.gen), ...g.filter((r) => r.entry.gen)], top = list.slice(0, 6), rest = list.slice(6);
+  return h`<div class="setmenu">${top.map(catLine)}</div>${rest.length ? h`<details class="how mini"><summary>Voir les ${rest.length} autres séances</summary><div class="setmenu">${rest.map(catLine)}</div></details>` : ''}`;
+}
 /** Carnet : sport → niveau → séances (lignes compactes). */
 function bookView(list) {
   if (!list.length) return h`<p class="small muted">Aucune séance avec ces filtres${S.catF.onlyEq ? ' et ton matériel (touche « 🧰 Faisable avec mon matériel » pour tout voir)' : ''}.</p>`;
   const acts = [...new Set(list.map((r) => r.entry.activity))].sort((a, b) => (SPORT_ORDER.indexOf(a) + 99) % 99 - (SPORT_ORDER.indexOf(b) + 99) % 99);
   return h`${acts.map((a) => { const of = list.filter((r) => r.entry.activity === a); return h`<section class="card stack"><h3 style="margin:0">${ACTIVITIES[a]?.emoji || ''} ${ACTIVITIES[a]?.label || a}</h3>
     ${[0, 1, 2].map((lv) => { const g = of.filter((r) => r.entry.level === lv); return g.length ? h`<span class="kicker">${LEVEL_W[lv][0]} ${LEVEL_W[lv][1]} <span class="tiny muted">· ${LEVEL_W[lv][2]}</span></span>
-      <div class="setmenu">${g.map((r) => h`<button class="setrow" data-act="catOpen" data-id="${r.entry.id}"><span class="sic">${r.entry.emoji}</span><span class="grow"><b>${r.entry.name}</b><small>${r.entry.minutes} min · ${r.entry.why.split(/[.:]/)[0]}</small></span><span class="chev">›</span></button>`)}</div>` : ''; })}</section>`; })}`;
+      ${catRows(g)}` : ''; })}</section>`; })}`;
 }
 /** Muscles et compétences, avec le nombre de séances qui les travaillent (calculé depuis les exercices). */
 function focusPicker() {
@@ -121,7 +141,7 @@ function focusList(list) {
 const focusText = (e) => { const f = focusOf(e); return [...f.muscles.map((id) => MUSCLE_FOCUS.find((x) => x[0] === id)?.[1]), ...f.skills.map((id) => COMPETENCES.find((x) => x[0] === id)?.[1])].filter(Boolean).join(', ').replace(/\p{Extended_Pictographic}️?\s*/gu, ''); };
 ACT.catFocus = (el) => { S.catF.focus = S.catF.focus === el.dataset.id ? '' : el.dataset.id; render(); };
 ACT.catView = (el) => { S.catF.view = el.dataset.id; render(); };
-ACT.catF = (el) => { S.catFOpen = true; S.catF[el.dataset.k] = S.catF[el.dataset.k] === el.dataset.v ? '' : el.dataset.v; render(); };
+ACT.catF = (el) => { S.catFOpen = true; if (el.dataset.k === 'sport') S.catF.cap = ''; S.catF[el.dataset.k] = S.catF[el.dataset.k] === el.dataset.v ? '' : el.dataset.v; render(); };
 ACT.catEq = () => { S.catFOpen = true; S.catF.onlyEq = !S.catF.onlyEq; render(); };
 ACT.catNoEq = () => { S.catFOpen = true; S.catF.noEq = !S.catF.noEq; render(); };
 /** Favoris (gardés avec ton compte) et séances du carnet déjà faites (d'après ton journal). */

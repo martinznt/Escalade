@@ -43,6 +43,7 @@ export const FAQ = [
   ['Texte plus grand, contraste, lecture facile ?', 'Paramètres › Affichage › « ♿ Accessibilité » (aussi dès le premier écran, avant de créer un compte) : lecture facile, gros boutons, contraste renforcé, couleurs pour daltonisme, taille du texte.'],
   ['Essayer l’app avant de créer un compte ?', 'Sur le premier écran : « 👀 Essayer sans compte » (tes vraies données, gardées sur ce téléphone) ou « 🎬 Voir une démo » (des données d’exemple, effacées en quittant).'],
   ['Ne jamais perdre mes données ?', 'Paramètres › Mes données : « 📥 Exporter » télécharge un fichier avec tout. Coche le rappel chaque semaine : une carte sur l’accueil te propose la sauvegarde en un toucher.'],
+  ['Trouver une séance qui travaille une chose précise ?', 'Bibliothèque › Carnet de séances : choisis un sport, puis « Ce que tu veux travailler » (technique de pieds, force des doigts, seuil, gainage…), le niveau et la durée. « ✨ Adapté à moi » trie d’après ton profil et ton matériel ; « 📚 Tout le carnet » montre tout, sans tri.'],
   ['Partager l’app avec quelqu’un ?', 'Paramètres › « 📲 Partager l’app » : un QR code à scanner, ou le lien à envoyer.'],
   ['Un problème ?', 'Va dans « 🐞 Signaler un bug » et décris ce qui s’est passé : le message arrive directement à l’administrateur.'],
 ];
