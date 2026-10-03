@@ -82,15 +82,15 @@ export const EQUIPMENT = {
   band: 'Élastique', rings: 'Anneaux', barbell: 'Barre et disques', kettlebell: 'Kettlebell', bench: 'Banc', pole: 'Espalier / poteau',
   box: 'Box / marche', rope: 'Corde à sauter', mat: 'Tapis de sol', machine: 'Machines de musculation (toutes)', pool: 'Bassin de natation',
   pullbuoy: 'Pull-buoy / planche', track: 'Piste / terrain', hill: 'Côte', treadmill: 'Tapis de course',
-  campus: 'Campus board', boardwall: 'Mur à prises connectées (Moon, Kilter, Tension)', spraywall: 'Pan d’entraînement', autobelay: 'Enrouleurs (auto-assureurs)', leadwall: 'Mur de voies en tête', topwall: 'Voies en moulinette',
+  campus: 'Campus board', boardwall: 'Mur à prises connectées (Moon, Kilter, Tension)', spraywall: 'Spray wall (pan d’entraînement)', autobelay: 'Enrouleurs (auto-assureurs)', leadwall: 'Mur de voies en tête', topwall: 'Voies en moulinette',
   // 8.29 : la salle de musculation, machine par machine (« Machines de musculation » = toutes), et le cardio.
   rack: 'Rack / cage à squat', ezbar: 'Barre EZ', cable: 'Poulie / vis-à-vis (câbles)', latpulldown: 'Tirage vertical (poulie haute)', seatedrow: 'Tirage horizontal assis (rowing)',
   legpress: 'Presse à cuisses', hacksquat: 'Hack squat', legext: 'Leg extension', legcurl: 'Leg curl', smith: 'Machine guidée (Smith)', chestpress: 'Développé couché à la machine',
   pecdeck: 'Pec deck (butterfly)', shoulderpress: 'Développé épaules à la machine', hipmachine: 'Abducteurs / adducteurs', calfmachine: 'Mollets à la machine', abmachine: 'Abdos à la machine',
-  assist: 'Tractions et dips assistés', ghd: 'Chaise romaine (lombaires)', bike: 'Vélo d’appartement', rower: 'Rameur', elliptical: 'Vélo elliptique', stairs: 'Stepper / escalier', skierg: 'SkiErg', airbike: 'Air bike',
+  assist: 'Tractions et dips assistés', inclinepress: 'Développé incliné à la machine', dipmachine: 'Dips assis à la machine', bicepsmachine: 'Curl biceps à la machine (pupitre)', tricepsmachine: 'Extension triceps à la machine', lateralmachine: 'Élévations latérales à la machine', tbar: 'Rowing T-bar', pullovermachine: 'Pull-over à la machine', hipthrustmachine: 'Hip thrust à la machine', glutemachine: 'Fessiers à la machine (kickback)', calfseated: 'Mollets assis à la machine', lyinglegcurl: 'Leg curl allongé', rotary: 'Rotation du buste à la machine', ghd: 'Chaise romaine (lombaires)', bike: 'Vélo d’appartement', rower: 'Rameur', elliptical: 'Vélo elliptique', stairs: 'Stepper / escalier', skierg: 'SkiErg', airbike: 'Air bike',
 };
 /** Machines de musculation précises : « Machines de musculation » (machine) les donne toutes. */
-export const MACHINES = ['cable', 'latpulldown', 'seatedrow', 'legpress', 'hacksquat', 'legext', 'legcurl', 'smith', 'chestpress', 'pecdeck', 'shoulderpress', 'hipmachine', 'calfmachine', 'abmachine', 'assist'];
+export const MACHINES = ['cable', 'latpulldown', 'seatedrow', 'legpress', 'hacksquat', 'legext', 'legcurl', 'smith', 'chestpress', 'pecdeck', 'shoulderpress', 'hipmachine', 'calfmachine', 'abmachine', 'assist', 'inclinepress', 'dipmachine', 'bicepsmachine', 'tricepsmachine', 'lateralmachine', 'tbar', 'pullovermachine', 'hipthrustmachine', 'glutemachine', 'calfseated', 'lyinglegcurl', 'rotary'];
 /** Le matériel rangé par familles (choix d'un lieu). */
 export const EQUIPMENT_GROUPS = [
   ['🧗 Escalade', ['wall', 'leadwall', 'topwall', 'autobelay', 'boardwall', 'spraywall', 'campus', 'hangboard']],

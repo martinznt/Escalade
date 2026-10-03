@@ -1,6 +1,8 @@
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
 import { personalFit } from './fit.js';
+import { vGym } from './views-gym.js';
+import { vRoutines, myRoutines } from './views-routines.js';
 import { h, raw, esc, $, toast, openSheet, closeSheet, ask, seg, chip, menuList, menuRow, subHead, tag, empty, howBox, exLine, fmtDay, relDate, numberField, buzzOk, skeleton } from './ui.js';
 import { linkSheet } from './share.js';
 import './duo.js';
@@ -66,9 +68,9 @@ export function vLibrary() {
   if (sub === 'shared-edit' && S.sharedDraft) return vEditor(S.sharedDraft.session, 'shared');
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
-  const cur = ['seances', 'climbplan', 'generate', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'home';
+  const cur = ['seances', 'climbplan', 'generate', 'gym', 'moments', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'home';
   if (cur === 'home') return vLibHome();
-  const views = { seances: vSeances, climbplan: vClimbPlan, generate: vGenerate, catalog: vCatalog, best: vBest, exercises: vExercises, common: vCommon, search: vSearch };
+  const views = { seances: vSeances, climbplan: vClimbPlan, generate: vGenerate, gym: vGym, moments: vRoutines, catalog: vCatalog, best: vBest, exercises: vExercises, common: vCommon, search: vSearch };
   if (cur === 'best') return views.best(); // a son propre retour vers Exercices
   const [ic, t] = LIB_INFO[cur];
   return h`${subHead('libSub', 'home', 'Bibliothèque', `${ic} ${t}`)}${views[cur]()}`;
@@ -77,6 +79,8 @@ const LIB_INFO = {
   generate: ['🎯', 'Séance sur mesure', () => ''],
   seances: ['📋', 'Mes séances', () => { const n = S.seances.items.filter((s) => !s.archived).length; return n ? `${n} séance${n > 1 ? 's' : ''} : lancer, modifier, planifier` : 'Tes séances : lancer, modifier, planifier'; }],
   climbplan: ['✨', 'Créer une séance', () => draftText() || 'Tous sports : l’app choisit, te guide, ou tu composes'],
+  gym: ['🏋️', 'Ma salle de sport', () => 'Tes machines, la séance du jour, tes charges et réglages'],
+  moments: ['🧩', 'Mes moments', () => { const n = myRoutines().length; return n ? `${n} moment${n > 1 ? 's' : ''} glissé${n > 1 ? 's' : ''} dans tes séances (échauffement, fin…)` : 'Élastiques, no foot, spray wall… proposés au bon moment de tes séances'; }],
   catalog: ['📖', 'Carnet de séances', () => `${CATALOG.length} séances prêtes, de débutant à avancé, pour chaque sport`],
   exercises: ['💪', 'Exercices', () => `${LIBRARY.filter((x) => x.role === 'main').length} exercices, et le top pour toi`],
   common: ['🌍', 'Bibliothèque commune', () => 'Séances partagées par les membres (non vérifiées)'],
@@ -88,7 +92,7 @@ function vLibHome() {
   const row = (k) => () => { const [ic, t, d] = LIB_INFO[k]; return menuRow(['libSub', k, ic, t, d()]); };
   return h`<h1>📚 Bibliothèque</h1><p class="tiny muted pagehelp">Tes séances, et tout pour en créer : par l’app, guidée, prête à l’emploi ou à la main.</p>${composePage('library', {
     newbtn: () => h`<button class="btn pri big" data-act="newChoose">＋ Nouvelle séance</button>`, draft: () => draftBanner(),
-    'r-seances': row('seances'), 'r-climbplan': row('climbplan'), 'r-catalog': row('catalog'), 'r-exercises': row('exercises'), 'r-common': row('common'), 'r-search': row('search'),
+    'r-seances': row('seances'), 'r-climbplan': row('climbplan'), 'r-gym': row('gym'), 'r-moments': row('moments'), 'r-catalog': row('catalog'), 'r-exercises': row('exercises'), 'r-common': row('common'), 'r-search': row('search'),
   })}`;
 }
 ACT.libSub = (el) => { closeSheet(); S.sel = null; window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };

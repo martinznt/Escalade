@@ -36,6 +36,8 @@ import { assessment } from './assess.js';
 import { sportFamily, SPORT_STRUCTS, sportProposals, sportTargets, sportMoves, bestPerf, targetAdvice, targetParts, targetLabel, defaultWorkParts, workTitle, moveName, paceOf, fmtPace } from './sportplan.js';
 import { MOMENTS, MOMENT_HELP, MAX_AIMS, RANK_WEIGHT, FAMILY_ORDER, familyAim, intentAim, goalAim, textAim, cleanAims, aimCatalog, planFromAims, timeline, clock, sportShort, familyOfCaps, FAM_TITLE, cleanWindows, fromMin, tiers, rankWord } from './aimplan.js';
 import { keywordCaps } from './intentions.js';
+import { suggestRoutines, insertRoutine, WHEN as RO_WHEN, EFFORT as RO_EFFORT } from './routines.js';
+import { myRoutines } from './views-routines.js';
 import { goalCaps } from './brain.js';
 
 const KEY = 'sea:climbplan';
@@ -64,7 +66,7 @@ function prefill(c) {
   const x = ctx(), main = x.config?.main || {};
   c.sport ||= Object.keys(x.activities)[0] || 'conditioning';
   const mins = Number(S.settings.defaultMinutes) || Number(main.durations?.[0]) || 0;
-  if (mins) c.minutes = Math.max(10, Math.min(240, mins));
+  if (mins) c.minutes = Math.max(10, Math.min(300, mins));
   c.zones = Object.entries(S.settings.avoid || {}).filter(([, v]) => v).map(([k]) => k);
   // 8.30 : douleurs notées (7 derniers jours, 3/10 ou plus) → zones pré-cochées ; check-in du matin → forme pré-remplie.
   c.painZones = activePains(x.pains, x.now).map((p) => p.zone).filter((z) => AVOID_ZONES.some(([k]) => k === z) && !c.zones.includes(z));
@@ -204,6 +206,7 @@ function vWhere() {
     <span class="kicker">Sport principal</span><div class="chips">${sports.map((id) => chip(c.sport === id, sportLabel(id), `data-act="cpSport" data-id="${id}"`))}<button type="button" class="chip add" data-act="allGo" data-to="profile/activities">＋ Ajouter un sport</button></div>
     <span class="kicker">Autres sports dans la même séance <span class="tiny muted">(facultatif, plusieurs possibles)</span></span>
     <div class="chips">${sports.filter((id) => id !== c.sport).map((id) => chip(more.includes(id), sportLabel(id), `data-act="cpSport2" data-id="${id}"`))}</div>
+    ${more.length ? h`<p class="tiny muted">Dans cette séance (${sportsOf(c).length} sports, autant que tu veux) : <b>${sportsOf(c).map((sp) => sportShort(sp, x.activities)).join(' → ')}</b>. L’app les place selon tes objectifs et les lieux ; tu peux tout déplacer à l’étape 3.</p>` : ''}
     <label>Lieu${more.length ? ` pour ${sportLabel(c.sport)}` : ''}<select data-change="cpEnv"><option value="">${x.defEnv ? 'Par défaut : ' + x.defEnv.name : 'Aucun lieu décrit'}</option>${envOptions(c.envId, x)}<option value="__new">＋ Ajouter un lieu…</option></select></label>
     <p class="tiny ${eq.length ? 'muted' : 'warn-t'}">🧰 ${env ? `Matériel de ${env.name}` : 'Matériel'} : ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun déclaré (séance sans matériel)'} · <button class="linkish acc-t" data-act="allGo" data-to="profile/equipment">modifier</button></p>
     ${more.map((sp) => h`<label>Lieu pour ${sportLabel(sp)}<select data-change="cpEnvFor" data-sp="${sp}"><option value="">Le même que la phase d’avant</option>${envOptions(c.places?.[sp] || '', x)}<option value="__new">＋ Ajouter un lieu…</option></select></label>`)}
@@ -213,7 +216,7 @@ function vWhere() {
     ${isClimb(c.sport) ? sysSelect(kindOf(c.sport)) : ''}
     <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>${c.formeFrom === 'checkin' ? h`<p class="tiny muted">Pré-rempli d’après ton check-in du matin : change-le si besoin.</p>` : ''}
     ${winOn(c) ? h`<p class="small">⏱ Temps disponible : <b>${fmtMin(c.minutes)}</b> <span class="tiny muted">(calculé d’après tes horaires)</span></p>` : h`<span class="kicker">Temps disponible${more.length ? ' (trajets compris)' : ''}</span>
-    <div class="chips">${[30, 45, 60, 90, 120, 150, 180].map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="240" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
+    <div class="chips">${[30, 45, 60, 90, 120, 150, 180, 240, 300].map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="300" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
 }
 /** Horaires précis : une arrivée et un départ par lieu ; le temps entre deux lieux devient le trajet. */
 function winCard() {
@@ -227,7 +230,7 @@ function winCard() {
       ${ws.length ? h`<p class="tiny ok-t">✓ ${ws.map((w) => `${w.name} ${fromMin(w.from)}–${fromMin(w.to)}`).join(' → ')}${gaps.some((g) => g > 0) ? ` · ${gaps.filter((g) => g > 0).map((g) => `${g} min entre deux`).join(', ')}` : ''}</p>` : ''}
       ${l.length === 1 ? h`<p class="tiny muted">Un seul lieu : choisis un lieu différent pour un autre sport pour faire deux créneaux.</p>` : ''}` : ''}`;
 }
-const winSync = (c = CP()) => { const ws = winState(c).windows; if (c.useWin && ws.length) c.minutes = Math.max(10, Math.min(240, ws.at(-1).to - ws[0].from)); };
+const winSync = (c = CP()) => { const ws = winState(c).windows; if (c.useWin && ws.length) c.minutes = Math.max(10, Math.min(300, ws.at(-1).to - ws[0].from)); };
 CHG.cpUseWin = (el) => { const c = CP(); c.useWin = el.checked; winSync(c); c.result = null; c.built = null; keep(); render(); };
 CHG.cpWin = (el) => {
   const c = CP(), id = el.dataset.id, k = el.dataset.k; if (!['from', 'to'].includes(k) || (el.value && !/^\d\d:\d\d$/.test(el.value))) return;
@@ -276,9 +279,7 @@ function vWhy() {
       <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div>
       ${(c.painZones || []).filter((z) => (c.zones || []).includes(z)).length ? h`<p class="tiny warn-t">🩹 Pré-coché d’après tes douleurs notées (${c.painZones.filter((z) => (c.zones || []).includes(z)).map((z) => ZONE_LABEL[z]).join(', ')}). Décoche si c’est passé.</p>` : ''}
       <p class="tiny muted">Les exercices qui les chargent fort sont écartés de cette séance.</p></div>
-    <div class="card stack"><label>📝 Mon intention pour aujourd’hui <span class="tiny muted">(facultatif)</span><textarea data-change="cpIntentText" maxlength="240" rows="2" placeholder="Ex. « Aujourd’hui je veux performer le plus possible en voie »">${c.intentText || ''}</textarea></label>
-      <p class="tiny muted">Elle sert à cette séance seulement : ce n’est pas un objectif de ton profil.</p>
-      ${c.intentText ? (c.intentGoal ? h`<p class="tiny ok-t">✓ Aussi enregistrée comme objectif.</p>` : h`<button class="btn sm" data-act="cpIntentGoal">🎯 Enregistrer aussi comme objectif</button>`) : ''}</div>`;
+    ${aim === 'goals' ? '' : h`<div class="card stack">${wordsField(false)}</div>`}`;
 }
 function aimsCard() {
   const c = CP(), l = c.aims || [], n = l.length, eq = !!c.equal && n > 1, T = tiers(l), tieN = (i) => T.filter((x) => x === T[i]).length;
@@ -287,25 +288,35 @@ function aimsCard() {
     ${n ? h`<div class="aimlist">${l.map((a, i) => h`<div class="aimrow"><span class="rank ${!eq && tieN(i) > 1 ? 'tie' : ''}" aria-label="${eq ? 'Objectif' : rankWord(l, i)}">${eq ? '•' : T[i] + 1}${!eq && tieN(i) > 1 ? '=' : ''}</span><span class="grow aimtxt"><b>${a.emoji} ${a.label}</b><small>${[!eq && T[i] === 0 ? (tieN(i) > 1 ? 'n°1 ex æquo : le plus de temps, à égalité' : 'le plus important : le plus de temps') : !eq && tieN(i) > 1 ? `${rankWord(l, i)} : même part que les autres n°${T[i] + 1}` : '', SRC[a.source] || '', a.summary || ''].filter(Boolean).join(' · ')}</small></span>
         <span class="aimbtns">${!eq && i > 0 ? h`<button class="btn sm ic ${a.tie ? 'pri' : ''}" data-act="cpAimTie" data-i="${i}" aria-pressed="${!!a.tie}" aria-label="${a.tie ? 'Séparer de l’objectif au-dessus' : 'Même importance que l’objectif au-dessus'}" title="${a.tie ? 'Séparer de l’objectif au-dessus' : 'Même importance que l’objectif au-dessus'}">=</button>` : ''}<button class="btn sm ic" data-act="cpAimUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter ${a.label}">↑</button><button class="btn sm ic" data-act="cpAimDown" data-i="${i}" ${i < n - 1 ? '' : 'disabled'} aria-label="Descendre ${a.label}">↓</button><button class="btn sm ic danger" data-act="cpAimDel" data-i="${i}" aria-label="Retirer ${a.label}">✕</button></span></div>`)}</div>
       <p class="tiny muted">${eq ? 'Tous aussi importants : même part de temps pour chacun, l’app choisit l’ordre selon l’effort (↑ ↓ ne change que l’ordre d’affichage). À l’étape 3, tu peux quand même fixer le moment de chacun.' : '↑ ↓ pour classer. « = » met un objectif à la même importance que celui au-dessus (ex æquo : même part de temps). Le n°1 reçoit le plus de temps, puis le n°2… À l’étape 3, tu diras à quel moment faire chacun.'}</p>
+      ${n * 10 > (c.minutes || 60) - 20 ? h`<p class="tiny warn-t">⏱️ En ${fmtMin(c.minutes || 60)}, environ ${Math.max(1, Math.floor(((c.minutes || 60) - 20) / 10))} objectifs tiennent (10 min chacun au moins). Les moins importants seront retirés à l’étape 3, sauf si tu ajoutes du temps à l’étape 1.</p>` : ''}
       ${eq ? '' : h`<button class="btn sm" data-act="cpStrat">🧭 Plusieurs chemins pour ton n°1</button>`}`
       : h`<p class="small muted">Aucun objectif pour l’instant : ajoute-en un ou plusieurs ci-dessous. Sans objectif, l’app fait une séance équilibrée.</p>`}</div>`;
 }
 const addSport = (c = CP()) => (sportsOf(c).includes(c.addFor) ? c.addFor : c.sport);
 function addCard() {
-  const c = CP(), x = ctx(), sps = sportsOf(c), sp = addSport(c), cat = aimCatalog(sp, x.activities, extraIntents()), has = (k) => (c.aims || []).some((a) => a.key === k), full = (c.aims || []).length >= MAX_AIMS;
+  const c = CP(), x = ctx(), sps = sportsOf(c), sp = addSport(c), cat = aimCatalog(sp, x.activities, extraIntents()), has = (k) => (c.aims || []).some((a) => a.key === k);
   const goals = activeGoals(x), short = sportShort(sp, x.activities).toLowerCase();
   return h`<details class="card fold addaim" ${!(c.aims || []).length || c.addOpen ? 'open' : ''}><summary><span>＋ Ajouter un objectif</span></summary>
-    ${full ? h`<p class="small warn-t">${MAX_AIMS} objectifs au plus : retire-en un pour en ajouter un autre.</p>` : ''}
+    <p class="tiny muted">Ajoute-en autant que tu veux. Si le temps manque, chacun a une part plus courte (et c’est dit à l’étape 3).</p>
     ${sps.length > 1 ? h`<span class="kicker">Pour quel sport ?</span><div class="chips">${sps.map((id) => chip(id === sp, sportLabel(id), `data-act="cpAddFor" data-id="${id}"`))}</div>` : ''}
     <span class="kicker">1 · Ce que tu veux travailler en ${short}</span>
-    <div class="setmenu">${cat.families.map((a) => h`<button class="setrow" data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}" ${full && !has(a.key) ? 'disabled' : ''}><span class="sic">${a.emoji}</span><span class="grow"><b>${a.label}</b><small>${a.help}</small></span><span class="chev">${has(a.key) ? '✓' : '＋'}</span></button>`)}</div>
+    <div class="setmenu">${cat.families.map((a) => h`<button class="setrow" data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}"><span class="sic">${a.emoji}</span><span class="grow"><b>${a.label}</b><small>${a.help}</small></span><span class="chev">${has(a.key) ? '✓' : '＋'}</span></button>`)}</div>
     <span class="kicker">2 · Ou plus précis</span>
-    <div class="chips">${cat.precise.map((a) => chip(has(a.key), `${a.emoji} ${a.label.replace(/ · [^·]+$/, '')}`, `data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}" ${full && !has(a.key) ? 'disabled' : ''}`))}</div>
+    <div class="chips">${cat.precise.map((a) => chip(has(a.key), `${a.emoji} ${a.label.replace(/ · [^·]+$/, '')}`, `data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}"`))}</div>
     ${goals.length ? h`<span class="kicker">3 · Un de tes objectifs du profil</span><div class="chips">${goals.map((g) => chip((c.aims || []).some((a) => a.goalId === g.id), `🎯 ${goalLabel(g)}`, `data-act="cpAimGoal" data-id="${g.id}"`))}</div>` : ''}
-    <span class="kicker">${goals.length ? 4 : 3} · Avec tes mots <span class="tiny muted">(l’IA le comprend et le relie à l’entraînement)</span></span>
-    <textarea data-input="cpAiText" rows="2" maxlength="200" placeholder="Ex. « tenir plus longtemps dans les voies déversantes »" aria-label="Objectif avec tes mots">${c.aiText || ''}</textarea>
-    <button class="btn sm" data-act="cpAiAim" ${S.cpAiBusy ? 'disabled' : ''}>${S.cpAiBusy ? '⏳ L’IA réfléchit…' : '✍️ Comprendre mon objectif'}</button>
+    ${wordsField(true, goals.length ? 4 : 3)}
     ${S.cpAiDraft ? aiDraftCard() : ''}</details>`;
+}
+/** Un seul champ « avec tes mots » : il sert d'intention à cette séance et, si tu le demandes, devient un objectif classé
+ * (compris par l'IA) ou un objectif de ton profil. Hors mode « objectifs », seulement intention + profil. */
+function wordsField(withAim, num = 0) {
+  const c = CP(), t = String(c.intentText || '').trim();
+  return h`<span class="kicker">${num ? `${num} · ` : ''}✍️ Avec tes mots <span class="tiny muted">(facultatif)</span></span>
+    <textarea data-input="cpWords" rows="2" maxlength="240" placeholder="Ex. « tenir plus longtemps dans les voies déversantes »" aria-label="Ce que tu veux, avec tes mots">${c.intentText || ''}</textarea>
+    <p class="tiny muted">${withAim ? 'Gardé comme intention de cette séance. Tu peux aussi le faire comprendre par l’IA pour l’ajouter à ta liste classée, ou l’enregistrer dans ton profil.' : 'Gardé comme intention de cette séance seulement, sauf si tu l’enregistres dans ton profil.'}</p>
+    <div class="row wrapf">${withAim ? h`<button class="btn sm" data-act="cpAiAim" ${S.cpAiBusy ? 'disabled' : ''}>${S.cpAiBusy ? '⏳ L’IA réfléchit…' : '＋ Ajouter à mes objectifs'}</button>` : ''}
+      ${c.intentGoal && t ? h`<span class="tiny ok-t">✓ Enregistré dans ton profil.</span>` : h`<button class="btn sm ghost" data-act="cpIntentGoal">🎯 Enregistrer dans mon profil</button>`}</div>
+    ${withAim && c.aiAdded && c.aiAdded === t ? h`<p class="tiny ok-t">✓ Ajouté à ta liste classée.</p>` : ''}`;
 }
 function aiDraftCard() {
   const d = S.cpAiDraft, x = ctx();
@@ -322,7 +333,7 @@ ACT.cpAimUp = (el) => moveAim(Number(el.dataset.i), -1);
 ACT.cpAimDown = (el) => moveAim(Number(el.dataset.i), 1);
 ACT.cpAimDel = (el) => { const c = CP(), a = c.aims?.[Number(el.dataset.i)]; if (!a) return; c.aims.splice(Number(el.dataset.i), 1); c.goalIds = c.aims.filter((y) => y.goalId).map((y) => y.goalId); aimsChanged(c); toast(`« ${a.label} » retiré.`); };
 ACT.cpAddFor = (el) => { const c = CP(); c.addFor = el.dataset.id; c.addOpen = true; keep(); render(); };
-const pushAim = (c, a) => { if (!a) return; if (c.aims.length >= MAX_AIMS) { toast(`${MAX_AIMS} objectifs au plus.`); return; } c.aims.push(a); c.addOpen = true; c.objFromProfile = false; aimsChanged(c); toast(c.aims.length > 1 ? `Ajouté en n°${c.aims.length} : classe-le avec ↑ ↓.` : 'Ajouté en n°1.', 3500); };
+const pushAim = (c, a) => { if (!a) return; if (c.aims.length >= MAX_AIMS) { toast(`Déjà ${MAX_AIMS} objectifs : c’est beaucoup pour une séance, retire ceux qui comptent le moins.`); return; } c.aims.push(a); c.addOpen = true; c.objFromProfile = false; aimsChanged(c); toast(c.aims.length > 1 ? `Ajouté en n°${c.aims.length} : classe-le avec ↑ ↓.` : 'Ajouté en n°1.', 3500); };
 ACT.cpAimAdd = (el) => {
   const c = CP(), sp = el.dataset.sp || c.sport, k = el.dataset.k, i = (c.aims || []).findIndex((a) => a.key === k);
   if (i >= 0) { c.aims.splice(i, 1); c.addOpen = true; aimsChanged(c); return; }
@@ -336,11 +347,11 @@ ACT.cpAimGoal = (el) => {
   if (g.activityId && (x.activities[g.activityId] || ACTIVITIES[g.activityId]) && !sportsOf(c).includes(g.activityId)) { c.more = [...(c.more || []), g.activityId]; toast(`${sportLabel(g.activityId)} ajouté à la séance pour cet objectif.`, 3500); }
   pushAim(c, aimOfGoal(g, c)); c.goalIds = c.aims.filter((y) => y.goalId).map((y) => y.goalId); keep();
 };
-INPUT.cpAiText = (el) => { CP().aiText = el.value.slice(0, 200); keep(); };
+INPUT.cpWords = (el) => { const c = CP(), v = el.value.slice(0, 240); if (v.trim() !== String(c.intentText || '').trim()) c.intentGoal = ''; c.intentText = v; keep(); };
 // Objectif écrit avec ses mots : l'IA le relie à des capacités (réponse validée par le serveur, relue ici avant l'ajout) ;
 // sans IA (invité, hors ligne), lecture des mots-clés ; si rien n'est reconnu, l'utilisateur choisit le type de travail.
 ACT.cpAiAim = async () => {
-  const c = CP(), text = String(c.aiText || '').trim(), sp = addSport(c); if (text.length < 3) { toast('Écris ce que tu veux travailler, en quelques mots.'); return; }
+  const c = CP(), text = String(c.intentText || '').trim().slice(0, 200), sp = addSport(c); if (text.length < 3) { toast('Écris ce que tu veux travailler, en quelques mots.'); return; }
   S.cpAiBusy = true; S.cpAiDraft = null; render();
   let r = null, why = '';
   try { r = (await api('POST', '/api/ai/intent', { text, activityId: sp, kind: 'intent' }, { timeout: 45000 })).intent; if (r) r = { ...r, ai: true }; }
@@ -350,10 +361,9 @@ ACT.cpAiAim = async () => {
 };
 ACT.cpAiFam = (el) => { if (S.cpAiDraft) { S.cpAiDraft.family = el.dataset.id; render(); } };
 ACT.cpAiCancel = () => { S.cpAiDraft = null; render(); };
-ACT.cpAiAdd = () => { const c = CP(), d = S.cpAiDraft; if (!d?.family) return; const a = textAim(d, sportsOf(c).includes(d.sport) ? d.sport : c.sport, ctx().activities, d.family); S.cpAiDraft = null; c.aiText = ''; pushAim(c, a); };
-CHG.cpIntentText = (el) => { const c = CP(); c.intentText = el.value.slice(0, 240); c.intentGoal = ''; keep(); render(); };
+ACT.cpAiAdd = () => { const c = CP(), d = S.cpAiDraft; if (!d?.family) return; const a = textAim(d, sportsOf(c).includes(d.sport) ? d.sport : c.sport, ctx().activities, d.family); S.cpAiDraft = null; c.aiAdded = String(c.intentText || '').trim(); pushAim(c, a); };
 // Seulement sur action explicite : l'intention devient un objectif (fiche relue et modifiable avant l'enregistrement).
-ACT.cpIntentGoal = () => { const c = CP(); keep(); ACT.goalFromText?.({ dataset: { text: c.intentText, back: 'cp' } }); };
+ACT.cpIntentGoal = () => { const c = CP(); if (String(c.intentText || '').trim().length < 3) { toast('Écris d’abord ce que tu veux, en quelques mots.'); return; } keep(); ACT.goalFromText?.({ dataset: { text: c.intentText, back: 'cp' } }); };
 const TARGET_EX = { run: 'Ex. 10 km en 50 min : échauffement, montée, blocs à l’allure visée.', swim: 'Ex. 100 m en 1:40 : éducatifs, montée, séries à l’allure visée.', load: 'Ex. 100 kg au squat : montée en charge, paliers, puis volume.', body: 'Ex. 15 tractions : séries faciles, séries max, pyramide.' };
 CHG.cpTMetric = (el) => { const c = CP(); c.tMetric = el.value; c.tValue = null; keep(); render(); };
 CHG.cpTValue = (el) => { const c = CP(), v = Number(String(el.value).replace(',', '.')); c.tMetric ||= sportTargets(c.sport, ctx())[0]?.id; c.tValue = Number.isFinite(v) && el.value !== '' ? v : null; keep(); render(); };
@@ -422,6 +432,7 @@ function vStructure() {
       <button class="btn sm" data-act="cpFilters">🔎 Filtres pour toute la séance${nf ? ` (${nf})` : ''}</button>
       ${nf ? h`<p class="tiny muted">${filterText(globalFilterValues()).join(' · ')}</p>` : ''}</div>
     ${issues.length ? h`<div class="card flat warn-b stack"><b class="small">↔️ Transitions entre phases</b>${issues.map((x) => h`<div class="row between wrapf"><span class="small">Phase ${x.to + 1} : ${x.text}</span>${x.proposal ? h`<button class="btn sm" data-act="cpTransPause" data-id="${x.to}">＋ ${x.proposal.minutes} min de récupération</button>` : ''}</div>`)}</div>` : ''}
+    ${routinesCard()}
     ${compact ? h`<div class="setmenu">${ph.map((p) => h`<div class="setrow"><span class="sic">${ROLES[p.role][0]}</span><span class="grow"><b>${phaseName(p)}</b><small>${actLabel(p.activity)} · ${fmtMin(p.minutes)}</small></span></div>`)}</div>
         <button class="btn" data-act="cpEditStruct">✏️ Modifier la structure</button>` : vPhases()}`;
 }
@@ -616,8 +627,31 @@ function buildNow() {
 /** Ossature proposée, avec les verrous qui correspondent au niveau de structure choisi. */
 function proposedPhases() {
   const c = CP(), lvl = c.level || 'modere', lock = { precis: { minutes: 'user' }, tres: { minutes: 'user', activity: 'user', goal: 'user', intensity: 'user' } }[lvl] || {};
-  return normalizePhases(proposeParts(), c.sport).map((p) => ({ ...p, locks: { ...p.locks, ...lock } }));
+  let ph = normalizePhases(proposeParts(), c.sport).map((p) => ({ ...p, locks: { ...p.locks, ...lock } }));
+  // « Mes moments » marqués « ajouter tout seul » : insérés quand ils conviennent (sport, matériel), adaptés et dits.
+  c.roAuto = [];
+  for (let k = 0; k < 12; k++) { const sg = roSugs(ph).find((x) => x.r.auto && x.ok); if (!sg) break; ph = normalizePhases(insertRoutine(ph, sg).phases, c.sport); c.roAuto.push(sg.r.label); }
+  return ph;
 }
+/** Matériel de tous les lieux de la séance (lieu principal + lieu de chaque autre sport). */
+const roEq = (c = CP()) => { const x = ctx(), ids = [...new Set([baseEnv(c), ...Object.values(c.places || {})])]; const eq = new Set(); for (const id of ids) for (const k of availableEquipment(x, id)) eq.add(k); return eq; };
+const roSugs = (parts = CP().parts) => { const c = CP(), x = ctx(); return suggestRoutines(myRoutines(), parts || [], { sports: [...new Set([...sportsOf(c), ...sessionActivities(parts || [])])], eq: roEq(c), minutes: c.minutes, history: x.history, now: Date.now() }); };
+/** Étape « Ta structure » : mes moments proposés au bon endroit, adaptés à cette séance (et pourquoi). */
+function routinesCard() {
+  const c = CP(), l = myRoutines(), sg = roSugs(), inS = (c.parts || []).filter((p) => p.type === 'routine');
+  if (!l.length) return h`<div class="card flat stack"><p class="small">🧩 Tu glisses toujours les mêmes choses dans tes séances (élastiques, no foot, spray wall…) ? Ajoute-les dans « Mes moments » : ils seront proposés ici, au bon endroit.</p><button class="btn sm" data-act="cpRoManage">🧩 Mes moments</button></div>`;
+  return h`<div class="card stack"><div class="row between wrapf"><h3 style="margin:0">🧩 Mes moments</h3><button class="btn sm ghost" data-act="cpRoManage">Gérer</button></div>
+    ${inS.length ? h`<p class="tiny ok-t">✓ Dans la séance : ${inS.map((p) => p.goal).join(', ')}${(c.roAuto || []).length ? ' (ajoutés tout seuls, retire-les avec ✕ si besoin)' : ''}.</p>` : ''}
+    ${sg.length ? h`<div class="setmenu">${sg.map((x) => h`<div class="setrow"><span class="sic">${x.r.emoji || '🧩'}</span><span class="grow"><b>${x.r.label}</b><small>${RO_WHEN[x.r.when][1]} · ${x.minutes} min · ${RO_EFFORT[x.effort].toLowerCase()}${x.ok ? ` — ${x.reasons.join(' ; ')}` : ` — manque : ${x.missing.join(', ').toLowerCase()}`}${x.advice ? ` · 🧱 ${x.advice.title.toLowerCase()}` : ''}</small></span>
+        ${x.ok ? h`<button class="btn sm" data-act="cpRoAdd" data-id="${x.r.id}" aria-label="Ajouter ${x.r.label}">＋</button>` : ''}</div>`)}</div>`
+      : inS.length ? '' : h`<p class="tiny muted">Aucun de tes moments ne va avec ces sports.</p>`}</div>`;
+}
+ACT.cpRoManage = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('library', 'moments'); };
+ACT.cpRoAdd = (el) => {
+  const c = CP(), sg = roSugs().find((x) => x.r.id === el.dataset.id); if (!sg?.ok) return;
+  pushHist(); const r = insertRoutine(c.parts, sg); c.parts = normalizePhases(r.phases, c.sport); c.partsTouched = true; c.result = null; c.built = null; c.generated = false; keep(); render();
+  toast(`« ${sg.r.label} » ajouté (${sg.minutes} min)${r.took ? `, pris sur « ${r.took.name} »` : ''}.`, 3500);
+};
 ACT.cpStep = (el) => {
   const c = CP(), d = Number(el.dataset.d), next = Math.max(1, Math.min(NSTEPS, c.step + d));
   if (d > 0 && c.step <= SI.why && next >= SI.structure) freshStructure();
@@ -690,7 +724,7 @@ function vPhases() {
         ${p.type === 'work' ? h`<div class="tiny muted">${workLine(p)}</div>` : ''}
         ${p.type === 'climb' ? h`<div class="tiny muted">${rangeText(p)}${p.styles?.length ? ' · ' + p.styles.map((id) => ctx().styles[id]?.label || id).join(', ') : ''}${p.stylesOut?.length ? ' · sans ' + p.stylesOut.map((id) => ctx().styles[id]?.label || id).join(', ').toLowerCase() : ''} · ${st ? `${st.emoji} ${st.name}` : 'structure au choix'}${p.attemptsMax ? ` · ${p.attemptsMax} essais max` : ''}${p.adapt ? ' · adapté à avant' : ''}</div>` : ''}
         ${L?.notes.length ? h`<div class="tiny acc-t">↳ ${L.notes[0]}</div>` : ''}</div>
-        <div class="row tight wrapf cpbtns"><label class="row tight grow"><span class="unitbox"><input type="number" min="${p.type === 'pause' ? 1 : 5}" max="240" step="5" value="${p.minutes}" data-change="cpPartMinRow" data-i="${i}" style="width:70px" aria-label="Durée de la phase" ${p.locks?.minutes === 'user' ? 'disabled' : ''}><em>min</em></span></label><button class="btn sm ic" data-act="cpUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter">↑</button><button class="btn sm ic" data-act="cpDown" data-i="${i}" ${i < c.parts.length - 1 ? '' : 'disabled'} aria-label="Descendre">↓</button><button class="btn sm" data-act="cpEdit" data-i="${i}">Régler</button><button class="btn sm ic danger" data-act="cpDel" data-i="${i}" aria-label="Retirer">✕</button></div></div>`; })}
+        <div class="row tight wrapf cpbtns"><label class="row tight grow"><span class="unitbox"><input type="number" min="${p.type === 'pause' ? 1 : 5}" max="300" step="5" value="${p.minutes}" data-change="cpPartMinRow" data-i="${i}" style="width:70px" aria-label="Durée de la phase" ${p.locks?.minutes === 'user' ? 'disabled' : ''}><em>min</em></span></label><button class="btn sm ic" data-act="cpUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter">↑</button><button class="btn sm ic" data-act="cpDown" data-i="${i}" ${i < c.parts.length - 1 ? '' : 'disabled'} aria-label="Descendre">↓</button><button class="btn sm" data-act="cpEdit" data-i="${i}">Régler</button><button class="btn sm ic danger" data-act="cpDel" data-i="${i}" aria-label="Retirer">✕</button></div></div>`; })}
     <span class="kicker">Ajouter une phase</span>
     <div class="chips">${chip(false, '🪨 Bloc', 'data-act="cpAdd" data-id="climb" data-k="bloc"')}${chip(false, '🧗 Voie', 'data-act="cpAdd" data-id="climb" data-k="voie"')}${chip(false, '⏸️ Pause', 'data-act="cpAdd" data-id="pause"')}${sports.map((id) => h`${sportFamily(id) ? chip(false, `${sportLabel(id)} : ${WORK_HINT[sportFamily(id)]}`, `data-act="cpAdd" data-id="work" data-k="${id}"`) : ''}${chip(false, `${sportLabel(id)} : exercices`, `data-act="cpAdd" data-id="main" data-k="${id}"`)}`)}${Object.entries(CLIMB_PARTS).filter(([k]) => k !== 'climb').map(([k, [e, l]]) => chip(false, `${e} ${l}`, `data-act="cpAdd" data-id="${k}"`))}</div>
     <div class="row wrapf"><button class="btn sm ghost" data-act="cpExample">↺ Structure proposée</button><button class="btn sm" data-act="cpDnaSave">💾 Enregistrer la structure</button><button class="btn sm" data-act="cpDnaOpen">📂 Mes structures</button><button class="btn sm" data-act="cpModOpen">🧩 Insérer un module</button></div>
@@ -855,7 +889,7 @@ ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
 export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true, envId = '' } = {}) {
   closeSheet();
   const help = CP().help || 'auto'; S.cp = null; ls.set(KEY, {}); const c = CP(), x = ctx();
-  c.help = help; c.sport = sport || c.sport || Object.keys(x.activities)[0] || 'conditioning'; placeFor(c); c.minutes = Math.max(10, Math.min(240, minutes || S.settings.defaultMinutes || 45));
+  c.help = help; c.sport = sport || c.sport || Object.keys(x.activities)[0] || 'conditioning'; placeFor(c); c.minutes = Math.max(10, Math.min(300, minutes || S.settings.defaultMinutes || 45));
   c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = 'goals'; if (forme) c.forme = forme;
   if (envId && x.envs.some((v) => v.id === envId)) { c.envId = envId; c.envPicked = true; } else if (envId === 'none') { c.envId = ''; c.envPicked = true; }
   // Une demande précise (objectif, intention, capacité) remplace les objectifs tirés du profil ; sinon ceux-ci suivent le sport.
@@ -873,7 +907,7 @@ ACT.cpTarget = (el) => { CP().target = Number(el.dataset.id); keep(); render(); 
 CHG.cpTargetSel = (el) => { CP().target = Number(el.value); keep(); render(); };
 ACT.cpStyle = (el) => { const c = CP(), id = el.dataset.id; c.styles = c.styles.includes(id) ? c.styles.filter((x) => x !== id) : [...c.styles, id]; keep(); render(); };
 ACT.cpMin = (el) => { CP().minutes = Number(el.dataset.id); keep(); render(); };
-CHG.cpMinIn = (el) => { CP().minutes = Math.max(10, Math.min(240, Number(el.value) || 60)); keep(); render(); };
+CHG.cpMinIn = (el) => { CP().minutes = Math.max(10, Math.min(300, Number(el.value) || 60)); keep(); render(); };
 const scrollRes = () => setTimeout(() => document.getElementById('cpresult')?.scrollIntoView({ behavior: 'smooth' }), 50);
 /** (Re)construit la séance à partir des parties retenues : chaque réglage de partie (temps, exercices) la reconstruit. */
 function rebuild() {
@@ -983,7 +1017,7 @@ function linkParams(p, i) {
     ${filtersHtml}`;
 }
 function linkIntensity(p, i) {
-  return h`${fieldHead('Durée', p, i, 'minutes')}<span class="unitbox"><input type="number" min="${p.type === 'pause' ? 1 : 5}" max="240" step="5" value="${p.minutes}" data-change="cpPartMin" data-i="${i}" aria-label="Durée de la phase" ${p.locks?.minutes === 'user' ? 'disabled' : ''}><em>min</em></span>
+  return h`${fieldHead('Durée', p, i, 'minutes')}<span class="unitbox"><input type="number" min="${p.type === 'pause' ? 1 : 5}" max="300" step="5" value="${p.minutes}" data-change="cpPartMin" data-i="${i}" aria-label="Durée de la phase" ${p.locks?.minutes === 'user' ? 'disabled' : ''}><em>min</em></span>
     ${p.type === 'pause' ? '' : h`${fieldHead('Intensité', p, i, 'intensity')}<div class="chips">${Object.entries(INTENSITY).map(([k, [e, l]]) => chip(p.intensity === k, `${e} ${l}`, `data-act="cpPart" data-i="${i}" data-k="intensity" data-v="${k}" ${p.locks?.intensity === 'user' && p.intensity !== k ? 'disabled' : ''}`))}</div>
     <span class="kicker">Fatigue acceptée</span><div class="chips">${Object.entries(FATIGUE).map(([k, l]) => chip(p.fatigue === k, l, `data-act="cpPhFat" data-i="${i}" data-id="${k}"`))}</div>
     <details class="how mini" ${Object.keys(p.tradeoffs || {}).length ? 'open' : ''}><summary>⚖️ Curseurs de compromis${Object.keys(p.tradeoffs || {}).length ? ` (${Object.keys(p.tradeoffs).length})` : ''}</summary>
@@ -1045,8 +1079,8 @@ ACT.cpPhSet = (el) => upd(Number(el.dataset.i), (p) => { if (['attemptType', 'fo
 CHG.cpPhAttempts = (el) => upd(Number(el.dataset.i), (p) => { const v = Math.round(Number(el.value)); p.attemptsMax = el.value === '' || !Number.isFinite(v) ? null : Math.max(1, Math.min(99, v)); });
 ACT.cpPhStyleOut = (el) => upd(Number(el.dataset.i), (p) => { const l = p.stylesOut || [], id = el.dataset.id; p.stylesOut = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; });
 CHG.cpPhSys = (el) => upd(Number(el.dataset.i), (p) => { p.systemId = el.value; delete p.from; delete p.to; });
-CHG.cpPartMinRow = (el) => { const p = CP().parts[Number(el.dataset.i)]; if (!p || p.locks?.minutes === 'user') return; p.minutes = Math.max(p.type === 'pause' ? 1 : 5, Math.min(240, Number(el.value) || p.minutes)); CP().result = null; CP().partsTouched = true; keep(); render(); };
-CHG.cpPartMin = (el) => upd(Number(el.dataset.i), (p) => { if (p.locks?.minutes === 'user') return; p.minutes = Math.max(p.type === 'pause' ? 1 : 5, Math.min(240, Number(el.value) || p.minutes)); });
+CHG.cpPartMinRow = (el) => { const p = CP().parts[Number(el.dataset.i)]; if (!p || p.locks?.minutes === 'user') return; p.minutes = Math.max(p.type === 'pause' ? 1 : 5, Math.min(300, Number(el.value) || p.minutes)); CP().result = null; CP().partsTouched = true; keep(); render(); };
+CHG.cpPartMin = (el) => upd(Number(el.dataset.i), (p) => { if (p.locks?.minutes === 'user') return; p.minutes = Math.max(p.type === 'pause' ? 1 : 5, Math.min(300, Number(el.value) || p.minutes)); });
 CHG.cpPartLv = (el) => upd(Number(el.dataset.i), (p) => { const sys = phSys(p), levels = sortedLevels(sys), [lo, hi] = partRange(p, levels, sys ? knownMax(ctx(), sys, p.kind) : null); p.from ??= lo; p.to ??= hi; p[el.dataset.k] = Number(el.value); });
 ACT.cpPartAuto = (el) => upd(Number(el.dataset.i), (p) => { delete p.from; delete p.to; });
 ACT.cpPartStyle = (el) => upd(Number(el.dataset.i), (p) => { const id = el.dataset.id, s = p.styles || []; p.styles = s.includes(id) ? s.filter((x) => x !== id) : [...s, id]; });

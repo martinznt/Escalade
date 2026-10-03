@@ -59,7 +59,7 @@ const EN = {
   '3 · Format de la séance': '3 · Session format', '4 · Ce que je veux travailler': '4 · What I want to work on', 'Automatique': 'Automatic', 'Classique': 'Classic', 'Avec étirements': 'With stretching',
   'Technique + physique': 'Technique + fitness', 'Cardio + renfo': 'Cardio + strength', 'Je compose': 'Build my own', 'Autre durée': 'Other length', 'Échauffement': 'Warm-up', 'Corps de séance': 'Main set', 'Technique': 'Technique',
   'Renforcement': 'Strength', 'Étirements': 'Stretching', 'Retour au calme': 'Cool-down', '＋ Ajouter une partie': '＋ Add a part', 'Garder ce format': 'Keep this format', 'Supprimer ce format': 'Delete this format',
-  'L’app répartit le temps : échauffement, corps de séance, retour au calme.': 'The app splits the time: warm-up, main set, cool-down.', 'de 5 min à 4 h': 'from 5 min to 4 h',
+  'L’app répartit le temps : échauffement, corps de séance, retour au calme.': 'The app splits the time: warm-up, main set, cool-down.', 'de 5 min à 5 h': 'from 5 min to 5 h',
   'Moi': 'Me', 'Mes résultats': 'My results', 'Comprendre mes conseils': 'Understand my advice', 'Partager': 'Share', 'Pourquoi ces conseils': 'Why this advice', 'ce que l’app sait de toi': 'what the app knows about you',
   'Mes capacités': 'My abilities', 'forces et points à travailler': 'strengths and things to work on', 'Nouvelle séance': 'New session', 'Séance prête': 'Ready-made session', 'À la main': 'By hand', 'Rejoindre un ami': 'Join a friend',
   'L’app la prépare selon ton sport, ton temps et ce que tu veux travailler.': 'The app builds it from your sport, your time and what you want to work on.', 'Des séances expliquées et sourcées, à lancer tout de suite.': 'Explained, sourced sessions you can start right away.',

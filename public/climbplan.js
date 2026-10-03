@@ -11,6 +11,7 @@ import { ACTIVITIES } from './model.js';
 import { partOptions, buildPicked, GUIDE_PARTS } from './guide.js';
 import { availableEquipment } from './brain.js';
 import { buildWorkPart, workTitle, SPORT_STRUCTS, sportFamily } from './sportplan.js';
+import { byId } from './library.js';
 
 export const INTENSITY = { easy: ['🌿', 'Tranquille'], mod: ['🙂', 'Modéré'], hard: ['🔥', 'Intense'], max: ['🚀', 'Max'] };
 /** Types de parties : grimpe (bloc ou voie) ou parties du corps (échauffement, renfo, étirements…) construites par le générateur. */
@@ -180,6 +181,7 @@ function bodyPart(p, ctx, act, label, seed, o = {}) {
 export const partLabel = (p, i, parts) => {
   if (p.label) return p.label;
   if (p.type === 'pause') return '⏸️ Pause';
+  if (p.type === 'routine') return `${p.emoji || '🧩'} ${p.goal || 'Mon moment'}`;
   if (p.type === 'main') return `💪 ${ACTIVITIES[p.activity]?.label || 'Corps de séance'}`;
   if (p.type === 'work') { const same = parts.filter((x) => x.type === 'work' && workTitle(x) === workTitle(p)); return same.length > 1 ? `${workTitle(p)} (${same.indexOf(p) + 1})` : workTitle(p); }
   if (p.type !== 'climb') return `${CLIMB_PARTS[p.type]?.[0] || '•'} ${CLIMB_PARTS[p.type]?.[1] || p.type}`;
@@ -219,6 +221,14 @@ export function buildFromParts(parts, ctx, opts = {}) {
       structs.forEach((st, k) => { const r = buildWorkPart({ ...p, minutes: each, structure: st || undefined }, ctx, { label }); if (!k) why.push(...r.notes); out.push(...r.exercises); });
       return;
     }
+    if (p.type === 'routine') {
+      // « Mon moment » : l'exercice lié (ses séries) ou, sans exercice lié, un bloc chronométré de la durée prévue.
+      const lib = p.libId ? byId(p.libId) : null, sec = Math.round((p.minutes || 10) * 60), block = p.role === 'warmup' ? 'warmup' : p.role === 'cool' ? 'cool' : 'main';
+      const name = lib ? (p.goal && !lib.name.toLowerCase().startsWith(p.goal.toLowerCase()) ? `${p.goal} — ${lib.name}` : lib.name) : p.goal || 'Mon moment';
+      const base = lib ? { ...lib, libId: lib.id } : { emoji: p.emoji || '🧩', mode: 'time', sets: 1, secMin: sec, secMax: sec, rest: 0, group: '' };
+      out.push(normalizeEx({ ...base, id: uid(), name, block, part: label, intensity: { easy: 'low', mod: 'mod', hard: 'high' }[p.intensity] || base.intensity || 'mod', note: p.note || '' }));
+      return;
+    }
     if (p.type !== 'climb') {
       // Choisis par l'utilisateur (guidé ou libre), sinon par l'app.
       if (Array.isArray(p.pick)) { out.push(...buildPicked(p, p.pick, label)); return; } // choix de l'utilisateur, même vide
@@ -255,7 +265,7 @@ export function buildFromParts(parts, ctx, opts = {}) {
  * échauffement général, échauffement en grimpant (loin sous l'objectif), montée, spécifique, essais sur l'objectif, retour au calme.
  */
 export function goalParts({ kind = 'bloc', target, levels, styles = [], minutes = 120, warm = null, stretch = 0 }) {
-  const n = levels.length, T = clampI(target, n), step = n > 10 ? 2 : 1, M = Math.max(40, Math.min(240, minutes));
+  const n = levels.length, T = clampI(target, n), step = n > 10 ? 2 : 1, M = Math.max(40, Math.min(300, minutes));
   // Échauffement général et étirements : au choix (0 = sans), sinon automatiques pour l'échauffement.
   const W = warm == null ? Math.min(15, Math.round(M * 0.12)) : Math.max(0, Math.min(45, warm)), X = Math.max(0, Math.min(45, stretch || 0));
   const cool = Math.min(10, Math.max(5, Math.round(M * 0.07))), climb = Math.max(20, M - W - cool - X);

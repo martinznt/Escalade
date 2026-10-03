@@ -63,7 +63,7 @@ export function normalizePhase(p = {}, i = 0, sport = '') {
     id: /^[\w-]{1,40}$/.test(String(x.id || '')) ? String(x.id) : `ph-${i + 1}`,
     type,
     activity: phaseActivity({ ...x, type }, sport),
-    minutes: int(x.minutes, type === 'pause' ? 1 : 5, 240, 15),
+    minutes: int(x.minutes, type === 'pause' ? 1 : 5, 300, 15),
     role: ROLES[x.role] ? x.role : defaultRole({ ...x, type }),
     roleLabel: x.role === 'custom' ? str(x.roleLabel, 40) : '',
     goal: str(x.goal, 200),

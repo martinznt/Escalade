@@ -56,7 +56,7 @@ function formatBox(g) {
         <select class="partact" data-change="gPartAct" data-i="${i}" aria-label="Sport de cette partie"><option value="">${ACTIVITIES[g.activityId]?.emoji || ''} Même sport</option>${sportsList(g.activityId).map(([id, e, l]) => h`<option value="${id}" ${p.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></span>
         <div class="stepper sm"><button type="button" data-act="gPartMin" data-i="${i}" data-d="-1" aria-label="Moins de temps">−</button><b aria-label="${p.minutes} minutes">${p.minutes}′</b><button type="button" data-act="gPartMin" data-i="${i}" data-d="1" aria-label="Plus de temps">+</button></div>
         <button type="button" class="btn sm ic" data-act="gPartUp" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button><button type="button" class="btn sm ic" data-act="gPartDel" data-i="${i}" aria-label="Retirer">✕</button></div>`)}
-      <div class="row between"><b>Total : ${durLabel(total)}</b>${total >= MAX_TOTAL ? h`<span class="tiny muted">4 h au maximum</span>` : ''}</div>
+      <div class="row between"><b>Total : ${durLabel(total)}</b>${total >= MAX_TOTAL ? h`<span class="tiny muted">5 h au maximum</span>` : ''}</div>
       <details class="how mini"><summary>＋ Ajouter une partie</summary><div class="chips">${Object.entries(PART_TYPES).map(([k, t]) => chip(false, `${t.emoji} ${t.label}`, `data-act="gPartAdd" data-v="${k}"`))}</div></details>
       ${formatAdvice(parts).map((a) => h`<p class="tiny warn-t">${a.text}</p>${a.sources.length ? sourcesLine(a.sources) : ''}`)}
       <div class="row wrapf"><button type="button" class="btn sm" data-act="gFmtSave">💾 Garder ce format</button>${saved.some((f) => f.id === g.fmtId) ? h`${S.user?.isAdmin ? '' : shareButton('format', g.fmtId)}<button type="button" class="btn sm danger" data-act="gFmtDel" data-v="${g.fmtId}">Supprimer ce format</button>` : ''}</div></div>`}`;
@@ -86,7 +86,7 @@ ACT.gPartMin = (el) => editParts((p) => { const x = p[Number(el.dataset.i)]; if 
 ACT.gPartUp = (el) => editParts((p) => { const i = Number(el.dataset.i); if (i > 0) [p[i - 1], p[i]] = [p[i], p[i - 1]]; });
 ACT.gPartDel = (el) => { if ((G().parts || []).length <= 1) { toast('Garde au moins une partie, ou choisis « Automatique ».'); return; } editParts((p) => p.splice(Number(el.dataset.i), 1)); };
 ACT.gPartAdd = (el) => {
-  if (totalMinutes(G().parts) >= MAX_TOTAL) { toast('La séance fait déjà 4 h : raccourcis une partie d’abord.'); return; }
+  if (totalMinutes(G().parts) >= MAX_TOTAL) { toast('La séance fait déjà 5 h : raccourcis une partie d’abord.'); return; }
   const t = el.dataset.v; editParts((p) => { const room = MAX_TOTAL - totalMinutes(p), m = Math.min(room, t === 'warmup' || t === 'cool' ? 10 : 15); const at = t === 'warmup' ? 0 : t === 'cool' || t === 'stretch' ? p.length : Math.max(0, p.findLastIndex((x) => x.type !== 'cool' && x.type !== 'stretch') + 1); p.splice(at, 0, { type: t, minutes: m }); });
 };
 ACT.gFmtSave = () => {
@@ -120,7 +120,7 @@ export function vGenerateForm(activityOptions) {
     <div class="formerow"><span class="kicker">Je veux une séance</span><div class="chips">${FEELS.map(([k, e, l]) => toggleChip((g.feel || 'mod') === k, `${e} ${l}`, 'gFeel', k))}</div>${fe.note ? h`<p class="tiny acc-t">${fe.note}</p>` : ''}</div>
     <span class="kicker">1 · Quel sport ?</span><div class="chips big">${activityOptions().map(([id, e, l]) => chip(g.activityId === id, `${e} ${l}`, `data-act="gSet" data-k="activityId" data-v="${id}"`))}</div>
     <span class="kicker">2 · Combien de temps ?</span><div class="chips big">${DURS.map((m) => chip(!other && Number(g.minutes) === m, durLabel(m), `data-act="gDur" data-v="${m}"`))}${chip(other, 'Autre durée', 'data-act="gDurOther"')}</div>
-    ${other ? h`<label class="row durrow"><input type="number" class="durin" min="5" max="${MAX_TOTAL}" step="5" value="${g.minutes}" data-change="gDurIn" aria-label="Durée en minutes"><span>min</span><span class="tiny muted">de 5 min à 4 h</span></label>` : ''}
+    ${other ? h`<label class="row durrow"><input type="number" class="durin" min="5" max="${MAX_TOTAL}" step="5" value="${g.minutes}" data-change="gDurIn" aria-label="Durée en minutes"><span>min</span><span class="tiny muted">de 5 min à 5 h</span></label>` : ''}
     ${formatBox(g)}
     <span class="kicker">4 · Ce que je veux travailler <span class="tiny muted">(facultatif, plusieurs choix)</span></span>
     <div class="gsecs">

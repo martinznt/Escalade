@@ -1,5 +1,21 @@
 # CHANGELOG — Séances entraînement
 
+## 8.31.0 — Carnet de 487 séances, Ma salle de sport, Mes moments, objectifs et sports sans limite, jusqu'à 5 h
+
+### Carnet de séances
+- 400 séances ciblées générées à partir des exercices réels (sport × qualité × niveau × durée) ; « Ce que tu veux travailler » par sport ; « Adapté à moi » ou « Tout le carnet » ; filtres repliables.
+
+### Ma salle de sport (Bibliothèque)
+- Machines cochées par zone ou par modèle de salle ; 12 machines de plus ; séance du jour par découpage, but et durée, machines d'abord ; 🔄 machine occupée ; charges reprises ; carnet des machines (dernière, meilleure, max estimé, réglage).
+
+### Mes moments (Bibliothèque)
+- Des blocs perso (élastiques à l'échauffement, no foot ou spray wall en fin de séance, étirements…) avec moment, durée, effort, sports, matériel, exercice lié.
+- Proposés à l'étape « Ta structure » au bon endroit, adaptés : séance courte → raccourci ; doigts déjà chargés par une phase dure ou une séance dure de moins de 48 h → effort baissé ; matériel absent → dit, jamais ajouté. Option « ajouter tout seul ». Le temps est pris sur la phase la plus longue.
+- Spray wall : nom clair dans le matériel, 3 exercices (blocs courts à la limite, pieds silencieux, no foot), conseil d'après les séances notées (récupération, reprise, ou la qualité la moins travaillée sans répéter la dernière).
+
+### Créer une séance
+- Autant d'objectifs que voulu (parts raccourcies à 10 min avant de retirer, avertissement dès l'étape 2) ; un seul champ « ✍️ Avec tes mots » ; les sports de la séance affichés dans l'ordre ; durée jusqu'à 5 h (4 h et 5 h en un toucher).
+
 ## 8.30.0 — Mesures précises, coach qui apprend, planning automatique, pendant la séance, outils par sport, mon parcours, communauté et accessibilité
 
 Base : 8.29.0 et 8.28.0 (incluses dans cette même Pull Request).

@@ -40,7 +40,7 @@ export const FEATURES = {
   // 8.29 : la Bibliothèque et le Profil se personnalisent aussi (ordre, masquer, couleur), pas seulement leurs icônes.
   library: {
     search: F('Recherche', ['icon']), newbtn: F('Bouton « ＋ Nouvelle séance »', ['big'], { ic: '＋' }), draft: F('Séance en cours de création', ['big'], { ic: '📝' }),
-    'r-seances': F('Mes séances', ['big'], { row: 1, ic: '📋' }), 'r-climbplan': F('Créer une séance', ['big'], { row: 1, ic: '✨' }), 'r-catalog': F('Carnet de séances', ['big'], { row: 1, ic: '📖' }),
+    'r-seances': F('Mes séances', ['big'], { row: 1, ic: '📋' }), 'r-climbplan': F('Créer une séance', ['big'], { row: 1, ic: '✨' }), 'r-gym': F('Ma salle de sport', ['big'], { row: 1, ic: '🏋️' }), 'r-moments': F('Mes moments', ['big'], { row: 1, ic: '🧩' }), 'r-catalog': F('Carnet de séances', ['big'], { row: 1, ic: '📖' }),
     'r-exercises': F('Exercices', ['big'], { row: 1, ic: '💪' }), 'r-common': F('Bibliothèque commune', ['big'], { row: 1, ic: '🌍' }), 'r-search': F('Rechercher', ['big'], { row: 1, ic: '🔍' }),
     gen: F('Séance du jour', ['icon']), timer: F('Minuteur', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach', ['icon']),
   },
@@ -56,7 +56,7 @@ export const FEATURES = {
 export const DEFAULTS = {
   home: [['search', 'icon'], ['hero', 'big'], ['gen', 'big'], ['seances', 'big'], ['timer', 'big'], ['carnet', 'big'], ['program', 'big'], ['finger', 'big'], ['forme', 'big'], ['weekreview', 'big'], ['story', 'big'], ['today', 'big'], ['question', 'big'], ['cal', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   progress: [['search', 'icon'], ['streak', 'big'], ['kpis', 'big'], ['wins', 'big'], ['goalsdone', 'big'], ['work', 'big'], ['learned', 'big'], ['regularity', 'big'], ['badges', 'big'], ['story', 'big'], ['muscles', 'big'], ['load', 'big'], ['weeksum', 'big'], ['notif', 'icon'], ['all', 'icon']],
-  library: [['search', 'icon'], ['newbtn', 'big'], ['draft', 'big'], ['r-seances', 'big'], ['r-climbplan', 'big'], ['r-catalog', 'big'], ['r-exercises', 'big'], ['r-common', 'big'], ['r-search', 'big'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
+  library: [['search', 'icon'], ['newbtn', 'big'], ['draft', 'big'], ['r-seances', 'big'], ['r-climbplan', 'big'], ['r-gym', 'big'], ['r-moments', 'big'], ['r-catalog', 'big'], ['r-exercises', 'big'], ['r-common', 'big'], ['r-search', 'big'], ['timer', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   profile: [['search', 'icon'], ['hero', 'big'], ['sw', 'big'], ['bilan', 'big'], ['complete', 'big'], ['g-moi', 'big'], ['g-res', 'big'], ['g-why', 'big'], ['g-share', 'big'], ['coach', 'icon'], ['notif', 'icon'], ['all', 'icon']],
   settings: [['search', 'icon'], ['notif', 'icon'], ['all', 'icon']],
 };

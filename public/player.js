@@ -393,7 +393,7 @@ function saveResult() {
     id: uid(), sessionId: p.s.id, sessionName: p.s.name, startedAt: p.startedAt, durationSeconds: p.durationSeconds,
     data: {
       rpe: q.difficulty || 0, note: q.comment.trim().slice(0, 600), focus: p.s.goal || '', activity: p.s.activity || '', aborted: !!p.aborted,
-      activeSeconds: p.activeSeconds, pausedSeconds: p.pausedSeconds, plannedMin: p.s.context?.plannedMin || sessionMinutes(p.s), context: p.s.context,
+      activeSeconds: p.activeSeconds, pausedSeconds: p.pausedSeconds, plannedMin: p.s.context?.plannedMin || sessionMinutes(p.s), context: p.s.context, ...((p.s.tags || []).find((t) => /^salle-[a-z]{2,12}$/.test(t)) ? { gymDay: p.s.tags.find((t) => /^salle-[a-z]{2,12}$/.test(t)).slice(6) } : {}),
       questionnaire: { felt: q.felt, hardest: q.hardest, easiest: q.easiest, difficulty: q.difficulty || 0, comment: q.comment.trim().slice(0, 600), likes, answers: Object.entries(q.answers).map(([k, a]) => ({ q: k, a })) },
       swaps: p.swaps.map((s) => ({ from: s.from, to: s.to })),
       ...(p.hr.n >= 5 ? { hr: { avg: Math.round(p.hr.sum / p.hr.n), max: p.hr.max } } : {}),

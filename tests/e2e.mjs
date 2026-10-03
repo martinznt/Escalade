@@ -579,7 +579,7 @@ await step('8.29 : plusieurs sports, objectifs classés ; n°1 « Performer · V
   await a.click('[data-act=cpAimUp][data-i="2"]'); // la force passe n°2
   assert.match(await a.text('.aimlist'), /1\s*🚀 Performer · Voie[\s\S]*2\s*🏋️ Force · Bloc[\s\S]*3\s*🎯 Technique · Bloc/);
   // Objectif avec ses mots : sans IA disponible, l'app lit les mots-clés et montre ce qu'elle a compris avant l'ajout.
-  await A.fill('textarea[data-input=cpAiText]', 'souplesse des hanches'); await a.click('[data-act=cpAiAim]'); await A.waitForSelector('[data-act=cpAiAdd]');
+  await A.fill('textarea[data-input=cpWords]', 'souplesse des hanches'); await a.click('[data-act=cpAiAim]'); await A.waitForSelector('[data-act=cpAiAdd]');
   if (await a.count('[data-act=cpAiAdd][disabled]')) await a.click('[data-act=cpAiFam][data-id=mobilite]');
   await a.click('[data-act=cpAiAdd]'); await A.waitForFunction(() => document.querySelectorAll('.aimrow').length === 4);
   await cpTo(3); await A.waitForSelector('.cpart');
@@ -712,7 +712,7 @@ await step('V1 : séance structurée (bloc → pause → voie), but ponctuel, pr
   await cpFresh('auto'); await cpMore(); await a.click('[data-act=cpLevel][data-id=precis]'); await cpTo(1);
   await a.click('[data-act=cpSport][data-id=climbing_boulder]'); await a.click('[data-act=cpMin][data-id="45"]');
   await cpTo(2); await a.click('[data-act=cpAim][data-id=none]');
-  await A.fill('textarea[data-change=cpIntentText]', 'Préparer puis performer en voie'); await A.press('textarea[data-change=cpIntentText]', 'Tab');
+  await A.fill('textarea[data-input=cpWords]', 'Préparer puis performer en voie'); await A.press('textarea[data-input=cpWords]', 'Tab');
   await cpTo(3); await A.waitForSelector('.cpart');
   while (await a.count('.cpart [data-act=cpDel]')) { await A.locator('.cpart [data-act=cpDel]').first().click(); await A.waitForTimeout(60); }
   const setMin = async (m) => { await A.fill('#sheet input[data-change=cpPartMin]', String(m)); await A.press('#sheet input[data-change=cpPartMin]', 'Tab'); await A.waitForTimeout(120); };

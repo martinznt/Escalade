@@ -21,6 +21,8 @@ const topCaps = (caps, n = 3) => Object.entries(caps).filter(([k]) => CAPACITIES
 const catsOfCaps = (caps) => { const w = {}; for (const [c, v] of Object.entries(caps)) for (const [k, C] of Object.entries(CATS)) if (C.caps.includes(c)) w[k] = (w[k] || 0) + v; return Object.entries(w).sort((a, b) => b[1] - a[1]).map(([k]) => k); };
 
 /** C'est quoi ? Une phrase : le type d'exercice, comment il se fait (temps ou répétitions), le matériel, les muscles. */
+/** « de course », mais « d’escalade » devant une voyelle. */
+const deOf = (w) => (/^[aeiouyhéèêàâîôû]/i.test(w) ? `d’${w}` : `de ${w}`);
 export function exWhat(e) {
   const lib = byId(e.libId) || {}, x = { ...lib, ...e };
   if (lib.what || e.what) return e.what || lib.what;
@@ -60,7 +62,7 @@ export function sessionWhat(s, sportLabel = (x) => x, minutes = 0) {
   const sp = sportsOf(s).map(sportLabel), main = s.exercises.filter((e) => e.block === 'main').length || s.exercises.length;
   const parts = [...new Set(s.exercises.map((e) => e.part).filter(Boolean))].map((p) => p.replace(/^\S+\s/, ''));
   const it = INTENSITY_LABEL(intensityOf(s));
-  return `${sp.length ? `Une séance ${sp.length > 1 ? 'multi-sports ' : ''}de ${list(sp).toLowerCase()}` : 'Une séance'} : ${main} exercice${main > 1 ? 's' : ''} en ~${minutes || sessionMinutes(s)} min${parts.length > 1 ? `, en ${parts.length} parties (${list(parts.map((p) => p.toLowerCase()))})` : ''}.${it ? ` Intensité ${it}.` : ''}`;
+  return `${sp.length ? `Une séance ${sp.length > 1 ? 'multi-sports ' : ''}${deOf(list(sp).toLowerCase())}` : 'Une séance'} : ${main} exercice${main > 1 ? 's' : ''} en ~${minutes || sessionMinutes(s)} min${parts.length > 1 ? `, en ${parts.length} parties (${list(parts.map((p) => p.toLowerCase()))})` : ''}.${it ? ` Intensité ${it}.` : ''}`;
 }
 /** À quoi ça sert ? Ses catégories et ce qu'elle développe le plus. */
 export function sessionUse(s) {

@@ -4,6 +4,7 @@
 import { byId, LIBRARY } from './library.js';
 import { normalizeSession, normalizeEx, uid } from './shared.js';
 import { CAPACITIES } from './model.js';
+import { generateCatalog } from './catgen.js';
 
 // [libId, séries, rép. ou secondes, repos (s)] — secondes si l'exercice est chronométré.
 const X = (libId, sets, amount, rest, block = '') => ({ libId, sets, amount, rest, block });
@@ -350,6 +351,9 @@ export const CATALOG = [
 ];
 
 /** Séance jouable à partir d'une entrée du catalogue (exercices de la bibliothèque, consignes comprises). */
+// Séances ciblées générées (une par sport × qualité × niveau × durée), après les séances écrites à la main.
+CATALOG.push(...generateCatalog());
+
 export function buildSession(entry) {
   const exercises = entry.ex.map((x, i) => {
     const lib = byId(x.libId); if (!lib) return null;
