@@ -14,7 +14,7 @@ export const PART_TYPES = {
   cool: { emoji: '🌬️', label: 'Retour au calme', block: 'cool' },
 };
 export const EFFORT = new Set(['main', 'technique', 'strength', 'cardio', 'core']);
-export const MAX_TOTAL = 240;
+export const MAX_TOTAL = 300;
 /** Formats tout prêts (part de chaque partie dans la durée totale). */
 export const PRESETS = [
   ['classique', 'Classique', [['warmup', 0.15], ['main', 0.75], ['cool', 0.1]]],
@@ -23,7 +23,7 @@ export const PRESETS = [
   ['cardio-renfo', 'Cardio + renfo', [['warmup', 0.12], ['cardio', 0.4], ['strength', 0.33], ['stretch', 0.15]]],
 ];
 const int = (v, min, max, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d; };
-/** Garde des parties valides : 10 au plus, 1 à 180 min chacune, 4 h au total. */
+/** Garde des parties valides : 10 au plus, 1 à 180 min chacune, 5 h au total. */
 export function cleanParts(parts) {
   const out = []; let total = 0;
   for (const p of Array.isArray(parts) ? parts.slice(0, 10) : []) {

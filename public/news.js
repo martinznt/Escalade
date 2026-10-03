@@ -166,6 +166,12 @@ export const NEWS = [
     ['progress', 'summary', '#main', '🌟 Mon parcours', 'Saison de 4 semaines, lettre à toi-même, ton année en sport, avant / après, rapport du mois à imprimer et photos de progrès gardées sur ton téléphone.'],
     ['settings', 'display', '#main h1', '♿ Accessibilité', 'Lecture facile, gros boutons, contraste renforcé, couleurs pour daltonisme. Et : encouragements entre partenaires, idées à voter, démo sans compte.'],
   ] },
+  { v: '8.31.0', date: '2026-10-03', title: 'Ta salle, tes moments, ta séance sans limite', why: 'Ta salle de sport avec tes machines, tes moments préférés (élastiques, no foot, spray wall…) glissés au bon endroit, autant d’objectifs et de sports que tu veux, jusqu’à 5 h, et 487 séances prêtes.', steps: [
+    ['library', 'gym', '#main h1', '🏋️ Ma salle de sport', 'Coche les machines de ta salle : la séance du jour n’utilise qu’elles, reprend tes charges et retient tes réglages. 🔄 si une machine est prise.'],
+    ['library', 'moments', '#main h1', '🧩 Mes moments', 'Élastiques à l’échauffement, no foot ou spray wall en fin de séance… Ils sont proposés dans « Créer une séance », adaptés à la séance du jour, avec un conseil spray wall d’après tes séances.'],
+    ['library', 'climbplan', '#main h1', '✨ Créer une séance', 'Autant d’objectifs et de sports que tu veux (voie, bloc, renfo, piscine…), jusqu’à 5 h. Un seul champ « ✍️ Avec tes mots ».'],
+    ['library', 'catalog', '#main h1', '📖 Carnet de séances', '487 séances prêtes : choisis ce que tu veux travailler (technique de pieds, doigts, seuil…), « Adapté à moi » ou tout le carnet.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

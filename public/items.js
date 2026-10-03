@@ -48,7 +48,7 @@ const CONTEXT = { env: ['id'], place: ['s', 80], kind: ['e', ['salle', 'falaise'
 // Modification « pour moi » d'un exercice ou d'une séance prête du catalogue (id = celui de l'élément modifié).
 const EX_EDIT = { name: ['s', 80], emoji: ['s', 8], sets: ['n', 1, 20, null], repsMin: ['n', 0, 500, null], repsMax: ['n', 0, 500, null], secMin: ['n', 0, 7200, null], secMax: ['n', 0, 7200, null], rest: ['n', 0, 3600, null],
   cues: ['strs', 8, 200], bad: ['strs', 6, 200], why: ['s', 240], what: ['s', 240], hidden: ['b'] };
-const CAT_EDIT = { name: ['s', 80], emoji: ['s', 8], why: ['s', 400], minutes: ['n', 5, 240, null], tips: ['strs', 5, 200], exjson: ['s', 4000], hidden: ['b'] };
+const CAT_EDIT = { name: ['s', 80], emoji: ['s', 8], why: ['s', 400], minutes: ['n', 5, 300, null], tips: ['strs', 5, 200], exjson: ['s', 4000], hidden: ['b'] };
 export const SCHEMAS = {
   exedit: EX_EDIT, catedit: CAT_EDIT,
   // Activité personnalisée ou activation d'une activité native (preset = identifiant natif).
@@ -146,6 +146,10 @@ export const SCHEMAS = {
     hr: ['n', 25, 220, null], period: ['b'], note: ['s', 300] },
   // 8.30 — réglages d'une machine ou d'un exercice (siège, dossier, prise…), affichés pendant la séance.
   exsetup: { key: ['s', 80], label: ['s', 80], setup: ['s', 160] },
+  // 9.0 — « Mes moments » : un bloc que la personne aime faire dans ses séances (élastiques à l'échauffement, no foot
+  // ou spray wall en fin de séance…). Proposé dans la structure et adapté à la séance (routines.js).
+  routine: { label: ['s', 60], emoji: ['s', 8], when: ['e', ['warmup', 'start', 'middle', 'end', 'cool'], 'end'], sports: ['ids', 8], minutes: ['n', 3, 90, 10],
+    libId: ['id'], needs: ['ids', 6], effort: ['e', ['easy', 'mod', 'hard'], 'mod'], fingers: ['b'], note: ['s', 200], auto: ['b'], off: ['b'] },
   // 8.30 — saison de 4 semaines autour d'un thème, et lettre à soi-même (scellée jusqu'à openAt).
   season: { theme: ['e', ['regularite', 'doigts', 'mobilite', 'endurance', 'recup', 'variete'], 'regularite'], start: ['n', 0, 9e15, 0], closed: ['b'], won: ['b'] },
   letter: { text: ['s', 3000], writtenAt: ['n', 0, 9e15, 0], openAt: ['n', 0, 9e15, 0], openedAt: ['n', 0, 9e15, 0], snap: ['s', 300] },

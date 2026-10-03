@@ -46,6 +46,7 @@ label{display:grid;gap:4px;font-size:.9rem;color:var(--muted)}label.inline{displ
 input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:var(--tap);color:var(--text)}
 textarea{min-height:90px;resize:vertical}input:focus,select:focus,textarea:focus,.btn:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 input[type=checkbox]{width:22px;height:22px;min-height:0;accent-color:var(--accent)}input[type=color]{padding:2px}
+.chkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(150px,100%),1fr));gap:0 12px}
 .chk{display:flex;align-items:center;gap:10px;color:var(--text);font-size:.92rem;min-height:var(--tap)}
 .unitbox{display:flex;align-items:center;gap:6px}.unitbox em{font-style:normal;color:var(--muted);font-size:.85rem;white-space:nowrap}.unitbox.small input{max-width:90px}
 .emoji-in{width:58px!important;text-align:center;font-size:1.3rem}.color-in{width:44px!important;min-height:36px}

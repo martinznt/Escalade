@@ -10,9 +10,9 @@ const home = (eq = ['mat', 'bar', 'band']) => ctxOf({ items: [act('conditioning'
 const partMinutes = (s) => { const m = new Map(); for (const e of s.exercises) m.set(e.part, (m.get(e.part) || 0) + exMinutes(e)); return m; };
 
 console.log('Format : règles');
-ok('parties nettoyées : types connus, 1 à 180 min, 4 h au total, 10 parties au plus', () => {
+ok('parties nettoyées : types connus, 1 à 180 min, 5 h au total, 10 parties au plus', () => {
   assert.deepEqual(cleanParts([{ type: 'warmup', minutes: 0 }, { type: 'x', minutes: 10 }, { type: 'main', minutes: 999 }]), [{ type: 'warmup', minutes: 1 }, { type: 'main', minutes: 180 }]);
-  assert.equal(totalMinutes(cleanParts(Array.from({ length: 12 }, () => ({ type: 'main', minutes: 60 })))), 240);
+  assert.equal(totalMinutes(cleanParts(Array.from({ length: 12 }, () => ({ type: 'main', minutes: 60 })))), 300);
   assert.equal(cleanParts(Array.from({ length: 12 }, () => ({ type: 'core', minutes: 5 }))).length, 10);
 });
 ok('formats tout prêts et changement de durée : la somme tombe juste', () => {

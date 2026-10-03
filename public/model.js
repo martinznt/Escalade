@@ -82,7 +82,7 @@ export const EQUIPMENT = {
   band: 'Élastique', rings: 'Anneaux', barbell: 'Barre et disques', kettlebell: 'Kettlebell', bench: 'Banc', pole: 'Espalier / poteau',
   box: 'Box / marche', rope: 'Corde à sauter', mat: 'Tapis de sol', machine: 'Machines de musculation (toutes)', pool: 'Bassin de natation',
   pullbuoy: 'Pull-buoy / planche', track: 'Piste / terrain', hill: 'Côte', treadmill: 'Tapis de course',
-  campus: 'Campus board', boardwall: 'Mur à prises connectées (Moon, Kilter, Tension)', spraywall: 'Pan d’entraînement', autobelay: 'Enrouleurs (auto-assureurs)', leadwall: 'Mur de voies en tête', topwall: 'Voies en moulinette',
+  campus: 'Campus board', boardwall: 'Mur à prises connectées (Moon, Kilter, Tension)', spraywall: 'Spray wall (pan d’entraînement)', autobelay: 'Enrouleurs (auto-assureurs)', leadwall: 'Mur de voies en tête', topwall: 'Voies en moulinette',
   // 8.29 : la salle de musculation, machine par machine (« Machines de musculation » = toutes), et le cardio.
   rack: 'Rack / cage à squat', ezbar: 'Barre EZ', cable: 'Poulie / vis-à-vis (câbles)', latpulldown: 'Tirage vertical (poulie haute)', seatedrow: 'Tirage horizontal assis (rowing)',
   legpress: 'Presse à cuisses', hacksquat: 'Hack squat', legext: 'Leg extension', legcurl: 'Leg curl', smith: 'Machine guidée (Smith)', chestpress: 'Développé couché à la machine',

@@ -221,7 +221,7 @@ const capMod = (ph) => ['hard', 'max'].includes(ph.intensity) && setIntensity(ph
  */
 export function planFromAims(o = {}) {
   if (Array.isArray(o.windows) && o.windows.length) return planWindows(o);
-  const sports = [...new Set((o.sports || []).filter(Boolean))], M = clamp(Math.round(Number(o.minutes) || 60), 20, 240), notes = [], dropped = [];
+  const sports = [...new Set((o.sports || []).filter(Boolean))], M = clamp(Math.round(Number(o.minutes) || 60), 20, 300), notes = [], dropped = [];
   const acts = o.acts || {}, travelEach = clamp(Math.round(Number(o.travel ?? 15) || 0), 0, 120);
   const aims = cleanAims(o.aims, sports);
   for (const sp of sports) if (!aims.some((a) => a.sport === sp)) { aims.push(balancedAim(sp, acts)); if (aims.length > 1) notes.push(`« ${sportShort(sp, acts)} » sans objectif : une partie équilibrée est ajoutée pour ce sport.`); }
@@ -371,7 +371,7 @@ export function cleanWindows(list) {
   }
   out.sort((x, y) => x.from - y.from);
   for (let i = 1; i < out.length; i++) if (out[i].from < out[i - 1].to) errors.push(`« ${out[i - 1].name} » (${fromMin(out[i - 1].from)}–${fromMin(out[i - 1].to)}) et « ${out[i].name} » (${fromMin(out[i].from)}–${fromMin(out[i].to)}) se chevauchent.`);
-  if (out.length && out.at(-1).to - out[0].from > 240) errors.push('Plus de 4 h entre la première arrivée et le dernier départ : raccourcis un créneau.');
+  if (out.length && out.at(-1).to - out[0].from > 300) errors.push('Plus de 5 h entre la première arrivée et le dernier départ : raccourcis un créneau.');
   return errors.length ? { windows: [], errors } : { windows: out, errors };
 }
 /** Matériel utile au renforcement (pour choisir où le faire). */
