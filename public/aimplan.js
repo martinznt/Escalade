@@ -24,7 +24,7 @@ export const MOMENT_HELP = {
   end: 'En dernier : tout ce qui vient avant le prépare.',
 };
 export const RANK_WEIGHT = [4, 3, 2, 1.5, 1];
-export const MAX_AIMS = 6;
+export const MAX_AIMS = 30; // garde-fou technique seulement : autant d'objectifs que voulu en pratique
 /** Ordre d'affichage des familles : du plus exigeant au plus doux. */
 export const FAMILY_ORDER = ['performance', 'force', 'puissance', 'endurance', 'technique', 'mobilite'];
 const MIN_AIM = 10;
@@ -85,7 +85,8 @@ const DOWN = { max: 'hard', hard: 'mod', mod: 'mod', easy: 'easy' };
 const WORD_INT = { easy: 'facile', mod: 'modérée', hard: 'intense', max: 'maximale' };
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const minOf = (a) => MIN_ROLE[FAMILY_ROLE[a.family]] || MIN_AIM;
+// « short » : beaucoup d'objectifs pour peu de temps → chacun garde au moins 10 min au lieu d'être retiré.
+const minOf = (a) => (a.short ? MIN_AIM : MIN_ROLE[FAMILY_ROLE[a.family]] || MIN_AIM);
 /** Nom court d'une phase (≤ 40 caractères, rang compris) : « Performer · Voie (n°1) ». */
 const goalText = (a) => { const tail = a.equal ? '' : ` (n°${a.rank + 1}${a.tied ? '=' : ''})`, max = 40 - tail.length; return (a.label.length > max ? a.label.slice(0, max - 1).trim() + '…' : a.label) + tail; };
 const r5 = (x) => Math.round(x / 5) * 5;
@@ -154,7 +155,7 @@ export function cleanAims(list, sports = []) {
   return (Array.isArray(list) ? list : []).filter((a) => a && typeof a === 'object').map((a) => ({
     ...a, key: str(a.key, 80), family: INTENT_FAMILIES[a.family] || a.family === 'equilibre' ? a.family : '', sport: sports.includes(a.sport) ? a.sport : sp0,
     label: str(a.label, 60), emoji: str(a.emoji, 4), caps: capsOk(a.caps), subs: (Array.isArray(a.subs) ? a.subs : []).map(String).filter((x) => /^[\w.-]{1,60}$/.test(x)).slice(0, 6),
-    when: MOMENTS[a.when] ? a.when : 'auto', tie: !!a.tie,
+    when: MOMENTS[a.when] ? a.when : 'auto', tie: !!a.tie, short: false,
   })).filter((a) => a.key && a.family && a.sport && !seen.has(a.key) && seen.add(a.key)).slice(0, MAX_AIMS);
 }
 
@@ -262,6 +263,7 @@ export function planFromAims(o = {}) {
   const need = () => seq.reduce((t, a) => t + minOf(a), 0);
   while (P.work < need()) {
     if (P.prep) { notes.push('Pas assez de temps pour une montée progressive séparée : elle se fait dans l’échauffement.'); P = { ...P, work: P.work + P.prep, prep: 0, noPrep: true }; continue; }
+    if (seq.length > 1 && seq.some((a) => !a.short)) { for (const a of seq) a.short = true; notes.push(`Beaucoup d’objectifs pour ${M} min : chacun a une part plus courte (10 min au moins) pour en garder le plus possible.`); continue; }
     if (seq.length > 1) {
       const last = [...seq].sort((a, b) => b.rank - a.rank)[0]; seq = seq.filter((a) => a !== last); dropped.push(last);
       notes.push(`Pas assez de temps pour « ${last.label} »${EQ ? ' (le dernier de ta liste)' : ` (n°${last.rank + 1})`} : retiré. Ajoute du temps ou garde moins d’objectifs.`);
@@ -444,6 +446,7 @@ export function planWindows(o = {}) {
     let list = [...by('start'), ...autoW.slice(0, half), ...by('middle'), ...autoW.slice(half), ...by('end'), ...by('auto').filter((a) => a.family === 'mobilite')];
     if (autoW.some(flex) && autoW.some((a) => !flex(a))) notes.push(`À ${w.name} : le renforcement vient après la grimpe (la grimpe se fait avec des bras frais).`);
     let work = w.mins - overhead(w);
+    if (list.length > 1 && work < list.reduce((t, a) => t + minOf(a), 0)) { for (const a of list) a.short = true; notes.push(`À ${w.name} : beaucoup d’objectifs pour ce créneau, chacun a une part plus courte (10 min au moins).`); }
     while (list.length > 1 && work < list.reduce((t, a) => t + minOf(a), 0)) {
       const last = [...list].sort((x, y) => y.rank - x.rank)[0]; list = list.filter((a) => a !== last); dropped.push(last);
       notes.push(`Pas assez de temps à ${w.name} (${fromMin(w.from)}–${fromMin(w.to)}) pour « ${last.label} » : retiré.`);

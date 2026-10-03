@@ -276,9 +276,7 @@ function vWhy() {
       <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div>
       ${(c.painZones || []).filter((z) => (c.zones || []).includes(z)).length ? h`<p class="tiny warn-t">🩹 Pré-coché d’après tes douleurs notées (${c.painZones.filter((z) => (c.zones || []).includes(z)).map((z) => ZONE_LABEL[z]).join(', ')}). Décoche si c’est passé.</p>` : ''}
       <p class="tiny muted">Les exercices qui les chargent fort sont écartés de cette séance.</p></div>
-    <div class="card stack"><label>📝 Mon intention pour aujourd’hui <span class="tiny muted">(facultatif)</span><textarea data-change="cpIntentText" maxlength="240" rows="2" placeholder="Ex. « Aujourd’hui je veux performer le plus possible en voie »">${c.intentText || ''}</textarea></label>
-      <p class="tiny muted">Elle sert à cette séance seulement : ce n’est pas un objectif de ton profil.</p>
-      ${c.intentText ? (c.intentGoal ? h`<p class="tiny ok-t">✓ Aussi enregistrée comme objectif.</p>` : h`<button class="btn sm" data-act="cpIntentGoal">🎯 Enregistrer aussi comme objectif</button>`) : ''}</div>`;
+    ${aim === 'goals' ? '' : h`<div class="card stack">${wordsField(false)}</div>`}`;
 }
 function aimsCard() {
   const c = CP(), l = c.aims || [], n = l.length, eq = !!c.equal && n > 1, T = tiers(l), tieN = (i) => T.filter((x) => x === T[i]).length;
@@ -287,25 +285,35 @@ function aimsCard() {
     ${n ? h`<div class="aimlist">${l.map((a, i) => h`<div class="aimrow"><span class="rank ${!eq && tieN(i) > 1 ? 'tie' : ''}" aria-label="${eq ? 'Objectif' : rankWord(l, i)}">${eq ? '•' : T[i] + 1}${!eq && tieN(i) > 1 ? '=' : ''}</span><span class="grow aimtxt"><b>${a.emoji} ${a.label}</b><small>${[!eq && T[i] === 0 ? (tieN(i) > 1 ? 'n°1 ex æquo : le plus de temps, à égalité' : 'le plus important : le plus de temps') : !eq && tieN(i) > 1 ? `${rankWord(l, i)} : même part que les autres n°${T[i] + 1}` : '', SRC[a.source] || '', a.summary || ''].filter(Boolean).join(' · ')}</small></span>
         <span class="aimbtns">${!eq && i > 0 ? h`<button class="btn sm ic ${a.tie ? 'pri' : ''}" data-act="cpAimTie" data-i="${i}" aria-pressed="${!!a.tie}" aria-label="${a.tie ? 'Séparer de l’objectif au-dessus' : 'Même importance que l’objectif au-dessus'}" title="${a.tie ? 'Séparer de l’objectif au-dessus' : 'Même importance que l’objectif au-dessus'}">=</button>` : ''}<button class="btn sm ic" data-act="cpAimUp" data-i="${i}" ${i ? '' : 'disabled'} aria-label="Monter ${a.label}">↑</button><button class="btn sm ic" data-act="cpAimDown" data-i="${i}" ${i < n - 1 ? '' : 'disabled'} aria-label="Descendre ${a.label}">↓</button><button class="btn sm ic danger" data-act="cpAimDel" data-i="${i}" aria-label="Retirer ${a.label}">✕</button></span></div>`)}</div>
       <p class="tiny muted">${eq ? 'Tous aussi importants : même part de temps pour chacun, l’app choisit l’ordre selon l’effort (↑ ↓ ne change que l’ordre d’affichage). À l’étape 3, tu peux quand même fixer le moment de chacun.' : '↑ ↓ pour classer. « = » met un objectif à la même importance que celui au-dessus (ex æquo : même part de temps). Le n°1 reçoit le plus de temps, puis le n°2… À l’étape 3, tu diras à quel moment faire chacun.'}</p>
+      ${n * 10 > (c.minutes || 60) - 20 ? h`<p class="tiny warn-t">⏱️ En ${fmtMin(c.minutes || 60)}, environ ${Math.max(1, Math.floor(((c.minutes || 60) - 20) / 10))} objectifs tiennent (10 min chacun au moins). Les moins importants seront retirés à l’étape 3, sauf si tu ajoutes du temps à l’étape 1.</p>` : ''}
       ${eq ? '' : h`<button class="btn sm" data-act="cpStrat">🧭 Plusieurs chemins pour ton n°1</button>`}`
       : h`<p class="small muted">Aucun objectif pour l’instant : ajoute-en un ou plusieurs ci-dessous. Sans objectif, l’app fait une séance équilibrée.</p>`}</div>`;
 }
 const addSport = (c = CP()) => (sportsOf(c).includes(c.addFor) ? c.addFor : c.sport);
 function addCard() {
-  const c = CP(), x = ctx(), sps = sportsOf(c), sp = addSport(c), cat = aimCatalog(sp, x.activities, extraIntents()), has = (k) => (c.aims || []).some((a) => a.key === k), full = (c.aims || []).length >= MAX_AIMS;
+  const c = CP(), x = ctx(), sps = sportsOf(c), sp = addSport(c), cat = aimCatalog(sp, x.activities, extraIntents()), has = (k) => (c.aims || []).some((a) => a.key === k);
   const goals = activeGoals(x), short = sportShort(sp, x.activities).toLowerCase();
   return h`<details class="card fold addaim" ${!(c.aims || []).length || c.addOpen ? 'open' : ''}><summary><span>＋ Ajouter un objectif</span></summary>
-    ${full ? h`<p class="small warn-t">${MAX_AIMS} objectifs au plus : retire-en un pour en ajouter un autre.</p>` : ''}
+    <p class="tiny muted">Ajoute-en autant que tu veux. Si le temps manque, chacun a une part plus courte (et c’est dit à l’étape 3).</p>
     ${sps.length > 1 ? h`<span class="kicker">Pour quel sport ?</span><div class="chips">${sps.map((id) => chip(id === sp, sportLabel(id), `data-act="cpAddFor" data-id="${id}"`))}</div>` : ''}
     <span class="kicker">1 · Ce que tu veux travailler en ${short}</span>
-    <div class="setmenu">${cat.families.map((a) => h`<button class="setrow" data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}" ${full && !has(a.key) ? 'disabled' : ''}><span class="sic">${a.emoji}</span><span class="grow"><b>${a.label}</b><small>${a.help}</small></span><span class="chev">${has(a.key) ? '✓' : '＋'}</span></button>`)}</div>
+    <div class="setmenu">${cat.families.map((a) => h`<button class="setrow" data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}"><span class="sic">${a.emoji}</span><span class="grow"><b>${a.label}</b><small>${a.help}</small></span><span class="chev">${has(a.key) ? '✓' : '＋'}</span></button>`)}</div>
     <span class="kicker">2 · Ou plus précis</span>
-    <div class="chips">${cat.precise.map((a) => chip(has(a.key), `${a.emoji} ${a.label.replace(/ · [^·]+$/, '')}`, `data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}" ${full && !has(a.key) ? 'disabled' : ''}`))}</div>
+    <div class="chips">${cat.precise.map((a) => chip(has(a.key), `${a.emoji} ${a.label.replace(/ · [^·]+$/, '')}`, `data-act="cpAimAdd" data-k="${a.key}" data-sp="${sp}"`))}</div>
     ${goals.length ? h`<span class="kicker">3 · Un de tes objectifs du profil</span><div class="chips">${goals.map((g) => chip((c.aims || []).some((a) => a.goalId === g.id), `🎯 ${goalLabel(g)}`, `data-act="cpAimGoal" data-id="${g.id}"`))}</div>` : ''}
-    <span class="kicker">${goals.length ? 4 : 3} · Avec tes mots <span class="tiny muted">(l’IA le comprend et le relie à l’entraînement)</span></span>
-    <textarea data-input="cpAiText" rows="2" maxlength="200" placeholder="Ex. « tenir plus longtemps dans les voies déversantes »" aria-label="Objectif avec tes mots">${c.aiText || ''}</textarea>
-    <button class="btn sm" data-act="cpAiAim" ${S.cpAiBusy ? 'disabled' : ''}>${S.cpAiBusy ? '⏳ L’IA réfléchit…' : '✍️ Comprendre mon objectif'}</button>
+    ${wordsField(true, goals.length ? 4 : 3)}
     ${S.cpAiDraft ? aiDraftCard() : ''}</details>`;
+}
+/** Un seul champ « avec tes mots » : il sert d'intention à cette séance et, si tu le demandes, devient un objectif classé
+ * (compris par l'IA) ou un objectif de ton profil. Hors mode « objectifs », seulement intention + profil. */
+function wordsField(withAim, num = 0) {
+  const c = CP(), t = String(c.intentText || '').trim();
+  return h`<span class="kicker">${num ? `${num} · ` : ''}✍️ Avec tes mots <span class="tiny muted">(facultatif)</span></span>
+    <textarea data-input="cpWords" rows="2" maxlength="240" placeholder="Ex. « tenir plus longtemps dans les voies déversantes »" aria-label="Ce que tu veux, avec tes mots">${c.intentText || ''}</textarea>
+    <p class="tiny muted">${withAim ? 'Gardé comme intention de cette séance. Tu peux aussi le faire comprendre par l’IA pour l’ajouter à ta liste classée, ou l’enregistrer dans ton profil.' : 'Gardé comme intention de cette séance seulement, sauf si tu l’enregistres dans ton profil.'}</p>
+    <div class="row wrapf">${withAim ? h`<button class="btn sm" data-act="cpAiAim" ${S.cpAiBusy ? 'disabled' : ''}>${S.cpAiBusy ? '⏳ L’IA réfléchit…' : '＋ Ajouter à mes objectifs'}</button>` : ''}
+      ${c.intentGoal && t ? h`<span class="tiny ok-t">✓ Enregistré dans ton profil.</span>` : h`<button class="btn sm ghost" data-act="cpIntentGoal">🎯 Enregistrer dans mon profil</button>`}</div>
+    ${withAim && c.aiAdded && c.aiAdded === t ? h`<p class="tiny ok-t">✓ Ajouté à ta liste classée.</p>` : ''}`;
 }
 function aiDraftCard() {
   const d = S.cpAiDraft, x = ctx();
@@ -322,7 +330,7 @@ ACT.cpAimUp = (el) => moveAim(Number(el.dataset.i), -1);
 ACT.cpAimDown = (el) => moveAim(Number(el.dataset.i), 1);
 ACT.cpAimDel = (el) => { const c = CP(), a = c.aims?.[Number(el.dataset.i)]; if (!a) return; c.aims.splice(Number(el.dataset.i), 1); c.goalIds = c.aims.filter((y) => y.goalId).map((y) => y.goalId); aimsChanged(c); toast(`« ${a.label} » retiré.`); };
 ACT.cpAddFor = (el) => { const c = CP(); c.addFor = el.dataset.id; c.addOpen = true; keep(); render(); };
-const pushAim = (c, a) => { if (!a) return; if (c.aims.length >= MAX_AIMS) { toast(`${MAX_AIMS} objectifs au plus.`); return; } c.aims.push(a); c.addOpen = true; c.objFromProfile = false; aimsChanged(c); toast(c.aims.length > 1 ? `Ajouté en n°${c.aims.length} : classe-le avec ↑ ↓.` : 'Ajouté en n°1.', 3500); };
+const pushAim = (c, a) => { if (!a) return; if (c.aims.length >= MAX_AIMS) { toast(`Déjà ${MAX_AIMS} objectifs : c’est beaucoup pour une séance, retire ceux qui comptent le moins.`); return; } c.aims.push(a); c.addOpen = true; c.objFromProfile = false; aimsChanged(c); toast(c.aims.length > 1 ? `Ajouté en n°${c.aims.length} : classe-le avec ↑ ↓.` : 'Ajouté en n°1.', 3500); };
 ACT.cpAimAdd = (el) => {
   const c = CP(), sp = el.dataset.sp || c.sport, k = el.dataset.k, i = (c.aims || []).findIndex((a) => a.key === k);
   if (i >= 0) { c.aims.splice(i, 1); c.addOpen = true; aimsChanged(c); return; }
@@ -336,11 +344,11 @@ ACT.cpAimGoal = (el) => {
   if (g.activityId && (x.activities[g.activityId] || ACTIVITIES[g.activityId]) && !sportsOf(c).includes(g.activityId)) { c.more = [...(c.more || []), g.activityId]; toast(`${sportLabel(g.activityId)} ajouté à la séance pour cet objectif.`, 3500); }
   pushAim(c, aimOfGoal(g, c)); c.goalIds = c.aims.filter((y) => y.goalId).map((y) => y.goalId); keep();
 };
-INPUT.cpAiText = (el) => { CP().aiText = el.value.slice(0, 200); keep(); };
+INPUT.cpWords = (el) => { const c = CP(), v = el.value.slice(0, 240); if (v.trim() !== String(c.intentText || '').trim()) c.intentGoal = ''; c.intentText = v; keep(); };
 // Objectif écrit avec ses mots : l'IA le relie à des capacités (réponse validée par le serveur, relue ici avant l'ajout) ;
 // sans IA (invité, hors ligne), lecture des mots-clés ; si rien n'est reconnu, l'utilisateur choisit le type de travail.
 ACT.cpAiAim = async () => {
-  const c = CP(), text = String(c.aiText || '').trim(), sp = addSport(c); if (text.length < 3) { toast('Écris ce que tu veux travailler, en quelques mots.'); return; }
+  const c = CP(), text = String(c.intentText || '').trim().slice(0, 200), sp = addSport(c); if (text.length < 3) { toast('Écris ce que tu veux travailler, en quelques mots.'); return; }
   S.cpAiBusy = true; S.cpAiDraft = null; render();
   let r = null, why = '';
   try { r = (await api('POST', '/api/ai/intent', { text, activityId: sp, kind: 'intent' }, { timeout: 45000 })).intent; if (r) r = { ...r, ai: true }; }
@@ -350,10 +358,9 @@ ACT.cpAiAim = async () => {
 };
 ACT.cpAiFam = (el) => { if (S.cpAiDraft) { S.cpAiDraft.family = el.dataset.id; render(); } };
 ACT.cpAiCancel = () => { S.cpAiDraft = null; render(); };
-ACT.cpAiAdd = () => { const c = CP(), d = S.cpAiDraft; if (!d?.family) return; const a = textAim(d, sportsOf(c).includes(d.sport) ? d.sport : c.sport, ctx().activities, d.family); S.cpAiDraft = null; c.aiText = ''; pushAim(c, a); };
-CHG.cpIntentText = (el) => { const c = CP(); c.intentText = el.value.slice(0, 240); c.intentGoal = ''; keep(); render(); };
+ACT.cpAiAdd = () => { const c = CP(), d = S.cpAiDraft; if (!d?.family) return; const a = textAim(d, sportsOf(c).includes(d.sport) ? d.sport : c.sport, ctx().activities, d.family); S.cpAiDraft = null; c.aiAdded = String(c.intentText || '').trim(); pushAim(c, a); };
 // Seulement sur action explicite : l'intention devient un objectif (fiche relue et modifiable avant l'enregistrement).
-ACT.cpIntentGoal = () => { const c = CP(); keep(); ACT.goalFromText?.({ dataset: { text: c.intentText, back: 'cp' } }); };
+ACT.cpIntentGoal = () => { const c = CP(); if (String(c.intentText || '').trim().length < 3) { toast('Écris d’abord ce que tu veux, en quelques mots.'); return; } keep(); ACT.goalFromText?.({ dataset: { text: c.intentText, back: 'cp' } }); };
 const TARGET_EX = { run: 'Ex. 10 km en 50 min : échauffement, montée, blocs à l’allure visée.', swim: 'Ex. 100 m en 1:40 : éducatifs, montée, séries à l’allure visée.', load: 'Ex. 100 kg au squat : montée en charge, paliers, puis volume.', body: 'Ex. 15 tractions : séries faciles, séries max, pyramide.' };
 CHG.cpTMetric = (el) => { const c = CP(); c.tMetric = el.value; c.tValue = null; keep(); render(); };
 CHG.cpTValue = (el) => { const c = CP(), v = Number(String(el.value).replace(',', '.')); c.tMetric ||= sportTargets(c.sport, ctx())[0]?.id; c.tValue = Number.isFinite(v) && el.value !== '' ? v : null; keep(); render(); };

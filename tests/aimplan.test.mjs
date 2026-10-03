@@ -99,10 +99,16 @@ ok('objectif écrit « gainage » pour l’escalade : une phase de gainage, pas 
   const r = A.planFromAims({ aims: [g], sports: ['climbing_boulder'], minutes: 60 });
   assert.equal(work(r.phases).find((p) => p.aimKey === g.key).type, 'core');
 });
-ok('objectifs nettoyés : clés uniques, sport inconnu ramené au sport principal, moment inconnu = auto, 6 au plus', () => {
+ok('objectifs nettoyés : clés uniques, sport inconnu ramené au sport principal, moment inconnu = auto, pas de limite basse (garde-fou à 30)', () => {
   const x = A.familyAim('force', 'climbing_boulder');
   const l = A.cleanAims([x, x, { ...x, key: 'k2', sport: 'inconnu', when: 'jamais', label: '<b>Hack</b>' }, ...Array.from({ length: 9 }, (_, k) => ({ ...x, key: 'z' + k }))], ['climbing_boulder']);
-  assert.equal(l.length, 6); assert.equal(l[1].sport, 'climbing_boulder'); assert.equal(l[1].when, 'auto'); assert.doesNotMatch(l[1].label, /[<>]/);
+  assert.equal(l.length, 11); assert.equal(A.cleanAims(Array.from({ length: 40 }, (_, k) => ({ ...x, key: 'y' + k })), ['climbing_boulder']).length, 30); assert.equal(l[1].sport, 'climbing_boulder'); assert.equal(l[1].when, 'auto'); assert.doesNotMatch(l[1].label, /[<>]/);
+});
+ok('beaucoup d’objectifs en 60 min : tous gardés, part plus courte (dit), aucun sous 10 min', () => {
+  const aims = ['performance', 'force', 'technique', 'endurance'].map((f) => A.familyAim(f, 'climbing_boulder'));
+  const r = A.planFromAims({ aims, sports: ['climbing_boulder'], minutes: 75 });
+  assert.equal(r.dropped.length, 0); assert.match(r.notes.join('\n'), /part plus courte/);
+  assert.equal(sum(r.phases), 75); assert.equal(work(r.phases).filter((p) => p.aimKey).length >= 4, true); assert.ok(work(r.phases).every((p) => p.minutes >= 10));
 });
 ok('chronologie de la structure finale : heures de début et de fin, trajets à leur place', () => {
   const aims = [A.familyAim('endurance', 'running'), A.familyAim('force', 'strength')];
