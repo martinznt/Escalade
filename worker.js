@@ -3,8 +3,10 @@
 // (jamais par un identifiant envoyé par le client), et chaque requête SQL est paramétrée.
 import { SCHEMA, ADD_COLUMNS } from './schema.js';
 import { mergeSeances, readStored, normalizeSession, normalizeEx, normalizeContext, normalizeHistory, summarizeHistory, clamp, uid, CHEERS } from './public/shared.js';
+import { cleanRecurrence, cleanAgendaMeta, validDay, calendarIcsEvents } from './public/agenda.js';
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
+import { interpretAgenda } from './server/agenda.js';
 import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, extractJson, DEFAULT_MODEL as AI_MODEL } from './server/ai.js';
 import { cleanOps } from './public/sessionedit.js';
 import { estimateLevel } from './public/estimate.js';
@@ -25,7 +27,7 @@ import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES, b64u } from './server/push.js';
 import { buildIcs } from './public/ics.js';
 
-const APP_VERSION = '8.31.0';
+const APP_VERSION = '8.32.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -34,7 +36,7 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/planning.js', '/views-planning.js', '/live.js', '/sports.js', '/views-sports.js', '/story.js', '/views-story.js', '/views-community.js', '/demo.js', '/catgen.js', '/gym.js', '/routines.js', '/views-routines.js', '/views-gym.js', '/library-more.js', '/player.js',
+const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/agenda.js', '/experience.js', '/views-agenda.js', '/views-experience.js', '/planning.js', '/views-planning.js', '/live.js', '/sports.js', '/views-sports.js', '/story.js', '/views-story.js', '/views-community.js', '/demo.js', '/catgen.js', '/gym.js', '/routines.js', '/views-routines.js', '/views-gym.js', '/library-more.js', '/player.js',
   '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
   '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/badge-96.png', '/robots.txt']);
 
@@ -487,6 +489,14 @@ async function routeAuthed(request, env, url, auth, secure) {
 
   // Signalements de bugs
   if (p === '/api/bugs' && m === 'POST') return bugCreate(request, env, u);
+  if (p === '/api/ai/agenda' && m === 'POST') {
+    const b = await readJson(request, 3000), message = str(b?.text, 600);
+    if (message.length < 3) return fail('Décris ton activité ou ton planning.');
+    if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Quota de demandes atteint : le formulaire reste disponible.', 429);
+    const rows = (await db(env, "SELECT id FROM user_items WHERE user_id=? AND collection='activity' AND deleted=0", u.id).all()).results || [];
+    try { const draft = await interpretAgenda(env, { message, kind: b?.kind === 'planning' ? 'planning' : 'journal', today: validDay(b?.today) ? b.today : new Date().toISOString().slice(0,10), allowed: [...Object.keys(ACTIVITIES), ...rows.map((x) => x.id)] }); return json({ok:true,draft}); }
+    catch (e) { return fail(e.status ? e.message : 'L’assistant est indisponible. Le formulaire reste utilisable.', e.status || 503); }
+  }
   if (p === '/api/ai/draft' && m === 'POST') return aiDraftRoute(request, env, u);
   if (p === '/api/ai/chat' && m === 'POST') return aiChatRoute(request, env, u);
   if (p === '/api/ai/session-edit' && m === 'POST') {
@@ -878,6 +888,7 @@ function cleanSettings(o) {
   if ('soundStyle' in o) out.soundStyle = ['bip', 'cloche', 'bois', 'doux'].includes(o.soundStyle) ? o.soundStyle : 'bip';
   if ('notifSound' in o) out.notifSound = ['aucun', 'bip', 'cloche', 'bois', 'doux'].includes(o.notifSound) ? o.notifSound : 'doux';
   if ('volume' in o) out.volume = clamp(o.volume, 0, 100, 60);
+  if ('interfaceMode' in o) out.interfaceMode = o.interfaceMode === 'advanced' ? 'advanced' : 'simple';
   if ('lang' in o) out.lang = ['fr', 'en'].includes(o.lang) ? o.lang : 'fr';
   if ('defaultRest' in o) out.defaultRest = clamp(o.defaultRest, 0, 600, 60);
   if ('defaultMinutes' in o) out.defaultMinutes = clamp(o.defaultMinutes, 5, 240, 30);
@@ -896,6 +907,7 @@ async function settingsPost(request, env, u) {
   const row = await db(env, 'SELECT settings_json FROM user_data WHERE user_id=?', u.id).first();
   const stored = cleanSettings(safeParse(row?.settings_json || '{}') || {});
   const merged = { ...incoming };
+  if (!('interfaceMode' in incoming) && stored.interfaceMode) merged.interfaceMode = stored.interfaceMode;
   for (const k of LEGACY_KEYS) if (!(k in merged) && k in stored) merged[k] = stored[k];
   // Niveau : les anciens maxima (repris dans les performances V2) ne sont jamais effacés par un client qui ne les envoie plus.
   if (merged.level) merged.level = { boulderMax: merged.level.boulderMax || stored.level?.boulderMax || '', routeMax: merged.level.routeMax || stored.level?.routeMax || '', years: merged.level.years };
@@ -913,9 +925,9 @@ const rowToEvent = (r) => ({ id: r.id, date: r.event_date, sessionId: r.session_
  * important) | test | rest, durée, sport, intention, lieu, légère, note. Rien d'autre n'est gardé. */
 function cleanEventMeta(m) {
   if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
-  const out = {}, idOk = (v) => /^[\w:.-]{1,80}$/.test(String(v || ''));
+  const out = cleanAgendaMeta(m), idOk = (v) => /^[\w:.-]{1,80}$/.test(String(v || ''));
   if (['auto', 'race', 'test', 'rest'].includes(m.kind)) out.kind = m.kind;
-  const mins = Number(m.minutes); if (Number.isFinite(mins) && mins >= 5 && mins <= 300) out.minutes = Math.round(mins);
+  const mins = Number(m.minutes); if (Number.isFinite(mins) && mins >= 1 && mins <= 1440) out.minutes = Math.round(mins);
   if (idOk(m.activityId)) out.activityId = String(m.activityId);
   if (idOk(m.envId)) out.envId = String(m.envId);
   if (/^[a-z_]{1,30}$/.test(String(m.intent || ''))) out.intent = String(m.intent);
@@ -934,18 +946,18 @@ async function calendarGet(url, env, u) {
 }
 async function calendarPost(request, env, u) {
   const b = await readJson(request, 10000);
-  if (!b || !isDate(b.date)) return fail('Date invalide.');
+  if (!b || !validDay(b.date)) return fail('Date invalide.');
   const id = ID_RE.test(b.id || '') ? b.id : uid();
-  let rec = null;
-  if (b.recurrence && b.recurrence.freq === 'weekly') rec = { freq: 'weekly', until: isDate(b.recurrence.until) ? b.recurrence.until : null };
+  const rec = cleanRecurrence(b.recurrence);
+  if (rec?.until && rec.until < b.date) return fail('La fin précède le début de la récurrence.');
   const count = await db(env, 'SELECT COUNT(*) c FROM calendar_events WHERE user_id=?', u.id).first();
   if (Number(count?.c) > 3000) return fail('Trop d’événements.', 413);
   const now = Date.now(), time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.time || '')) ? b.time : '', meta = cleanEventMeta(b.meta);
   const r = await db(env, `INSERT INTO calendar_events(id,user_id,event_date,event_time,session_id,title,completed,recurrence_json,meta_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET event_date=excluded.event_date,event_time=excluded.event_time,session_id=excluded.session_id,title=excluded.title,completed=excluded.completed,recurrence_json=excluded.recurrence_json,meta_json=excluded.meta_json,updated_at=excluded.updated_at
-    WHERE calendar_events.user_id=excluded.user_id`,
-    id, u.id, b.date, time, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, meta ? JSON.stringify(meta) : '', now, now).run();
-  if (!r.meta || r.meta.changes === 0) return fail('Identifiant déjà utilisé.', 409);
+    WHERE calendar_events.user_id=excluded.user_id AND (json_extract(NULLIF(calendar_events.meta_json,''),'$.version') IS NULL OR json_extract(NULLIF(calendar_events.meta_json,''),'$.version')<=?)`,
+    id, u.id, b.date, time, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.title, 120), b.completed ? 1 : 0, rec ? JSON.stringify(rec) : null, meta ? JSON.stringify(meta) : '', now, now, meta?.version || now).run();
+  if (!r.meta || r.meta.changes === 0) return fail('Événement modifié sur un autre appareil ou identifiant déjà utilisé. Ton action doit être revue.', 409);
   return json({ ok: true, event: { id, date: b.date, time, sessionId: b.sessionId || null, title: str(b.title, 120), completed: !!b.completed, recurrence: rec, meta } });
 }
 
@@ -980,11 +992,9 @@ async function icalFeed(request, env, url) {
   const row = await db(env, 'SELECT user_id FROM ical_feeds WHERE token_hash=?', await sha256hex(m[1])).first();
   if (!row) return new Response('Lien d’agenda inconnu ou remplacé.', { status: 404, headers: SECURITY_HEADERS });
   const now = Date.now(), from = new Date(now - 30 * 86400000).toISOString().slice(0, 10), out = [];
-  const evs = (await db(env, 'SELECT id,event_date,event_time,session_id,title,recurrence_json,meta_json FROM calendar_events WHERE user_id=? AND (event_date>=? OR recurrence_json IS NOT NULL) ORDER BY event_date LIMIT 1500', row.user_id, from).all()).results || [];
-  for (const r of evs) {
-    const e = rowToEvent(r), race = e.meta?.kind === 'race';
-    out.push({ uid: 'ev-' + e.id, title: `${race ? '🏁 ' : '🏋️ '}${e.title || (race ? 'Événement' : 'Séance')}`, date: e.date, time: e.time || '', minutes: e.meta?.minutes || 60, allDay: race && !e.time, weekly: e.recurrence?.freq === 'weekly', until: e.recurrence?.until || '', desc: e.meta?.note || '' });
-  }
+  const evs = (await db(env, 'SELECT id,event_date,event_time,session_id,title,completed,recurrence_json,meta_json FROM calendar_events WHERE user_id=? ORDER BY event_date LIMIT 3000', row.user_id).all()).results || [];
+  // Les anciennes exceptions doivent toujours exclure leur occurrence dans une règle encore active.
+  out.push(...calendarIcsEvents(evs.map(rowToEvent).filter((e) => e.date >= from || e.recurrence || e.meta?.seriesId)));
   const progs = (await db(env, "SELECT id,data_json FROM user_items WHERE user_id=? AND collection='program' AND deleted=0", row.user_id).all()).results || [];
   for (const r of progs) {
     const p = safeParse(r.data_json); if (p?.status !== 'active' || !Array.isArray(p.sessions)) continue;
@@ -1006,6 +1016,8 @@ function cleanHistoryData(d) {
     rpe: clamp(d.rpe, 1, 5, 0), focus: str(d.focus, 20), note: str(d.note, 600), activity: /^[\w:.-]{1,80}$/.test(String(d.activity || '')) ? String(d.activity) : '',
     aborted: !!d.aborted, activeSeconds: clamp(d.activeSeconds, 0, 86400, 0), pausedSeconds: clamp(d.pausedSeconds, 0, 86400, 0), plannedMin: clamp(d.plannedMin, 0, 600, 0),
     context: normalizeContext(d.context),
+    ...(d.quickLog && typeof d.quickLog === 'object' ? { quickLog: { durationKnown: d.quickLog.durationKnown === true, performance: str(d.quickLog.performance, 100), order: ['before', 'after'].includes(d.quickLog.order) ? d.quickLog.order : 'main' } } : {}),
+    ...(d.agenda && ID_RE.test(d.agenda.eventId || '') && validDay(d.agenda.occurrenceDate) ? { agenda: { eventId: d.agenda.eventId, occurrenceDate: d.agenda.occurrenceDate, planned: { date: validDay(d.agenda.planned?.date) ? d.agenda.planned.date : d.agenda.occurrenceDate, title: str(d.agenda.planned?.title, 120), time: str(d.agenda.planned?.time, 5) } } } : {}),
     ...(/^[a-z]{2,12}$/.test(String(d.gymDay || '')) ? { gymDay: String(d.gymDay) } : {}),
     questionnaire: q ? {
       felt: (Array.isArray(q.felt) ? q.felt : []).map(String).filter((m) => MUSCLE_RE.test(m)).slice(0, 12), hardest: str(q.hardest, 80), easiest: str(q.easiest, 80),

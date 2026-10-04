@@ -17,9 +17,9 @@ import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
 import { toast, tz, $ } from './ui.js';
 
-export const APP_VERSION = '8.31.0';
+export const APP_VERSION = '8.32.0';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
-export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr', notifSound: 'doux', redMode: false };
+export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr', notifSound: 'doux', redMode: false, interfaceMode: 'simple' };
 export const S = {
   user: null, tab: 'home', sub: { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }, param: '',
   settings: { ...DEFAULT_SETTINGS }, seances: { items: [], tomb: {} }, seancesDirty: false, seancesVer: 0,
@@ -93,6 +93,19 @@ export async function loadLocal() {
     for (const it of p.dirtyItems || []) { const k = itemKey(it.c, it.id), cur = S.items.get(k); if (!cur || it.u >= cur.u) { S.items.set(k, it); S.dirtyItems.add(k); } }
     if (p.seances) { S.seances = mergeSeances(S.seances, { items: p.seances.items.map(normalizeSession), tomb: p.seances.tomb || {} }); S.seancesDirty = true; }
   }
+  // Le cache complet peut être plus ancien de 250 ms que la file synchrone.
+  // Rejouer les intentions locales avant tout affichage, sans les renvoyer ni créer de nouvelle opération.
+  const historyById = new Map(S.history.map((x) => [x.id, x]));
+  const eventsById = new Map(S.events.map((x) => [x.id, x]));
+  for (const op of [...S.failed, ...S.outbox]) {
+    if (op.method === 'POST' && op.path === '/api/history' && op.body?.id) { const h = normalizeHistory(op.body); if (h) historyById.set(h.id, h); }
+    if (op.method === 'DELETE' && op.path.startsWith('/api/history/')) historyById.delete(decodeURIComponent(op.path.slice('/api/history/'.length)));
+    if (op.method === 'POST' && op.path === '/api/calendar' && op.body?.id) eventsById.set(op.body.id, op.body);
+    if (op.method === 'DELETE' && op.path.startsWith('/api/calendar/')) eventsById.delete(decodeURIComponent(op.path.slice('/api/calendar/'.length)));
+    if (op.method === 'POST' && op.path === '/api/settings' && op.body?.settings) S.settings = { ...S.settings, ...op.body.settings };
+  }
+  S.history = [...historyById.values()].sort((a,b) => b.startedAt-a.startedAt);
+  S.events = [...eventsById.values()];
   S.loaded = true; bump();
   return !!d;
 }
@@ -244,7 +257,7 @@ async function syncSeances() {
 export function addHistory(entry) { S.history.unshift(entry); S.history.sort((a, b) => b.startedAt - a.startedAt); queue('POST', '/api/history', entry); }
 export function updateHistory(entry) { const i = S.history.findIndex((x) => x.id === entry.id); if (i >= 0) S.history[i] = entry; queue('POST', '/api/history', entry); }
 export function deleteHistory(id) { S.history = S.history.filter((x) => x.id !== id); queue('DELETE', `/api/history/${encodeURIComponent(id)}`); }
-export function saveEvent(ev) { const i = S.events.findIndex((x) => x.id === ev.id); if (i >= 0) S.events[i] = ev; else S.events.push(ev); queue('POST', '/api/calendar', ev); }
+export function saveEvent(ev) { const previous = S.events.find((e) => e.id === ev.id); ev = { ...ev, meta: { ...ev.meta, version: Math.max(Date.now(), (previous?.meta?.version || 0) + 1) } }; const i = S.events.findIndex((x) => x.id === ev.id); if (i >= 0) S.events[i] = ev; else S.events.push(ev); queue('POST', '/api/calendar', ev); }
 export function deleteEvent(id) { S.events = S.events.filter((x) => x.id !== id); queue('DELETE', `/api/calendar/${encodeURIComponent(id)}`); }
 export function saveSettings() { persist(); queue('POST', '/api/settings', { settings: S.settings }, { coalesce: true }); }
 const pendingBodies = (path, method = 'POST') => S.outbox.filter((o) => o.method === method && o.path === path).map((o) => o.body);

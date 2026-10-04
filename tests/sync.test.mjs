@@ -118,5 +118,18 @@ await ok('séance modifiée hors ligne puis réouverture : synchronisée', async
   assert.ok(r.data.items.some((s) => s.id === 'se1'));
 });
 
+await ok('réouverture immédiate avant écriture du cache : historique, calendrier et mode restaurés depuis la file', async () => {
+  navigator.onLine = false; net.mode = 'down';
+  const before = store.get('sea:data:' + S.user.id);
+  St.addHistory(entry('instant'));
+  St.saveEvent({id:'instant-event',date:'2026-10-04',title:'Activité'});
+  S.settings.interfaceMode='advanced';St.saveSettings();
+  if (before === undefined) store.delete('sea:data:' + S.user.id); else store.set('sea:data:' + S.user.id,before);
+  await restart();
+  assert.ok(S.history.some((h)=>h.id==='instant'));
+  assert.ok(S.events.some((e)=>e.id==='instant-event'));
+  assert.equal(S.settings.interfaceMode,'advanced');
+  St.deleteHistory('instant');St.deleteEvent('instant-event');
+});
 console.log(`\n${n} tests de synchronisation OK`);
 process.exit(0);

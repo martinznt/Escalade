@@ -40,6 +40,7 @@ const notAdmin = () => h`<div class="card"><p class="small">Réservé aux admini
 export function vStudio() {
   if (!S.user?.isAdmin) return notAdmin();
   const st = ST(); if (!st.sets && !st.err) setTimeout(loadSets, 0);
+  const list = (st.sets || []).filter((c) => !st.query || `${c.title} ${c.author || ''} ${SOURCE[c.source] || ''}`.toLocaleLowerCase().includes(st.query.toLocaleLowerCase()));
   return h`<div class="card acc-b"><h3>🧪 Studio</h3><p class="small">Chaque changement pour tout le monde devient un lot : <b>brouillon</b> (invisible pour les membres) → <b>vérifications</b> → <b>publication</b> avec ta confirmation → <b>retour arrière</b> possible. Tout est versionné et noté dans le journal.</p>
       ${menuList([
         ['studioNew', '', '＋', 'Nouveau brouillon', 'Question fréquente, annonce, texte de l’app ou style'],
@@ -50,8 +51,9 @@ export function vStudio() {
         ...(canRole('technical') ? [['setSub', 'maint', '🛠️', 'Maintenance', 'Signalements regroupés et pistes de l’assistant'], ['setSub', 'code', '💻', 'Propositions de code', 'Diff, impact, validation — jamais de déploiement automatique']] : []),
       ])}<p class="tiny muted">Tes rôles : ${(S.user.roles || ['super']).map((r) => ROLE_L[r]).join(', ')}.</p></div>
     <div class="card"><div class="row between"><h3>Lots</h3><button class="btn sm" data-act="studioReload" aria-label="Actualiser">↻</button></div>
+      <form data-submit="studioFind" class="row"><label class="grow">Rechercher un lot<input name="query" maxlength="120" value="${st.query || ''}" placeholder="Titre, auteur ou origine"></label><button class="btn" type="submit">Rechercher</button></form>
       <div class="chips">${[['draft', 'Brouillons'], ['published', 'Publiés'], ['rolled_back', 'Annulés'], ['all', 'Tous']].map(([k, l]) => chip(st.filter === k, l, `data-act="studioFilter" data-id="${k}"`))}</div>
-      ${st.err ? h`<p class="err small">${st.err}</p>` : !st.sets ? skeleton(2) : st.sets.length ? h`<div class="setmenu">${st.sets.map((c) => h`<button class="setrow" data-act="studioOpen" data-id="${c.id}"><span class="sic">${STATUS[c.status]?.[0] || '•'}</span><span class="grow"><b>${c.title}</b><small>${STATUS[c.status]?.[1]} · ${SOURCE[c.source] || c.source} · ${c.count} modification(s) · ${c.author || '—'} · ${relDate(c.updatedAt)}${c.lastCheck === true ? ' · ✓ vérifié' : c.lastCheck === false ? ' · ✗ vérifications à revoir' : ''}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">Aucun lot ici.</p>`}</div>`;
+      ${st.err ? h`<p class="err small">${st.err}</p>` : !st.sets ? skeleton(2) : list.length ? h`<div class="setmenu">${list.map((c) => h`<button class="setrow" data-act="studioOpen" data-id="${c.id}"><span class="sic">${STATUS[c.status]?.[0] || '•'}</span><span class="grow"><b>${c.title}</b><small>${STATUS[c.status]?.[1]} · ${SOURCE[c.source] || c.source} · ${c.count} modification(s) · ${c.author || '—'} · ${relDate(c.updatedAt)}${c.lastCheck === true ? ' · ✓ vérifié' : c.lastCheck === false ? ' · ✗ vérifications à revoir' : ''}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">Aucun lot ici.</p>`}</div>`;
 }
 ACT.studioReload = () => { ST().sets = null; ST().err = ''; loadSets(); };
 ACT.studioFilter = (el) => { ST().filter = el.dataset.id; ACT.studioReload(); };
@@ -252,7 +254,7 @@ export function vCodeItem() {
       <details class="how mini"><summary>Voir le diff</summary><pre class="txt">${it.diff}</pre></details>
       ${it.note ? h`<p class="small">Note de validation : ${it.note}</p>` : ''}
       <div class="row wrapf"><a class="btn sm" href="/api/admin/code/${it.id}.patch" download>⬇ Télécharger le .patch</a>${it.status === 'draft' ? h`<button class="btn sm pri" data-act="codeReview" data-d="approve">✅ Valider</button><button class="btn sm ghost danger" data-act="codeReview" data-d="reject">Refuser</button>` : ''}</div>
-      ${it.prUrl ? h`<div class="card flat ok-b stack"><b class="small">🔀 Pull Request ouverte sur GitHub</b><a class="btn sm pri" href="${it.prUrl}" target="_blank" rel="noopener">Voir la Pull Request ↗</a><p class="tiny muted">Les tests du dépôt tournent dessus. Fusionne-la sur GitHub quand tout est vert : le site sera alors redéployé par ton hébergement, pas par l’app.</p></div>`
+      ${it.prUrl ? h`<div class="card flat ok-b stack"><b class="small">🔀 Pull Request ouverte sur GitHub</b><a class="btn sm pri" href="${it.prUrl}" target="_blank" rel="noopener">Voir la Pull Request ↗</a><p class="tiny muted">Brouillon : validation automatisée en attente. Vérifie la CI et l’aperçu, puis rends-la prête et fusionne-la sur GitHub quand tout est vert : le site sera alors redéployé par ton hébergement, pas par l’app.</p></div>`
         : it.status === 'approved' ? (it.exact ? (it.github ? h`<button class="btn pri" data-act="codePr">🔀 Créer la Pull Request sur GitHub</button><p class="tiny muted">Une branche « assistant/… » est créée avec ces remplacements, puis une Pull Request. Rien n’est fusionné ni déployé.</p>`
           : h`<p class="tiny warn-t">GitHub n’est pas relié : ajoute au Worker les secrets GITHUB_TOKEN (jeton avec les droits « contents » et « pull requests » sur ton dépôt) et GITHUB_REPO (propriétaire/dépôt), dans Cloudflare › ton Worker › Settings › Variables and Secrets. En attendant : télécharge le .patch.</p>`)
           : h`<p class="tiny muted">Proposition écrite à la main (diff) : applique le .patch toi-même (git), les tests tournent sur ta Pull Request.</p>`) : ''}
@@ -285,3 +287,5 @@ ACT.verRestore = async (el) => {
   if (!(await ask(`Préparer un brouillon qui rétablit la version ${el.dataset.v} ?`, { ok: 'Préparer', detail: 'Rien n’est publié : tu vérifies puis tu publies depuis le Studio.' }))) return;
   try { const r = await api('POST', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}/restore`, { version: Number(el.dataset.v) }); closeSheet(); ST().sets = null; go('settings', 'studioSet', r.id); } catch (e) { toast(e.message, 4000, 'bad'); }
 };
+
+SUBMIT.studioFind = (form) => { ST().query = String(new FormData(form).get('query') || '').trim().slice(0,120); render(); };

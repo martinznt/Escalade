@@ -1,3 +1,6 @@
+import { interfaceMode } from './experience.js';
+const advancedUI = () => interfaceMode(S.settings) === 'advanced';
+import { agendaEvents, occurrenceChange } from './agenda.js';
 // player.js — mode séance (téléphone) : exercice courant, séries, chronos, repos, pause / reprise, passage,
 // abandon, fin, puis questionnaire adaptatif très court et enregistrement.
 //
@@ -61,7 +64,7 @@ function initInputs(keepLoad) {
   if (keepLoad && p.nextAdj) { p.load = p.nextAdj.load; p.reps = p.nextAdj.reps; p.secs = p.nextAdj.secs; }
   p.nextAdj = null;
 }
-export function startPlayer(session, { eventId = null, fromGenerator = false, program = null } = {}) {
+export function startPlayer(session, { eventId = null, eventDate = null, fromGenerator = false, program = null } = {}) {
   const s = normalizeSession(session);
   if (!s.exercises.length) { toast('Cette séance est vide : ajoute au moins un exercice.'); return; }
   // Séance faite à la main sans échauffement : on en ajoute un court (réglable dans Paramètres, « Passer » à tout moment).
@@ -74,7 +77,7 @@ export function startPlayer(session, { eventId = null, fromGenerator = false, pr
   const fw = withFingerWarm(s.exercises, byId);
   if (fw.added) { s.exercises = fw.exercises; setTimeout(() => toast(`🖐️ Échauffement des doigts ajouté avant « ${fw.before} » (passe-le si tu es déjà chaud).`, 4500), 400); }
   S.player = {
-    s, eventId, fromGenerator, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pauseStart: 0, pausedMs: 0,
+    s, eventId, eventDate, fromGenerator, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pauseStart: 0, pausedMs: 0,
     workStart: 0, workPausedMs: 0, restStart: 0, restMs: 0, remaining: 0, lastBeep: 0, swaps: [...(fromGenerator ? S.gen.swaps || [] : [])],
     log: s.exercises.map((e) => ({ name: e.name, libId: e.libId, group: e.group, intensity: e.intensity, risk: e.risk, muscles: e.muscles, caps: e.caps, prim: e.prim, sec: e.sec, isNew: e.isNew, sets: [] })),
     quiz: { felt: [], hardest: '', easiest: '', difficulty: 0, comment: '', likes: {}, answers: {} }, useBase: !!S.settings.autoBase, prs: [], warmAdded, hr: { sum: 0, n: 0, max: 0 }, program,
@@ -221,13 +224,14 @@ function vQuiz(p) {
     ${p.prs.map((x) => h`<div class="card acc-b">🏆 Nouveau record : <b>${x}</b></div>`)}
     ${(() => { const g = goalsServed(done, c); return g.length ? h`<div class="card ok-b small">🎯 Cette séance a travaillé ce qui compte pour : <b>${g.join(', ')}</b></div>` : ''; })()}
     ${sets ? h`<div class="card"><h3>Questionnaire rapide</h3><p class="tiny muted">Tes réponses affinent ton profil, tes préférences et les prochaines séances. Tout est facultatif.</p>
+      <b class="small">Difficulté globale</b><div class="chips">${[[1, '😌 Facile'], [2, '🙂 Bien'], [3, '😅 Costaud'], [4, '🥵 Dur'], [5, '💀 Très dur']].map(([v, l]) => h`<button type="button" class="chip ${q.difficulty === v ? 'on' : ''}" data-act="qDiff" data-v="${v}">${l}</button>`)}</div>
+      <details class="how" ${advancedUI() ? 'open' : ''}><summary>Plus de détails sur ma séance</summary>
       ${muscles.length ? h`<b class="small">Quels muscles as-tu le plus sentis ?</b><div class="chips">${muscles.map((m) => h`<button type="button" class="chip ${q.felt.includes(m) ? 'on' : ''}" data-act="qFelt" data-v="${m}">${MUSCLES[m]?.label || m}</button>`)}</div>` : ''}
       ${done.length > 1 ? h`<b class="small">Exercice le plus difficile ?</b><div class="chips">${done.map((l) => h`<button type="button" class="chip ${q.hardest === l.name ? 'on' : ''}" data-act="qPick" data-k="hardest" data-v="${l.name}">${l.name}</button>`)}</div>
         <b class="small">Exercice le plus facile ?</b><div class="chips">${done.map((l) => h`<button type="button" class="chip ${q.easiest === l.name ? 'on' : ''}" data-act="qPick" data-k="easiest" data-v="${l.name}">${l.name}</button>`)}</div>` : ''}
-      <b class="small">Difficulté globale</b><div class="chips">${[[1, '😌 Facile'], [2, '🙂 Bien'], [3, '😅 Costaud'], [4, '🥵 Dur'], [5, '💀 Très dur']].map(([v, l]) => h`<button type="button" class="chip ${q.difficulty === v ? 'on' : ''}" data-act="qDiff" data-v="${v}">${l}</button>`)}</div>
       ${discoveries.map((l) => h`<b class="small">Nouveau pour toi : as-tu aimé « ${l.name} » ?</b><div class="chips">${[['aime', '👍 J’aime'], ['neutre', '😐 Neutre'], ['evite', '👎 À éviter']].map(([v, lab]) => h`<button type="button" class="chip ${q.likes[l.name] === v ? 'on' : ''}" data-act="qLike" data-n="${l.name}" data-v="${v}">${lab}</button>`)}</div>`)}
       ${fingers ? h`<b class="small">Tes doigts après la séance ?</b><div class="chips">${['Rien à signaler', 'Fatigués', 'Gêne ou douleur'].map((v) => h`<button type="button" class="chip ${q.answers.doigts === v ? 'on' : ''}" data-act="qAns" data-k="doigts" data-v="${v}">${v}</button>`)}</div>${q.answers.doigts === 'Gêne ou douleur' ? h`<p class="tiny warn-t">Noté. Le générateur évitera le travail intense des doigts dans les prochains jours. Si une douleur persiste, demande l’avis d’un professionnel de santé.</p>` : ''}` : ''}
-      <label><b class="small">Commentaire (facultatif)</b><textarea data-input="qComment" rows="3" maxlength="600" placeholder="Sensations, réussite, difficulté…">${q.comment}</textarea></label>
+      </details><label><b class="small">Commentaire (facultatif)</b><textarea data-input="qComment" rows="3" maxlength="600" placeholder="Sensations, réussite, difficulté…">${q.comment}</textarea></label>
       ${stored ? h`<label class="chk"><input type="checkbox" data-change="qBase" ${p.useBase ? 'checked' : ''}> Utiliser mes valeurs réalisées comme nouvelle base de « ${stored.name} » <span class="tiny muted">(seulement quand elles sont supérieures ou égales à la prescription)</span></label>` : ''}
     </div>` : h`<p class="muted center">Aucune série réalisée : rien à enregistrer.</p>`}
     <button class="btn pri big" data-act="pSave" ${sets ? '' : 'disabled'}>💾 Enregistrer</button><button class="btn" data-act="pDiscard">Ne pas enregistrer</button></div>`;
@@ -402,10 +406,11 @@ function saveResult() {
     },
   };
   if (!entry.data.activity) entry.data.activity = entryActivity(entry, c) === 'autre' ? '' : entryActivity(entry, c);
+  if (p.eventId) { const day = p.eventDate || new Date(p.startedAt).toLocaleDateString('en-CA'); const ev = S.events.find((e) => e.id === p.eventId); if (ev) { const on = agendaEvents(S.events, day).find((e) => e.sourceId === ev.id); if (on) { entry.data.agenda = { eventId: ev.id, occurrenceDate: on.occurrenceDate, planned: on.planned }; saveEvent(occurrenceChange(ev, on.occurrenceDate, {date:on.on, completed:true,meta:{...on.meta,status:'done'}})); } } }
   addHistory(entry);
   // Préférences explicitement exprimées dans le questionnaire (aucune déduction silencieuse).
   for (const { name, value } of likes) if (value !== 'neutre') putItem('pref', 'q-' + exKey(name).replace(/[^\w-]/g, '_').slice(0, 60), { key: exKey(name), label: name, value, source: 'questionnaire', reason: `Réponse au questionnaire du ${new Date().toLocaleDateString('fr-FR')}` });
-  if (p.eventId) { const ev = S.events.find((e) => e.id === p.eventId); if (ev && !ev.recurrence) saveEvent({ ...ev, completed: true }); }
+
   // Boucle d'adaptation : ce que la séance change dans le profil, affiché explicitement.
   const capsAdded = {};
   for (const e of entry.data.exercises) for (const [k, w] of Object.entries(e.caps || {})) capsAdded[k] = (capsAdded[k] || 0) + w * e.sets.length;

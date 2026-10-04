@@ -1,3 +1,4 @@
+import { advancedUI } from './views-experience.js';
 // views-progress.js — Progrès : comparaisons personnelles, résumés, régularité, charge, historique, records,
 // timeline, journal, analyses descriptives et mode Lab. Toujours par rapport à soi-même, jamais aux autres.
 import { doneList } from './views-profile.js';
@@ -9,7 +10,7 @@ import { benchmarks, periodSummary, regularity, loadAnalysis, records, timeline,
 import { anatomySvg } from './anatomy.js';
 import { compressPhoto } from './views-climb.js';
 import { streakCard, badgesCard } from './views-motiv.js';
-import { composePage } from './layout.js';
+import { composePage, savedLayouts } from './layout.js';
 import { FEELS, sessionFromHistory } from './live.js';
 import { startPlayer } from './player.js';
 import { learnedCard } from './views-forme.js';
@@ -39,6 +40,7 @@ ACT.progSub = (el) => { if (el.dataset.id === 'journal' && !el.dataset.keep) S.j
 const pct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${x} %`);
 
 function vSummary() {
+  if (!advancedUI() && !S.lay && !savedLayouts().progress && ctx().history.length) return simpleProgress();
   const c = ctx(), days = S.benchDays || 30, b = benchmarks(c, days), per = S.sumKind || 'week', s = periodSummary(c, per), reg = regularity(c), load = loadAnalysis(c);
   if (!c.history.length) return h`<section class="card hero center"><div style="font-size:3rem">🌱</div><h2>Ta progression commence ici</h2><p>Fais ta première séance : tes chiffres, tes records et ta régularité apparaîtront ici.</p><button class="btn pri big" data-act="genOpen">🎯 Me proposer une séance</button></section>${storyCard()}`;
   const delta = (x) => (x == null ? '' : x > 0 ? h`<i class="up">▲ ${x} %</i>` : x < 0 ? h`<i class="down">▼ ${Math.abs(x)} %</i>` : h`<i>=</i>`);
@@ -87,17 +89,19 @@ function vHistory() {
 }
 ACT.histOpen = (el) => go('progress', 'history', el.dataset.id);
 const FEEL_E = Object.fromEntries(FEELS.map(([v, e]) => [v, e]));
-ACT.histRedo = (el) => { const e = S.history.find((x) => x.id === el.dataset.id); if (!e) return; startPlayer(sessionFromHistory(e, e.sessionId ? getSeance(e.sessionId) : null)); };
+ACT.histRedo = async(el) => { const e = S.history.find((x) => x.id === el.dataset.id); if (!e) return; if(e.data?.quickLog && !e.data.exercises?.length){const {openWizard}=await import('./views-climbplan.js');openWizard({sport:e.data.activity,minutes:e.durationSeconds ? e.durationSeconds/60 : S.settings.defaultMinutes,envId:e.data.context?.env || ''});return;}startPlayer(sessionFromHistory(e, e.sessionId ? getSeance(e.sessionId) : null)); };
 function vEntry(e) {
   const q = e.data?.questionnaire || {}, d = e.data || {};
   return h`<h2 style="margin:0">${e.sessionName}</h2>
-    <div class="card"><p class="small">${fmtDateTime(e.startedAt)} · durée ${fmtDur(e.durationSeconds || 0)}${d.activeSeconds ? ' · actif ' + fmtDur(d.activeSeconds) : ''}${d.pausedSeconds ? ' · pause ' + fmtDur(d.pausedSeconds) : ''}${d.plannedMin ? ' · prévu ' + d.plannedMin + ' min' : ''}</p>
+    <div class="card"><p class="small">${fmtDateTime(e.startedAt)} · ${d.quickLog?.durationKnown === false ? 'durée non renseignée' : 'durée '+fmtDur(e.durationSeconds || 0)}${d.activeSeconds ? ' · actif ' + fmtDur(d.activeSeconds) : ''}${d.pausedSeconds ? ' · pause ' + fmtDur(d.pausedSeconds) : ''}${d.plannedMin ? ' · prévu ' + d.plannedMin + ' min' : ''}</p>
+      ${d.quickLog?.performance ? h`<p class="small">Repère déclaré : ${d.quickLog.performance}</p>` : ''}${['before','after'].includes(d.quickLog?.order) ? h`<p class="small">${d.quickLog.order==='before'?'Avant':'Après'} la séance principale.</p>`:''}
+      ${d.agenda?.planned ? h`<p class="tiny muted">Prévu : ${d.agenda.planned.title} · ${d.agenda.planned.date}${d.agenda.planned.time?' · '+d.agenda.planned.time:''}</p>`:''}
       ${d.context?.envName ? h`<p class="small">Lieu : ${d.context.envName}</p>` : ''}${d.aborted ? h`<p class="small warn-t">Séance interrompue avant la fin.</p>` : ''}
       ${q.felt?.length ? h`<p class="small">Muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}</p>` : ''}${q.hardest ? h`<p class="small">Plus difficile : ${q.hardest}</p>` : ''}${q.easiest ? h`<p class="small">Plus facile : ${q.easiest}</p>` : ''}
       ${d.rpe ? h`<p class="small">Ressenti : ${d.rpe}/5</p>` : ''}${d.note ? h`<p class="small">📝 ${d.note}</p>` : ''}${(q.answers || []).map((a) => h`<p class="small">${a.q} : ${a.a}</p>`)}${(d.swaps || []).length ? h`<p class="small">Remplacements : ${d.swaps.map((s) => `${s.from} → ${s.to}`).join(', ')}</p>` : ''}</div>
     <div class="card">${(d.exercises || []).map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${(x.sets || []).map((s) => (s.seconds ? `${s.seconds} s` : `${s.reps}${s.load ? ' × ' + s.load + ' kg' : ''}`) + (s.feel ? ' ' + (FEEL_E[s.feel] || '') : '')).join(' · ')}</div>${x.note ? h`<div class="tiny">📝 ${x.note}</div>` : ''}</div></div>`)}</div>
     ${mediaCard(e)}
-    <div class="row wrapf"><button class="btn pri" data-act="histRedo" data-id="${e.id}">🔁 Refaire cette séance</button><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
+    <div class="row wrapf"><button class="btn pri" data-act="histRedo" data-id="${e.id}">${d.quickLog && !d.exercises?.length?'Préparer une séance similaire':'🔁 Refaire cette séance'}</button><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
 }
 /* Journal visuel : photos (réduites, synchronisées), liens vidéo, captures et notes liés à une séance. Privé au compte. */
 function mediaCard(e) {
@@ -191,3 +195,8 @@ ACT.labNew = () => openSheet(labForm(null), { wide: true });
 ACT.labEdit = (el) => { const l = item('lab', el.dataset.id); if (l) openSheet(labForm(l), { wide: true }); };
 SUBMIT.labSave = (f) => { const d = Object.fromEntries(new FormData(f)); putItem('lab', d.id || 'lab-' + uid().slice(0, 12), { title: d.title, hypothesis: d.hypothesis, criteria: d.criteria || '', startDate: d.startDate, weeks: Number(d.weeks) || 4, capId: d.capId, metricId: d.metricId, before: { value: d.before === '' ? null : Number(d.before), date: 0 }, after: { value: d.after === '' ? null : Number(d.after), date: 0 }, status: d.status, conclusion: d.conclusion }); closeSheet(); buzzOk(); toast('Expérience enregistrée'); render(); };
 ACT.labDel = async (el) => { if (await ask('Supprimer cette expérience ?', { danger: true, ok: 'Supprimer' })) { delItem('lab', el.dataset.id); render(); } };
+
+function simpleProgress() {
+ const c=ctx(), days=S.benchDays || 30, b=benchmarks(c,days), r=regularity(c), less=undertrained(c).items.slice(0,3);
+ return h`<section class="card"><h3>Ce qui change</h3><div class="chips">${[7,30,90].map((d) => chip(days===d, d+' jours', 'data-act="benchDays" data-id="'+d+'"'))}</div><p class="small">${r.text}</p>${b.capDiff.slice(0,4).map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.cur > x.prev ? 'Plus travaillé' : x.cur < x.prev ? 'Moins travaillé' : 'Stable'} · volume observé, pas une mesure de niveau</div></div></div>`)}${!b.capDiff.length ? h`<p class="muted small">Données insuffisantes pour comparer les capacités. Tes activités sont bien dans le journal.</p>` : ''}</section><details class="card"><summary>Ce qui mérite mon attention</summary>${less.map((x) => h`<p class="small">${x.text || x.label || x.capId}</p>`)}<p class="tiny muted">${loadAnalysis(c).text}</p></details><button class="btn" data-act="progSub" data-id="journal">Mon journal réel</button>`;
+}

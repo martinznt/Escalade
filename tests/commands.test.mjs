@@ -9,6 +9,11 @@ ok('« Fais une séance de 20 minutes pour les jambes »', () => {
   const c = parseCommand('Fais-moi une séance de 20 minutes pour les jambes.');
   assert.equal(c.type, 'generate'); assert.equal(c.minutes, 20); assert.equal(c.size, 'petite'); assert.equal(c.focus, 'jambes');
 });
+ok('Express : formulations courtes, pieds en bloc et séance légère sans verbe', () => {
+  const c=parseCommand('30 min tirage + gainage');assert.equal(c.type,'generate');assert.equal(c.minutes,30);assert.deepEqual(c.focuses,['tirage','gainage']);
+  const feet=parseCommand('1 h de bloc pour travailler les pieds');assert.equal(feet.type,'generate');assert.equal(feet.minutes,60);assert.equal(feet.activity,'climbing_boulder');assert.ok(feet.focuses.includes('dalle'));
+  assert.equal(parseCommand('séance légère').light,true);assert.equal(parseCommand('Ajoute 20 min de gainage').type,'addExercise');
+});
 ok('« Remplace les tractions »', () => {
   const c = parseCommand('Remplace les tractions.');
   assert.equal(c.type, 'swapExercise'); assert.equal(c.query, 'tractions');

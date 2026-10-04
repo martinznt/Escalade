@@ -141,6 +141,6 @@ export async function openPullRequest(o, fetchFn = fetch) {
     const next = applyEdits(b64dec(f.content || ''), list);
     await api(`/contents/${path.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', body: JSON.stringify({ message: `${o.title} (${path})`, content: b64enc(next), sha: f.sha, branch }) });
   }
-  const pr = await api('/pulls', { method: 'POST', body: JSON.stringify({ title: o.title, head: branch, base, body: o.body, maintainer_can_modify: true }) });
+  const pr = await api('/pulls', { method: 'POST', body: JSON.stringify({ title: o.title, head: branch, base, body: `${o.body || ''}\n\nValidation automatisée en attente : cette Pull Request est un brouillon. Vérifier la CI, le parcours navigateur et le diff avant de la rendre prête. Aucun déploiement automatique par l’application.`, draft: true, maintainer_can_modify: true }) });
   return { url: pr.html_url, number: pr.number, branch };
 }

@@ -38,6 +38,7 @@ addEventListener('error', (e) => { window.__seaErrs = [...window.__seaErrs, Stri
 addEventListener('unhandledrejection', (e) => { window.__seaErrs = [...window.__seaErrs, String(e.reason?.message || e.reason || 'promesse rejetée').slice(0, 160)].slice(-10); });
 import { setLang } from './i18n.js';
 
+import { advancedUI } from './views-experience.js';
 const TABS = [['home', '🏠', 'Accueil'], ['progress', '📈', 'Progrès'], ['library', '📚', 'Bibliothèque'], ['profile', '👤', 'Profil'], ['settings', '⚙️', 'Paramètres']];
 const VIEWS = { home: vHome, progress: vProgress, library: vLibrary, profile: vProfile, settings: vSettings };
 
@@ -56,6 +57,7 @@ function doRender() {
   const pl = pendingLink();
   if (!S.user) { app.innerHTML = (pub ? vPublicVisitor(decodeURIComponent(pub[1])) : pl && !S.authMode ? h`<main class="wrap">${vLanding(pl)}</main>` : vAuth()).s; return; }
   if (!S.loaded) { app.innerHTML = h`<main class="wrap">${skeleton(4)}</main>`.s; return; }
+  document.documentElement.dataset.interface = S.settings.interfaceMode === 'advanced' ? 'advanced' : 'simple';
   let body;
   try { body = pl ? vLanding(pl) : pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
   catch (e) {
@@ -66,8 +68,8 @@ function doRender() {
       <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
   }
   app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
-    <main class="wrap" id="main">${demoBar()}${bannerBar()}${returnBar()}${hintsBar()}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}${body}</main>
-    <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
+    <main class="wrap" id="main">${demoBar()}${bannerBar()}${returnBar()}${advancedUI() ? hintsBar() : ''}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}${body}</main>
+    <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${id === 'profile' && !advancedUI() ? 'Moi' : label}</span></button>`)}</nav>`.s;
 }
 /** Bandeau de l'équipe (ex. maintenance prévue) : affiché jusqu'à sa date de fin, ou jusqu'à « Compris ». */
 function bannerBar() {

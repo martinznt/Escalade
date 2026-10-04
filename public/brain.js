@@ -62,7 +62,7 @@ export function buildContext(raw = {}) {
   const unavailable = new Set(config.equipment?.unavailable || []);
   const defEnv = envs.find((e) => e.id === config.main?.envId) || envs.find((e) => e.isDefault) || envs[0] || null;
   const prefs = {};
-  for (const p of Object.values(get('pref'))) if (p.key) prefs[p.key] = p;
+  for (const p of Object.values(get('pref'))) if (p.key && (!prefs[p.key] || p._u >= prefs[p.key]._u)) prefs[p.key] = p;
   const capdecl = {};
   for (const d of Object.values(get('capdecl'))) if (d.capId) capdecl[d.capId] = d;
   const arr = (v) => (Array.isArray(v) ? v : []);
@@ -503,11 +503,11 @@ export function exerciseStats(ctx) {
   const get = (name) => { const k = exKey(name); if (!st.has(k)) st.set(k, { key: k, name, done: 0, swappedOut: 0, hardest: 0, easiest: 0, liked: 0, disliked: 0, last: 0 }); return st.get(k); };
   for (const h of ctx.history) {
     for (const ex of h.data?.exercises || []) if (doneSets(ex)) { const s = get(ex.name); s.done++; s.last = Math.max(s.last, h.startedAt); }
-    for (const sw of h.data?.swaps || []) if (sw.from) get(sw.from).swappedOut++;
+    for (const sw of h.data?.swaps || []) if (sw.from) { const s=get(sw.from); s.swappedOut++; s.last=Math.max(s.last,h.startedAt); }
     const q = h.data?.questionnaire || {};
     if (q.hardest) get(q.hardest).hardest++;
     if (q.easiest) get(q.easiest).easiest++;
-    for (const l of q.likes || []) { const s = get(l.name || l.key); if (l.value === 'aime') s.liked++; if (l.value === 'evite') s.disliked++; }
+    for (const l of q.likes || []) { const s = get(l.name || l.key); if (l.value === 'aime') s.liked++; if (l.value === 'evite') s.disliked++; s.last=Math.max(s.last,h.startedAt); }
   }
   for (const sw of ctx.swaps || []) if (sw.from) get(sw.from).swappedOut++;
   return st;
@@ -703,7 +703,10 @@ export function journal(ctx, limit = 80) {
   const out = [];
   for (const h of ctx.history) {
     const q = h.data?.questionnaire || {};
-    const bits = [`⏱ ${Math.round((h.durationSeconds || 0) / 60)} min`];
+    const quick = h.data?.quickLog;
+    const bits = [quick?.durationKnown === false ? 'Durée non renseignée' : `⏱ ${Math.round((h.durationSeconds || 0) / 60)} min`];
+    if (quick?.performance) bits.push(`Repère déclaré : ${quick.performance}`);
+    if (['before','after'].includes(quick?.order)) bits.push(quick.order === 'before' ? 'Avant la séance principale' : 'Après la séance principale');
     if (h.data?.rpe) bits.push(`😮‍💨 ${h.data.rpe}/5`);
     if (h.data?.aborted) bits.push('interrompue');
     const more = [q.hardest ? `Plus difficile : ${q.hardest}` : '', q.felt?.length ? `Muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}` : ''].filter(Boolean);
@@ -753,9 +756,9 @@ export function todayOptions(ctx, { todayEvents = [], minutes = null } = {}) {
   const last = ctx.history[0], hoursSince = last ? (ctx.now - last.startedAt) / HOUR : Infinity;
   const load = loadAnalysis(ctx), forgotten = forgottenGoals(ctx), under = undertrained(ctx), reg = regularity(ctx);
   const pref = Number(ctx.config.main?.durations?.[0]) || null;
-  const dur = minutes || pref || (ctx.history.length ? Math.max(10, Math.min(90, Math.round(median(ctx.history.slice(0, 8).map((h) => (h.durationSeconds || 0) / 60)) / 5) * 5)) : 30);
+  const dur = minutes || pref || (ctx.history.length ? Math.max(10, Math.min(90, Math.round(median(ctx.history.filter((h) => h.durationSeconds > 0).slice(0, 8).map((h) => h.durationSeconds / 60)) / 5) * 5)) : 30);
   const how = [`${ctx.history.length} séance(s) dans ton historique`, last ? `dernière séance il y a ${Math.round(hoursSince)} h (${last.sessionName})` : 'aucune séance enregistrée', reg.text];
-  for (const ev of (Array.isArray(todayEvents) ? todayEvents : []).filter((e) => e && typeof e === 'object' && !e.completed).slice(0, 2)) opts.push({ kind: 'event', id: 'event:' + ev.id, title: ev.title || 'Séance prévue', reason: 'C’est planifié aujourd’hui dans ton calendrier.', eventId: ev.id, sessionId: ev.sessionId || null, how: ['Événement du calendrier du jour'] });
+  for (const ev of (Array.isArray(todayEvents) ? todayEvents : []).filter((e) => e && typeof e === 'object' && !e.completed && !['missed','cancelled'].includes(e.meta?.status)).slice(0, 2)) opts.push({ kind: 'event', id: 'event:' + ev.id, title: ev.title || 'Séance prévue', reason: 'C’est planifié aujourd’hui dans ton calendrier.', eventId: ev.id, sessionId: ev.sessionId || null, how: ['Événement du calendrier du jour'] });
   if (hoursSince < 20 || load.signals.length >= 2) opts.push({ kind: 'rest', id: 'rest', title: 'Repos ou récupération légère', reason: hoursSince < 20 ? `Dernière séance il y a ${Math.round(hoursSince)} h : se reposer est une option tout aussi valable.` : 'Ta charge récente a augmenté : une journée légère est une option.', light: true, minutes: Math.min(dur, 20), how: [...how, ...load.signals] });
   const fg = forgotten[0];
   if (fg) opts.push({ kind: 'generate', id: 'goal:' + fg.goal.id, title: `Reprendre « ${fg.label} »`, reason: fg.days != null ? `Pas travaillé depuis ${fg.days} jours.` : 'Objectif configuré mais pas encore travaillé.', mode: 'goal', goalId: fg.goal.id, minutes: dur, how: [...how, `objectif actif : ${fg.label}`] });

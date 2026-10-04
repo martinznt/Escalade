@@ -1,3 +1,5 @@
+import { comparisonView } from './views-experience.js';
+import { sessionFromHistory } from './live.js';
 // views-climbplan.js — « Structurer ma séance d'escalade » : par objectif de fin de séance, ou partie par partie.
 import { h, raw, chip, openSheet, closeSheet, toast, ask, askText, seg } from './ui.js';
 import { S, ACT, CHG, INPUT, ctx, render, go, saveSeance, ls, putItem, itemsOf, api } from './state.js';
@@ -852,6 +854,7 @@ function vResult(final = false) {
   return h`<div class="card stack" id="cpresult"><h2 style="margin:0">${s.emoji} ${s.name}</h2>
     ${sp ? h`<div class="card flat acc-b"><b class="small">${AIMS[c.aimDone]?.[0] || '🎲'} Pourquoi cette surprise</b><ul class="clean tight small">${c.reasons.map((r) => h`<li>${r}</li>`)}</ul></div>` : ''}
     ${forYou()}
+    ${ctx().history.find((x) => x.data?.exercises?.length && x.data?.activity === s.activity) ? comparisonView(sessionFromHistory(ctx().history.find((x) => x.data?.exercises?.length && x.data?.activity === s.activity)), s) : ''}
     <p class="muted small">~${fmtMin(sessionMinutes(s))} · ${byPart.length} parties · ${help === 'guide' ? 'coche ce que tu veux dans chaque partie' : help === 'free' ? 'ajoute tes exercices dans chaque partie' : 'change le temps ou les exercices de chaque partie si tu veux'}</p>
     ${byPart.map(({ p, i, label, title, sub }) => { const ex = s.exercises.filter((e) => (p?.id && e.phase ? e.phase === p.id : e.part === label));
       return h`<div class="rpart"><div class="row"><b class="grow">${title}${sub ? h`<small class="tiny muted"> · ${sub}</small>` : ''}</b>${p ? h`<span class="unitbox"><input type="number" min="5" max="180" step="5" value="${p.minutes}" data-change="cpBMin" data-i="${i}" style="width:64px" aria-label="Durée de la partie"><em>min</em></span>` : ''}</div>

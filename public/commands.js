@@ -16,7 +16,7 @@ const FOCUS_WORDS = {
   abdos: ['abdos', 'abdominaux', 'ventre'], gainage: ['gainage', 'tronc', 'core'], doigts: ['doigt', 'doigts', 'reglette', 'reglettes', 'poutre'],
   avantbras: ['avant-bras', 'avant bras', 'avantbras'], mobilite: ['mobilite', 'etirement', 'etirements'], souplesse: ['souplesse', 'assouplissement'],
   cardio: ['cardio'], endurance: ['endurance', 'resistance', 'foncier'], vitesse: ['vitesse', 'sprint', 'fractionne'], explosivite: ['explosivite', 'detente', 'puissance', 'saut'],
-  equilibre: ['equilibre', 'proprioception'], dalle: ['dalle'], devers: ['devers'], technique: ['technique'],
+  equilibre: ['equilibre', 'proprioception'], dalle: ['dalle', 'pieds', 'placement des pieds'], devers: ['devers'], technique: ['technique'],
 };
 // Anciens objectifs escalade du générateur historique (compatibilité).
 const CLIMB_FOCUS = { jambes: 'jambes', devers: 'devers', dalle: 'dalle', doigts: 'reglette', endurance: 'resistance', vitesse: 'vitesse', explosivite: 'vitesse', equilibre: 'equilibre', gainage: 'equilibre' };
@@ -111,7 +111,7 @@ export function parseCommand(raw, now = new Date()) {
   // Générer une séance
   const wantsSession = /\b(seance|entrainement|workout|session|circuit)\b/.test(text);
   const verb = /\b(fais|fait|faire|genere|generer|cree|creer|propose|donne|prepare|construis|invente)\b/.test(text);
-  if ((wantsSession && (verb || minutes || acts.length || focuses.length)) || (verb && minutes) || (/\bj'ai\s+\d+\s*(?:min|minutes)/.test(text) && !found.some((f) => f.type === 'adaptDuration'))) {
+  if ((wantsSession && (verb || minutes || acts.length || focuses.length || light)) || (verb && minutes) || (!found.length && minutes && (acts.length || focuses.length)) || (/\bj'ai\s+\d+\s*(?:min|minutes)/.test(text) && !found.some((f) => f.type === 'adaptDuration'))) {
     const focus = focuses[0] || null;
     add({
       type: 'generate', minutes, size: sizeFromMinutes(minutes), focus: CLIMB_FOCUS[focus] || focus, focuses, activity: acts[0] || null, light,

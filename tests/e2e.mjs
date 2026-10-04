@@ -20,7 +20,7 @@ globalThis.fetch = (u, o) => String(u).startsWith('https://api.github.com/') ? P
 ]))) : realFetch(u, o);
 const srv = await startServer(env);
 const BASE = srv.base;
-const browser = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') && process.env.PW_EXEC ? { executablePath: process.env.PW_EXEC } : {});
+const browser = await chromium.launch(process.env.PW_EXEC ? { executablePath: process.env.PW_EXEC } : {});
 const errors = [];
 const watch = (page, who) => {
   page.on('pageerror', (e) => errors.push(`[${who}] pageerror: ${e.message}`));
@@ -38,7 +38,10 @@ async function poll(fn, ms = 12000, what = 'condition') { const t0 = Date.now();
 /** Deux validations de suite (mise en page) : la 2e boîte s'ouvre juste après la 1re. */
 const confirm2 = async (P) => { await P.click('#dialog.open [data-dlg="1"]'); await P.waitForFunction(() => /sûr|Vraiment/.test(document.querySelector('#dialog.open')?.textContent || '')); await P.click('#dialog.open [data-dlg="1"]'); await P.waitForSelector('#dialog:not(.open)', { state: 'attached' }); };
 const step = async (name, fn) => {
-  try { await fn(); n++; console.log('  ✓', name); }
+  try { await fn();
+    // Cette suite couvre les options avancées ; le parcours simple possède sa propre suite.
+    if (cur && !cur.isClosed() && cur.url().startsWith(BASE)) await cur.evaluate(async () => { const {S,saveSettings,render}=await import('/state.js'); if(S.user && S.loaded && S.settings.interfaceMode !== 'advanced') { S.settings.interfaceMode='advanced';saveSettings();render(); } });
+    n++; console.log('  ✓', name); }
   catch (e) { console.log('  ✗', name); if (cur) await cur.screenshot({ path: '/tmp/e2e-fail.png', fullPage: true }).catch(() => {}); throw e; }
 };
 // Choisir dans une liste : les longues listes passent par le sélecteur (recherche + catégories), comme un vrai utilisateur.
@@ -995,6 +998,7 @@ await step('admin sans code : réécrire un texte et envoyer une annonce ; l’a
   cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('home'); await B.waitForSelector('#main :text-is("Séance du jour")', { timeout: 10000 });
 });
 await step('Service Worker actif, puis passage hors ligne : l’application s’ouvre avec les données', async () => {
+  cur = A;
   await A.evaluate(() => navigator.serviceWorker.ready); await A.reload(); await A.waitForSelector('nav.tabs'); await A.waitForTimeout(600);
   await ctxA.setOffline(true); await A.reload(); await A.waitForSelector('nav.tabs', { timeout: 10000 });
   await a.tab('library'); await a.sub('libSub', 'seances'); assert.ok(await a.count('text=Tirage maison') > 0);
@@ -1059,7 +1063,7 @@ await step('mode invité : questionnaire en QCM, « finir plus tard », aucune d
   await G.goto(BASE); await G.waitForSelector('[data-act=guestStart]'); await g.click('[data-act=guestStart]');
   await G.waitForSelector('.setup'); await g.click('[data-act=setPick][data-q=acts][data-v=running]'); await g.click('[data-act=setupNext]:not([disabled])');
   await g.click('[data-act=setPick][data-q=level][data-v=nsp]'); await G.waitForSelector('text=séances par semaine');
-  await g.click('[data-act=setupLater]'); await G.waitForSelector('.quick');
+  await g.click('[data-act=setupLater]'); await G.waitForSelector('[data-act=expressOpen]');
   await G.waitForSelector('#tour .tour-bubble'); await g.click('#tour .tour-x'); await G.waitForSelector('#tour', { state: 'detached' });
   assert.equal(await g.count('.syncbadge.guest'), 1);
   assert.match(await g.text('main'), /profil n’est pas encore complet/);

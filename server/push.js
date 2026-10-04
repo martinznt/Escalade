@@ -1,3 +1,4 @@
+import { agendaEvents } from '../public/agenda.js';
 // server/push.js — rappels d'entraînement par notification (Web Push), sans service tiers ni clé à configurer.
 // - Les clés VAPID sont créées automatiquement au premier besoin et gardées dans D1 (la clé privée ne sort jamais du serveur).
 // - La notification est envoyée SANS contenu (pas de chiffrement nécessaire) : le service worker de l'appareil demande
@@ -133,12 +134,10 @@ export async function messageFor(env, endpoint, userId, tz, now = Date.now()) {
 /** Texte du rappel pour une personne : la séance prévue aujourd'hui (calendrier), sinon celle du programme, sinon un mot simple. */
 export async function reminderText(env, userId, tz = 'Europe/Paris', now = Date.now()) {
   const L = localNow(tz, now), today = L.ymd;
-  const evs = (await q(env, 'SELECT title,event_time,event_date,recurrence_json,meta_json FROM calendar_events WHERE user_id=? AND (event_date=? OR (recurrence_json IS NOT NULL AND event_date<=?)) LIMIT 50', userId, today, today).all().catch(() => ({ results: [] }))).results || [];
-  const wd = (d) => (new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7;
-  const todays = evs.filter((e) => { let rec = null, meta = null; try { rec = e.recurrence_json ? JSON.parse(e.recurrence_json) : null; meta = e.meta_json ? JSON.parse(e.meta_json) : null; } catch { /* rien */ }
-    if (meta?.kind === 'race' || meta?.kind === 'rest') return false;
-    return e.event_date === today || (rec?.freq === 'weekly' && wd(e.event_date) === wd(today) && (!rec.until || today <= rec.until)); }).sort((a, b) => String(a.event_time || '99').localeCompare(String(b.event_time || '99')));
-  if (todays.length) { const e = todays[0]; return { title: 'Séance prévue aujourd’hui 💪', body: `${String(e.title || 'Ta séance').slice(0, 80)}${e.event_time ? ` à ${e.event_time}` : ''}. On y va ?`, url: '/#/home/dash' }; }
+  const evs = (await q(env, "SELECT id,title,event_time,event_date,completed,recurrence_json,meta_json FROM calendar_events WHERE user_id=? AND (event_date=? OR (recurrence_json IS NOT NULL AND event_date<=?) OR json_extract(NULLIF(meta_json,''),'$.occurrenceDate')=?) LIMIT 3000", userId, today, today, today).all().catch(() => ({ results: [] }))).results || [];
+  const parsed = evs.map((e) => { let recurrence=null,meta=null; try { recurrence=e.recurrence_json ? JSON.parse(e.recurrence_json):null;meta=e.meta_json ? JSON.parse(e.meta_json):null; } catch {} return {id:e.id,date:e.event_date,title:e.title,time:e.event_time,completed:!!e.completed,recurrence,meta}; });
+  const todays = agendaEvents(parsed,today).filter((e) => !e.completed && !['cancelled','missed'].includes(e.meta?.status) && !['race','rest'].includes(e.meta?.kind));
+  if (todays.length) { const e = todays[0]; return { title: 'Séance prévue aujourd’hui 💪', body: `${String(e.title || 'Ta séance').slice(0, 80)}${e.time ? ` à ${e.time}` : ''}. On y va ?`, url: '/#/home/dash' }; }
   const rows = (await q(env, "SELECT data_json FROM user_items WHERE user_id=? AND collection='program' AND deleted=0", userId).all()).results || [];
   for (const r of rows) {
     let p; try { p = JSON.parse(r.data_json); } catch { continue; }

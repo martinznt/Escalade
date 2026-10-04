@@ -1,3 +1,4 @@
+import { agendaEvents } from './agenda.js';
 // planning.js — organiser ses semaines (sans DOM, testé) :
 //  · objectif daté : programme construit À REBOURS depuis la date (fondation → spécifique → affûtage, semaine légère
 //    toutes les 4 semaines), recalculé quand des séances sont manquées ou que les jours changent ;
@@ -125,19 +126,11 @@ export const inPause = (cfg, date) => { const p = pauseState(cfg, parseDay(date)
 
 /* ───────── Calendrier : événements étendus (répétitions chaque semaine) ───────── */
 export function eventsBetween(events = [], from, to) {
-  const out = [];
-  for (let t = parseDay(from); ymd(t) <= to; t = addDays(t, 1)) {
-    const date = ymd(t), wd = weekday(date);
-    for (const e of events) {
-      if (!e || typeof e !== 'object') continue;
-      const rec = e.recurrence?.freq === 'weekly' && e.date <= date && weekday(e.date) === wd && (!e.recurrence.until || date <= e.recurrence.until);
-      if (e.date === date || rec) out.push({ ...e, on: date });
-    }
-  }
-  return out;
+  return agendaEvents(events, from, to);
 }
 const isRace = (e) => e.meta?.kind === 'race';
 const isSession = (e) => !isRace(e) && e.meta?.kind !== 'rest';
+const activeSchedule = (e) => !['cancelled', 'missed'].includes(e.meta?.status);
 
 /* ───────── Pilote automatique ───────── */
 /**
@@ -149,7 +142,7 @@ const isSession = (e) => !isRace(e) && e.meta?.kind !== 'rest';
  */
 export function weekPlan(ctx, { from = ymd(ctx.now || Date.now()), slots = [], perWeek = 3, minutes = 45, activities = [], pause = {}, defaultTime = '18:00', lowForm = false, envFor = null } = {}) {
   const S = cleanSlots(slots), dates = Array.from({ length: 7 }, (_, k) => ymd(addDays(parseDay(from), k))), to = dates.at(-1), notes = [];
-  const evs = eventsBetween(ctx.events || [], from, to), races = evs.filter(isRace);
+  const evs = eventsBetween(ctx.events || [], from, to).filter(activeSchedule), races = evs.filter(isRace);
   const planned = new Set(evs.filter(isSession).map((e) => e.on));
   const prog = (ctx.programs || []).filter((p) => p.status === 'active').flatMap((p) => (p.sessions || []).filter((s) => s.date >= from && s.date <= to).map((s) => s.date));
   for (const d of prog) planned.add(d);
@@ -220,7 +213,7 @@ export function weekPlan(ctx, { from = ymd(ctx.now || Date.now()), slots = [], p
  * 3 jours de séances d'affilée. Retourne [{ kind, date, eventId, text, fix: { kind: 'move'|'time'|'delete', date?, time? }, fixText }].
  */
 export function conflicts(ctx, { now = ctx.now || Date.now(), days = 14, pause = {}, envs = [] } = {}) {
-  const from = ymd(now), to = ymd(addDays(parseDay(from), days - 1)), evs = eventsBetween(ctx.events || [], from, to), out = [];
+  const from = ymd(now), to = ymd(addDays(parseDay(from), days - 1)), evs = eventsBetween(ctx.events || [], from, to).filter(activeSchedule), out = [];
   const sess = evs.filter(isSession), races = evs.filter(isRace), byDay = new Map();
   for (const e of sess) (byDay.get(e.on) || byDay.set(e.on, []).get(e.on)).push(e);
   const busy = (d) => (byDay.get(d) || []).length > 0 || races.some((r) => r.on === d);
@@ -254,7 +247,7 @@ export function conflicts(ctx, { now = ctx.now || Date.now(), days = 14, pause =
 /** Séances prévues (non répétées) des 3 derniers jours sans séance faite ce jour-là ; avec le prochain jour libre. */
 export function missedEvents(ctx, now = ctx.now || Date.now(), { pause = {} } = {}) {
   const today = ymd(now), from = ymd(addDays(parseDay(today), -3)), done = new Set((ctx.history || []).map((h) => ymd(h.startedAt)));
-  const all = eventsBetween(ctx.events || [], from, ymd(addDays(parseDay(today), 14)));
+  const all = eventsBetween(ctx.events || [], from, ymd(addDays(parseDay(today), 14))).filter(activeSchedule);
   const busy = new Set(all.filter((e) => e.on >= today).map((e) => e.on));
   const next = () => { for (let k = 0; k < 14; k++) { const d = ymd(addDays(parseDay(today), k)); if (!busy.has(d) && !done.has(d) && !inPause(pause, d)) return d; } return null; };
   return all.filter((e) => e.on < today && !e.recurrence && !e.completed && isSession(e) && !done.has(e.on) && !inPause(pause, e.on)).map((e) => ({ event: e, to: next() }));
@@ -267,7 +260,8 @@ export function weekReview(ctx, now = ctx.now || Date.now(), offset = 0) {
   const inW = (t) => { const d = ymd(t); return d >= from && d <= to; };
   const hs = (ctx.history || []).filter((h) => inW(h.startedAt)), prevM = addDays(m, -7), prev = (ctx.history || []).filter((h) => { const d = ymd(h.startedAt); return d >= ymd(prevM) && d < from; });
   const mins = Math.round(hs.reduce((t, h) => t + (h.durationSeconds || 0), 0) / 60), pMins = Math.round(prev.reduce((t, h) => t + (h.durationSeconds || 0), 0) / 60);
-  const planned = eventsBetween(ctx.events || [], from, to).filter(isSession), plannedDone = planned.filter((e) => hs.some((h) => ymd(h.startedAt) === e.on)).length;
+  const planned = eventsBetween(ctx.events || [], from, to).filter((e) => isSession(e) && e.meta?.status !== 'cancelled');
+  const plannedDone = planned.filter((e) => hs.some((h) => h.data?.agenda ? h.data.agenda.eventId === e.sourceId && h.data.agenda.occurrenceDate === e.occurrenceDate : ymd(h.startedAt) === e.on && (!e.sessionId || e.sessionId === h.sessionId))).length;
   const perfs = (ctx.perfs || []).filter((p) => p.source === 'measured' && inW(p.date || 0)).length;
   const pains = (ctx.pains || []).filter((p) => inW(p.date || 0) && p.level >= 3 && !p.healed).length;
   const W = (ctx.wellness || []).filter((w) => w.day >= from && w.day <= to && w.sleep != null), sleep = W.length ? Math.round((W.reduce((t, w) => t + w.sleep, 0) / W.length) * 10) / 10 : null;

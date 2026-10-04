@@ -51,6 +51,7 @@ await ok('Pull Request : branche, fichier modifié sur la version GitHub, PR ouv
   const r = await C.openPullRequest({ repo: 'moi/depot', token: 't', id: 'p1', title: 'Renommer', body: 'b', edits: [{ path: 'public/layout.js', find: '✏️ Page', replace: '✏️ Organiser' }] }, fetchFn);
   assert.equal(r.url, 'https://github.com/moi/depot/pull/7');
   const put = calls.find(([m, p]) => m === 'PUT'); assert.equal(Buffer.from(put[2].content, 'base64').toString('utf8').includes('✏️ Organiser'), true); assert.equal(put[2].branch, 'assistant/p1');
+  assert.equal(calls.find(([, p]) => p === '/pulls')[2].draft, true, 'PR non validée avant la CI');
   assert.ok(!calls.some(([, p]) => /merge/.test(p)), 'aucune fusion');
   await assert.rejects(C.openPullRequest({ repo: 'pas un dépôt', token: 't', id: 'x', title: 't', body: '', edits: [] }, fetchFn), /propriétaire\/dépôt/);
 });

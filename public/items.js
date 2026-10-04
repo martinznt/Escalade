@@ -162,7 +162,7 @@ export const SCHEMAS = {
     perWeek: ['n', 1, 14, null], climbPerWeek: ['n', 0, 14, null], goal: ['e', ['climb', 'force', 'endurance', 'mobilite', 'forme', 'figure', 'poids', 'muscle', 'physique', 'sante', ''], ''], intent: ['s', 30],
     setupDone: ['b'], asked: ['strs', 30, 30],
     // Apparence choisie (item « appearance ») : suit le compte sur tous les appareils.
-    mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], shape: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
+    mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
     vibe: ['s', 20],
     easy: ['s', 4], cb: ['s', 4], big: ['s', 4], contrast: ['s', 4],
     // Objectifs (plusieurs) et profil corporel (item « body ») : déclarés, tous facultatifs.

@@ -172,6 +172,11 @@ export const NEWS = [
     ['library', 'climbplan', '#main h1', '✨ Créer une séance', 'Autant d’objectifs et de sports que tu veux (voie, bloc, renfo, piscine…), jusqu’à 5 h. Un seul champ « ✍️ Avec tes mots ».'],
     ['library', 'catalog', '#main h1', '📖 Carnet de séances', '487 séances prêtes : choisis ce que tu veux travailler (technique de pieds, doigts, seuil…), « Adapté à moi » ou tout le carnet.'],
   ] },
+  { v:'8.32.0', date:'2026-10-04', title:'Simple à utiliser, toujours aussi riche', why:'Une interface simple par défaut, tes rendez-vous récurrents et un bilan rapide qui raconte la vraie séance.', steps:[
+    ['settings','display','#main h1','Mon interface','Choisis Simple ou Avancée : tes données et la réflexion sportive restent les mêmes.'],
+    ['home','cal','#main h1','Mes rendez-vous sportifs','Planifie plusieurs jours par semaine, même sans séance détaillée. Chaque occurrence a son propre bilan.'],
+    ['profile','memory','#main h2','Ce que l’app a compris','Retrouve les observations, leur origine et leur confiance. Confirme ou corrige ce qui est faux.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

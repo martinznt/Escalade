@@ -1,3 +1,7 @@
+import { advancedUI, creationChoices, applyInterfaceRequest } from './views-experience.js';
+import { occurrenceChange, agendaEvents } from './agenda.js';
+import { agendaActions, agendaDayCards, openActivityPlan } from './views-agenda.js';
+import { parseAgendaText } from './agenda.js';
 // views-home.js — Accueil : tableau de bord personnalisable, « Que faire aujourd'hui ? », commandes en langage
 // naturel, calendrier visuel (planifié / réalisé), premier lancement.
 import { nextImpact } from './loop.js';
@@ -16,7 +20,7 @@ import { blocksOf } from './views-library.js';
 import { startPlayer, resumeCard } from './player.js';
 import { findHistory, sessionFromHistory } from './live.js';
 import { streakCard } from './views-motiv.js';
-import { composePage } from './layout.js';
+import { composePage, savedLayouts } from './layout.js';
 import { programCard, fingerCard, activeProgram } from './views-program.js';
 import { programStatus } from './program.js';
 import { buildIcs } from './ics.js';
@@ -33,9 +37,7 @@ const DEFAULT_DASH = ['today', 'next', 'goals', 'reco', 'command'];
 export const dashBlocks = () => (item('config', 'dashboard')?.blocks?.length ? item('config', 'dashboard').blocks.filter((b) => DASH_BLOCKS[b]) : DEFAULT_DASH);
 
 export function eventsOn(date) {
-  const wd = (d) => new Date(d + 'T12:00:00').getDay();
-  return S.events.filter((e) => e.date === date || (e.recurrence?.freq === 'weekly' && e.date <= date && wd(e.date) === wd(date) && (!e.recurrence.until || date <= e.recurrence.until)))
-    .sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+  return agendaEvents(S.events, date);
 }
 const hhmm = (t) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 /** Séances du programme en cours prévues ce jour-là (pas encore faites). */
@@ -48,6 +50,12 @@ export function vHome() {
   if (sub === 'cal') return h`${subHead('homeSub', 'dash', 'Accueil', '📅 Planning')}<p class="tiny muted pagehelp">Touche un jour pour planifier une séance (avec son heure) ou un événement important. En dessous : ta semaine proposée automatiquement, un objectif daté, tes disponibilités, une pause, l’abonnement agenda.</p>${vCalendar()}`;
   return h`${reinstallCard()}${vDash()}`;
 }
+function simpleHome() {
+  const date = ymd(new Date());
+  return h`${hero()}${resumeCard()}${setupCard()}${installCard()}${agendaDayCards(date)}${BLOCK_VIEWS.today()}${creationChoices()}${agendaActions(date)}${BLOCK_VIEWS.command()}${BLOCK_VIEWS.progress()}<details class="card"><summary>Pourquoi ces conseils ?</summary>${impactCard()}${BLOCK_VIEWS.goals()}</details><button class="btn ghost" data-act="homeDetails">Voir tous les détails de l’accueil</button>`;
+}
+ACT.homeSimple = () => { S.homeDetails = false; render(); };
+ACT.homeDetails = () => { S.homeDetails = true; render(); };
 function hero() {
   const c = ctx(), hr = new Date().getHours();
   const hello = hr < 6 ? 'Bonne nuit' : hr < 12 ? 'Bonjour' : hr < 18 ? 'Salut' : 'Bonsoir';
@@ -83,12 +91,13 @@ ACT.goProfile = (el) => go('profile', el.dataset.id);
 
 /* ═════════ Tableau de bord ═════════ */
 function vDash() {
+  if (!advancedUI() && !S.lay && !S.homeDetails && !savedLayouts().home && !item('config','dashboard')?.blocks?.length) return simpleHome();
   const loop = S.lastLoop && Date.now() - S.lastLoop.at < 15 * 60000 ? S.lastLoop : null;
   const tile = (act, ic, title, sub, pri = false, id = '') => (pri
     ? h`<button class="qa pri" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><span class="qt"><b>${title}</b><small>${sub}</small></span><span class="qgo" aria-hidden="true">▶</span></button>`
     : h`<button class="qa" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="qi">${ic}</span><b>${title}</b><small>${sub}</small></button>`);
   const safe = (b) => () => BLOCK_VIEWS[b]();
-  return h`${resumeCard()}${setupCard()}${installCard()}
+  return h`${!advancedUI() && S.homeDetails ? h`<button class="btn ghost" data-act="homeSimple">Revenir à l’accueil simple</button>` : ''}${resumeCard()}${setupCard()}${installCard()}
     ${loop ? h`<div class="card ok-b"><b>✓ Séance enregistrée</b>${loop.changes.length ? h`<ul class="small">${loop.changes.map((c) => h`<li>${c}</li>`)}</ul>` : h`<p class="small muted">Historique mis à jour.</p>`}<button class="btn sm" data-act="loopClose">OK</button></div>` : ''}
     ${impactCard()}
     <div class="${S.lay?.page === 'home' ? '' : 'home-grid'}">${composePage('home', {
@@ -251,6 +260,8 @@ function currentSession() {
   return null;
 }
 export async function runCommand(c, raw) {
+  if (applyInterfaceRequest(raw)) return;
+  const agenda = parseAgendaText(raw); if (agenda) { openActivityPlan(ymd(new Date()), agenda); return; }
   if (c.type === 'unknown') { toast(`Je n’ai pas compris « ${raw} ». Rien n’a été fait. Essaie par exemple « Fais-moi une séance de 20 minutes ».`, 5000); return; }
   if (c.type === 'ambiguous') {
     openSheet(h`<h2 style="margin:0">Que voulais-tu dire ?</h2><p class="muted small">« ${raw} » peut se comprendre de plusieurs façons. Rien n’a été fait.</p>${c.options.map((o, i) => h`<button class="item pick" data-act="cmdPick" data-i="${i}"><div class="grow">${o.summary}</div></button>`)}<button class="btn" data-act="closeSheet">Annuler</button>`);
@@ -338,7 +349,7 @@ function vCalendar() {
   const acts = {}; for (const x of inMonth) { const a = entryActivity(x, c); acts[a] = (acts[a] || 0) + 1; }
   const reg = regularity(c);
   return h`${planAlerts()}<div class="card">${monthGrid()}<div class="legend small"><span><i class="lg done"></i> réalisée</span><span><i class="lg plan"></i> prévue</span>${activeProgram() ? h`<span><i class="lg prog"></i> programme</span>` : ''}</div></div>
-    ${planTools()}
+    ${advancedUI() ? planTools() : h`<details class="card"><summary>Programmes, disponibilités et autres outils de planning</summary>${planTools()}</details>`}
     ${menuList([['icsExport', '', '📲', 'Ajouter mes séances à l’agenda du téléphone', 'Un fichier, une fois (programme et séances prévues, 90 jours)'], ['allGo', '', '⏰', 'Rappels d’entraînement', 'Quels jours, à quelle heure (dans Notifications)', 'settings/notifs']])}
     ${activeProgram() ? programCard() : h`<section class="card prog"><b>📆 Un objectif sur plusieurs semaines ?</b><p class="small muted">4 questions, et ton calendrier se remplit tout seul.</p><button class="btn pri" data-act="progNew">Créer un programme</button></section>`}
     <div class="card"><h3>Ce mois-ci</h3><p class="small">${inMonth.length} séance(s) réalisée(s)${Object.keys(acts).length ? ' · ' + Object.entries(acts).map(([a, n]) => `${activityLabel(a, c)} ×${n}`).join(', ') : ''}.</p><p class="small muted">${reg.text}</p>
@@ -349,7 +360,7 @@ ACT.icsExport = () => {
   const today = ymd(new Date()), hour = ls.get('sea:reminders', null)?.hour || '18:00', ev = [];
   for (let k = 0; k < 90; k++) {
     const d = new Date(); d.setDate(d.getDate() + k); const day = ymd(d);
-    for (const e of eventsOn(day)) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: e.time || hour, minutes: s ? Math.max(10, Math.round(sessionMinutes(s))) : 45 }); }
+    for (const e of eventsOn(day).filter((e) => !['cancelled','missed'].includes(e.meta?.status))) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: e.time || hour, minutes: e.meta?.minutes || (s ? Math.max(10, Math.round(sessionMinutes(s))) : 45), done: e.completed }); }
     for (const x of programOn(day)) if (x.status !== 'missed' || day >= today) ev.push({ uid: `${x.pid}-${x.i}`, title: `${x.name.split(' · ')[0]} · semaine ${x.week}`, date: day, time: hour, minutes: x.minutes, desc: 'Programme Séances entraînement' });
   }
   if (!ev.length) { toast('Rien de prévu pour l’instant : planifie une séance ou crée un programme.'); return; }
@@ -365,29 +376,29 @@ export function openPlanSheet(date, seanceId) {
   const list = S.seances.items.filter((s) => !s.archived);
   openSheet(h`<h2 style="margin:0">${new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
     ${done.length ? h`<b class="small ok-t">Réalisé</b><p class="tiny muted">Pas faite en vrai ? Touche « Pas faite » : elle sort de ton historique et de tes statistiques.</p>${done.map((x) => h`<div class="item"><div class="ico sm">✅</div><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">à ${hhmm(x.startedAt)} · ${Math.round(x.durationSeconds / 60)} min${x.data?.rpe ? ' · ressenti ' + x.data.rpe + '/5' : ''}${x.data?.aborted ? ' · interrompue' : ''}</div></div><button class="btn sm" data-act="notDone" data-id="${x.id}">✗ Pas faite</button></div>`)}` : ''}
-    ${evs.length ? h`<b class="small">Prévu</b>${evs.map((e) => { const s = e.sessionId && getSeance(e.sessionId), race = e.meta?.kind === 'race', auto = e.meta?.kind === 'auto' || e.meta?.kind === 'test'; return h`<div class="item"><div class="ico sm">${race ? '🏁' : e.meta?.kind === 'test' ? '📏' : auto ? '🤖' : '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${[race ? 'événement important : repos la veille' : '', auto ? (e.meta.kind === 'test' ? 'tes mesures du mois (Mon bilan physique)' : `séance proposée · ${e.meta.minutes || 45} min${e.meta.light ? ' · légère' : ''} · préparée le jour même`) : '', e.recurrence ? 'se répète chaque semaine' : '', e.completed ? 'marquée faite' : future && !race ? 'à venir' : ''].filter(Boolean).join(' · ')}</div>
-        <label class="tiny row" style="gap:6px;margin-top:4px">Heure <input type="time" value="${e.time || ''}" data-change="evTime" data-id="${e.id}" aria-label="Heure" style="width:auto"></label></div>
-        ${e.completed ? h`<button class="btn sm" data-act="evUndone" data-id="${e.id}">✗ Pas faite</button>` : s && !future ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}" aria-label="Lancer">▶</button>` : auto && !future ? h`<button class="btn pri sm" data-act="autoPlay" data-id="${e.id}" aria-label="Préparer cette séance">▶</button>` : ''}<button class="btn danger sm ic" data-act="delEvent" data-id="${e.id}" aria-label="Supprimer">✕</button></div>`; })}` : ''}
+    ${agendaDayCards(date)}
     ${programOn(date).map((x) => h`<div class="item"><div class="ico sm">📆</div><div class="grow"><b>${x.name.split(' · ')[0]} · S${x.week}</b><div class="tiny muted">${x.minutes} min · programme${x.status === 'missed' ? ' · manquée' : ''}</div></div>${date <= ymd(new Date()) ? h`<button class="btn pri sm" data-act="progPlay" data-id="${x.pid}" data-i="${x.i}">▶</button>` : ''}</div>`)}
     ${!done.length && !evs.length && !programOn(date).length ? h`<p class="muted small">Rien ce jour-là.</p>` : ''}
+    ${agendaActions(date)}
+    <details class="card flat" ${advancedUI() ? 'open' : ''}><summary>Associer une séance détaillée</summary>
     ${list.length ? h`<form data-submit="addEvent" class="card flat"><h3>Planifier une séance</h3>
       <label>Séance<select name="sid">${list.map((s) => h`<option value="${s.id}" ${s.id === seanceId ? 'selected' : ''}>${s.emoji} ${s.name}</option>`)}</select></label>
       <label>Heure <span class="tiny muted">(facultatif : sert au rappel dans l’agenda du téléphone)</span><input type="time" name="time"></label>
       <label class="chk"><input type="checkbox" name="weekly"> Répéter chaque semaine</label>
-      <button class="btn pri" type="submit">Planifier le ${date.split('-').reverse().join('/')}</button></form>` : h`<p class="muted small">Crée d’abord une séance pour la planifier.</p>`}
+      <button class="btn pri" type="submit">Planifier le ${date.split('-').reverse().join('/')}</button></form>` : h`<p class="muted small">Tu peux aussi planifier une activité libre ci-dessus.</p>`}</details>
     <details class="card flat"><summary><b>🏁 Ajouter un événement important</b> <span class="tiny muted">(compétition, course, sortie…)</span></summary>
       <form data-submit="addRace" class="stack"><label>Quoi ?<input name="title" maxlength="80" required placeholder="Ex. Contest de bloc, 10 km, sortie à Bleau"></label><label>Heure <span class="tiny muted">(facultatif)</span><input type="time" name="time"></label>
         <p class="tiny muted">Le planning garde un jour de repos la veille et te prévient s’il y a une séance dure.</p><button class="btn" type="submit">Ajouter</button></form></details>
     <button class="btn" data-act="closeSheet">Fermer</button>`);
 }
-CHG.evTime = (el) => { const e = S.events.find((x) => x.id === el.dataset.id), t = el.value; if (!e || (t && !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) return; saveEvent({ ...e, time: t }); toast(t ? `Heure : ${t}` : 'Heure retirée'); render(); };
+CHG.evTime = (el) => { const day = el.dataset.date || S.selDay; const e = eventsOn(day).find((x) => x.id === el.dataset.id); if (!e) return; const base = S.events.find((x) => x.id === e.sourceId); saveEvent(occurrenceChange(base, e.occurrenceDate, {date:e.on, time:el.value, completed:e.completed, meta:e.meta})); toast('Heure modifiée pour cette occurrence'); render(); };
 /** « Je ne l'ai pas faite » : une séance enregistrée par erreur (lancée puis abandonnée, oubliée ouverte…) sort de l'historique. */
 ACT.notDone = async (el) => {
   const x = S.history.find((y) => y.id === el.dataset.id); if (!x) return;
   if (!(await ask(`« ${x.sessionName} » n’a pas été faite ? Elle sera retirée de ton historique : statistiques, séries, progression et programme ne la compteront plus.`, { ok: 'Retirer', danger: true }))) return;
   const day = ymd(new Date(x.startedAt));
   deleteHistory(x.id);
-  for (const e of eventsOn(day)) if (e.completed && e.sessionId === x.sessionId) saveEvent({ ...e, completed: false });
+  for (const e of eventsOn(day)) if (e.completed && e.sessionId === x.sessionId) saveEvent(occurrenceChange(S.events.find((x) => x.id === e.sourceId) || e, e.occurrenceDate || day, {date:day, completed:false, meta:{...e.meta,status:'missed'}}));
   toast('Retirée de l’historique'); openPlanSheet(S.selDay || day); render();
 };
 ACT.evUndone = (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; saveEvent({ ...e, completed: false }); toast('Remise « à faire »'); openPlanSheet(S.selDay); render(); };

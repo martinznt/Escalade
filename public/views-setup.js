@@ -2,7 +2,7 @@
 // ou fiche complète sur une seule page, avec « Plus tard » à tout moment ; visite guidée des onglets ;
 // proposition d'installer l'application. Tout ce qui est répondu est enregistré comme DÉCLARÉ par l'utilisateur
 // (jamais présenté comme mesuré) et reste modifiable dans Profil.
-import { h, openSheet, closeSheet, toast, buzzOk, chip, meter } from './ui.js';
+import { h, openSheet, closeSheet, sheetOpen, toast, buzzOk, chip, meter } from './ui.js';
 import { S, ACT, INPUT, render, go, putItem, item, itemsOf, ctx, saveSettings, ls } from './state.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, SKILLS, CAPACITIES } from './model.js';
 import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
@@ -226,7 +226,7 @@ ACT.setupHide = () => { saveMain({ setupHidden: true }); toast('Rappel masqué. 
 // La visite elle-même (tour.js) navigue de page en page et pointe chaque élément avec une flèche.
 export function maybeTour(force = false) {
   if (!force && mainConfig().tourDone) return;
-  setTimeout(() => { closeSheet(); startTour({ onEnd: () => { if (!mainConfig().tourDone) saveMain({ tourDone: true }); } }); }, 250);
+  setTimeout(() => { if (!force && sheetOpen()) return; closeSheet(); startTour({ onEnd: () => { if (!mainConfig().tourDone) saveMain({ tourDone: true }); } }); }, 250);
 }
 export const showTour = () => maybeTour(true);
 ACT.tourStart = () => maybeTour(true);

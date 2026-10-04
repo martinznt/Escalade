@@ -1,3 +1,4 @@
+import { advancedUI, creationChoices, comparisonView } from './views-experience.js';
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
 import { personalFit } from './fit.js';
@@ -11,7 +12,7 @@ import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, getSeance, saveSeance, del
 import { cleanParts } from './format.js';
 import { vClimbPlan } from './views-climbplan.js';
 import { setReturn } from './nav.js';
-import { composePage } from './layout.js';
+import { composePage, savedLayouts } from './layout.js';
 import { adaptButton } from './views-adapt.js';
 import { groupButton } from './views-group.js';
 import { mergeAdvice, bestMerges, mergeSessions, orderForMerge } from './merge.js';
@@ -69,7 +70,7 @@ export function vLibrary() {
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
   const cur = ['seances', 'climbplan', 'generate', 'gym', 'moments', 'catalog', 'best', 'exercises', 'common', 'search'].includes(sub) ? sub : 'home';
-  if (cur === 'home') return vLibHome();
+  if (cur === 'home') return h`${creationChoices()}${vLibHome()}`;
   const views = { seances: vSeances, climbplan: vClimbPlan, generate: vGenerate, gym: vGym, moments: vRoutines, catalog: vCatalog, best: vBest, exercises: vExercises, common: vCommon, search: vSearch };
   if (cur === 'best') return views.best(); // a son propre retour vers Exercices
   const [ic, t] = LIB_INFO[cur];
@@ -88,6 +89,7 @@ const LIB_INFO = {
 };
 /** Bibliothèque : créer une séance, puis la liste des rubriques (même format que les paramètres). */
 function vLibHome() {
+  if (!advancedUI() && !S.lay && !savedLayouts().library) return h`<h1>📚 Bibliothèque</h1><p class="small muted">Mes séances, le catalogue intégré et les partages.</p>${menuList([['libSub','seances','📋','Mes séances','Personnel : mes créations et mes copies'],['libSub','exercises','💪','Exercices','Catalogue intégré et exercices personnels'],['libSub','catalog','📖','Séances prêtes','Catalogue intégré'],['libSub','common','🌍','Découvrir','Publications de la communauté']])}<details class="card"><summary>Programmes et outils spécialisés</summary>${menuList([['libSub','gym','🏋️','Ma salle de sport','Machines et charges'],['libSub','moments','🧩','Mes moments','Routines et petits compléments'],['libSub','search','🔍','Rechercher','Dans toute la bibliothèque']])}</details>`;
   // Chaque élément se déplace, se masque ou se colore avec ✏️ « Organiser » (mise en page de la Bibliothèque).
   const row = (k) => () => { const [ic, t, d] = LIB_INFO[k]; return menuRow(['libSub', k, ic, t, d()]); };
   return h`<h1>📚 Bibliothèque</h1><p class="tiny muted pagehelp">Tes séances, et tout pour en créer : par l’app, guidée, prête à l’emploi ou à la main.</p>${composePage('library', {
@@ -124,7 +126,7 @@ function vSeances() {
       : empty(st === 'active' ? 'Aucune séance pour l’instant.' : 'Rien ici.', st === 'active' ? h`<button class="btn pri" data-act="cpNew">✨ Créer une séance</button>` : '')}`;
 }
 function seanceCard(s) {
-  const sel = S.sel?.includes(s.id); const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card ${sel ? 'on-b' : ''}"><div class="row">${S.sel ? h`<button class="selbox ${sel ? 'on' : ''}" data-act="selTog" data-id="${s.id}" aria-pressed="${!!sel}" aria-label="Sélectionner">${sel ? '✓' : ''}</button>` : ''}<div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''}${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
+  const sel = S.sel?.includes(s.id); const cats = categoriesOf(s), sp = sportsOf(s), it = intensityOf(s); return h`<div class="card ${sel ? 'on-b' : ''}"><div class="row">${S.sel ? h`<button class="selbox ${sel ? 'on' : ''}" data-act="selTog" data-id="${s.id}" aria-pressed="${!!sel}" aria-label="Sélectionner">${sel ? '✓' : ''}</button>` : ''}<div class="ico">${s.emoji}</div><div class="grow"><b>${s.name}</b><div class="muted small">${sp.length ? sp.map((x) => sportName(x).split(' ')[0]).join(' ') + ' · ' : ''}${s.exercises.filter((e) => e.block === 'main').length || s.exercises.length} exercice(s) · ~${sessionMinutes(s)} min${it ? ' · ' + INTENSITY_LABEL(it) : ''} · Personnel${s.template ? ' · modèle' : ''}${s.source === 'copy' ? ' · copie' : s.source === 'generated' ? ' · générée' : s.source === 'merge' ? ' · fusionnée' : ''}</div>
       <div class="tiny muted">${s.context?.env ? placeName(s.context.env) + ' · ' : ''}${cats.map(catName).join(' · ')}</div></div></div>
       ${S.sel ? '' : h`<div class="row wrapf"><button class="btn pri sm" data-act="play" data-id="${s.id}">▶ Lancer</button><button class="btn sm" data-act="openSeance" data-id="${s.id}">Ouvrir</button><button class="btn sm" data-act="planSeance" data-id="${s.id}">📅 Planifier</button>${adaptButton(s.id)}${groupButton(s.id)}</div>`}</div>`;
 }
@@ -259,7 +261,7 @@ ACT.newSeance = () => { closeSheet(); const s = saveSeance({ id: uid(), name: 'N
 ACT.openSeance = (el) => go('library', 'seance', el.dataset.id);
 ACT.play = (el) => {
   const s = el.dataset.gen ? S.gen.result?.session : el.dataset.shared ? S.shared.detail?.session : getSeance(el.dataset.id);
-  closeSheet(); if (s) startPlayer(s, { eventId: el.dataset.event || null, fromGenerator: !!el.dataset.gen });
+  closeSheet(); if (s) startPlayer(s, { eventId: el.dataset.event || null, eventDate: el.dataset.date || null, fromGenerator: !!el.dataset.gen });
 };
 
 /* ═════════ Éditeur de séance (séance personnelle ou contribution commune) ═════════ */

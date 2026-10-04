@@ -1,7 +1,8 @@
+import { advancedUI, memoryView } from './views-experience.js';
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
 import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG, ymd } from './ui.js';
-import { composePage } from './layout.js';
+import { composePage, savedLayouts } from './layout.js';
 import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
 import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
@@ -31,14 +32,15 @@ import { sportTools } from './views-sports.js';
 import { cheersCard, loadCheers } from './views-community.js';
 import { PHYSIQUE, PHYSIQUE_SOURCES, physiqueGroups, physiqueMeasures, physiqueTrack, weeklySets, SETS_RANGE } from './physique.js';
 
-const SUBS = [['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const SUBS = [['memory', 'Mémoire d’entraînement'], ['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
 const TILES = { bilan: ['🩺', 'Mon bilan physique', 'ce que l’app sait de ta condition, tests à faire'], analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
   climbing: ['🧗', 'Carnet', 'blocs, voies, pyramide'], goals: ['🎯', 'Objectifs', 'figures, projets d’escalade'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
 /** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
 const GROUPS = [['Moi', ['bilan', 'body', 'activities', 'goals', 'equipment']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['analyse']], ['Partager', ['public']]];
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
-  if (sub === 'home') return vHub();
+  if (sub === 'home') return h`${vHub()}<section class="card"><h3>🧠 Ce que l’app a compris</h3><p class="small muted">Tes habitudes, leur origine et tes corrections.</p><button class="btn" data-act="profSub" data-id="memory">Ma mémoire d’entraînement</button></section>`;
+  if (sub === 'memory') return h`${subHead('profSub', 'home', 'Moi', '🧠 Mémoire d’entraînement')}${memoryView()}`;
   // Préférences : avec « Mon corps » ; capacités et « pourquoi » : dans « Mon analyse ».
   if (sub === 'prefs') { setTimeout(() => go('profile', 'body'), 0); return ''; }
   if (sub === 'map' || sub === 'understand') { const [ic, title] = TILES[sub]; return h`${subHead('profSub', 'analyse', 'Mon analyse', `${ic} ${title}`)}${(sub === 'map' ? vMap : vUnderstand)()}`; }
@@ -63,6 +65,7 @@ function completeCard(c, acts, goals, climbing) {
     <div class="setmenu">${left.map(([, ic, t, to]) => h`<button class="setrow" data-act="allGo" data-to="${to}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b></span><span class="chev">›</span></button>`)}</div></section>`;
 }
 function vHub() {
+  if (!advancedUI() && !S.lay && !savedLayouts().profile) { const c = ctx(); return h`<h1>👤 Moi</h1><p class="small muted">${Object.values(c.activities).map((a) => a.label).join(' · ') || 'Mon entraînement'}</p>${menuList([['profSub','activities','🏅','Mon entraînement','Sports et niveaux'],['profSub','goals','🎯','Mes objectifs','Ce que je veux réussir'],['profSub','equipment','📍','Mes lieux et matériel','Mon contexte'],['profSub','perfs','🏆','Mes repères','Mesures, records et cotations']])}<details class="card"><summary>Préférences, capacités et autres détails</summary>${menuList([['profSub','body','❤️','Mes préférences et mon corps','Mes choix, les zones à ménager'],['profSub','analyse','🔎','Comprendre mes capacités','Les faits, les estimations et les inconnues'],['profSub','climbing','🧗','Carnet d’escalade','Blocs, voies et projets'],['profSub','public','🌍','Partage','Je choisis ce que je partage']])}</details>`; }
   const c = ctx(), acts = Object.values(c.activities), st = profileCapacities(c), sw = strengthsWeaknesses(st), goals = activeGoals(c);
   const known = st.filter((x) => x.level != null).length;
   const bil = assessment(c), envies = bil.envies;
