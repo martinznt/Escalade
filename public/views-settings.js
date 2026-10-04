@@ -1,7 +1,7 @@
-import { interfaceChoice } from './views-experience.js';
+import { advancedUI, interfaceChoice } from './views-experience.js';
 // views-settings.js — Paramètres : séance, apparence, compte, données (export / import JSON, import CSV),
 // synchronisation et diagnostic, administration (EDIT_PASSWORD vérifié par le serveur), signalement de bug.
-import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead, menuList } from './ui.js';
+import { h, raw, icon, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead, menuList } from './ui.js';
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, ctx, go, render, api, queue, saveSettings, syncAll, retryFailed, discardFailed, restoreConflict, pendingCount, persistNow, clearLocal, DEFAULT_SETTINGS, putItem, itemsOf, addHistory, saveEvent, ls, writePending, persist, bump, syncSoon } from './state.js';
 import { uid, mergeSeances, readStored, normalizeSession } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
@@ -23,12 +23,12 @@ import { CAPACITIES, ACTIVITIES } from './model.js';
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe', 'easy', 'cb', 'big', 'contrast'];
 export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
-const SUBS = [['main', 'Paramètres'], ['display', 'Affichage'], ['session', 'Pendant la séance'], ['notifs', 'Notifications'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Admin'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition'], ['assistant', 'Assistant du site'], ['content', 'Contenu de l’app'], ['look', 'Textes et apparence'], ['changes', 'Tout ce qui a été modifié'], ['members', 'Propositions des membres'], ['bugs', 'Signalements'], ['users', 'Comptes et rôles'], ['push', 'Notifications de mise à jour']];
+const SUBS = [['main', 'Paramètres'], ['display', 'Affichage et accessibilité'], ['session', 'Pendant la séance'], ['notifs', 'Notifications et rappels'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Administration'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition'], ['assistant', 'Assistant du site'], ['content', 'Contenu de l’app'], ['look', 'Textes et apparence'], ['changes', 'Tout ce qui a été modifié'], ['members', 'Propositions des membres'], ['bugs', 'Signalements'], ['users', 'Comptes et rôles'], ['push', 'Notifications de mise à jour']];
 /** Rubriques des paramètres : une ligne claire par rubrique, comme les réglages d'un téléphone. */
 const MENU = [
-  ['display', '🎨', 'Affichage', 'Thème, ambiance, couleur, taille, langue, mise en page'],
-  ['session', '▶️', 'Pendant la séance', 'Coach vocal, bips, vibration, repos par défaut'],
-  ['notifs', '🔔', 'Notifications', 'Rappels d’entraînement, mises à jour, son'],
+  ['display', '🎨', 'Affichage et accessibilité', 'Thème, texte, couleurs et langue'],
+  ['session', '▶️', 'Pendant la séance', 'Voix, sons, vibration, repos et durée'],
+  ['notifs', '🔔', 'Notifications et rappels', 'Choisir ce qui m’avertit et quand'],
   ['data', '💾', 'Mes données', 'Exporter, importer un historique'],
   ['sync', '🔄', 'Synchronisation', 'État de l’envoi de tes données'],
   ['shareapp', '📲', 'Partager l’app', 'Un QR code à scanner pour ouvrir le site sur un autre téléphone', 'shareApp'],
@@ -37,7 +37,7 @@ const MENU = [
   ['bug', '🐞', 'Signaler un bug', 'Un problème ? Dis-le nous'],
   ['idea', '💡', 'Proposer une amélioration', 'Une idée, une modification ? Les administrateurs répondent', 'ideaNew'],
   ['votes', '🗳️', 'Idées à voter', 'Les idées retenues par l’équipe : vote pour celles que tu veux', 'ideasOpen'],
-  ['admin', '🛡️', 'Admin', 'Réservé aux administrateurs'],
+  ['admin', '🛡️', 'Administration', 'Modifier le site et gérer les membres'],
 ];
 /** Partager le site : QR code qui ouvre l'adresse de l'app, comme si on la tapait. */
 export const SITE_URL = 'https://seances-sport.pages.dev/';
@@ -57,8 +57,8 @@ ACT.shareAppSave = () => {
 };
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
 /* Pages de l'administration : d'où l'on vient (retour) et leur titre. */
-const ADMIN_PARENT = { assistant: ['admin', 'Admin'], content: ['admin', 'Admin'], look: ['admin', 'Admin'], changes: ['admin', 'Admin'], members: ['admin', 'Admin'], bugs: ['admin', 'Admin'], users: ['admin', 'Admin'], push: ['admin', 'Admin'],
-  studio: ['admin', 'Admin'], studioSet: ['studio', 'Studio'], audit: ['admin', 'Admin'], lab: ['admin', 'Admin'], health: ['admin', 'Admin'], maint: ['admin', 'Admin'], code: ['admin', 'Admin'], codeItem: ['code', 'Propositions de code'] };
+const ADMIN_PARENT = { assistant: ['admin', 'Administration'], content: ['admin', 'Administration'], look: ['admin', 'Administration'], changes: ['admin', 'Administration'], members: ['admin', 'Administration'], bugs: ['admin', 'Administration'], users: ['admin', 'Administration'], push: ['admin', 'Administration'],
+  studio: ['admin', 'Administration'], studioSet: ['studio', 'Studio'], audit: ['admin', 'Administration'], lab: ['admin', 'Administration'], health: ['admin', 'Administration'], maint: ['admin', 'Administration'], code: ['admin', 'Administration'], codeItem: ['code', 'Propositions de code'] };
 const ADMIN_TITLE = { assistant: '💬 Assistant du site', content: '🧩 Contenu de l’app', look: '✏️ Textes et apparence', changes: '📝 Tout ce qui a été modifié', members: '📬 Propositions des membres', bugs: '🐞 Signalements', users: '👥 Comptes et rôles', push: '🔔 Notifications de mise à jour',
   studio: '🧪 Brouillons et publication', studioSet: '🧪 Lot', audit: '📜 Journal', lab: '🧠 Laboratoire', health: '🩺 Santé des données', maint: '🛠️ Maintenance', code: '💻 Propositions de code', codeItem: '💻 Proposition' };
 const adminOnly = (fn) => () => (S.user?.isAdmin ? fn() : h`<p class="small muted">Réservé aux administrateurs.</p>`);
@@ -66,10 +66,9 @@ export function vSettings() {
   const subs = S.user.guest ? SUBS.filter(([k]) => k !== 'sync' && !ADMIN_PARENT[k] && k !== 'admin') : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
   const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant), content: adminOnly(vAdminContent), look: adminOnly(vAdminLook), changes: adminOnly(vAdminChanges), members: adminOnly(vAdminProposals), bugs: adminOnly(vAdminBugs), users: adminOnly(vAdminUsers), push: adminOnly(vAdminPush), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
-  if (sub === 'main') return h`<h1>Paramètres</h1><p class="tiny muted pagehelp">Ton compte, l’affichage, les séances, les notifications, tes données et l’aide.</p>${views.main()}`;
-  const ic = MENU.find(([k]) => k === sub)?.[1];
+  if (sub === 'main') return h`<h1>Paramètres</h1><p class="tiny muted pagehelp">Choisis ton interface, puis le réglage à modifier.</p>${views.main()}`;
   if (ADMIN_PARENT[sub]) { const [pk, pl] = ADMIN_PARENT[sub]; return h`${subHead('setSub', pk, pl, ADMIN_TITLE[sub] || sub)}${views[sub]()}`; }
-  return h`${subHead('setSub', 'main', 'Paramètres', `${ic ? ic + ' ' : ''}${subs.find(([k]) => k === sub)[1]}`)}${views[sub]()}`;
+  return h`${subHead('setSub', 'main', 'Paramètres', subs.find(([k]) => k === sub)[1])}${views[sub]()}`;
 }
 ACT.setSub = (el) => { go('settings', el.dataset.id); if (el.dataset.id === 'admin' && S.user?.isAdmin) loadBugs(); if (el.dataset.id === 'bug' && !S.user?.guest) loadMyBugs(); };
 
@@ -81,15 +80,20 @@ function vMain() {
         <div class="row wrapf"><button class="btn" data-act="guestLogin">J’ai déjà un compte</button><button class="btn danger" data-act="guestQuit">Quitter le mode invité</button></div></div>`
     : h`<div class="card"><div class="row between"><h3>👤 ${S.user.username} ${S.user.isAdmin ? tag('administrateur', 'acc') : ''}</h3><button class="btn sm" data-act="logout">Se déconnecter</button></div>
         <details class="how mini"><summary>Gérer mon compte</summary><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></details></div>`;
-  return h`${account}
-    <label class="findbox"><span aria-hidden="true">🔍</span><input type="search" data-input="setFind" placeholder="Rechercher un paramètre…" aria-label="Rechercher un paramètre" autocomplete="off"></label>
-    <div id="setfindres"></div>
-    <div class="setmenu setmain">${MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin', 'idea', 'votes'].includes(k))).map(([k, ic, t, d, a]) => h`<button class="setrow" data-act="${a || 'setSub'}" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>
+  const entries = MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin', 'idea', 'votes'].includes(k)));
+  const common = new Set(['display', 'session', 'notifs', 'data', 'help', ...(S.user.isAdmin ? ['admin'] : [])]);
+  const rows = (list) => h`<div class="setmenu">${list.map(([k, ic, t, d, a]) => h`<button class="setrow" data-act="${a || 'setSub'}" data-id="${k}"><span class="sic" aria-hidden="true">${icon(k, ic)}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev" aria-hidden="true">›</span></button>`)}</div>`;
+  return h`<label class="findbox"><span aria-hidden="true">🔍</span><input type="search" data-input="setFind" placeholder="Ex. texte, rappel, mot de passe…" aria-label="Rechercher un paramètre" autocomplete="off"></label>
+    <div id="setfindres" aria-live="polite"></div>
+    <div class="setmain">${interfaceChoice()}${rows(entries.filter(([k]) => common.has(k)))}${account}
+    <details class="card" id="settings-more" ${advancedUI() ? 'open' : ''}><summary>Autres options</summary>
+    ${rows(entries.filter(([k]) => !common.has(k)))}
     <div class="card"><h3>🧩 Mon profil sportif</h3><p class="small muted">Pour que l’app s’adapte à toi (sports, niveau, temps, matériel, objectif).</p>
-      <div class="row wrapf"><button class="btn pri" data-act="setupAgain" data-id="quiz">Répondre aux questions</button><button class="btn" data-act="setupAgain" data-id="form">Remplir la fiche</button><button class="btn ghost" data-act="goProfile" data-id="understand">Voir mon profil</button></div></div>
+      <button class="btn pri" data-act="setupAgain" data-id="quiz">Mettre à jour mon profil</button>
+      <details class="how mini"><summary>Modifier avec la fiche complète</summary><button class="btn" data-act="setupAgain" data-id="form">Ouvrir la fiche</button></details></div>
     ${installCard({ force: true })}
     <div class="card"><h3>ℹ️ À propos</h3><p class="small">Séances entraînement · version ${APP_VERSION}. ${S.user.guest ? 'Mode invité : données sur cet appareil uniquement.' : 'Tes données sont liées à ton compte et synchronisées ; elles restent utilisables hors ligne.'}</p>
-      <p class="tiny muted">Les séances et analyses suivent des principes d’entraînement courants. Elles ne constituent ni un avis médical ni un diagnostic. Aucune comparaison avec d’autres personnes n’est faite.</p></div>`;
+      <p class="tiny muted">Les séances et analyses suivent des principes d’entraînement courants. Elles ne constituent ni un avis médical ni un diagnostic. Aucune comparaison avec d’autres personnes n’est faite.</p></div></details></div>`;
 }
 function prefs() {
   const st = S.settings, a = window.__sea.load();
@@ -111,29 +115,29 @@ function vUpdates() {
 /* ═════════ Affichage et mise en page ═════════ */
 function vDisplay() {
   const { st, a, segA, tog } = prefs();
-  return h`${interfaceChoice()}
-    <div class="card"><h3>🌈 Thème et couleurs</h3>
-      <label>Thème</label>${segA('mode', [['dark', '🌙 Sombre'], ['light', '☀️ Clair'], ['auto', '🔁 Comme mon téléphone']])}
+  return h`<div class="card"><h3>Thème et langue</h3>
+      <label>Thème</label>${segA('mode', [['dark', 'Sombre'], ['light', 'Clair'], ['auto', 'Automatique']])}
+      <label>Langue<select data-change="pref" name="lang"><option value="fr" ${st.lang !== 'en' ? 'selected' : ''}>Français</option><option value="en" ${st.lang === 'en' ? 'selected' : ''}>English (beta)</option></select></label></div>
+    ${a11yCard(a)}
+    <details class="card" ${advancedUI() ? 'open' : ''}><summary>Couleurs, ambiance et animations</summary>
       <label>Ambiance</label><div class="vibes">${VIBES.map(([id, n, d]) => h`<button type="button" class="vibe ${(a.vibe || 'classique') === id ? 'on' : ''}" data-act="appear" data-k="vibe" data-v="${id}" data-vibe-preview="${id}"><span class="vprev"><i></i><i></i><i></i></span><b>${n}</b><small>${d}</small></button>`)}</div>
       <label>Couleur</label><div class="palette">${(a.vibe || 'classique') !== 'classique' ? h`<button type="button" class="sw none ${a.accent ? '' : 'on'}" title="Couleur de l’ambiance" aria-label="Couleur de l’ambiance" data-act="appearColor" data-v="">∅</button>` : ''}${PALETTES.map(([id, c, n]) => h`<button type="button" class="sw ${((a.vibe || 'classique') === 'classique' ? a.palette === id && !a.accent : a.accent === c) ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n}" data-act="appearColor" data-id="${id}" data-v="${c}"></button>`)}</div>
-      <label>Taille du texte</label>${segA('size', [['s', 'Petit'], ['m', 'Normal'], ['l', 'Grand'], ['xl', 'Très grand']])}
       ${tog(['season', '🍂 Décor de saison sur l’accueil (neige, fleurs, feuilles…)'])}
-      <label>Langue<select data-change="pref" name="lang"><option value="fr" ${st.lang !== 'en' ? 'selected' : ''}>Français</option><option value="en" ${st.lang === 'en' ? 'selected' : ''}>English (beta)</option></select></label>
-      <details class="how mini"><summary>Plus d’options d’affichage</summary><label>Espacement</label>${segA('density', [['compact', 'Serré'], ['normal', 'Normal'], ['airy', 'Aéré']])}<label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</details></div>
-    ${a11yCard(a)}
-    <div class="card"><h3>✏️ Mise en page</h3><p class="small muted">Pour chaque page : ce qui s’affiche (en grand, en petite icône en haut, ou masqué), dans quel ordre et de quelle couleur. Le bouton ✏️ « Organiser » en haut des pages ouvre la même chose.</p>
+      <label>Espacement</label>${segA('density', [['compact', 'Serré'], ['normal', 'Normal'], ['airy', 'Aéré']])}<label>Animations</label>${segA('motion', [['on', 'Oui'], ['off', 'Non']])}</details>
+    <details class="card" ${advancedUI() ? 'open' : ''}><summary>Organiser mes écrans</summary><p class="small muted">Choisis les rubriques et leur ordre. Tu peux aussi utiliser le bouton « Organiser » sur chaque page.</p>
       <div class="row wrapf"><button class="btn" data-act="layEditAt" data-to="home/dash">Accueil</button><button class="btn" data-act="layEditAt" data-to="progress/summary">Progrès</button><button class="btn" data-act="layEditAt" data-to="library/home">Bibliothèque</button><button class="btn" data-act="layEditAt" data-to="profile/home">Profil</button></div>
       ${tog(['hideLayEdit', 'Masquer le bouton ✏️ « Organiser » en haut des pages (la mise en page reste ici, et dans ☰ › « Mise en page »)'])}
-      <button class="btn ghost" data-act="layReset" data-scope="all">Revenir à la mise en page de base partout</button></div>
+      <button class="btn ghost" data-act="layReset" data-scope="all">Revenir à la mise en page de base partout</button></details>
 `;
 }
 /** Accessibilité : réglages de CET appareil (et du compte s'il y en a un). Proposés aussi dès le premier écran. */
 export const A11Y = [['easy', '📖', 'Lecture facile', 'Police plus lisible, lignes plus espacées, pas d’italique'], ['big', '👆', 'Gros boutons', 'Boutons et cases plus grands, plus faciles à toucher'],
   ['contrast', '🔲', 'Contraste renforcé', 'Textes et bordures bien marqués'], ['cb', '🎨', 'Couleurs pour daltonisme', 'Bleu / orange au lieu de vert / rouge']];
 export function a11yCard(a = window.__sea.load()) {
-  return h`<div class="card"><h3>♿ Accessibilité</h3><div class="setmenu">${A11Y.map(([k, ic, t, d]) => h`<button class="setrow ${a[k] === 'on' ? 'on' : ''}" data-act="a11ySet" data-k="${k}" aria-pressed="${a[k] === 'on'}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${a[k] === 'on' ? '✓' : ''}</span></button>`)}</div>
+  return h`<div class="card"><h3>Texte et accessibilité</h3>
     <label>Taille du texte</label><div class="chips">${[['s', 'Petit'], ['m', 'Normal'], ['l', 'Grand'], ['xl', 'Très grand']].map(([v, l]) => chip(a.size === v, l, `data-act="a11ySize" data-v="${v}"`))}</div>
-    <p class="tiny muted">Les icônes sont toujours accompagnées d’un texte, et chaque bouton a un nom lu par les lecteurs d’écran. Au clavier : Tab pour avancer, Entrée pour valider, Échap pour fermer.</p></div>`;
+    <div class="setmenu">${A11Y.map(([k, ic, t, d]) => h`<button class="setrow ${a[k] === 'on' ? 'on' : ''}" data-act="a11ySet" data-k="${k}" aria-pressed="${a[k] === 'on'}"><span class="sic" aria-hidden="true">${icon(k, ic)}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev" aria-hidden="true">${a[k] === 'on' ? '✓' : ''}</span></button>`)}</div>
+    <p class="tiny muted">Au clavier : Tab pour avancer, Entrée pour valider, Échap pour fermer.</p></div>`;
 }
 function a11ySave(patch) {
   const a = { ...window.__sea.load(), ...patch, _t: Date.now(), _owner: S.user?.id || '' };
@@ -336,7 +340,7 @@ function pushStatusCard(open = false) {
   return h`<details class="card how" ${open ? 'open' : ''}><summary>🔔 Notifications de mise à jour</summary>
     <p class="small">${l ? `Dernière envoyée le ${when} : ${l.sent} appareil(s) joint(s) sur ${l.targeted} abonné(s) aux nouveautés${l.gone ? `, ${l.gone} abonnement(s) expiré(s) retiré(s)` : ''}${l.errors ? `, ${l.errors} en erreur` : ''}.` : 'Aucune notification de mise à jour envoyée pour l’instant.'}</p>
     ${cronLine(p)}
-    <p class="tiny muted">${p.devices} appareil(s) abonné(s) en tout. Version en ligne : ${p.build}${p.lastBuild && p.lastBuild !== p.build ? ` (annonce en attente : ${p.lastBuild})` : ''}. Un appareil qui ne reçoit rien : Paramètres › Notifications › « 🩺 Vérifier cet appareil ».</p></details>`;
+    <p class="tiny muted">${p.devices} appareil(s) abonné(s) en tout. Version en ligne : ${p.build}${p.lastBuild && p.lastBuild !== p.build ? ` (annonce en attente : ${p.lastBuild})` : ''}. Un appareil qui ne reçoit rien : Paramètres › Notifications et rappels › « 🩺 Vérifier cet appareil ».</p></details>`;
 }
 /** La tâche planifiée (chaque minute) prévient d'une nouvelle version même si personne n'ouvre l'app : tourne-t-elle ? */
 function cronLine(p) {

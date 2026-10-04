@@ -48,7 +48,7 @@ const mentions = () => {
 
 ok('les vrais libellés des écrans sont lus (sinon le test ne vérifierait rien)', () => {
   for (const [k, l] of Object.entries({ TILES, MENU, ADMIN, LIB, PROG })) assert.ok(l.length >= 3, `${k} : ${l.length} libellés`);
-  assert.ok(TILES.includes('Records et mesures') && MENU.includes('Notifications') && LIB.includes('Exercices'));
+  assert.ok(TILES.includes('Records et mesures') && MENU.includes('Notifications et rappels') && LIB.includes('Exercices'));
 });
 ok('chaque « X › Y » écrit dans l’app mène à une page (ou un bouton) qui existe', () => {
   const m = mentions(), bad = m.map((x) => check(x.section, x.rest, x.line, x.where)).filter(Boolean);

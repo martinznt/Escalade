@@ -68,8 +68,8 @@ function hero() {
   if (streak >= 2) pills.push(`🔥 ${streak} semaines d’affilée`);
   const now = new Date(), today = new Date(now); today.setHours(0, 0, 0, 0);
   const mood = moodLine({ first: !c.history.length, done: c.history.some((x) => x.startedAt >= today.getTime()), target, weekCount: week.length, hour: hr, day: Math.floor(today.getTime() / 86400000) });
-  return h`<section class="card hero">${raw(sceneSvg(now, { season: !!S.settings.season }))}<span class="date">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-    <h1>${hello}${S.user.guest ? '' : ' ' + S.user.username}</h1><p>${mood}</p><div class="stats">${pills.map((p) => h`<span>${p}</span>`)}</div></section>`;
+  return h`<section class="card hero">${S.settings.season ? raw(sceneSvg(now, { season: true })) : ''}<span class="date">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+    <h1>${hello}${S.user.guest ? '' : ' ' + S.user.username}</h1>${advancedUI() ? h`<p>${mood}</p>` : ''}<div class="stats">${pills.map((p) => h`<span>${p}</span>`)}</div></section>`;
 }
 ACT.homeSub = (el) => go('home', el.dataset.id);
 

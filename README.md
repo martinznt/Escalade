@@ -1,10 +1,11 @@
-# Séances entraînement — v8.32.0
+# Séances entraînement — v8.32.1
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
 activité personnalisée. Chaque recommandation est expliquée (faits, estimations, données manquantes) ; rien n'est inventé.
 
-Le bilan de cette refonte, la couverture du cahier des charges et les vérifications sont dans [DELIVERY_8_32.md](DELIVERY_8_32.md). `FINAL_AUDIT.md` conserve l’audit historique de la version 8.30.
+Les changements et vérifications de la version 8.32.1 sont dans [DELIVERY_8_32_1.md](DELIVERY_8_32_1.md).
+Le bilan de la refonte et la couverture du cahier des charges restent dans [DELIVERY_8_32.md](DELIVERY_8_32.md). `FINAL_AUDIT.md` conserve l’audit historique de la version 8.30.
 
 ## Architecture en bref
 
@@ -79,7 +80,7 @@ PW_EXEC=/usr/bin/chromium npm run test:e2e
 
 ## Interface simple et avancée
 
-Un nouveau compte utilise l’interface simple. Dans Paramètres › Affichage, choisir Simple ou Avancée ;
+Un nouveau compte utilise l’interface simple. Le choix Simple ou Avancée est directement en haut des Paramètres ;
 la préférence suit le compte et reste disponible hors ligne. Dans le champ de commande, « je veux une interface
 avancée » ou « mode simple » change uniquement la présentation. Les profils, objectifs, réglages, analyses et
 séances utilisent les mêmes calculs. Les anciennes mises en page personnalisées restent utilisables.

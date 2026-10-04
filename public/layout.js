@@ -2,7 +2,7 @@
 // Chaque fonction d'une page peut être : en grand (carte ou tuile), en petite icône en haut à droite, ou masquée ;
 // l'ordre et une couleur par élément se choisissent en « mode édition » (icône ✏️). Rien n'est enregistré sans deux
 // confirmations, et « Revenir à la mise en page de base » remet tout comme au départ (après confirmation aussi).
-import { h, raw, openSheet, closeSheet, ask, toast } from './ui.js';
+import { h, raw, icon, openSheet, closeSheet, ask, toast } from './ui.js';
 import { S, ACT, item, putItem, render, go } from './state.js';
 import { globalLayout } from './global.js';
 import { chooseScope, saveLayoutGlobal, isAdmin as isAdminUser } from './content.js';
@@ -95,8 +95,8 @@ export function topIcons(page) {
   if (editing(page)) return h`<button class="btn sm" data-act="layQuit">✕ Quitter</button>`;
   const icons = shown(page).filter((e) => e.as === 'icon' && ICONS[e.id]);
   const unread = S.notifUnread || 0;
-  return h`<nav class="topicons" aria-label="Raccourcis">${icons.map((e) => { const [ic, label, act] = ICONS[e.id]; const w = CLEAR.has(e.id) ? '' : SHORT[e.id] || label; return h`<button class="ti ${w ? 'lbl' : ''}" data-act="${act}" data-id="${e.id}" aria-label="${label}" title="${label}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>${w ? h`<span>${ic}</span><small>${w}</small>` : ic}${e.id === 'notif' && unread ? h`<i class="badge-dot">${unread > 9 ? '9+' : unread}</i>` : ''}</button>`; })}
-    ${FEATURES[page] && !S.lay && !S.settings?.hideLayEdit ? h`<button class="ti edit lbl" data-act="layEdit" aria-label="Organiser cette page : choisir ce qui s’affiche, l’ordre et les couleurs" title="Organiser cette page"><span>✏️</span><small>Organiser</small></button>` : ''}</nav>`;
+  return h`<nav class="topicons" aria-label="Raccourcis">${icons.map((e) => { const [ic, label, act] = ICONS[e.id]; const w = CLEAR.has(e.id) ? '' : SHORT[e.id] || label; const drawing = icon(e.id === 'notif' ? 'notifs' : e.id, ic); return h`<button class="ti ${w ? 'lbl' : ''}" data-act="${act}" data-id="${e.id}" aria-label="${label}" title="${label}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>${w ? h`<span>${drawing}</span><small>${w}</small>` : drawing}${e.id === 'notif' && unread ? h`<i class="badge-dot">${unread > 9 ? '9+' : unread}</i>` : ''}</button>`; })}
+    ${FEATURES[page] && !S.lay && !S.settings?.hideLayEdit ? h`<button class="ti edit lbl" data-act="layEdit" aria-label="Organiser cette page : choisir ce qui s’affiche, l’ordre et les couleurs" title="Organiser cette page"><span>${icon('edit')}</span><small>Organiser</small></button>` : ''}</nav>`;
 }
 
 /**

@@ -17,6 +17,67 @@ try {
     await p.evaluate(async()=>{const m=await import('/state.js');m.putItem('config','main',{tourDone:true,asked:['acts','place','minutes','perWeek','goal','avoid']});});
     await p.click('[data-act=setupSkip]');await p.waitForSelector('[data-act=expressOpen]');assert.equal(await p.locator('html').getAttribute('data-interface'),'simple');
   });
+  await step('paramètres en un toucher : cinq rubriques et un seul choix d’interface',async()=>{
+    await p.getByRole('button',{name:'Paramètres',exact:true}).click();
+    await p.waitForSelector('.setmain > .setmenu .setrow');
+    assert.equal(await p.locator('nav .ico svg').count(),5);
+    assert.equal(await p.locator('.setmain > .setmenu .setrow').count(),5);
+    assert.equal(await p.locator('[data-act=interfaceSet]').count(),2);
+    assert.ok(await p.locator('[data-act=interfaceSet][data-v=simple]').isVisible());
+    assert.equal(await p.locator('#settings-more').getAttribute('open'),null);
+    await p.fill('[data-input=setFind]','interface simple');await p.waitForSelector('#setfindres [data-act=findGo]');
+    assert.equal(await p.locator('.setmain').isVisible(),false);
+    await p.click('#setfindres [data-act=findGo]');await p.waitForSelector('.setmain:not([hidden])');
+    assert.equal(await p.locator('[data-act=interfaceSet]').count(),2);
+    await p.fill('[data-input=setFind]','administration');await p.click('#setfindres [data-act=findGo]');await p.waitForSelector('[data-submit=adminOn]');
+    assert.equal((await api('/api/auth/me')).user.isAdmin,false);await p.click('nav [data-id=settings]');await p.waitForSelector('[data-act=interfaceSet]');
+  });
+  await step('affichage : une seule taille du texte, couleurs facultatives et recherche précise',async()=>{
+    await p.click('[data-act=setSub][data-id=display]');await p.waitForSelector('[data-act=a11ySize]');assert.equal(await p.locator('[data-act=interfaceSet]').count(),0);
+    assert.equal((await p.locator('main').innerText()).match(/Taille du texte/g)?.length,1);
+    assert.equal(await p.locator('[data-act=a11ySize]').count(),4);
+    assert.equal(await p.locator('[data-act=appearColor]').first().isVisible(),false);
+    await p.click('[data-act=a11ySize][data-v=l]');assert.equal(await p.locator('html').getAttribute('data-size'),'l');
+    await p.click('[data-act=a11ySize][data-v=m]');
+    await p.click('nav [data-id=settings]');await p.fill('[data-input=setFind]','espacement');await p.click('#setfindres [data-act=findGo]');
+    await p.waitForSelector('[data-k=density].found');assert.ok(await p.locator('[data-act=appearColor]').first().isVisible());
+    await p.click('nav [data-id=settings]');await p.fill('[data-input=setFind]','gros boutons');await p.click('#setfindres [data-act=findGo]');
+    await p.waitForSelector('[data-act=a11ySet][data-k=big].found');await p.click('[data-act=a11ySet][data-k=big]');
+    assert.equal(await p.locator('html').getAttribute('data-big'),'on');await p.click('[data-act=a11ySet][data-k=big]');
+  });
+  await step('recherche : compte et profil repliés accessibles ; mobile, bureau, clair et sombre',async()=>{
+    await p.click('nav [data-id=settings]');await p.fill('[data-input=setFind]','mot de passe');await p.click('#setfindres [data-act=findGo]');
+    await p.waitForSelector('[data-act=chpass].found');assert.ok(await p.locator('[data-act=chpass]').isVisible());
+    await p.fill('[data-input=setFind]','profil questionnaire');await p.click('#setfindres [data-act=findGo]');
+    await p.waitForSelector('[data-act=setupAgain].found');assert.ok(await p.locator('#settings-more [data-act=setupAgain][data-id=quiz]').isVisible());
+    for(const [width,height] of [[320,568],[390,844],[1280,900]]) {
+      await p.setViewportSize({width,height});await p.click('nav [data-id=settings]');
+      assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+      assert.ok(await p.locator('[data-act=interfaceSet][data-v=simple]').isVisible());
+      await p.screenshot({path:`/tmp/escalade-settings-${width}.png`,fullPage:true});
+    }
+    await p.setViewportSize({width:390,height:844});await p.click('[data-act=setSub][data-id=display]');
+    await p.click('[data-act=appear][data-k=mode][data-v=light]');assert.equal(await p.locator('html').getAttribute('data-mode'),'light');
+    await p.screenshot({path:'/tmp/escalade-display-light.png',fullPage:true});
+    await p.click('[data-act=appear][data-k=mode][data-v=dark]');
+  });
+  await step('visites de page, générale et nouveauté : passer à toute étape et relancer',async()=>{
+    await p.setViewportSize({width:320,height:568});
+    const canSkip=async()=>{const b=p.getByRole('button',{name:'Passer la visite',exact:true});await b.waitFor();await p.waitForTimeout(350);const r=await b.boundingBox();assert.ok(r&&r.y>=0&&r.y+r.height<=p.viewportSize().height);};
+    await p.click('nav [data-id=settings]');await p.click('[data-act=pageTour]');await canSkip();await p.click('#tour [data-act=tourNext]');await p.waitForSelector('#tour .tour-step:text-matches("^2 /")');await canSkip();
+    await p.getByRole('button',{name:'Passer la visite',exact:true}).click();await p.waitForSelector('#tour',{state:'detached'});assert.match(p.url(),/#\/settings\/main/);
+    await p.click('[data-act=setSub][data-id=help]');await p.click('[data-act=helpTour]');await canSkip();await p.click('#tour [data-act=tourNext]');await p.waitForSelector('#tour .tour-step:text-matches("^2 /")');await canSkip();
+    await p.getByRole('button',{name:'Passer la visite',exact:true}).click();await p.waitForSelector('#tour',{state:'detached'});
+    await p.reload();await p.waitForSelector('nav.tabs');await p.waitForTimeout(600);assert.equal(await p.locator('#tour').count(),0);
+    await p.click('nav [data-id=settings]');await p.click('#settings-more > summary');await p.click('[data-act=setSub][data-id=updates]');await p.click('[data-act=notifTour][data-v="8.32.1"]');await canSkip();
+    await p.click('#tour [data-act=tourNext]');await p.waitForSelector('#tour .tour-step:text-matches("^2 /")');await canSkip();
+    await p.getByRole('button',{name:'Passer la visite',exact:true}).click();await p.waitForSelector('#tour',{state:'detached'});
+    await p.click('nav [data-id=settings]');await p.click('[data-act=setSub][data-id=help]');await p.click('[data-act=helpTour]');await canSkip();
+    await p.getByRole('button',{name:'Passer la visite',exact:true}).click();await p.waitForSelector('#tour',{state:'detached'});
+    assert.equal((await api('/api/settings')).settings.interfaceMode,'simple');assert.equal((await api('/api/history')).history.length,0);
+    await p.setViewportSize({width:390,height:844});await p.click('nav [data-id=home]');
+    await p.screenshot({path:'/tmp/escalade-home-sober.png',fullPage:true});
+  });
   await step('phrase de récurrence relue : mardi et vendredi, voie à Nicole Abar',async()=>{
     await p.click('[data-act=agendaPlan]');await p.fill('[data-submit=agendaParse] input','Tous les mardis et vendredis, escalade voie à Nicole Abar');await p.click('[data-submit=agendaParse] button');assert.equal(await p.inputValue('[name=place]'),'Nicole Abar');assert.equal(await p.locator('[name=days]:checked').count(),2);
     await p.fill('[name=date]',tuesday);await p.click('[data-submit=agendaSave] button[type=submit]');await p.waitForSelector('.cal');await poll(async()=>(await api('/api/calendar')).events.length===1);
@@ -38,7 +99,7 @@ try {
     const hist=(await api('/api/history')).history;assert.ok(hist.every(h=>h.data.agenda.occurrenceDate===tuesday));
   });
   await step('mode avancé puis simple : préférence persistante, même historique',async()=>{
-    await p.click('nav [data-id=settings]');await p.click('[data-act=setSub][data-id=display]');await p.click('[data-act=interfaceSet][data-v=advanced]');await poll(async()=>(await api('/api/settings')).settings.interfaceMode==='advanced');await p.reload();await p.waitForSelector('[data-act=interfaceSet][data-v=simple]');assert.equal(await p.locator('html').getAttribute('data-interface'),'advanced');await p.click('[data-act=interfaceSet][data-v=simple]');await poll(async()=>(await api('/api/settings')).settings.interfaceMode==='simple');assert.equal((await api('/api/history')).history.length,2);
+    await p.click('nav [data-id=settings]');await p.click('[data-act=interfaceSet][data-v=advanced]');await poll(async()=>(await api('/api/settings')).settings.interfaceMode==='advanced');await p.reload();await p.waitForSelector('[data-act=interfaceSet][data-v=simple]');assert.equal(await p.locator('html').getAttribute('data-interface'),'advanced');await p.click('[data-act=interfaceSet][data-v=simple]');await poll(async()=>(await api('/api/settings')).settings.interfaceMode==='simple');assert.equal((await api('/api/history')).history.length,2);
   });
   await step('accueil, bibliothèque, moi et progrès lisibles à 320 et 390 px',async()=>{
     for(const width of [320,390])for(const tab of ['home','library','profile','progress']){await p.setViewportSize({width,height:844});await p.click(`nav [data-id=${tab}]`);await p.waitForTimeout(100);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${width}px ${tab}`);assert.doesNotMatch(await p.locator('main').innerText(),/undefined|NaN|\[object Object\]|Cet écran n’a pas pu/);}

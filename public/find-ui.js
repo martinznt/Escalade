@@ -16,7 +16,8 @@ function dynamicIndex() {
 }
 function results(q, scope) {
   const index = scope === 'settings' ? SETTINGS_INDEX : [...FEATURE_INDEX, ...SETTINGS_INDEX, ...dynamicIndex()];
-  S.findRes = findIn(index, q, 200);
+  const available = S.user?.guest ? index.filter((r) => !r.account && !['settings/sync', 'settings/bug'].includes(r.to) && !['[data-act=logout]', '[data-act=chpass]', '[data-act=delAccount]'].includes(r.sel)) : index;
+  S.findRes = findIn(available, q, 200);
   return S.findRes;
 }
 function resultsView(q, scope) {
@@ -38,7 +39,7 @@ ACT.findTry = (el) => { const i = $('#sheet input[data-input=findQ]'); if (!i) r
 INPUT.setFind = (el) => {
   const box = $('#setfindres'), q = el.value; if (!box) return;
   box.innerHTML = resultsView(q, 'settings').s;
-  document.querySelector('.setmenu.setmain')?.classList.toggle('hidden', !!norm(q));
+  document.querySelector('.setmain')?.toggleAttribute('hidden', !!norm(q));
 };
 /** Va au résultat, puis met l'élément en lumière (et ouvre le bloc replié qui le contient). */
 ACT.findGo = (el) => {
@@ -53,7 +54,7 @@ function spotlight(sel, tries = 0) {
   setTimeout(() => {
     const el = document.querySelector(`#main ${sel}`);
     if (!el) { if (tries < 8) spotlight(sel, tries + 1); return; }
-    const det = el.closest('details'); if (det) det.open = true; if (el.tagName === 'DETAILS') el.open = true;
+    for (let det = el.closest('details'); det; det = det.parentElement?.closest('details')) det.open = true;
     const target = el.closest('label, .card, .vibes, .palette, .chips') && !el.matches('.card, .vibes, .palette') ? el.closest('label') || el : el;
     target.scrollIntoView({ block: 'center', behavior: 'smooth' });
     target.classList.remove('found'); void target.offsetWidth; target.classList.add('found');

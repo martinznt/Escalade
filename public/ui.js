@@ -7,6 +7,28 @@ export const raw = (s) => new Raw(String(s));
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const val = (v) => (v instanceof Raw ? v.s : Array.isArray(v) ? v.map(val).join('') : v === false || v == null ? '' : esc(v));
 export const h = (strings, ...vals) => new Raw(strings.reduce((out, s, i) => out + s + (i < vals.length ? val(vals[i]) : ''), ''));
+const ICONS = {
+  home: 'M3 10l9-7 9 7M5 9v12h5v-7h4v7h5V9',
+  progress: 'M4 4v16h16M7 14l4-5 4 3 5-7',
+  library: 'M12 5v15M12 5C9 3 6 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1',
+  profile: 'M12 3a4 4 0 1 0 0 8 4 4 0 1 0 0-8M4 21v-2a8 8 0 0 1 16 0v2',
+  settings: 'M4 6h6m4 0h6M10 3v6M4 12h11m4 0h1M15 9v6M4 18h3m4 0h9M7 15v6',
+  display: 'M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4M12 7a5 5 0 1 0 0 10 5 5 0 1 0 0-10',
+  session: 'M8 4l12 8-12 8z',
+  notifs: 'M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 21h4M12 2v2',
+  data: 'M12 3v12m-4-4 4 4 4-4M4 15v6h16v-6',
+  help: 'M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4M12 17h.01',
+  admin: 'M12 2l8 3v6c0 5-8 11-8 11S4 16 4 11V5zM8 11l3 3 5-5',
+  search: 'M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 1 0 0-15M16 16l5 5',
+  all: 'M4 6h16M4 12h16M4 18h16',
+  edit: 'M14 4l6 6M4 16 16 4l4 4L8 20H4z',
+  easy: 'M6 3h12v18H6zM9 7h6M9 11h6M9 15h4',
+  big: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+  contrast: 'M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20M12 2v20M5 6h7M3 10h9M3 14h9M5 18h7',
+  cb: 'M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h3a5 5 0 0 0 5-5c0-3-5-5-9-5M7 10h.01M10 7h.01M15 7h.01',
+};
+/** Icônes de navigation : dessin commun et libellé porté par le bouton. */
+export const icon = (name, fallback = '') => ICONS[name] ? h`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${ICONS[name]}"></path></svg>` : h`${fallback}`;
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 

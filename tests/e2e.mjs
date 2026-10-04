@@ -52,7 +52,15 @@ const pickSel = async (P, sel, v) => {
   await L.locator('xpath=following-sibling::button[contains(@class,"pickbtn")][1]').click(); await (v?.label ? P.locator('#picker .setrow', { has: P.locator(`b:text-is("${v.label}")`) }) : P.locator(`#picker .setrow[data-v="${v}"]`)).first().click();
 };
 const H = (page) => ({
-  click: (sel) => page.locator(sel).first().click(),
+  click: async (sel) => {
+    const target = page.locator(sel).first();
+    for (let i = 0; i < 5 && await target.count() && !(await target.isVisible()); i++) {
+      const panel = target.locator('xpath=ancestor::details[not(@open)]').first();
+      if (!(await panel.count())) break;
+      await panel.locator(':scope > summary').click();
+    }
+    await target.click();
+  },
   text: (sel) => page.locator(sel).first().innerText(),
   count: (sel) => page.locator(sel).count(),
   confirm: async () => { await page.waitForSelector('#dialog.open [data-dlg="1"]'); await page.click('#dialog.open [data-dlg="1"]'); await page.waitForSelector('#dialog:not(.open)', { state: 'attached' }); },
@@ -68,6 +76,7 @@ const H = (page) => ({
     }
     // Page retirée des listes mais toujours accessible par son adresse (ex. le générateur « Sur mesure »).
     if (!(await page.locator(sel).count()) && root) { await page.evaluate((hsh) => { location.hash = hsh; }, `#/${{ libSub: 'library', progSub: 'progress', profSub: 'profile', setSub: 'settings' }[act]}/${id}`); await page.waitForTimeout(200); return; }
+    if (act === 'setSub' && !(await page.locator(sel).first().isVisible()) && await page.locator('#settings-more > summary').isVisible()) await page.click('#settings-more > summary');
     await page.locator(sel).first().click(); await page.waitForTimeout(120);
   },
   noOverflow: async (where) => { const ok = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1); assert.ok(ok, `défilement horizontal de page détecté (${where})`); },
@@ -208,7 +217,7 @@ await step('recherche 🔍 dans toute l’app, et recherche limitée aux paramè
   await a.click('#findres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/display'));
   await A.waitForSelector('#main .found'); // l'élément trouvé est mis en lumière
   await a.tab('settings'); await A.fill('input[data-input=setFind]', 'vibration'); await A.waitForSelector('#setfindres [data-act=findGo]');
-  assert.equal(await a.count('.setmenu.setmain.hidden'), 1, 'la liste des rubriques laisse place aux résultats');
+  assert.equal(await A.locator('.setmain').isVisible(), false, 'la liste des rubriques laisse place aux résultats');
   assert.doesNotMatch(await a.text('#setfindres'), /Minuteur|Exercice/, 'seulement des paramètres');
   await a.click('#setfindres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/session')); await A.waitForSelector('#main input[name=vibration]');
 });
@@ -1042,7 +1051,7 @@ console.log('Autre appareil');
 await step('tout suit le compte sur un autre appareil : données, réglages et apparence', async () => {
   const a2 = H(A2);
   await a2.tab('settings'); await a2.sub('setSub', 'display');
-  await A2.click('[data-act=appear][data-k=mode][data-v=light]'); await A2.click('[data-act=appearColor][data-id=granit]'); await A2.click('[data-act=appear][data-k=size][data-v=l]');
+  await A2.click('[data-act=appear][data-k=mode][data-v=light]'); await A2.click('[data-act=appearColor][data-id=granit]'); await A2.click('[data-act=a11ySize][data-v=l]');
   await a2.sub('setSub', 'main'); await a2.sub('setSub', 'session');
   await A2.fill('input[name=defaultRest]', '75'); await A2.dispatchEvent('input[name=defaultRest]', 'change');
   await poll(async () => (await a2.api('GET', '/api/items?since=0')).data.items.some((i) => i.c === 'config' && i.id === 'appearance' && i.d.palette === 'granit'), 15000, 'apparence enregistrée dans le compte');

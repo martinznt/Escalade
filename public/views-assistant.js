@@ -1,4 +1,4 @@
-// views-assistant.js — Paramètres › Admin › Assistant du site. Une conversation en français avec l'IA du serveur
+// views-assistant.js — Paramètres › Administration › Assistant du site. Une conversation en français avec l'IA du serveur
 // (Workers AI : pas besoin d'abonnement extérieur). L'assistant répond, pose des questions s'il lui manque une
 // information, et range ses propositions VALIDÉES PAR LE SERVEUR dans un brouillon du Studio, que tu relis et publies.
 // Ce qui demande du code : « 💻 Proposer dans le code » prépare de petits remplacements exacts (vérifiés par le serveur),

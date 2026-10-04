@@ -7,13 +7,13 @@ import { S, ACT, go } from './state.js';
 // [onglet, sous-page, sélecteur de l'élément à montrer, titre, texte]
 const STEPS = [
   ['home', 'dash', '.hero', '👋 Bienvenue !', 'Voici ton accueil : ta semaine en un coup d’œil. On fait le tour des 5 onglets ensemble, en une minute.'],
-  ['home', 'dash', '.quick .qa.pri', '🎯 Une séance pour toi', 'Touche ici : l’app prépare une séance adaptée à ton niveau, ton temps et ton matériel.'],
+  ['home', 'dash', '.quick .qa.pri, [data-act=expressOpen]', 'Préparer une séance', 'Une séance adaptée à ton niveau, ton temps et ton matériel. Tu peux la modifier avant de commencer.'],
   ['home', 'dash', '.pagetour', '🧭 Une visite sur chaque page', 'Sur chaque écran, ce bouton t’explique la page : chaque partie, ce qu’il y a dedans et à quoi ça sert.'],
   ['progress', 'summary', '#main h1', '📈 Progrès', 'Tes chiffres, ta régularité, tes records et ton journal, comparés uniquement à toi-même.'],
   ['library', 'home', '#main .setmenu', '📚 Bibliothèque', 'Tes séances enregistrées, « Créer une séance » (l’app te guide), le carnet de séances prêtes par niveau, et tous les exercices.'],
   ['library', 'catalog', '#main h1', '📖 Le carnet de séances', 'Pas le temps de créer ? Des séances toutes prêtes pour chaque sport, de débutant à avancé.'],
   ['profile', 'home', '#main', '👤 Ton profil', 'Tout ce que l’app sait de toi : corps, sports, lieux et matériel, objectifs, mesures. Plus il est complet, plus tes séances sont justes.'],
-  ['settings', 'main', '#main .setmenu', '⚙️ Paramètres', 'Affichage, déroulé des séances, notifications, tes données et l’aide.'],
+  ['settings', 'main', '#main .setmenu', 'Paramètres', 'Le choix Simple ou Avancée est en haut. Les réglages courants sont dans la liste ; la recherche retrouve les autres.'],
   ['settings', 'help', '[data-act=helpTour]', '🧭 C’est parti !', 'Tu pourras relancer cette visite ici, et la visite de chaque page avec le bouton 🧭 en haut. Bon entraînement 💪'],
 ];
 const T = { i: -1, onEnd: null, raf: 0, steps: STEPS, stay: false };
@@ -47,14 +47,15 @@ function draw(el) {
   const [, , , title, text] = T.steps[T.i], root = document.getElementById('tour'); if (!root) return;
   const last = T.i === T.steps.length - 1;
   root.innerHTML = h`<div class="tour-spot"></div><div class="tour-bubble tour"><i class="tour-arrow"></i><button class="tour-x" data-act="tourEnd" aria-label="Quitter la visite">✕</button>
-    <div class="tour-step">${T.i + 1} / ${T.steps.length}</div><h3>${title}</h3><p>${text}</p>
+    <div class="tour-step">${T.i + 1} / ${T.steps.length}</div><div class="tour-copy"><h3>${title}</h3><p>${text}</p></div>
     ${T.steps.length > 12 ? h`<div class="tbar" aria-hidden="true"><i style="width:${Math.round(((T.i + 1) / T.steps.length) * 100)}%"></i></div>` : h`<div class="dots">${T.steps.map((_, k) => h`<i class="${k === T.i ? 'on' : ''}"></i>`)}</div>`}
-    <div class="row">${T.i > 0 ? h`<button class="btn sm" data-act="tourPrev">‹ Retour</button>` : h`<button class="btn sm ghost" data-act="tourEnd">Passer</button>`}<span class="grow"></span>
-      ${last ? h`<button class="btn pri" data-act="tourEnd">C’est compris !</button>` : h`<button class="btn pri" data-act="tourNext">Suivant ›</button>`}</div></div>`.s;
+    <div class="row">${T.i > 0 ? h`<button class="btn sm" data-act="tourPrev">‹ Retour</button>` : ''}<span class="grow"></span>
+      ${last ? h`<button class="btn pri tour-finish" data-act="tourEnd">Terminer</button>` : h`<button class="btn pri" data-act="tourNext">Suivant ›</button>`}</div>
+    <button class="btn sm ghost tour-skip" data-act="tourEnd">Passer la visite</button></div>`.s;
   T.el = el; place();
   // Deuxième placement un peu après : si la page s'est redessinée, la bulle suit l'élément.
   const i0 = T.i; for (const ms of [350, 1000]) setTimeout(() => { if (T.i === i0) place(); }, ms);
-  root.querySelector('.tour-bubble [data-act=tourNext], .tour-bubble [data-act=tourEnd]')?.focus({ preventScroll: true });
+  root.querySelector('.tour-bubble [data-act=tourNext], .tour-bubble .tour-finish, .tour-bubble .tour-skip')?.focus({ preventScroll: true });
 }
 /** Place le halo sur l'élément et la bulle au-dessus ou en dessous, avec la flèche qui le pointe. */
 function place() {
@@ -67,7 +68,9 @@ function place() {
     if ((!T.el || !document.body.contains(T.el)) && T.steps[T.i]?.[2]) { const again = document.querySelector(T.steps[T.i][2]); if (again && again.getBoundingClientRect().height > 0) T.el = again; }
     if (!T.el || !document.body.contains(T.el)) {
       spot.style.cssText = `left:${vw / 2}px;top:${vh / 2}px;width:0;height:0`;
-      bub.style.cssText = `left:16px;right:16px;top:${Math.max(16, vh / 2 - 120)}px`; arrow.style.display = 'none'; return;
+      const width = Math.min(360, vw - 32);
+      bub.style.cssText = `left:${Math.max(16, (vw - width) / 2)}px;top:16px;width:${width}px`;
+      bub.style.top = `${Math.max(16, (vh - bub.offsetHeight) / 2)}px`; arrow.style.display = 'none'; return;
     }
     const r = T.el.getBoundingClientRect();
     spot.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + 2 * pad}px;height:${r.height + 2 * pad}px`;

@@ -173,9 +173,14 @@ export const NEWS = [
     ['library', 'catalog', '#main h1', '📖 Carnet de séances', '487 séances prêtes : choisis ce que tu veux travailler (technique de pieds, doigts, seuil…), « Adapté à moi » ou tout le carnet.'],
   ] },
   { v:'8.32.0', date:'2026-10-04', title:'Simple à utiliser, toujours aussi riche', why:'Une interface simple par défaut, tes rendez-vous récurrents et un bilan rapide qui raconte la vraie séance.', steps:[
-    ['settings','display','#main h1','Mon interface','Choisis Simple ou Avancée : tes données et la réflexion sportive restent les mêmes.'],
+    ['settings','main','[data-act=interfaceSet]','Mon interface','Choisis Simple ou Avancée : tes données et la réflexion sportive restent les mêmes.'],
     ['home','cal','#main h1','Mes rendez-vous sportifs','Planifie plusieurs jours par semaine, même sans séance détaillée. Chaque occurrence a son propre bilan.'],
     ['profile','memory','#main h2','Ce que l’app a compris','Retrouve les observations, leur origine et leur confiance. Confirme ou corrige ce qui est faux.'],
+  ] },
+  { v:'8.32.1', date:'2026-10-04', title:'Des réglages plus faciles à trouver', why:'Une présentation plus sobre, les réglages essentiels à portée de main et des visites que tu peux passer.', steps:[
+    ['settings','main','[data-act=interfaceSet]','Choisir mon interface','Simple ou Avancée se choisit dès l’ouverture des paramètres.'],
+    ['settings','display','[data-act=a11ySize]','Lire plus confortablement','La taille du texte se règle à un seul endroit, avec les options d’accessibilité.'],
+    ['settings','help','[data-act=helpTour]','Les visites restent facultatives','Passe une visite à n’importe quelle étape. Tu peux la relancer dans Aide.'],
   ] },
 ];
 

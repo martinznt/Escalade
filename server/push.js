@@ -123,7 +123,7 @@ export async function messageFor(env, endpoint, userId, tz, now = Date.now()) {
     return { title: `${d.emoji || '📣'} ${d.title || 'Annonce'}`, body: String(d.body || '').slice(0, 180), url: '/?news=1#/home/dash', silent };
   }
   if (pending === 'update') return { title: 'Nouvelle mise à jour disponible ✨', body: 'Ouvre l’app pour voir ce qui a changé et à quoi ça sert.', url: '/?news=1#/home/dash', silent };
-  if (pending === 'admin') return { title: 'Nouvelle proposition 📬', body: 'Quelqu’un propose une idée pour l’app. À valider dans Paramètres › Admin.', url: '/?news=1#/home/dash', silent }; // la boîte 🔔 : une notification par idée, qui mène à l'endroit concerné
+  if (pending === 'admin') return { title: 'Nouvelle proposition 📬', body: 'Quelqu’un propose une idée pour l’app. À valider dans Paramètres › Administration.', url: '/?news=1#/home/dash', silent }; // la boîte 🔔 : une notification par idée, qui mène à l'endroit concerné
   if (pending === 'reply' && userId) {
     const r = await q(env, "SELECT label,reply FROM proposals WHERE user_id=? AND status='done' ORDER BY reviewed_at DESC LIMIT 1", userId).first();
     return { title: 'Réponse à ta proposition', body: r ? `« ${r.label} » : ${r.reply}` : 'Un administrateur a répondu à ta proposition.', url: '/?news=1#/home/dash', silent };

@@ -28,7 +28,7 @@ export const PAGE_INTRO = {
   'profile/activities': ['🏅 Mes sports', 'Les sports que tu pratiques, et pour l’escalade tes cotations et tes styles.'],
   'profile/equipment': ['📍 Mes lieux', 'Tes salles, ta maison, tes falaises, avec le matériel de chacun : les séances n’utilisent que ce qui est disponible.'],
   'profile/analyse': ['🔎 Mon analyse', 'Tes capacités (forces et points à travailler), les tendances, et pourquoi l’app te conseille ce qu’elle te conseille.'],
-  'settings/main': ['⚙️ Paramètres', 'Ton compte, l’affichage, le déroulé des séances, les notifications, tes données et l’aide. Chaque ligne dit ce qu’elle contient.'],
+  'settings/main': ['Paramètres', 'Le choix Simple ou Avancée est en haut. Choisis une rubrique ou cherche le réglage par son nom.'],
   'settings/display': ['🎨 Affichage', 'Thème clair ou sombre, couleurs, taille du texte, langue : ça suit ton compte sur tous tes appareils.'],
   'settings/notifs': ['🔔 Notifications', 'Rappels d’entraînement, nouvelles mises à jour, réponses : choisis ce que tu reçois et quand.'],
   'library/seance': ['📋 Ta séance', 'Tout sur cette séance : son résumé, ses exercices (à modifier, remplacer, réordonner), ▶ Lancer, et 🔁 Adapter pour faire une version pour cette fois (durée, matériel, douleur, intensité) sans la modifier.'],
@@ -108,4 +108,4 @@ export function pageSteps() {
 }
 ACT.pageTour = () => { if (tourActive()) return; window.scrollTo(0, 0); setTimeout(() => startTour({ steps: pageSteps(), stay: true }), 60); };
 /** Bouton en haut de la page. */
-export const pageTourBar = () => h`<div class="row pagetour"><span class="grow"></span><button class="btn sm ghost" data-act="pageTour" aria-label="Visite guidée de cette page : ce qu’il y a et à quoi ça sert">🧭 Visite de cette page</button></div>`;
+export const pageTourBar = () => h`<div class="row pagetour"><span class="grow"></span><button class="btn sm ghost" data-act="pageTour" aria-label="Visite guidée de cette page : ce qu’il y a et à quoi ça sert">Visite de cette page</button></div>`;

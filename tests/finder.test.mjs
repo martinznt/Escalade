@@ -25,6 +25,16 @@ ok('dans Paramètres, seulement des réglages', () => {
   assert.ok(findIn(SETTINGS_INDEX, 'son').length > 0); assert.ok(findIn(SETTINGS_INDEX, 'son').every((r) => r.kind === 'setting'));
   assert.deepEqual(findIn(SETTINGS_INDEX, 'minuteur tabata'), []);
 });
+ok('le choix d’interface et l’accessibilité se trouvent avec leurs mots courants', () => {
+  for (const q of ['interface simple', 'interface avancée', 'mode compliqué']) {
+    const r = findIn(SETTINGS_INDEX, q)[0];
+    assert.equal(r.title, 'Interface simple ou avancée'); assert.equal(r.to, 'settings/main');
+  }
+  assert.equal(top('gros boutons', SETTINGS_INDEX), 'Gros boutons');
+  assert.equal(top('lecture facile', SETTINGS_INDEX), 'Lecture facile');
+  assert.equal(top('daltonisme', SETTINGS_INDEX), 'Couleurs pour daltonisme');
+  assert.equal(top('administration', SETTINGS_INDEX), 'Administration');
+});
 ok('chaque paramètre mène à une rubrique qui existe ; chaque action existe dans l’app', () => {
   const subs = fs.readFileSync(new URL('../public/views-settings.js', import.meta.url), 'utf8');
   for (const e of SETTINGS_INDEX) assert.match(subs, new RegExp(`\\['${e.to.split('/')[1]}'`), e.title);

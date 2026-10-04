@@ -3,7 +3,7 @@
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
 import { returnBar, hintsBar } from './nav.js';
 import './picker.js';
-import { h, raw, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
+import { h, raw, icon, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession, uid } from './shared.js';
@@ -69,7 +69,7 @@ function doRender() {
   }
   app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
     <main class="wrap" id="main">${demoBar()}${bannerBar()}${returnBar()}${advancedUI() ? hintsBar() : ''}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}${body}</main>
-    <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${ic}</span><span class="lbl">${id === 'profile' && !advancedUI() ? 'Moi' : label}</span></button>`)}</nav>`.s;
+    <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${icon(id, ic)}</span><span class="lbl">${id === 'profile' && !advancedUI() ? 'Moi' : label}</span></button>`)}</nav>`.s;
 }
 /** Bandeau de l'équipe (ex. maintenance prévue) : affiché jusqu'à sa date de fin, ou jusqu'à « Compris ». */
 function bannerBar() {

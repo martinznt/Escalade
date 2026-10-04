@@ -178,7 +178,7 @@ export async function seanceToCatalog(s) {
 ACT.seanceToCatalog = (el) => { const s = S.seances.items.find((x) => x.id === el.dataset.id); if (s) seanceToCatalog(s); };
 
 /* ───────── Intentions et formats (écran administrateur) ───────── */
-// Paramètres › Admin, groupe « Modifier l’app sans code » : trois pages claires (contenu, textes et apparence, ce qui a été modifié).
+// Paramètres › Administration, groupe « Modifier l’app sans code » : trois pages claires (contenu, textes et apparence, ce qui a été modifié).
 const CHANGE_KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', hint: '💡 Raccourci', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
 export const globalChanges = () => GL.items.slice().sort((a, b) => b.updatedAt - a.updatedAt);
 /** Contenu de l'app : où modifier chaque type, et les intentions par sport. */
@@ -270,7 +270,7 @@ export function shareButton(kind, id) {
 }
 ACT.pubGlobal = async (el) => {
   const x = SHARE[el.dataset.k]?.(el.dataset.id); if (!x) { toast('Impossible : il manque des informations.'); return; }
-  if (!(await ask(`Ajouter « ${x.label} » pour tout le monde ?`, { ok: 'Oui, pour tout le monde', detail: 'Tous les comptes le verront. Tu pourras l’annuler dans Paramètres › Admin.' }))) return;
+  if (!(await ask(`Ajouter « ${x.label} » pour tout le monde ?`, { ok: 'Oui, pour tout le monde', detail: 'Tous les comptes le verront. Tu pourras l’annuler dans Paramètres › Administration.' }))) return;
   try { await putGlobal(el.dataset.k, 'g-' + uid().slice(0, 12), { data: x.data }); closeSheet(); toast('Ajouté pour tout le monde'); } catch (e) { toast(e.message, 4500, 'bad'); }
 };
 ACT.propose = (el) => {
@@ -318,7 +318,7 @@ ACT.propOpen = async (el) => {
     <p class="tiny muted">De ${p.username || 'un compte supprimé'} · ${relDate(p.created_at)}</p>${p.detail ? h`<p class="small">« ${p.detail} »</p>` : ''}${place}${preview(p)}
     <form data-submit="propDecide" class="stack"><input type="hidden" name="id" value="${p.id}"><label>Réponse à ${p.username || 'la personne'} (facultatif)<input name="reply" maxlength="300" placeholder="Merci !"></label>
     <div class="grid2"><button class="btn pri" name="decision" value="accept">${p.kind === 'idea' ? '✓ C’est noté' : p.payload?.target ? '✓ Appliquer pour tout le monde' : '✓ Ajouter pour tout le monde'}</button><button class="btn danger" name="decision" value="refuse">✗ Refuser</button></div></form>
-    <p class="tiny muted">Une fois ajouté, tu peux encore le modifier ici avec ✏️, ou l’annuler dans Paramètres › Admin.</p></div>`, { wide: true }), 180);
+    <p class="tiny muted">Une fois ajouté, tu peux encore le modifier ici avec ✏️, ou l’annuler dans Paramètres › Administration.</p></div>`, { wide: true }), 180);
 };
 /** L'élément joint à une idée, sur la page courante (null s'il a disparu depuis). */
 function placeEl(sel, flash = false) {
@@ -337,7 +337,7 @@ ACT.propBack = () => { propBar(false); if (S.propCur) ACT.propOpen({ dataset: { 
 /** Modifier l'endroit joint : la fiche de l'exercice ou de la séance prête s'il s'agit de l'une d'elles, sinon le texte. */
 ACT.propEditPlace = () => {
   const el = placeEl(S.propCur?.payload?.sel || ''); propBar(false);
-  if (!el) { toast('Endroit introuvable sur cette page : va le chercher, puis utilise Paramètres › Admin › Textes et apparence.', 5000); return; }
+  if (!el) { toast('Endroit introuvable sur cette page : va le chercher, puis utilise Paramètres › Administration › Textes et apparence.', 5000); return; }
   const ex = el.closest('[data-act=libInfo][data-id], [data-act=gxEdit][data-id]'), cat = el.closest('[data-act=catOpen][data-id]');
   if (ex && byId(ex.dataset.id)) { closeSheet(); ACT.gxEdit({ dataset: { id: ex.dataset.id } }); return; }
   if (cat) { closeSheet(); ACT.gcEdit?.({ dataset: { id: cat.dataset.id } }); return; }
