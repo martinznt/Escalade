@@ -986,9 +986,19 @@ await step('Studio : brouillon invisible, vérifications, publication confirmée
     await C.route(studioListURL, delayedStudio, { times: 1 });
     await c.click('.subhead [data-act=setSub]'); await C.waitForSelector('#studio-tools > summary');
     if (!(await C.locator('#studio-tools').evaluate((el) => el.open))) await c.click('#studio-tools > summary');
-    const audit = C.locator('#studio-tools [data-act=setSub][data-id=audit]'); await audit.scrollIntoViewIfNeeded();
+    const audit = C.locator('#studio-tools [data-act=setSub][data-id=audit]');
+    await audit.evaluate((el) => {
+      // À la limite de défilement, des lignes plus courtes peuvent déplacer même un bouton situé avant elles.
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      const r = el.getBoundingClientRect();
+      if (document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('[data-act]') !== el) el.scrollIntoView({ block: 'center' });
+    });
     const pressedAudit = await audit.elementHandle();
-    const box = await audit.boundingBox(); assert.ok(box); await C.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await C.mouse.down();
+    const box = await audit.boundingBox(); assert.ok(box);
+    const auditPoint = [box.x + box.width / 2, box.y + box.height / 2];
+    assert.equal(await pressedAudit.evaluate((el, [x, y]) => document.elementFromPoint(x, y)?.closest('[data-act]') === el, auditPoint), true, 'le point pressé atteint Audit sans être recouvert par la navigation fixe');
+    const rowsBeforePress = await C.locator('#studio-rows').innerHTML();
+    await C.mouse.move(...auditPoint); await C.mouse.down();
     const rollbackDelivery = C.waitForResponse(async (r) => new URL(r.url()).pathname === '/api/global' && !(await r.json()).items.some((item) => item.data?.q === 'Question E2E ?'));
     releaseRolledBackGlobal();
     await (await rollbackDelivery).finished();
@@ -1009,7 +1019,12 @@ await step('Studio : brouillon invisible, vérifications, publication confirmée
     assert.ok(!afterLatePublication.globalItems.some((item) => item.data?.q === 'Question E2E ?'), 'la publication annulée reste absente de la couche globale');
     assert.ok(!afterLatePublication.faq.some((item) => item[0] === 'Question E2E ?'), 'la publication annulée reste absente des questions appliquées');
     assert.equal(await pressedAudit.evaluate((el) => el.isConnected && el === document.querySelector('#studio-tools [data-id=audit]')), true, 'la réponse globale ancienne de publication conserve le bouton pressé');
-    releaseStudio(); await C.waitForSelector('#studio-rows :text("Aucun brouillon en attente.")');
+    const studioDelivery = C.waitForResponse((r) => new URL(r.url()).pathname === '/api/admin/studio');
+    releaseStudio(); await (await studioDelivery).finished();
+    await C.waitForFunction(async () => (await import('/state.js')).S.studio?.sets?.length === 0);
+    assert.equal(await C.locator('#studio-rows').innerHTML(), rowsBeforePress, 'les nouvelles lignes attendent la fin de l’appui malgré le modèle reçu');
+    assert.deepEqual(await audit.boundingBox(), box, 'le chargement conserve la position du bouton pressé');
+    assert.equal(await pressedAudit.evaluate((el, [x, y]) => el.isConnected && document.elementFromPoint(x, y)?.closest('[data-act]') === el, auditPoint), true, 'le point de relâchement atteint toujours le même bouton Audit');
     assert.equal(await C.locator('#studio-tools').evaluate((el) => el.open), true, 'le chargement conserve le menu ouvert et son bouton pressé');
     await C.mouse.up(); await C.waitForSelector('main :text("Lot publié")');
   } finally {

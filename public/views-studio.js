@@ -24,12 +24,42 @@ const FORMS = {
 };
 const val = (v) => (v == null ? '—' : typeof v === 'string' ? v : JSON.stringify(v)).slice(0, 240);
 
+const studioRowsElement = (st, owner) => S.user?.id === owner && S.studio === st && S.tab === 'settings' && S.sub.settings === 'studio' ? $('#studio-rows') : null;
+let studioToolsPress = null;
+function paintStudioRows(st, owner) {
+  const rows = studioRowsElement(st, owner); if (!rows) return;
+  if (studioToolsPress?.rows === rows) { studioToolsPress.pending = true; return; }
+  rows.innerHTML = studioRows(st).s;
+  for (const button of document.querySelectorAll('[data-act=studioFilter]')) button.classList.toggle('on', button.dataset.id === st.filter);
+}
+function releaseStudioTools(e) {
+  const press = studioToolsPress;
+  if (!press || press.releasing || (e.pointerId != null && e.pointerId !== press.pointerId)) return;
+  press.releasing = true;
+  // Le clic natif et son action de navigation doivent finir avant un éventuel changement de hauteur des lignes.
+  setTimeout(() => {
+    if (studioToolsPress !== press) return;
+    studioToolsPress = null;
+    if (press.pending && studioRowsElement(press.st, press.owner) === press.rows) paintStudioRows(press.st, press.owner);
+  }, 0);
+}
+if (typeof document !== 'undefined') {
+  // Un seul suivi pour le module : aucune accumulation de handlers à chaque chargement de liste.
+  document.addEventListener('pointerdown', (e) => {
+    if (e.isPrimary === false || e.button !== 0 || !e.target.closest('#studio-tools [data-act]')) return;
+    const st = S.studio, owner = S.user?.id, rows = studioRowsElement(st, owner); if (!rows) return;
+    studioToolsPress = { st, owner, rows, pointerId: e.pointerId, pending: studioToolsPress?.rows === rows && studioToolsPress.pending };
+  }, true);
+  for (const event of ['pointerup', 'pointercancel', 'click']) document.addEventListener(event, releaseStudioTools, true);
+  window.addEventListener('blur', releaseStudioTools);
+  window.addEventListener('hashchange', releaseStudioTools);
+}
+
 async function loadSets() {
   const st = ST(), owner = S.user?.id;
   try { const r = await api('GET', '/api/admin/studio' + (st.filter === 'all' ? '' : '?status=' + st.filter)); if (S.user?.id !== owner || S.studio !== st) return; st.sets = r.sets; st.err = ''; }
   catch (e) { if (S.user?.id !== owner || S.studio !== st) return; st.err = e.offline ? 'Connexion requise.' : e.message; }
-  const rows = S.tab === 'settings' && S.sub.settings === 'studio' ? $('#studio-rows') : null;
-  if (rows) { rows.innerHTML = studioRows(st).s; for (const button of document.querySelectorAll('[data-act=studioFilter]')) button.classList.toggle('on', button.dataset.id === st.filter); }
+  paintStudioRows(st, owner);
 }
 async function loadSet(id) {
   const st = ST(), owner = S.user?.id;

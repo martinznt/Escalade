@@ -190,6 +190,9 @@ export const NEWS = [
   { v:'8.32.3', date:'2026-10-05', title:'Des réglages et des actions plus fiables', why:'Les réglages IA sont accessibles au rôle Intelligence. Les options de séance et les menus d’administration restent ouverts pendant la synchronisation ; un contenu annulé reste annulé.', steps:[
     ['settings','main','','Les réponses de l’IA','Le ton et la longueur des réponses peuvent être réglés par l’administration. Les demandes de précision, les sources vérifiées et la validation des modifications restent obligatoires.'],
   ] },
+  { v:'8.32.4', date:'2026-10-05', title:'Des boutons stables pendant le chargement', why:'Dans l’administration, le chargement des modifications attend la fin d’un appui avant de changer la liste. Les raccourcis restent utilisables.', steps:[
+    ['settings','main','','Administration','Les raccourcis du Studio restent à leur place pendant ton appui, même si la liste finit de charger.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

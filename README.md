@@ -1,10 +1,10 @@
-# Séances entraînement — v8.32.3
+# Séances entraînement — v8.32.4
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
 activité personnalisée. Chaque recommandation est expliquée (faits, estimations, données manquantes) ; rien n'est inventé.
 
-L’accès aux réglages IA par rôle est corrigé en [8.32.3](DELIVERY_8_32_3.md). Les changements et vérifications de la version 8.32.2 sont dans [DELIVERY_8_32_2.md](DELIVERY_8_32_2.md).
+Les appuis pendant le chargement du Studio sont protégés en [8.32.4](DELIVERY_8_32_4.md). L’accès aux réglages IA par rôle est corrigé en [8.32.3](DELIVERY_8_32_3.md). Les changements et vérifications de la version 8.32.2 sont dans [DELIVERY_8_32_2.md](DELIVERY_8_32_2.md).
 La simplification des paramètres et des visites est décrite dans [DELIVERY_8_32_1.md](DELIVERY_8_32_1.md).
 Le bilan de la refonte et la couverture du cahier des charges restent dans [DELIVERY_8_32.md](DELIVERY_8_32.md). `FINAL_AUDIT.md` conserve l’audit historique de la version 8.30.
 
