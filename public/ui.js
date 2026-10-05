@@ -63,7 +63,8 @@ export const buzzOk = () => { try { if (navigator.vibrate && document.documentEl
 let sheetStack = 0;
 export function openSheet(content, { wide = false } = {}) {
   const s = $('#sheet');
-  s.innerHTML = `<div class="back" data-act="closeSheet"></div><div class="panel${wide ? ' wide' : ''}" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div>${val(content)}</div>`;
+  const body = val(content), close = body.includes('data-act="closeSheet"') ? '' : '<button type="button" class="btn sm ghost" data-act="closeSheet" aria-label="Fermer la fenêtre">Fermer</button>';
+  s.innerHTML = `<div class="back" data-act="closeSheet"></div><div class="panel${wide ? ' wide' : ''}" role="dialog" aria-modal="true"><div class="sheet-tools"><div class="grab" aria-hidden="true"></div>${close}</div>${body}</div>`;
   s.classList.add('open'); sheetStack++;
   setTimeout(() => { const f = s.querySelector('[autofocus]'); if (f) f.focus(); }, 30);
 }

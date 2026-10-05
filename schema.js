@@ -1,7 +1,7 @@
 // schema.js — tables D1. Le worker les crée / complète tout seul au premier appel (CREATE TABLE IF NOT EXISTS
 // + migrations idempotentes de worker.js upgradeSchema) : aucune commande à lancer, compatible avec la base existante.
 // Aucune table existante n'est supprimée ; les colonnes ajoutées ont des valeurs par défaut.
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 export const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, email TEXT UNIQUE, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
@@ -18,6 +18,9 @@ export const SCHEMA = [
   // Rappels d'entraînement (notifications) : un abonnement par appareil.
   "CREATE TABLE IF NOT EXISTS push_subs (endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, days TEXT NOT NULL DEFAULT '[]', hour TEXT NOT NULL DEFAULT '18:00', tz TEXT NOT NULL DEFAULT 'Europe/Paris', last_day TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_push_user ON push_subs(user_id)",
+  // Envois de mise à jour / annonces : accusé de réception par appareil, reprise des erreurs et verrou d'envoi.
+  "CREATE TABLE IF NOT EXISTS push_updates (notice_id TEXT NOT NULL, endpoint TEXT NOT NULL, user_id TEXT NOT NULL, pending TEXT NOT NULL, force INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, next_at INTEGER NOT NULL DEFAULT 0, lease_until INTEGER NOT NULL DEFAULT 0, token TEXT NOT NULL DEFAULT '', read_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(notice_id,endpoint), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_push_updates_due ON push_updates(state,next_at,lease_until)",
   "CREATE TABLE IF NOT EXISTS duo_rooms (code TEXT PRIMARY KEY, owner_id TEXT NOT NULL, members_json TEXT NOT NULL, session_json TEXT NOT NULL, state_json TEXT NOT NULL, v INTEGER NOT NULL DEFAULT 1, by_id TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
   "CREATE INDEX IF NOT EXISTS idx_duo_exp ON duo_rooms(expires_at)",
   "CREATE TABLE IF NOT EXISTS group_rooms (code TEXT PRIMARY KEY, owner_id TEXT NOT NULL, members_json TEXT NOT NULL, session_json TEXT NOT NULL, config_json TEXT NOT NULL DEFAULT '{}', state_json TEXT NOT NULL, v INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",

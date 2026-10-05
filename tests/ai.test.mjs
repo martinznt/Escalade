@@ -68,7 +68,7 @@ await ok('coach : conversation bornée, règles de prudence, réponse nettoyée'
   assert.equal(cleanReply({ response: '<b>Salut</b> \u0007ok' }), 'Salut ok');
 });
 await ok('coach : route protégée, limitée, erreurs sans détail interne', async () => {
-  const envC = makeEnv({ AI: { run: async (_m, o) => ({ response: `Réponse à : ${o.messages.at(-1).content}` }) } });
+  const envC = makeEnv({ AI: { run: async (_m, o) => ({ response: JSON.stringify({status:'ok',basis:'request',sources:['request'],reply:`Réponse à : ${o.messages.at(-1).content}`}) }) } });
   const u = new Client(envC); await u.register('coachee');
   assert.equal((await new Client(envC).post('/api/ai/chat', { messages: [{ role: 'user', content: 'x' }] })).status, 401);
   const r = await u.post('/api/ai/chat', { messages: [{ role: 'user', content: 'Comment progresser ?' }], profile: 'sports : Escalade' });

@@ -14,7 +14,7 @@ import { NEWS } from './news.js';
 import { filterBugs } from './adminlist.js';
 import { vStudio, vStudioSet, vAudit, vLab, vHealth, vMaint, vCode, vCodeItem, canRole, ROLE_L } from './views-studio.js';
 import { FAQ } from './help.js';
-import { faqAdminButtons, announcements } from './content.js';
+import { faqAdminButtons, announcements, loadGlobal } from './content.js';
 import { vAdminContent, vAdminLook, vAdminChanges, globalChanges } from './content.js';
 import { vAssistant } from './views-assistant.js';
 import { vSources } from './views-catalog.js';
@@ -58,14 +58,14 @@ ACT.shareAppSave = () => {
 const guestNeed = (what) => h`<div class="card acc-b"><h3>🔒 Compte nécessaire</h3><p class="small">${what} demande un compte (gratuit). En le créant, tout ce que tu as fait en mode invité est conservé.</p><button class="btn pri" data-act="guestUpgrade">Créer mon compte</button></div>`;
 /* Pages de l'administration : d'où l'on vient (retour) et leur titre. */
 const ADMIN_PARENT = { assistant: ['admin', 'Administration'], content: ['admin', 'Administration'], look: ['admin', 'Administration'], changes: ['admin', 'Administration'], members: ['admin', 'Administration'], bugs: ['admin', 'Administration'], users: ['admin', 'Administration'], push: ['admin', 'Administration'],
-  studio: ['admin', 'Administration'], studioSet: ['studio', 'Studio'], audit: ['admin', 'Administration'], lab: ['admin', 'Administration'], health: ['admin', 'Administration'], maint: ['admin', 'Administration'], code: ['admin', 'Administration'], codeItem: ['code', 'Propositions de code'] };
+  studio: ['admin', 'Administration'], studioSet: ['studio', 'Brouillons et publication'], audit: ['admin', 'Administration'], lab: ['admin', 'Administration'], health: ['admin', 'Administration'], maint: ['admin', 'Administration'], code: ['admin', 'Administration'], codeItem: ['code', 'Propositions de code'] };
 const ADMIN_TITLE = { assistant: '💬 Assistant du site', content: '🧩 Contenu de l’app', look: '✏️ Textes et apparence', changes: '📝 Tout ce qui a été modifié', members: '📬 Propositions des membres', bugs: '🐞 Signalements', users: '👥 Comptes et rôles', push: '🔔 Notifications de mise à jour',
-  studio: '🧪 Brouillons et publication', studioSet: '🧪 Lot', audit: '📜 Journal', lab: '🧠 Laboratoire', health: '🩺 Santé des données', maint: '🛠️ Maintenance', code: '💻 Propositions de code', codeItem: '💻 Proposition' };
-const adminOnly = (fn) => () => (S.user?.isAdmin ? fn() : h`<p class="small muted">Réservé aux administrateurs.</p>`);
+  studio: '🧪 Brouillons et publication', studioSet: '📝 Brouillon et modifications', audit: '📜 Journal', lab: '🧠 Laboratoire', health: '🩺 Santé des données', maint: '🛠️ Maintenance', code: '💻 Propositions de code', codeItem: '💻 Proposition' };
+const adminOnly = (fn, role) => () => (!S.user?.isAdmin ? h`<p class="small muted">Réservé aux administrateurs.</p>` : role && !canRole(role) ? h`<div class="card"><p class="small">Rôle « ${ROLE_L[role]} » nécessaire pour cette rubrique.</p></div>` : fn());
 export function vSettings() {
   const subs = S.user.guest ? SUBS.filter(([k]) => k !== 'sync' && !ADMIN_PARENT[k] && k !== 'admin') : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant), content: adminOnly(vAdminContent), look: adminOnly(vAdminLook), changes: adminOnly(vAdminChanges), members: adminOnly(vAdminProposals), bugs: adminOnly(vAdminBugs), users: adminOnly(vAdminUsers), push: adminOnly(vAdminPush), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant, 'content'), content: adminOnly(vAdminContent, 'content'), look: adminOnly(vAdminLook, 'content'), changes: adminOnly(vAdminChanges, 'content'), members: adminOnly(vAdminProposals, 'content'), bugs: adminOnly(vAdminBugs, 'technical'), users: adminOnly(vAdminUsers, 'users'), push: adminOnly(vAdminPush, 'technical'), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   if (sub === 'main') return h`<h1>Paramètres</h1><p class="tiny muted pagehelp">Choisis ton interface, puis le réglage à modifier.</p>${views.main()}`;
   if (ADMIN_PARENT[sub]) { const [pk, pl] = ADMIN_PARENT[sub]; return h`${subHead('setSub', pk, pl, ADMIN_TITLE[sub] || sub)}${views[sub]()}`; }
   return h`${subHead('setSub', 'main', 'Paramètres', subs.find(([k]) => k === sub)[1])}${views[sub]()}`;
@@ -332,20 +332,33 @@ ACT.diag = async () => {
 ACT.hardReload = async () => { if (!(await ask('Recharger l’application ?', { detail: 'Tes données sont conservées. Le cache des fichiers est vidé pour récupérer la dernière version.' }))) return; await persistNow(); try { for (const k of await caches.keys()) await caches.delete(k); } catch { /* rien */ } location.reload(); };
 
 /* ═════════ Administration ═════════ */
-async function loadBugs() { try { S.admin.bugs = (await api('GET', '/api/admin/bugs')).reports; } catch (e) { S.admin.error = e.offline ? 'Connexion requise.' : e.message; } render(); }
+function refreshAdminSummary() {
+  if (S.tab !== 'settings' || S.sub.settings !== 'admin' || !$('#admin-advanced')) return false;
+  const a = S.admin, bugs = (a.bugs || []).filter((b) => b.status === 'open').length, props = (a.propF || 'open') === 'open' ? (a.props || []).length : 0;
+  const labels = { bugs: a.error ? 'Chargement impossible · ouvrir pour réessayer' : !a.bugs ? 'Chargement des signalements…' : bugs ? `${bugs} ouvert${bugs > 1 ? 's' : ''}` : 'Aucun signalement ouvert', members: a.propErr ? 'Chargement impossible · ouvrir pour réessayer' : !a.props ? 'Chargement des propositions…' : props ? `${props} à traiter` : 'Idées, intentions, demandes de modification' };
+  for (const [id, label] of Object.entries(labels)) { const text = $(`#main [data-act=setSub][data-id=${id}] small`); if (text) text.textContent = label; }
+  return true;
+}
+async function loadBugs() {
+  const owner = S.user?.id, admin = S.admin;
+  try { const r = await api('GET', '/api/admin/bugs'); if (S.user?.id !== owner || S.admin !== admin) return; admin.bugs = r.reports; admin.error = ''; }
+  catch (e) { if (S.user?.id !== owner || S.admin !== admin) return; admin.error = e.offline ? 'Connexion requise.' : e.message; }
+  if (!refreshAdminSummary() && S.tab === 'settings' && S.sub.settings === 'bugs') render();
+}
 /** Suivi des notifications « nouvelle mise à jour » : quand la dernière est partie et vers combien d'appareils. */
 function pushStatusCard(open = false) {
   const p = S.admin.push; if (!p) return '';
   const l = p.last, when = l?.at ? new Date(l.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
-  return h`<details class="card how" ${open ? 'open' : ''}><summary>🔔 Notifications de mise à jour</summary>
-    <p class="small">${l ? `Dernière envoyée le ${when} : ${l.sent} appareil(s) joint(s) sur ${l.targeted} abonné(s) aux nouveautés${l.gone ? `, ${l.gone} abonnement(s) expiré(s) retiré(s)` : ''}${l.errors ? `, ${l.errors} en erreur` : ''}.` : 'Aucune notification de mise à jour envoyée pour l’instant.'}</p>
+  return h`<details class="card how" ${open ? 'open' : ''}><summary>État des envois</summary>
+    <p class="small">${l ? `Dernier envoi le ${when} : ${l.sent} appareil(s) joint(s) sur ${l.targeted} appareil(s) ciblé(s)${l.gone ? `, ${l.gone} abonnement(s) expiré(s) retiré(s)` : ''}${l.pending ? `, ${l.pending} en attente de reprise` : l.errors ? `, ${l.errors} en erreur` : ''}.` : 'Aucune notification envoyée pour l’instant.'}</p>
     ${cronLine(p)}
-    <p class="tiny muted">${p.devices} appareil(s) abonné(s) en tout. Version en ligne : ${p.build}${p.lastBuild && p.lastBuild !== p.build ? ` (annonce en attente : ${p.lastBuild})` : ''}. Un appareil qui ne reçoit rien : Paramètres › Notifications et rappels › « 🩺 Vérifier cet appareil ».</p></details>`;
+    <p class="tiny muted">${p.devices} appareil(s) abonné(s) en tout. Version en ligne : ${p.version || APP_VERSION}. Un appareil qui ne reçoit rien : Paramètres › Notifications et rappels › « 🩺 Vérifier cet appareil ».</p>
+    <details class="how mini"><summary>Identifiant du déploiement</summary><p class="tiny muted">${p.build}${p.lastBuild && p.lastBuild !== p.build ? ` · dernière version annoncée : ${p.lastBuild}` : ''}</p></details></details>`;
 }
 /** La tâche planifiée (chaque minute) prévient d'une nouvelle version même si personne n'ouvre l'app : tourne-t-elle ? */
 function cronLine(p) {
   const c = p.cron, age = c?.t ? Math.max(0, Math.round(((p.now || Date.now()) - c.t) / 60000)) : null;
-  if (!c) return h`<div class="card flat warn-b stack"><p class="small">⚠️ <b>La tâche planifiée n’a encore jamais tourné.</b> Sans elle, l’annonce d’une nouvelle version ne part qu’à la première visite de quelqu’un.</p>
+  if (!c) return h`<div class="card flat warn-b stack"><p class="small">La tâche de reprise n’a encore jamais tourné. Le déploiement et la première visite déclenchent aussi les annonces de mise à jour.</p>
     <p class="tiny">À vérifier dans Cloudflare : Workers › ton Worker › Settings › Triggers › Cron Triggers : il doit y avoir « * * * * * » (chaque minute, déjà prévu dans wrangler.json, appliqué au prochain déploiement).</p></div>`;
   if (age > 20) return h`<p class="small warn-t">⚠️ Dernier passage de la tâche planifiée il y a ${age} min : elle devrait passer chaque minute. Vérifie les Cron Triggers du Worker dans Cloudflare.${c.error ? ` Dernière erreur : ${c.error}` : ''}</p>`;
   return h`<p class="small ok-t">✓ Tâche planifiée active : dernier passage il y a ${age ? `${age} min` : 'moins d’une minute'}${c.error ? ` (erreur : ${c.error})` : ''}. Une nouvelle version est annoncée dans la minute, même si personne n’ouvre l’app.</p>`;
@@ -357,63 +370,109 @@ function vAdmin() {
   if (!S.admin.props && !S.admin.propErr && canRole('content')) setTimeout(loadProps, 0);
   const openBugs = (S.admin.bugs || []).filter((b) => b.status === 'open').length, props = (S.admin.propF || 'open') === 'open' ? (S.admin.props || []).length : 0, changed = globalChanges().length;
   const row = (role, r) => (canRole(role) ? [r] : []);
-  return h`<div class="card acc-b"><div class="row between wrapf"><h3>🛡️ Tu es administrateur</h3><button class="btn sm ghost" data-act="adminOff">Quitter ce rôle</button></div>
-      <p class="tiny muted">Tes rôles : ${(S.user.roles || ['super']).map((r) => ROLE_L[r]).join(', ')}. Chaque action est vérifiée par le serveur et notée dans le Journal.</p></div>
-    ${canRole('content') ? h`<button class="card pick ai-cta" data-act="setSub" data-id="assistant"><span>💬</span><div><b>Discuter avec l’assistant du site</b><small>Écris ce que tu veux changer, comme à une personne : il prépare les modifications dans un brouillon que tu relis et publies. Sans abonnement extérieur.</small></div></button>` : ''}
-    <span class="kicker">Modifier l’app sans code</span>
-    ${menuList([
+  const section = (title, description, rows) => rows.length ? h`<section class="card stack" aria-label="${title}"><h3>${title}</h3><p class="small muted">${description}</p>${menuList(rows)}</section>` : '';
+  const edit = [
+      ...row('content', ['setSub', 'assistant', '💬', 'Assistant du site', 'Décris la modification ; relis le brouillon proposé avant de publier']),
       ...row('content', ['setSub', 'content', '🧩', 'Contenu de l’app', 'Exercices, séances prêtes, intentions par sport, aide, cotations']),
-      ...row('content', ['setSub', 'look', '✏️', 'Textes et apparence', 'Réécrire un texte, mise en page pour tous, raccourcis, annonces']),
-      ...row('content', ['setSub', 'studio', '🧪', 'Brouillons et publication', 'Relire les différences, vérifier, publier, revenir en arrière']),
-      ...row('content', ['setSub', 'changes', '📝', 'Tout ce qui a été modifié', changed ? `${changed} élément${changed > 1 ? 's' : ''} différent${changed > 1 ? 's' : ''} de l’origine · annulable` : 'Rien pour l’instant']),
-    ])}
-    <span class="kicker">Les membres</span>
-    ${menuList([
-      ...row('content', ['setSub', 'members', '📬', 'Propositions des membres', props ? `${props} à traiter` : 'Idées, intentions, demandes de modification']),
-      ...row('technical', ['setSub', 'bugs', '🐞', 'Signalements', openBugs ? `${openBugs} ouvert${openBugs > 1 ? 's' : ''}` : 'Problèmes signalés par les membres']),
+      ...row('content', ['setSub', 'look', '✏️', 'Textes et apparence', 'Textes, annonces et organisation des écrans pour tous les membres']),
+      ...row('content', ['setSub', 'studio', '📝', 'Brouillons et publication', 'Vérifier et publier une modification, ou annuler une publication']),
+    ];
+  const members = [
       ...row('users', ['setSub', 'users', '👥', 'Comptes et rôles', 'Dernières connexions, droits d’administration']),
+      ...row('content', ['setSub', 'members', '📬', 'Propositions des membres', S.admin.propErr ? 'Chargement impossible · ouvrir pour réessayer' : !S.admin.props ? 'Chargement des propositions…' : props ? `${props} à traiter` : 'Idées, intentions, demandes de modification']),
+      ...row('technical', ['setSub', 'bugs', '🐞', 'Signalements', S.admin.error ? 'Chargement impossible · ouvrir pour réessayer' : !S.admin.bugs ? 'Chargement des signalements…' : openBugs ? `${openBugs} ouvert${openBugs > 1 ? 's' : ''}` : 'Aucun signalement ouvert']),
+      ...row('content', ['adminIdeasOpen', '', '🗳️', 'Idées à voter', 'Publier une idée et suivre son avancement']),
       ['libSub', 'common', '🌍', 'Bibliothèque commune', 'Séances partagées par les membres'],
-      ...row('content', ['adminIdeasOpen', '', '🗳️', 'Idées à voter', 'Publier une idée, suivre les votes, dire quand elle est prévue ou faite']),
+    ];
+  const follow = [
+      ...row('technical', ['setSub', 'push', '🔔', 'Notifications de mise à jour', 'Vérifier les envois et les appareils abonnés']),
+      ...row('content', ['setSub', 'changes', '📝', 'Tout ce qui a été modifié', changed ? `${changed} élément${changed > 1 ? 's' : ''} différent${changed > 1 ? 's' : ''} de l’origine · annulable` : 'Aucune modification publiée pour l’instant']),
+      ['setSub', 'audit', '📜', 'Journal', 'Retrouver les actions des administrateurs, avec leurs dates'],
+    ];
+  const advanced = [
+      ...row('intelligence', ['setSub', 'health', '🩺', 'Santé des données', 'Vérifier les doublons et les liens entre exercices et objectifs']),
+      ...row('intelligence', ['setSub', 'lab', '🧠', 'Laboratoire', 'Tester les règles de séance et analyser un problème']),
+      ...row('technical', ['setSub', 'maint', '🛠️', 'Maintenance', 'Regrouper les signalements et préparer des pistes de correction']),
+      ...row('technical', ['setSub', 'code', '💻', 'Propositions de code', 'Relire une correction et préparer une Pull Request GitHub']),
       ['adminStatsOpen', '', '📊', 'Statistiques anonymes', 'Totaux sur tous les comptes, sans aucune donnée personnelle'],
       ['adminNewbie', '', '🐣', 'Voir l’app comme un nouveau membre', 'Ce que découvre quelqu’un qui arrive'],
-    ])}
-    <span class="kicker">Surveiller et comprendre</span>
-    ${menuList([
-      ...row('intelligence', ['setSub', 'health', '🩺', 'Santé des données', 'Doublons, relations incohérentes, textes orphelins']),
-      ...row('intelligence', ['setSub', 'lab', '🧠', 'Laboratoire', 'Analyser un problème, simuler une règle sur des exemples']),
-      ...row('technical', ['setSub', 'maint', '🛠️', 'Maintenance', 'Signalements regroupés et pistes de l’assistant']),
-      ...row('technical', ['setSub', 'code', '💻', 'Propositions de code', 'Ce qui demande du code : relu, validé, jamais déployé par l’app']),
-      ...row('technical', ['setSub', 'push', '🔔', 'Notifications de mise à jour', 'Envoyées, reçues, appareils abonnés']),
-      ['setSub', 'audit', '📜', 'Journal', 'Qui a fait quoi, quand, avant / après'],
-      ...row('content', ['adminGlobalExport', '', '📦', 'Sauvegarder le contenu commun', 'Un fichier avec tout ce qui est publié ; revenir en arrière : Brouillons et publication']),
-    ])}`;
+      ...row('content', ['adminGlobalExport', '', '📦', 'Sauvegarder le contenu commun', 'Télécharger une copie des contenus publiés']),
+    ];
+  return h`<div class="card"><h3>Tu es administrateur</h3><p class="small muted">Choisis ce que tu veux modifier ou gérer.</p>
+      <details class="how mini"><summary>Mes droits d’administration</summary><p class="tiny muted">Tes rôles : ${(S.user.roles || ['super']).map((r) => ROLE_L[r] || r).join(', ')}. Les actions sont vérifiées par le serveur et conservées dans le Journal.</p><button class="btn sm ghost" data-act="adminOff">Quitter ce rôle</button></details></div>
+    ${section('Modifier le site', 'Prépare une modification, vérifie-la, puis publie-la pour les membres.', edit)}
+    ${section('Gérer les membres', 'Comptes, demandes et problèmes signalés.', members)}
+    ${section('Suivre le site', 'Notifications, modifications publiées et historique des actions.', follow)}
+    <details class="card" id="admin-advanced" ${S.admin.advancedOpen ? 'open' : ''}><summary data-act="adminAdvanced">Outils avancés</summary><p class="small muted">Diagnostic, règles d’entraînement, code et sauvegardes.</p>${menuList(advanced)}</details>`;
 }
+ACT.adminAdvanced = (el) => { S.admin.advancedOpen = !S.admin.advancedOpen; const panel = el.closest('details'); if (panel) panel.open = S.admin.advancedOpen; };
 function vAdminBugs() {
   const bugs = S.admin.bugs, f = S.admin.filter || 'open';
   if (!bugs && !S.admin.error) setTimeout(loadBugs, 0);
-  return h`<div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload" aria-label="Actualiser">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['done', 'Traités'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>
+  return h`<div class="card"><div class="row between"><h3>🐞 Signalements</h3><button class="btn sm" data-act="bugsReload" aria-label="Actualiser">↻</button></div><div class="chips">${[['open', 'Ouverts'], ['in_progress', 'En cours'], ['done', 'Traités'], ['ignored', 'Ignorés / doublons'], ['all', 'Tous']].map(([k, l]) => chip(f === k, l, `data-act="bugFilter" data-id="${k}"`))}</div>
       <input id="bugq" type="search" aria-label="Rechercher un signalement" placeholder="🔎 Rechercher (titre, texte, page, auteur)" value="${S.admin.bugQ || ''}" data-input="bugQ">
       <div id="bugres">${S.admin.error ? h`<p class="err small">${S.admin.error}</p>` : !bugs ? skeleton(2) : bugList()}</div></div>`;
 }
 function vAdminPush() {
-  if (S.admin.push === undefined) { S.admin.push = null; api('GET', '/api/admin/push-status').then((r) => { S.admin.push = r; render(); }).catch(() => {}); }
-  return S.admin.push ? pushStatusCard(true) : skeleton(1);
+  if (S.admin.push === undefined) { S.admin.push = null; loadAdminPush(); }
+  const draft = S.admin.broadcast || {}, previous = S.admin.push?.broadcast;
+  return h`<section class="card stack"><div class="row between"><h3>Annoncer la version finale</h3><button class="btn sm" data-act="adminPushReload">Actualiser</button></div>
+    <p class="small">Quand tu es satisfait de la version, envoie ton message à tous les utilisateurs.</p>
+    <p class="small muted">L’annonce apparaît dans le site, même si les mises à jour automatiques sont désactivées. Le téléphone reçoit aussi une notification s’il a autorisé celles de l’app. Un téléphone qui les a refusées ne peut pas être joint.</p>
+    ${canRole('technical') ? h`<form class="stack" data-submit="pushBroadcast"><label>Titre<input name="title" maxlength="100" required value="${draft.title || 'La nouvelle version de Mes séances est prête'}" data-input="pushBroadcastField" placeholder="Un titre court"></label>
+      <label>Message<textarea name="body" rows="3" maxlength="1200" required data-input="pushBroadcastField" placeholder="Décris ce qui est prêt et ce que les utilisateurs peuvent faire.">${draft.body || ''}</textarea></label>
+      <button type="submit" class="btn pri" ${S.admin.broadcastSending ? 'disabled' : ''}>${S.admin.broadcastSending ? 'Envoi en cours…' : 'Préparer l’envoi à tous'}</button></form>` : ''}
+    ${previous ? h`<div class="card flat"><b>Dernière annonce : ${previous.title}</b><p class="small">Version ${previous.version} · ${fmtDateTime(previous.at)}</p><p class="tiny muted">${previous.sent} appareil(s) joint(s)${previous.pending ? ` · ${previous.pending} en attente de reprise` : ''}. L’annonce reste visible dans le site pour tous.</p></div>` : ''}
+    ${S.admin.pushError ? h`<p class="err small">${S.admin.pushError}</p>` : ''}</section>
+    <section class="card"><h3>Mises à jour automatiques</h3><p class="small muted">L’envoi commence dès que Cloudflare confirme le déploiement. Il respecte le choix « Mises à jour » de chaque appareil. Les erreurs sont reprises par la tâche planifiée.</p></section>
+    ${S.admin.push ? pushStatusCard(true) : S.admin.pushError ? '' : skeleton(1)}`;
 }
+async function loadAdminPush() {
+  try { S.admin.push = await api('GET', '/api/admin/push-status'); S.admin.pushError = ''; }
+  catch (e) { S.admin.pushError = e.offline ? 'Connexion requise pour vérifier les envois.' : e.message; }
+  render();
+}
+ACT.adminPushReload = () => { S.admin.push = null; S.admin.pushError = ''; loadAdminPush(); };
+INPUT.pushBroadcastField = (el) => { S.admin.broadcast = { ...(S.admin.broadcast || {}), [el.name]: el.value }; };
+SUBMIT.pushBroadcast = async (form) => {
+  if (S.admin.broadcastSending || S.admin.broadcastPreparing) return;
+  const d = Object.fromEntries(new FormData(form)), title = String(d.title || '').trim(), body = String(d.body || '').trim();
+  if (!title || !body) { toast('Ajoute un titre et un message.', 4000, 'bad'); return; }
+  S.admin.broadcastPreparing = true;
+  const button = form.querySelector('button[type=submit]'); if (button) button.disabled = true;
+  let p;
+  try { p = await api('GET', '/api/admin/push-status'); S.admin.push = p; }
+  catch (e) { S.admin.broadcastPreparing = false; if (button) button.disabled = false; toast(e.offline ? 'Connexion requise pour préparer l’envoi.' : e.message, 4000, 'bad'); return; }
+  const confirmed = await ask('Envoyer cette annonce à tous ?', { ok: 'Envoyer à tous', detail: `Version ${p.version || APP_VERSION}. Dans le site : tous les utilisateurs. Sur téléphone : ${p.devices} appareil(s) ayant autorisé les notifications, même si les mises à jour automatiques sont désactivées.\n\n${title}\n${body}` });
+  S.admin.broadcastPreparing = false; if (button) button.disabled = false;
+  if (!confirmed) return;
+  const old = S.admin.broadcast || {}, version = p.version || APP_VERSION, build = p.build;
+  const id = old.id && old.title === title && old.body === body && old.build === build ? old.id : 'final-' + uid().slice(0, 24);
+  S.admin.broadcast = { id, title, body, version, build }; S.admin.broadcastSending = true; render();
+  try {
+    const r = await api('POST', '/api/admin/push-broadcast', { id, title, body, version, build, confirmed: true });
+    toast(`Annonce publiée pour tous · ${r.sent} appareil(s) joint(s)${r.pending ? ` · ${r.pending} en attente de reprise` : ''}.`, 6000);
+    S.admin.broadcast = {}; await Promise.all([loadAdminPush(), loadGlobal()]);
+  } catch (e) { toast(e.offline ? 'Connexion interrompue : réessaie, cet envoi ne sera pas doublé.' : e.message, 6000, 'bad'); }
+  finally { S.admin.broadcastSending = false; render(); }
+};
 function bugList() {
   const list = filterBugs(S.admin.bugs, S.admin.filter || 'open', S.admin.bugQ || '');
   if (!list.length) return h`<p class="muted small">${S.admin.bugQ ? 'Aucun signalement ne correspond.' : 'Aucun signalement.'}</p>`;
-  return h`<p class="tiny muted">${list.length} signalement(s)${list.some((b) => b.recent) ? ` · ${list.filter((b) => b.recent).length} récent(s)` : ''}</p>${list.map((b) => h`<div class="card flat${b.recent && b.status === 'open' ? ' acc-b' : ''}"><div class="row between"><b>${b.title}</b><span>${b.recent ? tag('nouveau', 'acc') : ''}${tag(b.status === 'done' ? 'traité' : 'ouvert', b.status === 'done' ? 'ok' : 'warn')}</span></div>
+  const labels = { open: 'ouvert', in_progress: 'en cours', done: 'traité', ignored: 'ignoré / doublon' };
+  return h`<p class="tiny muted">${list.length} signalement(s)${list.some((b) => b.recent) ? ` · ${list.filter((b) => b.recent).length} récent(s)` : ''}</p>${list.map((b) => h`<div class="card flat${b.recent && b.status === 'open' ? ' acc-b' : ''}"><div class="row between"><b>${b.title}</b><span>${b.recent ? tag('nouveau', 'acc') : ''}${tag(labels[b.status] || 'ouvert', b.status === 'done' ? 'ok' : 'warn')}</span></div>
     <p class="tiny muted">par ${b.author} · ${fmtDateTime(b.createdAt)}${b.page ? ' · page : ' + b.page : ''}</p>
     ${b.description.length > 180 ? h`<details class="how mini"><summary>${b.description.slice(0, 140)}…</summary><p class="small pre">${b.description}</p></details>` : h`<p class="small pre">${b.description}</p>`}
     ${b.appVersion || b.userAgent ? h`<details class="how mini"><summary>Détail technique</summary><p class="tiny muted">${b.appVersion ? 'Version ' + b.appVersion : ''}${b.userAgent ? ' · ' + b.userAgent.slice(0, 200) : ''}${b.updatedAt && b.updatedAt !== b.createdAt ? ' · statut changé ' + fmtDateTime(b.updatedAt) : ''}</p></details>` : ''}
-    <button class="btn sm" data-act="bugStatus" data-id="${b.id}" data-v="${b.status === 'done' ? 'open' : 'done'}">${b.status === 'done' ? 'Rouvrir' : 'Marquer traité'}</button></div>`)}`;
+    <div class="row wrapf">${Object.entries(labels).filter(([status]) => status !== b.status).map(([status, label]) => h`<button class="btn sm" data-act="bugStatus" data-id="${b.id}" data-v="${status}">${status === 'open' ? 'Rouvrir' : status === 'done' ? 'Marquer traité' : status === 'in_progress' ? 'Prendre en cours' : 'Ignorer / doublon'}</button>`)}</div></div>`)}`;
 }
 INPUT.bugQ = (el) => { S.admin.bugQ = el.value.slice(0, 80); const box = $('#bugres'); if (box && S.admin.bugs) box.innerHTML = bugList().s; };
 /* Propositions des utilisateurs (intentions, idées) et intentions communes. */
 async function loadProps() {
-  try { const [p, ci] = await Promise.all([api('GET', '/api/admin/proposals?status=' + (S.admin.propF || 'open')), api('GET', '/api/community/intents')]); S.admin.props = p.proposals; S.admin.cintents = ci.intents; S.admin.propErr = ''; }
-  catch (e) { S.admin.propErr = e.offline ? 'Connexion requise.' : e.message; }
-  render();
+  const owner = S.user?.id, admin = S.admin;
+  try { const [p, ci] = await Promise.all([api('GET', '/api/admin/proposals?status=' + (admin.propF || 'open')), api('GET', '/api/community/intents')]); if (S.user?.id !== owner || S.admin !== admin) return; admin.props = p.proposals; admin.cintents = ci.intents; admin.propErr = ''; }
+  catch (e) { if (S.user?.id !== owner || S.admin !== admin) return; admin.propErr = e.offline ? 'Connexion requise.' : e.message; }
+  if (!refreshAdminSummary() && S.tab === 'settings' && S.sub.settings === 'members') render();
 }
 function vAdminProposals() {
   const p = S.admin.props; if (!p && !S.admin.propErr) setTimeout(loadProps, 0);
@@ -467,10 +526,10 @@ ACT.userSort = (el) => { S.admin.userSort = el.dataset.id; render(); };
 INPUT.userQ = (el) => { S.admin.userQ = el.value; clearTimeout(INPUT.userQ.t); INPUT.userQ.t = setTimeout(() => { render(); const i = document.querySelector('input[data-input=userQ]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
 SUBMIT.adminOn = async (f) => {
   const pw = new FormData(f).get('password'); f.reset(); // la valeur saisie est effacée du formulaire immédiatement
-  try { await api('POST', '/api/admin/activate', { password: pw }); const me = await api('GET', '/api/auth/me'); S.user = me.user; ls.set('sea:user', { id: me.user.id, username: me.user.username, isAdmin: me.user.isAdmin }); buzzOk(); toast('Droits administrateur activés'); loadBugs(); render(); }
+  try { await api('POST', '/api/admin/activate', { password: pw }); const me = await api('GET', '/api/auth/me'); S.user = me.user; ls.set('sea:user', { id: me.user.id, username: me.user.username, isAdmin: me.user.isAdmin, roles: me.user.roles || [] }); buzzOk(); toast('Droits administrateur activés'); loadBugs(); render(); }
   catch (e) { toast(e.offline ? 'Connexion requise.' : e.message, 4000, 'bad'); }
 };
-ACT.adminOff = async () => { if (!(await ask('Quitter le rôle administrateur ?', { detail: 'Il faudra de nouveau le mot de passe administrateur pour le réactiver.' }))) return; try { await api('POST', '/api/admin/deactivate', {}); S.user = { ...S.user, isAdmin: false }; ls.set('sea:user', { id: S.user.id, username: S.user.username, isAdmin: false }); render(); } catch (e) { toast(e.message); } };
+ACT.adminOff = async () => { if (!(await ask('Quitter le rôle administrateur ?', { detail: 'Il faudra de nouveau le mot de passe administrateur pour le réactiver.' }))) return; try { await api('POST', '/api/admin/deactivate', {}); S.user = { ...S.user, isAdmin: false, roles: [] }; ls.set('sea:user', { id: S.user.id, username: S.user.username, isAdmin: false, roles: [] }); render(); } catch (e) { toast(e.message); } };
 ACT.bugsReload = () => { S.admin.bugs = null; S.admin.error = ''; loadBugs(); };
 ACT.bugFilter = (el) => { S.admin.filter = el.dataset.id; render(); };
 ACT.bugStatus = async (el) => { try { await api('POST', `/api/admin/bugs/${encodeURIComponent(el.dataset.id)}`, { status: el.dataset.v }); const b = S.admin.bugs.find((x) => x.id === el.dataset.id); if (b) b.status = el.dataset.v; render(); } catch (e) { toast(e.message); } };
@@ -487,7 +546,7 @@ function vBug() {
       <label class="chk"><input type="checkbox" name="state" checked> Joindre l’état de la page (pages visitées juste avant, taille d’écran, connexion, dernières erreurs techniques ; aucune de tes données d’entraînement)</label>
       <p class="tiny muted">Ne mets jamais de mot de passe dans un signalement. Envoyé hors ligne, il part dès le retour de la connexion.</p>
       <button class="btn pri" type="submit">Envoyer</button></form>
-    <div class="card"><h3>Mes signalements</h3>${S.myBugs ? (S.myBugs.length ? S.myBugs.map((b) => h`<div class="item"><div class="grow"><b>${b.title}</b><div class="tiny muted">${fmtDateTime(b.createdAt)}</div></div>${tag(b.status === 'done' ? 'traité' : 'reçu', b.status === 'done' ? 'ok' : '')}</div>`) : h`<p class="muted small">Aucun signalement envoyé.</p>`) : h`<p class="muted small">Liste disponible en ligne.</p>`}</div>`;
+    <div class="card"><h3>Mes signalements</h3>${S.myBugs ? (S.myBugs.length ? S.myBugs.map((b) => h`<div class="item"><div class="grow"><b>${b.title}</b><div class="tiny muted">${fmtDateTime(b.createdAt)}</div></div>${tag(({ done: 'traité', in_progress: 'en cours', ignored: 'ignoré / doublon' })[b.status] || 'reçu', b.status === 'done' ? 'ok' : '')}</div>`) : h`<p class="muted small">Aucun signalement envoyé.</p>`) : h`<p class="muted small">Liste disponible en ligne.</p>`}</div>`;
 }
 /** État de la page joint à un signalement : aucun contenu personnel (ni séances, ni mesures, ni texte saisi). */
 export function pageState() {

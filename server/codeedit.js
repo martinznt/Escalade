@@ -5,6 +5,7 @@
 // envoyée en Pull Request sur GitHub, où les tests du dépôt tournent. JAMAIS fusionnée ni déployée par l'app : c'est
 // toi qui fusionnes sur GitHub. Règles pures et testées ; les appels réseau passent par une fonction fetch fournie.
 import { extractJson } from './ai.js';
+import { responseText } from './ai-runtime.js';
 
 /** Fichiers modifiables : l'interface (JS, CSS, HTML de public/), sauf le service worker. Jamais le serveur ni la base. */
 export const CODE_FILES = /^public\/(?!sw\.js$)[\w-]+\.(js|css|html)$/;
@@ -95,8 +96,8 @@ export function applyEdits(content, edits) {
  * Retourne { reply, title, summary, edits, diff, errors } ; edits vide si rien n'est acceptable.
  */
 export function cleanEdits(raw, files) {
-  const x = typeof raw === 'object' && raw && !raw.response ? raw : extractJson(raw);
-  if (!x || typeof x !== 'object') return { reply: str(typeof raw === 'string' ? raw : raw?.response, 1200) || 'Je n’ai pas su proposer de modification.', title: '', summary: '', edits: [], diff: '', errors: [] };
+  const x = extractJson(raw);
+  if (!x || typeof x !== 'object') return { reply: str(responseText(raw), 1200) || 'Je n’ai pas su proposer de modification.', title: '', summary: '', edits: [], diff: '', errors: [] };
   const errors = [], edits = [], after = new Map();
   for (const e of (Array.isArray(x.edits) ? x.edits : []).slice(0, LIMITS.edits)) {
     const path = String(e?.path || '').replace(/^\/+/, ''), find = String(e?.find ?? ''), replace = String(e?.replace ?? '');

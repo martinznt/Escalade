@@ -161,9 +161,13 @@ const BLOCK_VIEWS = {
   today() {
     const today = ymd(new Date()), evs = eventsOn(today).filter((e) => !doneOnDay(today).some((d) => d.sessionId === e.sessionId && e.sessionId));
     const t = todayOptions(ctx(), { todayEvents: evs });
+    const eventActions = (o) => {
+      const e = evs.find((event) => event.id === o.eventId), session = o.sessionId && getSeance(o.sessionId);
+      return h`<div class="row wrapf">${session ? h`<button class="btn pri sm" data-act="play" data-id="${session.id}" data-event="${e?.sourceId || o.eventId}" data-date="${e?.on || today}" aria-label="Lancer cette séance">▶</button>` : h`<button class="btn pri sm" data-act="quickLog" data-id="${o.eventId}" data-date="${today}">Bilan rapide</button><button class="btn sm" data-act="agendaEdit" data-id="${o.eventId}" data-date="${today}">Voir / modifier</button>${o.sessionId ? tag('séance associée supprimée', 'warn') : ''}`}</div>`;
+    };
     return card('☀️ Que faire aujourd’hui ?', h`<button class="btn sm" data-act="nothingPlanned">⚡ Je n’ai rien prévu : 3 questions</button>${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
       <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="tiny">${(o.how || []).map((x) => h`<li>${x}</li>`)}</ul></details></div>
-      ${o.kind === 'event' ? (o.sessionId && getSeance(o.sessionId) ? h`<button class="btn pri sm" data-act="play" data-id="${o.sessionId}" data-event="${o.eventId}">▶</button>` : tag('séance supprimée', 'warn')) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}" aria-label="Préparer cette séance">▶</button>`}</div>`)}`);
+      ${o.kind === 'event' ? eventActions(o) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}" aria-label="Préparer cette séance">▶</button>`}</div>`)}`);
   },
   command() {
     return card('🗣️ Dis-le simplement', h`<button class="btn coachbtn" data-act="coachOpen">💬 Poser une question au coach</button><form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Séance de 20 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>
@@ -172,7 +176,7 @@ const BLOCK_VIEWS = {
   next() {
     const days = [...Array(8)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return ymd(d); });
     const list = days.flatMap((d) => eventsOn(d).map((e) => ({ d, e }))).slice(0, 5);
-    return card('📅 Prochaines séances', list.length ? list.map(({ d, e }) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${relDate(new Date(d + 'T12:00:00').getTime())}${e.time ? ' à ' + e.time : ''}${e.recurrence ? ' · chaque semaine' : ''}</div></div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.id}">▶</button>` : ''}</div>`; }) : h`<p class="muted small">Rien de planifié cette semaine. <button class="btn sm" data-act="homeSub" data-id="cal">Planifier</button></p>`);
+    return card('📅 Prochaines séances', list.length ? list.map(({ d, e }) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${relDate(new Date(d + 'T12:00:00').getTime())}${e.time ? ' à ' + e.time : ''}${e.recurrence ? ' · chaque semaine' : ''}</div></div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.sourceId}" data-date="${d}">▶</button>` : h`<button class="btn sm" data-act="agendaEdit" data-id="${e.id}" data-date="${d}">Voir</button>`}</div>`; }) : h`<p class="muted small">Rien de planifié cette semaine. <button class="btn sm" data-act="homeSub" data-id="cal">Planifier</button></p>`);
   },
   progress() {
     const b = benchmarks(ctx(), 7), d = (x) => (x == null ? '' : x > 0 ? ` (+${x} %)` : ` (${x} %)`);
@@ -254,7 +258,7 @@ ACT.dashReset = () => saveDash(DEFAULT_DASH);
 SUBMIT.command = (f) => { const t = String(new FormData(f).get('text') || '').trim(); if (t) runCommand(parseCommand(t), t); };
 function currentSession() {
   if (S.gen.result?.session && S.tab === 'library' && S.sub.library === 'generate') return { s: S.gen.result.session, save: (n) => { S.gen.result.session = n; S.gen.saved = false; } };
-  const s = (S.sub.library === 'seance' && getSeance(S.param)) || (S.lastOpenSeance && getSeance(S.lastOpenSeance)) || (S.gen.result?.session ? null : null);
+  const s = (S.tab === 'library' && S.sub.library === 'seance' && getSeance(S.param)) || (S.lastOpenSeanceOwner === S.user?.id && S.lastOpenSeance && getSeance(S.lastOpenSeance));
   if (s) return { s, save: (n) => saveSeance(n) };
   if (S.gen.result?.session) return { s: S.gen.result.session, save: (n) => { S.gen.result.session = n; S.gen.saved = false; } };
   return null;

@@ -65,7 +65,7 @@ function levelDetails(lv, s = null) {
 
 export function vLibrary() {
   const sub = S.sub.library;
-  if (sub === 'seance') { const s = getSeance(S.param); if (s) return vEditor(s, 'local'); }
+  if (sub === 'seance') { const s = getSeance(S.param); if (s) { S.lastOpenSeance = s.id; S.lastOpenSeanceOwner = S.user?.id; return vEditor(s, 'local'); } }
   if (sub === 'shared-edit' && S.sharedDraft) return vEditor(S.sharedDraft.session, 'shared');
   if (sub === 'common-detail') return vCommonDetail();
   if (sub === 'import') return vImport();
@@ -216,7 +216,7 @@ ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvel
     ...(S.user?.guest ? [] : [['groupMenu', '', '👥', 'Séance à plusieurs', 'Rejoindre avec un code, chrono à plusieurs (ex. 7 s / 3 s), ou une séance pour un groupe.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
 /** Séance en cours de création (brouillon gardé) : on peut la reprendre où on en était. */
-function draftText() { const d = S.cp || ls.get('sea:climbplan', null); return d && (d.step || 1) > 1 ? `En cours : étape ${d.v === 2 ? d.step : Math.max(1, d.step - 1)}/6` : ''; }
+function draftText() { const d = S.cp || ls.get('sea:climbplan:' + (S.user?.id || 'guest'), null); return d && (d.step || 1) > 1 ? `En cours : étape ${d.v === 2 ? d.step : Math.max(1, d.step - 1)}/6` : ''; }
 function draftBanner() { const t = draftText(); return t ? h`<button class="card flat acc-b row" data-act="cpResume"><span class="grow small">📝 <b>Reprendre ma séance en cours</b> · ${t.replace('En cours : ', '')}</span><span class="chev">›</span></button>` : ''; }
 /* Fusionner des séances : on en choisit 2 à 4, l'app conseille (note, ordre) et crée une NOUVELLE séance ; les originales ne changent pas. */
 const mergeable = () => S.seances.items.filter((s) => !s.archived && s.exercises.length);

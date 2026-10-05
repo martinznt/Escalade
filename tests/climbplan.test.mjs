@@ -60,6 +60,45 @@ ok('cotations choisies à la main respectées ; sinon selon l’intensité', () 
   const [lo1] = C.partRange({ intensity: 'easy' }, levels, 6), [, hi2] = C.partRange({ intensity: 'max' }, levels, 6);
   assert.ok(lo1 < 6 && hi2 === 6);
 });
+ok('maximum inconnu : aucune plage supposée dans les échelles bloc, voie ou personnalisées', () => {
+  for (const scale of [levels, sortedLevels(BUILTIN_SYSTEMS.font), sortedLevels(BUILTIN_SYSTEMS.french), [{ label: 'Niveau A' }, { label: 'Niveau B' }]]) {
+    for (const intensity of Object.keys(C.INTENSITY)) assert.deepEqual(C.partRange({ intensity }, scale, null), [null, null]);
+  }
+  assert.deepEqual(C.partRange({ from: 3 }, levels, null), [3, 3], 'une seule borne donnée reste un choix explicite');
+  assert.deepEqual(C.partRange({ intensity: 'max' }, levels, -1), [null, null], 'une conversion inconnue ne devient pas un maximum');
+  assert.deepEqual(C.partRange({ from: 0, to: 1 }, [], null), [null, null]);
+});
+ok('toutes les structures sans maximum donnent des consignes relatives et signalent la donnée manquante', () => {
+  for (const kind of ['bloc', 'voie']) for (const structure of Object.keys(C.STRUCTURES[kind])) {
+    const scale = kind === 'voie' ? sortedLevels(BUILTIN_SYSTEMS.french) : levels;
+    const p = { type: 'climb', kind, structure, intensity: 'hard', minutes: 40 };
+    const r = C.buildClimbPart(p, { levels: scale });
+    assert.ok(r.exercises.length, `${kind}/${structure}`);
+    assert.deepEqual(r.range, [null, null]);
+    assert.match(r.exercises[0].note, /Maximum de (bloc|voie) non renseigné/);
+    for (const e of r.exercises) {
+      assert.doesNotMatch(e.name, /\b(?:[Bb]locs?|[Vv]oies?)\s+(?:U\d|[3-9](?:[a-cA-C]\+?|\+)?)(?:\b|$)|undefined|NaN/);
+      assert.ok(e.sets > 0 && Number.isFinite(e.rest));
+    }
+    const adapted = C.buildClimbPart({ ...p, adapt: true }, { levels: scale, load: { fingers: 100, power: 100 } });
+    assert.deepEqual(adapted.range, [null, null], 'adapter la fatigue ne crée pas une cotation');
+    assert.match(adapted.notes.join(' '), /fatigue/);
+  }
+});
+ok('plage manuelle sans maximum conservée, maximum réel conservé, échelle manquante utilisable au ressenti', () => {
+  const p = { type: 'climb', kind: 'bloc', structure: 'limit', intensity: 'hard', minutes: 40 };
+  const manual = C.buildClimbPart({ ...p, from: 5, to: 6 }, { levels });
+  assert.deepEqual(manual.range, [5, 6]); assert.match(manual.exercises[0].name, /U6–U7/);
+  assert.doesNotMatch(manual.exercises[0].note, /Maximum.*non renseigné/);
+  const known = C.buildClimbPart(p, { levels, max: 6 });
+  assert.deepEqual(known.range, [4, 6]); assert.match(known.exercises[0].name, /U6–U7/);
+  const relative = C.buildClimbPart(p, { levels: [] });
+  assert.ok(relative.exercises.length); assert.deepEqual(relative.range, [null, null]);
+  const session = C.buildFromParts([p], ctx);
+  assert.match(session.notes[0].text, /Maximum de bloc non renseigné/);
+  assert.doesNotMatch(session.exercises.map((e) => e.name).join(' '), /U[1-8]/);
+  assert.deepEqual(C.goalParts({ kind: 'bloc', target: null, levels }), [], 'aucun objectif implicite au premier niveau');
+});
 ok('adapter à ce qui précède (au choix) : après beaucoup de doigts, moins de réglettes et un cran plus bas ; sans le choix, rien ne change', () => {
   const before = { type: 'climb', kind: 'bloc', intensity: 'hard', minutes: 90, styles: ['st-reglettes', 'st-petites-prises'] };
   const after = { type: 'climb', kind: 'voie', intensity: 'max', minutes: 40, styles: ['st-reglettes', 'st-devers'] };

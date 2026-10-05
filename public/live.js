@@ -95,12 +95,13 @@ export function findHistory(history = [], text = '', now = Date.now()) {
   return null;
 }
 /** Instantané d'une séance en cours (pour la reprendre après une fermeture) : rien de ce qui dépend de l'horloge. */
-export function snapshot(p, now = Date.now()) {
-  if (!p || p.phase === 'done') return null;
-  return { at: now, s: p.s, i: p.i, set: p.set, side: p.side || 0, log: p.log, startedAt: p.startedAt, eventId: p.eventId || null, fromGenerator: !!p.fromGenerator, program: p.program || null, warmAdded: p.warmAdded || 0, swaps: p.swaps || [], adapted: !!p.adapted, elapsed: Math.max(0, now - p.startedAt - (p.pausedMs || 0)) };
+export const playerSnapshotKey = (ownerId) => typeof ownerId === 'string' && ownerId.length > 0 ? 'sea:player-snap:' + encodeURIComponent(ownerId) : null;
+export function snapshot(p, now = Date.now(), ownerId = 'guest') {
+  if (!p || p.phase === 'done' || !playerSnapshotKey(ownerId)) return null;
+  return { ownerId, at: now, s: p.s, i: p.i, set: p.set, side: p.side || 0, log: p.log, startedAt: p.startedAt, eventId: p.eventId || null, eventDate: p.eventDate || null, fromGenerator: !!p.fromGenerator, program: p.program || null, warmAdded: p.warmAdded || 0, swaps: p.swaps || [], adapted: !!p.adapted, elapsed: Math.max(0, now - p.startedAt - (p.pausedMs || 0)) };
 }
 export const SNAP_MAX = 12 * 3600000;
 /** Reprendre : utilisable seulement moins de 12 h après, et s'il reste quelque chose à faire. */
-export function canResume(snap, now = Date.now()) {
-  return !!snap && now - (snap.at || 0) < SNAP_MAX && Array.isArray(snap.s?.exercises) && snap.i < snap.s.exercises.length && Array.isArray(snap.log);
+export function canResume(snap, now = Date.now(), ownerId = 'guest') {
+  return !!snap && !!playerSnapshotKey(ownerId) && snap.ownerId === ownerId && Number.isFinite(snap.at) && now >= snap.at && now - snap.at < SNAP_MAX && Array.isArray(snap.s?.exercises) && Number.isInteger(snap.i) && snap.i >= 0 && snap.i < snap.s.exercises.length && Array.isArray(snap.log) && Array.isArray(snap.log[snap.i]?.sets) && Number.isFinite(snap.elapsed) && snap.elapsed >= 0;
 }

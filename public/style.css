@@ -108,6 +108,7 @@ nav.tabs button .ico{width:auto;height:auto;background:none;font-size:1.25rem}na
 #sheet>.panel,#dialog>.panel{position:absolute;left:0;right:0;bottom:0;max-height:88dvh;overflow:auto;background:var(--card);border-radius:20px 20px 0 0;padding:10px 16px calc(18px + env(safe-area-inset-bottom));display:grid;gap:10px;box-shadow:var(--shadow);animation:up .2s ease-out;max-width:760px;margin:0 auto}
 #dialog>.panel{bottom:auto;top:30%;border-radius:18px;margin:0 16px;max-width:520px}@media(min-width:560px){#dialog>.panel{margin:0 auto}}
 .grab{width:42px;height:5px;border-radius:9px;background:var(--line);justify-self:center}
+.sheet-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:-10px;background:var(--card);z-index:1}.sheet-tools .grab{margin-left:auto;margin-right:auto}
 .list{display:grid;max-height:50dvh;overflow:auto}
 @keyframes up{from{transform:translateY(24px);opacity:0}}@keyframes fade{from{opacity:0}}
 #toast{position:fixed;left:16px;right:16px;bottom:calc(80px + env(safe-area-inset-bottom));z-index:40;margin:0 auto;max-width:520px;background:var(--text);color:var(--bg);padding:12px 14px;border-radius:12px;font-size:.9rem;opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s;box-shadow:var(--shadow)}
@@ -380,6 +381,9 @@ header.top .brand{display:flex;align-items:center;gap:6px;min-width:0}
 header.top .brand .bt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:430px){header.top .brand .bt{display:none}}
 .topicons{display:flex;gap:4px;align-items:center;margin-right:6px}
+@media(max-width:360px){header.top>.wrap{gap:6px}.topicons{gap:2px;margin-right:0}.syncbadge.guest{padding:0 6px}}
+.public-settings{grid-template-columns:minmax(0,1fr)}.public-settings .btn{min-width:0;max-width:100%;white-space:normal}.public-settings p{overflow-wrap:anywhere}
+#site-banner:empty{display:none}
 .topicons .ti{position:relative;width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:1.05rem;display:grid;place-items:center;cursor:pointer;padding:0}
 .topicons .ti[style*="--wc"]{border-color:var(--wc);background:color-mix(in srgb,var(--wc) 18%,var(--card))}
 .topicons .ti.edit{opacity:.75;font-size:.95rem}

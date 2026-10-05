@@ -2,7 +2,7 @@
 // (brouillon → vérifications → publication confirmée → retour arrière possible), avec versions, différences
 // avant/après et journal. Laboratoire : analyser un problème (assistant) et voir les règles actuelles sur des exemples.
 // Rien n'est exécuté : l'assistant ne rédige que des brouillons validés par le serveur, publiés seulement sur confirmation.
-import { h, toast, openSheet, closeSheet, ask, askText, chip, tag, fmtDateTime, relDate, skeleton, menuList } from './ui.js';
+import { h, $, toast, openSheet, closeSheet, ask, askText, chip, tag, fmtDateTime, relDate, skeleton, menuList } from './ui.js';
 import { S, ACT, SUBMIT, INPUT, CHG, go, render, api } from './state.js';
 import { uid } from './shared.js';
 import { loadGlobal } from './content.js';
@@ -25,36 +25,47 @@ const FORMS = {
 const val = (v) => (v == null ? '—' : typeof v === 'string' ? v : JSON.stringify(v)).slice(0, 240);
 
 async function loadSets() {
-  const st = ST();
-  try { st.sets = (await api('GET', '/api/admin/studio' + (st.filter === 'all' ? '' : '?status=' + st.filter))).sets; st.err = ''; }
-  catch (e) { st.err = e.offline ? 'Connexion requise.' : e.message; }
-  render();
+  const st = ST(), owner = S.user?.id;
+  try { const r = await api('GET', '/api/admin/studio' + (st.filter === 'all' ? '' : '?status=' + st.filter)); if (S.user?.id !== owner || S.studio !== st) return; st.sets = r.sets; st.err = ''; }
+  catch (e) { if (S.user?.id !== owner || S.studio !== st) return; st.err = e.offline ? 'Connexion requise.' : e.message; }
+  const rows = S.tab === 'settings' && S.sub.settings === 'studio' ? $('#studio-rows') : null;
+  if (rows) { rows.innerHTML = studioRows(st).s; for (const button of document.querySelectorAll('[data-act=studioFilter]')) button.classList.toggle('on', button.dataset.id === st.filter); }
 }
 async function loadSet(id) {
-  try { ST().cur = await api('GET', '/api/admin/studio/' + encodeURIComponent(id)); } catch (e) { ST().cur = { error: e.offline ? 'Connexion requise.' : e.message, set: { id } }; }
-  render();
+  const st = ST(), owner = S.user?.id;
+  try { const r = await api('GET', '/api/admin/studio/' + encodeURIComponent(id)); if (S.user?.id !== owner || S.studio !== st) return; st.cur = r; }
+  catch (e) { if (S.user?.id !== owner || S.studio !== st) return; st.cur = { error: e.offline ? 'Connexion requise.' : e.message, set: { id } }; }
+  if (S.tab === 'settings' && S.sub.settings === 'studioSet' && S.param === id) render();
 }
 const notAdmin = () => h`<div class="card"><p class="small">Réservé aux administrateurs.</p><button class="btn" data-act="setSub" data-id="admin">🛡️ Administration</button></div>`;
+
+function studioRows(st) {
+  const list = (st.sets || []).filter((c) => !st.query || `${c.title} ${c.author || ''} ${SOURCE[c.source] || ''}`.toLocaleLowerCase().includes(st.query.toLocaleLowerCase()));
+  return h`${st.err ? h`<p class="err small">${st.err}</p>` : !st.sets ? skeleton(2) : list.length ? h`<div class="setmenu">${list.map((c) => h`<button class="setrow" data-act="studioOpen" data-id="${c.id}"><span class="sic">${STATUS[c.status]?.[0] || '•'}</span><span class="grow"><b>${c.title}</b><small>${STATUS[c.status]?.[1]} · ${SOURCE[c.source] || c.source} · ${c.count} modification(s) · ${c.author || '—'} · ${relDate(c.updatedAt)}${c.lastCheck === true ? ' · ✓ vérifié' : c.lastCheck === false ? ' · ✗ vérifications à revoir' : ''}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">${st.query ? 'Aucune modification ne correspond à cette recherche.' : st.filter === 'draft' ? 'Aucun brouillon en attente. Crée un brouillon pour préparer une modification.' : 'Aucune modification dans cette catégorie.'}</p>`}`;
+}
 
 /** Liste des lots. */
 export function vStudio() {
   if (!S.user?.isAdmin) return notAdmin();
+  if (!canRole('content')) return roleNeeded('content');
   const st = ST(); if (!st.sets && !st.err) setTimeout(loadSets, 0);
-  const list = (st.sets || []).filter((c) => !st.query || `${c.title} ${c.author || ''} ${SOURCE[c.source] || ''}`.toLocaleLowerCase().includes(st.query.toLocaleLowerCase()));
-  return h`<div class="card acc-b"><h3>🧪 Studio</h3><p class="small">Chaque changement pour tout le monde devient un lot : <b>brouillon</b> (invisible pour les membres) → <b>vérifications</b> → <b>publication</b> avec ta confirmation → <b>retour arrière</b> possible. Tout est versionné et noté dans le journal.</p>
+  return h`<div class="card"><h3>Préparer une modification</h3><p class="small">Un brouillon regroupe les changements à publier ensemble. <b>Crée-le, vérifie son contenu, puis publie-le.</b> Tu peux ensuite annuler la publication.</p>
       ${menuList([
         ['studioNew', '', '＋', 'Nouveau brouillon', 'Question fréquente, annonce, texte de l’app ou style'],
-        ['studioAi', '', '🤖', 'Brouillon avec l’assistant', 'Décris ce que tu veux ; tu relis avant toute publication'],
-        ['setSub', 'lab', '🧠', 'Laboratoire', 'Analyser un problème, voir les règles sur des exemples'],
+        ...(canRole('intelligence') ? [['studioAi', '', '💬', 'Brouillon avec l’assistant', 'Décris le texte ou l’annonce à préparer']] : []),
+      ])}</div>
+    <details class="card" id="studio-tools" ${st.toolsOpen ? 'open' : ''}><summary data-act="studioTools">Autres outils de vérification</summary>${menuList([
+        ...(canRole('intelligence') ? [['setSub', 'lab', '🧠', 'Laboratoire', 'Analyser un problème, voir les règles sur des exemples']] : []),
         ['setSub', 'audit', '📜', 'Journal des changements', 'Qui a fait quoi, quand, avant / après'],
         ...(canRole('intelligence') ? [['setSub', 'health', '🩺', 'Santé des données', 'Doublons, relations incohérentes, anciennes structures']] : []),
         ...(canRole('technical') ? [['setSub', 'maint', '🛠️', 'Maintenance', 'Signalements regroupés et pistes de l’assistant'], ['setSub', 'code', '💻', 'Propositions de code', 'Diff, impact, validation — jamais de déploiement automatique']] : []),
-      ])}<p class="tiny muted">Tes rôles : ${(S.user.roles || ['super']).map((r) => ROLE_L[r]).join(', ')}.</p></div>
-    <div class="card"><div class="row between"><h3>Lots</h3><button class="btn sm" data-act="studioReload" aria-label="Actualiser">↻</button></div>
-      <form data-submit="studioFind" class="row"><label class="grow">Rechercher un lot<input name="query" maxlength="120" value="${st.query || ''}" placeholder="Titre, auteur ou origine"></label><button class="btn" type="submit">Rechercher</button></form>
+      ])}</details>
+    <div class="card"><div class="row between"><h3>Modifications</h3><button class="btn sm" data-act="studioReload" aria-label="Actualiser les modifications">↻</button></div>
+      <form data-submit="studioFind" class="row"><label class="grow">Rechercher une modification<input name="query" maxlength="120" value="${st.query || ''}" placeholder="Titre, auteur ou origine"></label><button class="btn" type="submit">Rechercher</button></form>
       <div class="chips">${[['draft', 'Brouillons'], ['published', 'Publiés'], ['rolled_back', 'Annulés'], ['all', 'Tous']].map(([k, l]) => chip(st.filter === k, l, `data-act="studioFilter" data-id="${k}"`))}</div>
-      ${st.err ? h`<p class="err small">${st.err}</p>` : !st.sets ? skeleton(2) : list.length ? h`<div class="setmenu">${list.map((c) => h`<button class="setrow" data-act="studioOpen" data-id="${c.id}"><span class="sic">${STATUS[c.status]?.[0] || '•'}</span><span class="grow"><b>${c.title}</b><small>${STATUS[c.status]?.[1]} · ${SOURCE[c.source] || c.source} · ${c.count} modification(s) · ${c.author || '—'} · ${relDate(c.updatedAt)}${c.lastCheck === true ? ' · ✓ vérifié' : c.lastCheck === false ? ' · ✗ vérifications à revoir' : ''}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">Aucun lot ici.</p>`}</div>`;
+      <div id="studio-rows">${studioRows(st)}</div></div>`;
 }
+ACT.studioTools = (el) => { const st = ST(); st.toolsOpen = !st.toolsOpen; const panel = el.closest('details'); if (panel) panel.open = st.toolsOpen; };
 ACT.studioReload = () => { ST().sets = null; ST().err = ''; loadSets(); };
 ACT.studioFilter = (el) => { ST().filter = el.dataset.id; ACT.studioReload(); };
 ACT.studioOpen = (el) => { ST().cur = null; go('settings', 'studioSet', el.dataset.id); loadSet(el.dataset.id); };
@@ -62,6 +73,7 @@ ACT.studioOpen = (el) => { ST().cur = null; go('settings', 'studioSet', el.datas
 /** Détail d'un lot : différences avant → après, vérifications, actions. */
 export function vStudioSet() {
   if (!S.user?.isAdmin) return notAdmin();
+  if (!canRole('content')) return roleNeeded('content');
   const st = ST(), d = st.cur;
   if (!d || d.set?.id !== S.param) { if (S.param && (!d || d.set?.id !== S.param)) setTimeout(() => loadSet(S.param), 0); return skeleton(2); }
   if (d.error) return h`<div class="card"><p class="err">${d.error}</p></div>`;
@@ -160,6 +172,7 @@ export const EXAMPLES = [
 ];
 export function vLab() {
   if (!S.user?.isAdmin) return notAdmin();
+  if (!canRole('intelligence')) return roleNeeded('intelligence');
   const L = ST().lab, ex = EXAMPLES[L.ex] || EXAMPLES[0], phases = normalizePhases(ex[1]), sug = analyzeSession(phases, {}, {});
   const r = L.res;
   return h`<div class="card"><h3>🧠 Analyser un problème ou une idée</h3>
@@ -169,7 +182,7 @@ export function vLab() {
       ${r ? h`<p><b>Reformulation</b> : ${r.reformulation || '—'}</p>${r.rules.length ? h`<p class="small"><b>Règles en jeu</b></p><ul>${r.rules.map((x) => h`<li class="small">${x}</li>`)}</ul>` : ''}${r.questions.length ? h`<p class="small"><b>À préciser</b></p><ul>${r.questions.map((x) => h`<li class="small">${x}</li>`)}</ul>` : ''}
         ${r.solutions.map((s, i) => h`<div class="card flat"><div class="row between"><b>${s.title}</b>${tag('risque ' + s.risk, s.risk === 'élevé' ? 'warn' : s.risk === 'faible' ? 'ok' : '')}</div>${s.how ? h`<p class="small">${s.how}</p>` : ''}
           ${s.pros.length ? h`<p class="tiny"><b>Pour</b> : ${s.pros.join(' · ')}</p>` : ''}${s.cons.length ? h`<p class="tiny"><b>Contre</b> : ${s.cons.join(' · ')}</p>` : ''}
-          ${s.change ? h`<button class="btn sm" data-act="labDraft" data-i="${i}">📝 Créer un brouillon (${KIND[s.change.kind]})</button>` : h`<p class="tiny muted">Demande un changement du code de l’app : à faire par une mise à jour, pas depuis le Studio.</p>`}</div>`)}` : ''}</div>
+          ${s.change ? canRole('content') ? h`<button class="btn sm" data-act="labDraft" data-i="${i}">📝 Créer un brouillon (${KIND[s.change.kind]})</button>` : h`<p class="tiny muted">Le rôle Contenu est nécessaire pour préparer et publier cette modification.</p>` : h`<p class="tiny muted">Demande un changement du code de l’app : à faire par une mise à jour, pas depuis le Studio.</p>`}</div>`)}` : ''}</div>
     <div class="card"><h3>🔬 Règles actuelles sur des exemples</h3><p class="tiny muted">Simulation : l’analyse de séance de l’app, appliquée telle quelle à des séances d’exemple. Rien n’est enregistré.</p>
       <div class="chips">${EXAMPLES.map(([l], i) => chip(L.ex === i, l, `data-act="labEx" data-i="${i}"`))}</div>
       <p class="small">${phases.map((p) => `${phaseName(p)} (${activityLabel(p.activity) === '—' ? ROLES[p.role][1] : activityLabel(p.activity)}, ${p.minutes} min)`).join(' → ')}</p>
@@ -205,7 +218,7 @@ export function vHealth() {
       <p class="tiny muted">${r.checked.exercises} exercices, ${r.checked.capacities} capacités, ${r.checked.skills} objectifs-figures et ${r.checked.common} éléments communs vérifiés. Une correction devient un brouillon du Studio : rien n’est appliqué sans ta validation.</p>
       <div class="chips">${Object.entries(r.counts).map(([k, n]) => h`<span class="chip static">${TYPE_L[k] || k} : ${n}</span>`)}</div></div>
     ${r.issues.length ? r.issues.slice(0, 80).map((x, k) => h`<div class="card flat"><div class="row between wrapf"><span class="small">${SEV_L[x.severity][0]} <b>${TYPE_L[x.type] || x.type}</b></span><span class="tiny muted">${x.target}</span></div><p class="small">${x.text}</p>
-      ${x.fix ? h`<button class="btn sm" data-act="healthFix" data-id="${k}">📝 Préparer la correction (brouillon)</button>` : ''}</div>`) : h`<div class="card"><p class="small">👍 Aucun problème détecté.</p></div>`}`;
+      ${x.fix && canRole('content') ? h`<button class="btn sm" data-act="healthFix" data-id="${k}">📝 Préparer la correction (brouillon)</button>` : ''}</div>`) : h`<div class="card"><p class="small">👍 Aucun problème détecté.</p></div>`}`;
 }
 ACT.healthReload = () => { ST().health = null; render(); };
 ACT.healthFix = async (el) => {

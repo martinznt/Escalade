@@ -10,8 +10,12 @@ await ok('sortie IA : schéma et activités autorisés, inconnues non inventées
 });
 await ok('IA indisponible, réponse invalide et délai : échec explicite et aucun enregistrement',async()=>{
   await assert.rejects(interpretAgenda({}, {message:'voie'}),e=>e.status===503);
-  await assert.rejects(interpretAgenda({AI:{run:async()=>({response:'???'})}}, {message:'voie'}),e=>e.status===502);
-  await assert.rejects(interpretAgenda({AI:{run:()=>new Promise(()=>{})}}, {message:'voie'},10),e=>e.status===504);
+  const invalid=makeEnv({AI:{run:async()=>({response:'???'})}}),slow=makeEnv({AI:{run:()=>new Promise(()=>{})}});
+  await new Client(invalid).register('AgendaInvalid');await new Client(slow).register('AgendaSlow');
+  await assert.rejects(interpretAgenda(invalid, {message:'voie'}),e=>e.status===502);
+  await assert.rejects(interpretAgenda(slow, {message:'voie'},10),e=>e.status===504);
+  assert.equal((await invalid.DB.prepare('SELECT COUNT(*) n FROM calendar_events').first()).n,0);
+  assert.equal((await slow.DB.prepare('SELECT COUNT(*) n FROM history').first()).n,0);
 });
 const env=makeEnv({AI:{run:async()=>({response:JSON.stringify({activities:[{activityId:'climbing_route',minutes:90},{activityId:'climbing_boulder',minutes:20,order:'before'}],confidence:'medium'})})}}),u=new Client(env);await u.register('AgendaAI');
 await ok('API interprète un brouillon sans sauvegarder, garde le modèle configurable et refuse les visiteurs',async()=>{

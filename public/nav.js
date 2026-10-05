@@ -5,14 +5,15 @@ import { S, ACT, go, ls, ctx, render } from './state.js';
 import { hintsFor, hintState } from './hints.js';
 import { globalHints } from './global.js';
 
-const KEY = 'sea:return';
+const key = () => 'sea:return:' + (S.user?.id || 'guest');
 const here = () => `${S.tab}/${S.sub?.[S.tab] || ''}`;
 /** Retenir où revenir (libellé + « onglet/sous-page »). */
-export function setReturn(label, to) { S.returnTo = { label: String(label).slice(0, 60), to: String(to), from: here(), at: Date.now() }; ls.set(KEY, S.returnTo); }
-export function clearReturn() { S.returnTo = null; ls.del?.(KEY); ls.set(KEY, null); }
+export function setReturn(label, to) { S.returnOwner = key(); S.returnTo = { label: String(label).slice(0, 60), to: String(to), from: here(), at: Date.now() }; ls.set(key(), S.returnTo); }
+export function clearReturn() { S.returnOwner = key(); S.returnTo = null; ls.del?.(key()); ls.set(key(), null); }
 /** Barre « ‹ Retour à … », affichée partout sauf sur la page de retour elle-même (valable 2 h). */
 export function returnBar() {
-  const r = S.returnTo ?? (S.returnTo = ls.get(KEY, null));
+  const owner = key(); if (S.returnOwner !== owner) { S.returnOwner = owner; S.returnTo = null; }
+  const r = S.returnTo ?? (S.returnTo = ls.get(owner, null));
   if (!r || Date.now() - (r.at || 0) > 2 * 3600000) return '';
   if (here() === r.to || here().startsWith(r.to + '/')) { clearReturn(); return ''; }
   return h`<div class="retbar"><button class="btn sm pri" data-act="navBack">‹ ${r.label}</button><button class="btn sm ic ghost" data-act="navDrop" aria-label="Ne pas revenir">✕</button></div>`;
@@ -26,7 +27,7 @@ let shown = [];
 export function hintsBar() {
   if (!S.user || S.lay || S.player) return '';
   const route = here(); let list = [];
-  try { list = hintsFor(route, hintState(ctx(), { cp: S.sub?.library === 'climbplan' ? S.cp : null, seances: S.seances?.items?.filter((s) => !s.archived).length || 0, draft: ((S.cp || ls.get('sea:climbplan', null))?.step || 1) > 1 }), { off: ls.get(OFF, []) || [], extra: globalHints() }); } catch { list = []; }
+  try { list = hintsFor(route, hintState(ctx(), { cp: S.sub?.library === 'climbplan' ? S.cp : null, seances: S.seances?.items?.filter((s) => !s.archived).length || 0, draft: ((S.cp || ls.get('sea:climbplan:' + (S.user?.id || 'guest'), null))?.step || 1) > 1 }), { off: ls.get(OFF, []) || [], extra: globalHints() }); } catch { list = []; }
   shown = list; if (!list.length) return '';
   return h`<div class="hints">${list.map((x, i) => h`<div class="hint"><button class="linkish grow" data-act="hintGo" data-i="${i}"><span>${x.icon}</span> ${x.text} <b class="acc-t">›</b></button><button class="btn sm ic ghost" data-act="hintOff" data-id="${x.id}" aria-label="Ne plus afficher ce conseil">✕</button></div>`)}</div>`;
 }

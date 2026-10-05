@@ -1,0 +1,96 @@
+// Vrai navigateur, vrai Worker et SQLite ; le fournisseur Qwen est simulé, sans benchmark réseau.
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+import { startServer, makeEnv } from './server.mjs';
+import { Client } from './helpers.mjs';
+
+let heldTest=false,releaseTest,adminCalls=0;
+const qwen=x=>({choices:[{message:{content:JSON.stringify(x),reasoning_content:'RAISONNEMENT-EXCLU'}}]});
+const nativeFetch=globalThis.fetch;let geminiCalls=0,lastGeminiBody;
+globalThis.fetch=async(input,options)=>{
+  const url=new URL(typeof input==='string'?input:input.url);
+  if(url.hostname==='generativelanguage.googleapis.com'){geminiCalls++;lastGeminiBody=JSON.parse(options.body);return Response.json({candidates:[{content:{parts:[{thought:true,text:'PENSEE-GEMINI-EXCLUE'},{text:JSON.stringify({status:'ok',basis:'request',sources:['request','app/map'],reply:'GEMINI : quelques conseils simples.',actions:[{to:'settings/help',label:'Ouvrir l’aide'}]})}]},finishReason:'STOP'}]});}
+  return nativeFetch(input,options);
+};
+const env=makeEnv({GEMINI_API_KEY:'mock-gemini-key-only-for-isolated-tests',AI:{run:async(_model,input)=>{
+  const sys=input.messages[0].content,last=input.messages.at(-1).content;
+  if(sys.includes('Vérifie')||sys.includes('L’IA est disponible.')){if(heldTest)return new Promise(resolve=>{releaseTest=()=>resolve(qwen({reply:'REPONSE-TARDIVE-A-EXCLUE'}));});return qwen({reply:'IA disponible, vérification réussie.'});}
+  if(sys.includes('Tu es le coach'))return qwen({status:'ok',basis:'request',sources:['request','app/map'],reply:'COACH-A : une séance courte peut convenir.',actions:[{command:'Fais une séance de 20 minutes pour les jambes',label:'Préparer les jambes'},{to:'settings/notifs',label:'Ouvrir mes rappels'},{to:'settings/admin',label:'Interdit'}]});
+  adminCalls++;
+  return qwen(/raccourcis/i.test(last)?{status:'ok',sources:['draft:faq/n-ui-faq'],reply:'Réponse FAQ raccourcie.',changes:[{kind:'faq',id:'n-ui-faq',data:{a:'Depuis le calendrier.'}}]}:{status:'ok',sources:['app/map','request'],reply:'FAQ-A-PRIVEE préparée.',changes:[{kind:'faq',id:'n-ui-faq',data:{q:'Comment noter ma séance ?',a:'Depuis le calendrier, choisis ton sport et ton ressenti.'}}]});
+}}});
+const accounts={};
+for(const [name,roles] of [['AssistantA',['super']],['AssistantB',['content','intelligence']],['AssistantC',['content']]]){
+  const client=new Client(env);await client.register(name);await client.post('/api/admin/activate',{password:'secret-admin-de-test'});
+  await client.post('/api/items',{changes:[{c:'config',id:'main',u:Date.now(),d:{setupDone:true,tourDone:true,asked:['acts','place','minutes','perWeek','goal','avoid']}}]});accounts[name]={client,id:(await client.get('/api/auth/me')).data.user.id,roles};
+}
+for(const name of ['AssistantB','AssistantC'])await accounts.AssistantA.client.post(`/api/admin/users/${accounts[name].id}/roles`,{roles:accounts[name].roles});
+await accounts.AssistantA.client.post('/api/admin/ai',{model:'@cf/qwen/qwen3-30b-a3b-fp8',budget:8000});
+await accounts.AssistantA.client.post('/api/items',{changes:[{c:'env',id:'gemini-profile-place',u:Date.now(),d:{name:'LIEU-PROFIL-GEMINI',type:'maison',equipment:['bar'],isDefault:true}}]});
+const srv=await startServer(env),browser=await chromium.launch(process.env.PW_EXEC?{executablePath:process.env.PW_EXEC}:{}),errors=[];
+const context=await browser.newContext({viewport:{width:390,height:844},timezoneId:'Europe/Paris',serviceWorkers:'block'}),p=await context.newPage();p.on('pageerror',e=>errors.push(e.message));
+let n=0,draftId;
+const step=async(name,fn)=>{try{await fn();n++;console.log('  ✓',name);}catch(e){if(process.env.GITHUB_ACTIONS)console.error('::error title=Assistant et coach E2E::'+`${name} : ${e.message}`.slice(0,4000).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A'));throw e;}};
+const api=(method,path,body)=>p.evaluate(async([method,path,body])=>{const r=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json()};},[method,path,body]);
+const login=async(name)=>{
+  if(await p.locator('[data-act=authPick][data-id=login]').count())await p.click('[data-act=authPick][data-id=login]');
+  await p.waitForSelector('form[data-submit=login]');await p.fill('input[name=username]',name);await p.fill('input[name=password]','motdepasse1');await p.click('form[data-submit=login] button[type=submit]');await p.waitForSelector('nav.tabs');
+  await p.waitForFunction(async()=>{const {mainConfig}=await import('/views-setup.js');return mainConfig().setupDone;},null,{timeout:15000});
+};
+const go=async(hash,selector)=>{await p.evaluate(hash=>location.hash=hash,hash);await p.waitForSelector(selector);};
+const assistant=()=>go('#/settings/assistant','form[data-submit=asSend]');
+const panel=async()=>{const summary=p.getByText('Modèle et réserve gratuite',{exact:true});await summary.waitFor();await p.waitForFunction(async()=>!!(await import('/state.js')).S.admin.ai);if(!(await summary.evaluate(el=>el.parentElement.open)))await summary.click();};
+const send=async(text)=>{await p.fill('form[data-submit=asSend] textarea[name=t]',text);await p.click('form[data-submit=asSend] button.btn.pri');await p.waitForSelector('form[data-submit=asSend] textarea:not([disabled])');};
+const logout=async()=>{await go('#/settings/main','[data-act=logout]');await p.click('[data-act=logout]');await p.click('#dialog.open [data-dlg="1"]');await p.waitForSelector('form[data-submit=login]');};
+try{
+  await p.goto(srv.base);await login('AssistantA');
+  await step('assistant accessible, modèle et test concret de réponse',async()=>{
+    await assistant();await panel();assert.ok(await p.locator('[data-submit=asAIConfig]').isVisible());await p.click('[data-act=asAITest]');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('IA disponible, vérification réussie.'));await panel();assert.match(await p.locator('main').innerText(),/Réponse en \d[,.]\d s/);
+    await p.fill('[data-submit=asAIConfig] input[name=budget]','6000');await p.click('[data-submit=asAIConfig] button');await p.waitForFunction(async()=>((await import('/state.js')).S.admin.ai?.budget)===6000);assert.equal((await api('GET','/api/admin/ai')).data.budget,6000);
+  });
+  await step('style des réponses enregistré, règles de clarté et de sources toujours actives',async()=>{
+    await panel();await p.getByText('Style des réponses',{exact:true}).click();const form=p.locator('[data-submit=asAIConfig]');
+    await form.locator('[name=answerStyle]').selectOption('pedagogical');await form.locator('[name=detail]').selectOption('short');await form.locator('[name=reasoning]').selectOption('minimal');await form.locator('[name=creativity]').selectOption('0');
+    const requested=p.waitForRequest(r=>new URL(r.url()).pathname==='/api/admin/ai'&&r.method()==='POST');await form.locator('button').click();assert.deepEqual((await requested).postDataJSON().preferences,{answerStyle:'pedagogical',detail:'short',reasoning:'minimal',creativity:0});await p.waitForFunction(async()=>((await import('/state.js')).S.admin.ai?.preferences?.answerStyle)==='pedagogical');const saved=(await api('GET','/api/admin/ai')).data.preferences;assert.equal(saved.detail,'short');assert.equal(saved.reasoning,'minimal');assert.equal(saved.creativity,0);assert.equal(saved.askWhenUnclear,true);assert.equal(saved.sourcePolicy,'verified_only');assert.equal(saved.requireConfirmation,true);
+    await p.reload();await p.waitForSelector('[data-submit=asSend]');await panel();await p.getByText('Style des réponses',{exact:true}).click();assert.equal(await p.locator('[data-submit=asAIConfig] [name=answerStyle]').inputValue(),'pedagogical');assert.equal(await p.locator('[data-submit=asAIConfig] [name=detail]').inputValue(),'short');assert.equal(await p.locator('[name=askWhenUnclear],[name=sourcePolicy],[name=requireConfirmation]').count(),0);
+  });
+  await step('Qwen : modification utile puis suivi du même brouillon sans doublon',async()=>{
+    await send('Ajoute une question fréquente sur comment noter ma séance.');await p.locator('#aslog').getByText('FAQ-A-PRIVEE préparée.',{exact:true}).waitFor();draftId=await p.evaluate(async()=>(await import('/state.js')).S.admin.chat.draftId);assert.ok(draftId);await send('raccourcis-la, garde le reste');await p.locator('#aslog').getByText('Réponse FAQ raccourcie.',{exact:true}).waitFor();assert.equal(await p.evaluate(async()=>(await import('/state.js')).S.admin.chat.draftId),draftId);
+    const draft=(await api('GET','/api/admin/studio/'+draftId)).data;assert.equal(draft.set.status,'draft');assert.equal(draft.items.length,1);assert.equal(draft.items[0].data.q,'Comment noter ma séance ?');assert.equal(draft.items[0].data.a,'Depuis le calendrier.');assert.equal((await api('GET','/api/global')).data.items.filter(x=>x.id==='n-ui-faq').length,0);assert.doesNotMatch(await p.locator('main').innerText(),/RAISONNEMENT-EXCLU/);
+  });
+  await step('conversation admin conservée après rechargement sur le même compte',async()=>{
+    await p.reload();await p.waitForSelector('form[data-submit=asSend]');assert.match(await p.locator('#aslog').innerText(),/FAQ-A-PRIVEE|Réponse FAQ raccourcie/);assert.equal(await p.evaluate(async()=>(await import('/state.js')).S.admin.chat.draftId),draftId);
+  });
+  await step('coach : boutons relus, aucune séance enregistrée avant choix et cache local',async()=>{
+    await go('#/home/dash','[data-act=coachOpen]');await p.locator('[data-act=coachOpen]').first().click();await p.fill('#sheet input[name=q]','Comment m’organiser quand ma soirée est courte ?');await p.click('#sheet form[data-submit=chatSend] button[type=submit]');await p.waitForSelector('#sheet [data-act=chatAction]');assert.equal(await p.locator('#sheet [data-act=chatAction]').count(),2);assert.equal((await api('GET','/api/history')).data.history.length,0);assert.doesNotMatch(await p.locator('#sheet').innerText(),/RAISONNEMENT-EXCLU|Interdit/);await p.getByRole('button',{name:'Ouvrir mes rappels',exact:true}).click();await p.waitForFunction(()=>location.hash==='#/settings/notifs');await p.reload();await p.waitForSelector('nav.tabs');
+    await go('#/home/dash','[data-act=coachOpen]');await p.locator('[data-act=coachOpen]').first().click();assert.match(await p.locator('#chatlog').innerText(),/COACH-A/);assert.equal(await p.locator('#sheet [data-act=chatAction]').count(),2);await p.keyboard.press('Escape');
+  });
+  await step('autre admin sur le même appareil : conversations et test en cours isolés',async()=>{
+    await assistant();await panel();heldTest=true;const pendingResponse=p.waitForResponse(r=>new URL(r.url()).pathname==='/api/admin/ai/test');await p.click('[data-act=asAITest]');await p.waitForFunction(async()=>(await import('/state.js')).S.admin.aiTesting===true);for(let i=0;i<30&&!releaseTest;i++)await p.waitForTimeout(20);assert.ok(releaseTest);await logout();await login('AssistantB');await assistant();await panel();assert.doesNotMatch(await p.locator('main').innerText(),/FAQ-A-PRIVEE|Réponse FAQ raccourcie/);assert.equal(await p.locator('#aslog .msg').count(),0);assert.ok(await p.locator('[data-act=asAITest]').isEnabled());releaseTest();heldTest=false;await (await pendingResponse).finished();await p.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    await p.waitForFunction(async()=>(await import('/state.js')).S.admin.chatOwner.endsWith((await import('/state.js')).S.user.id));assert.doesNotMatch(await p.locator('main').innerText(),/REPONSE-TARDIVE-A-EXCLUE/);assert.equal(await p.evaluate(async()=>(await import('/state.js')).S.admin.aiTest),null);await go('#/home/dash','[data-act=coachOpen]');await p.locator('[data-act=coachOpen]').first().click();assert.doesNotMatch(await p.locator('#chatlog').innerText(),/COACH-A/);await p.keyboard.press('Escape');
+  });
+  await step('retour au compte initial : son historique reste disponible',async()=>{
+    await logout();await login('AssistantA');await assistant();assert.match(await p.locator('#aslog').innerText(),/FAQ-A-PRIVEE|Réponse FAQ raccourcie/);assert.equal(await p.evaluate(async()=>(await import('/state.js')).S.admin.chat.draftId),draftId);assert.equal(adminCalls,2);
+  });
+  await step('rôle Contenu : état consultable, réglage et test réservés au rôle Intelligence',async()=>{
+    await logout();await login('AssistantC');await assistant();await panel();assert.equal(await p.locator('[data-submit=asAIConfig]').count(),0);assert.equal(await p.locator('[data-act=asAITest]').count(),0);assert.match(await p.locator('main').innerText(),/Le rôle Intelligence permet/);assert.equal((await api('POST','/api/admin/ai/test',{})).status,403);assert.equal((await api('POST','/api/admin/ai',{model:'@cf/qwen/qwen3-30b-a3b-fp8',budget:1000})).status,403);
+  });
+  await step('Gemini : modèle choisi, plafond en demandes et instructions de connexion sans champ clé',async()=>{
+    await logout();await login('AssistantA');await assistant();await panel();await p.selectOption('[data-submit=asAIConfig] select[name=model]','gemini-3.8-flash');const budget=p.locator('[data-submit=asAIConfig] input[name=budget]');assert.equal(await budget.getAttribute('min'),'1');assert.equal(await budget.getAttribute('max'),'500');assert.equal(await budget.getAttribute('step'),'1');assert.equal(await budget.inputValue(),'40');await p.click('[data-submit=asAIConfig] button');await p.waitForFunction(async()=>((await import('/state.js')).S.admin.ai?.provider)==='gemini');await panel();assert.match(await p.locator('main').innerText(),/demandes/);assert.equal(await p.locator('input[name=apiKey],input[name=key],input[name=GEMINI_API_KEY]').count(),0);
+    const key=env.GEMINI_API_KEY;delete env.GEMINI_API_KEY;await p.click('[data-act=asAIRefresh]');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('IA non activée sur ce serveur'));await panel();assert.match(await p.locator('main').innerText(),/GEMINI_API_KEY/);assert.match(await p.locator('main').innerText(),/sans facturation activée/);env.GEMINI_API_KEY=key;await p.click('[data-act=asAIRefresh]');await p.waitForFunction(async()=>!!(await import('/state.js')).S.admin.ai?.available);
+  });
+  await step('Gemini coach : profil privé par défaut, partagé seulement après choix explicite',async()=>{
+    await go('#/home/dash','[data-act=coachOpen]');await p.locator('[data-act=coachOpen]').first().click();await p.waitForFunction(async()=>((await import('/state.js')).S.coachStatus?.provider)==='gemini');const choice=p.locator('#sheet [data-change=chatProfile]');assert.equal(await choice.isChecked(),false);assert.match(await p.locator('#sheet').innerText(),/transmis à Google/);
+    await p.fill('#sheet input[name=q]','Quels conseils simples pourrais-tu me donner ?');await p.click('#sheet form[data-submit=chatSend] button[type=submit]');await p.waitForFunction(()=>document.querySelector('#chatlog')?.textContent.includes('GEMINI : quelques conseils simples.'));assert.doesNotMatch(JSON.stringify(lastGeminiBody),/LIEU-PROFIL-GEMINI/);assert.doesNotMatch(await p.locator('#sheet').innerText(),/PENSEE-GEMINI-EXCLUE/);
+    await p.check('#sheet [data-change=chatProfile]');const before=geminiCalls;await p.fill('#sheet input[name=q]','Et comment garder cela facile à suivre ?');await p.click('#sheet form[data-submit=chatSend] button[type=submit]');await p.waitForSelector('#sheet input[name=q]:not([disabled])');assert.equal(geminiCalls,before+1);assert.match(JSON.stringify(lastGeminiBody),/LIEU-PROFIL-GEMINI/);assert.equal(await p.locator('#sheet [data-change=chatProfile]').isChecked(),true);await p.keyboard.press('Escape');
+  });
+  await step('partage Gemini : préférence conservée pour A, jamais imposée à B',async()=>{
+    await go('#/home/dash','[data-act=coachOpen]');await p.locator('[data-act=coachOpen]').first().click();await p.waitForFunction(async()=>((await import('/state.js')).S.coachStatus?.provider)==='gemini');assert.equal(await p.locator('#sheet [data-change=chatProfile]').isChecked(),true);await p.keyboard.press('Escape');await logout();await login('AssistantB');await go('#/home/dash','[data-act=coachOpen]');await p.locator('[data-act=coachOpen]').first().click();await p.waitForFunction(async()=>((await import('/state.js')).S.coachStatus?.provider)==='gemini');assert.equal(await p.locator('#sheet [data-change=chatProfile]').isChecked(),false);assert.doesNotMatch(await p.locator('#chatlog').innerText(),/COACH-A|GEMINI :/);await p.keyboard.press('Escape');
+  });
+  await step('sources du cache relues : liens sûrs, clarification sans action, aucune injection HTML',async()=>{
+    await p.evaluate(async()=>{const {S,ls}=await import('/state.js');const sources=[{id:'safe',label:'Guide officiel',url:'https://example.org/guide',kind:'document',checkedAt:'2026-10-05T10:00:00Z'},{id:'script',label:'Source <img src=x onerror=alert(1)>',url:'javascript:alert(1)'},{id:'http',label:'Source HTTP',url:'http://example.org'},{id:'creds',label:'Identifiants interdits',url:'https://name:password@example.org'},{id:'private',label:'Réseau privé',url:'https://127.0.0.1/guide'}];ls.set('sea:coachchat:'+S.user.id,[{role:'assistant',content:'Peux-tu préciser ce que tu veux modifier ?',status:'clarify',sources,actions:[{to:'settings/main',label:'Action interdite en clarification'}]}]);ls.set('sea:adminchat:'+S.user.id,{messages:[{role:'assistant',content:'Cette information ne peut pas être vérifiée.',meta:{status:'unverified',sources,added:1,draftId:'invalid-cache-draft',code:{title:'Code caché',edits:[{}],diff:'Diff caché'}}}],draftId:''});});
+    await p.reload();await p.waitForSelector('nav.tabs');await go('#/home/dash','[data-act=coachOpen]');await p.locator('[data-act=coachOpen]').first().click();assert.match(await p.locator('#chatlog').innerText(),/À préciser · aucune action proposée/);assert.equal(await p.locator('#chatlog [data-act=chatAction]').count(),0);await p.locator('#chatlog summary').click();assert.equal(await p.locator('#chatlog a').count(),1);assert.equal(await p.locator('#chatlog a').getAttribute('href'),'https://example.org/guide');assert.equal(await p.locator('#chatlog img').count(),0);assert.match(await p.locator('#chatlog').innerText(),/Source <img/);await p.keyboard.press('Escape');
+    await assistant();assert.match(await p.locator('#aslog').innerText(),/Informations non vérifiées · aucune modification proposée/);await p.locator('#aslog summary').click();assert.equal(await p.locator('#aslog a').count(),1);assert.equal(await p.locator('#aslog [data-act=studioOpen],#aslog [data-act=asCodeSave]').count(),0);assert.equal(await p.locator('#aslog img').count(),0);assert.doesNotMatch(await p.locator('#aslog').innerText(),/Diff caché/);
+  });
+  assert.deepEqual(errors,[]);console.log(`\n${n} étapes assistant / coach E2E OK`);
+}catch(e){await p.screenshot({path:'/tmp/escalade-assistant-ui-fail.png',fullPage:true}).catch(()=>{});throw e;}finally{releaseTest?.();await browser.close();await new Promise(resolve=>srv.server.close(resolve));globalThis.fetch=nativeFetch;}

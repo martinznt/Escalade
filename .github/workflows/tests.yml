@@ -22,4 +22,28 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npx --no-install playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Parcours navigateur
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          if ! npm run test:e2e 2>&1 | tee artifacts/e2e.log; then
+            python - <<'PY'
+          from pathlib import Path
+          excerpt = Path('artifacts/e2e.log').read_text(errors='replace')[-1800:]
+          escaped = excerpt.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::error title=Parcours navigateur::' + escaped)
+          PY
+            exit 1
+          fi
+      - name: Journaux et captures navigateur
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parcours-navigateur-${{ github.run_attempt }}
+          path: |
+            artifacts/e2e.log
+            /tmp/e2e-fail.png
+            /tmp/escalade-*.png
+          if-no-files-found: ignore
+          retention-days: 14

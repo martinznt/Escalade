@@ -1,0 +1,40 @@
+name: Annoncer la mise à jour déployée
+on:
+  check_run:
+    types: [completed]
+permissions:
+  contents: read
+concurrency:
+  group: notify-production
+  cancel-in-progress: false
+jobs:
+  notify:
+    if: >-
+      github.event.check_run.name == 'Workers Builds: seances-entrainement' &&
+      github.event.check_run.conclusion == 'success' &&
+      github.event.check_run.check_suite.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.check_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Vérifier que le déploiement concerne toujours main
+        id: current
+        env:
+          DEPLOYED_SHA: ${{ github.event.check_run.head_sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          if [ "$(git rev-parse FETCH_HEAD)" = "$DEPLOYED_SHA" ]; then
+            echo 'active=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Un commit plus récent est en cours : le cron du Worker reste actif.'
+          fi
+      - name: Réveiller immédiatement la version déployée
+        if: steps.current.outputs.active == 'true'
+        run: node scripts/notify-deployment.mjs
+        # Aucune clé supplémentaire. /api/version ne peut annoncer que la version réellement exécutée.
+        # Si le check externe ne déclenche pas ce workflow, le cron chaque minute reste le filet de reprise.

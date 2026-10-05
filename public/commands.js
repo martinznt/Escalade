@@ -6,6 +6,28 @@
 // Pur JavaScript, sans DOM : testé avec Node (tests/commands.test.mjs).
 
 const norm = (s) => String(s || '').toLocaleLowerCase('fr-FR').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’`]/g, "'").replace(/\s+/g, ' ').trim();
+/** Suggestions du coach : routes existantes et commandes relues par le parseur, jamais exécutées automatiquement. */
+export const COACH_ROUTES = {
+  'home/dash': 'Accueil', 'home/cal': 'Calendrier', 'library/home': 'Bibliothèque', 'library/seances': 'Mes séances', 'library/catalog': 'Séances prêtes',
+  'profile/home': 'Moi', 'profile/goals': 'Mes objectifs', 'profile/equipment': 'Mes lieux et matériel', 'profile/memory': 'Mémoire d’entraînement',
+  'progress/summary': 'Progrès', 'progress/journal': 'Journal', 'settings/main': 'Paramètres', 'settings/display': 'Affichage et accessibilité', 'settings/notifs': 'Notifications et rappels', 'settings/help': 'Aide',
+};
+const COACH_COMMANDS = new Set(['generate', 'adaptDuration', 'redo', 'today', 'showRecords', 'showProgress', 'search', 'blockers', 'whyNoProgress', 'plan']);
+export function cleanCoachActions(raw) {
+  const out = [], keys = new Set();
+  for (const a of (Array.isArray(raw) ? raw : []).slice(0, 6)) {
+    if (!a || typeof a !== 'object') continue;
+    const to = String(a.to || ''), command = String(a.command || '').trim().slice(0, 500);
+    const parsed = command ? parseCommand(command) : null;
+    if (to ? !Object.hasOwn(COACH_ROUTES, to) : !parsed || !COACH_COMMANDS.has(parsed.type) || parsed.confirm) continue;
+    const key = to || command; if (keys.has(key)) continue; keys.add(key);
+    const summary = to ? 'Ouvrir ' + COACH_ROUTES[to] : parsed.summary;
+    const label = String(a.label || summary).replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 80) || summary;
+    out.push(to ? { to, label, summary } : { command, label, summary });
+    if (out.length === 3) break;
+  }
+  return out;
+}
 const stripEdges = (s) => String(s || '').replace(/^[\s.,;:!?'"«»]+|[\s.,;:!?'"«»]+$/g, '').trim();
 
 // Zones / capacités évoquées → mots-clés utilisés par le générateur (generator.js BODY_WORDS).

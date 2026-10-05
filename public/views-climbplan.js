@@ -42,18 +42,20 @@ import { suggestRoutines, insertRoutine, WHEN as RO_WHEN, EFFORT as RO_EFFORT } 
 import { myRoutines } from './views-routines.js';
 import { goalCaps } from './brain.js';
 
-const KEY = 'sea:climbplan';
+const key = () => 'sea:climbplan:' + (S.user?.id || 'guest');
 const DEFAULT_PARTS = [
   { type: 'warmup', minutes: 15 }, { type: 'climb', kind: 'bloc', intensity: 'hard', minutes: 90, styles: [] },
   { type: 'climb', kind: 'bloc', intensity: 'easy', minutes: 30, styles: [] }, { type: 'climb', kind: 'voie', intensity: 'max', minutes: 40, styles: [], adapt: true },
   { type: 'cool', minutes: 10 },
 ];
-const CP = () => (S.cp ||= fresh());
+let aiContext = null;
+const CP = () => { const c = S.cp ||= fresh(); if (aiContext !== c) { aiContext = c; S.cpAiBusy = false; S.cpAiDraft = null; } return c; };
+const ownsPlan = (owner, c) => S.user?.id === owner && S.cp === c;
 /** Nouveau brouillon (ou brouillon repris). 8.28 : pré-rempli d'après le profil (durée habituelle, lieu adapté au sport,
  * zones à ménager, objectifs tirés des envies) ; les anciens brouillons à 7 étapes sont renumérotés.
  * 8.29 : plusieurs sports (chacun dans son lieu) et des objectifs CLASSÉS ; l'ancien objectif unique devient le n°1. */
 function fresh() {
-  const saved = ls.get(KEY, {}) || {};
+  const saved = ls.get(key(), {}) || {};
   const c = { mode: 'goal', kind: 'bloc', envId: '', sys: {}, target: null, styles: [], minutes: 120, parts: DEFAULT_PARTS.map((p) => ({ ...p })), result: null, ...saved, result: null, reasons: [] };
   if (saved.step && saved.v !== 2) c.step = Math.max(1, saved.step - 1);
   c.v = 2;
@@ -124,11 +126,23 @@ function placeFor(c) {
   else if (c.envId && !x.envs.some((v) => v.id === c.envId)) c.envId = '';
 }
 // Le brouillon est gardé sur l'appareil (fermeture accidentelle, hors ligne) : ossature, choix, changements appliqués.
-const keep = () => { const { result, reasons, aimDone, bopts, ...rest } = CP(); ls.set(KEY, rest); };
+const keep = () => { const { result, reasons, aimDone, bopts, ...rest } = CP(); ls.set(key(), rest); };
 const climbStyles = () => Object.values(ctx().styles || {}).filter((s) => !s.archived && (s.activity === 'climbing' || !s.activity));
 const systemsFor = (kind) => Object.values(ctx().systems || {}).filter((s) => s.activity === kind && s.levels?.length);
 const sysOf = (kind) => { const c = CP(), all = ctx().systems || {}; return all[c.sys?.[kind]] || pickSystem(ctx(), kind, c.envId); };
 const levelsOf = (kind) => sortedLevels(sysOf(kind));
+// Une cible vient du choix de l'utilisateur ou d'un maximum réellement noté, jamais du milieu de l'échelle.
+const climbTarget = (c = CP()) => {
+  const kind = kindOf(c.sport), levels = levelsOf(kind);
+  if (Number.isInteger(c.target) && c.target >= 0 && c.target < levels.length) return c.target;
+  const sys = sysOf(kind), max = sys ? knownMax(ctx(), sys, kind) : null;
+  return max == null || !levels.length ? null : Math.min(levels.length - 1, max + (levels.length > 10 ? 2 : 1));
+};
+const requireGradeTarget = () => {
+  const c = CP();
+  if (!isClimb(c.sport) || c.aim !== 'grade' || climbTarget(c) != null) return true;
+  c.step = SI.why; keep(); render(); toast('Choisis la cotation que tu veux atteindre.'); return false;
+};
 const phSys = (p) => ctx().systems?.[p.systemId] || sysOf(p.kind);
 const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${String(m % 60).padStart(2, '0')}` : ''}` : `${m} min`);
 const partTitle = (p) => (p.type === 'work' ? (p.label || workTitle(p)) : p.type === 'main' ? `${sportLabel(p.activity || CP().sport)} : exercices` : p.type === 'climb' ? `${p.kind === 'voie' ? '🧗 Voie' : '🪨 Bloc'} ${INTENSITY[p.intensity]?.[1].toLowerCase() || ''}` : `${CLIMB_PARTS[p.type]?.[0]} ${CLIMB_PARTS[p.type]?.[1]}`);
@@ -162,6 +176,7 @@ const envOf = () => { const x = ctx(); return x.envs.find((e) => e.id === CP().e
 export function vClimbPlan() {
   const c = CP(); c.step ||= 1; c.sport ||= Object.keys(ctx().activities)[0] || 'conditioning';
   c.step = Math.max(1, Math.min(NSTEPS, c.step));
+  if (c.step > SI.why && isClimb(c.sport) && c.aim === 'grade' && climbTarget(c) == null) c.step = SI.why;
   syncAims(c);
   const st = c.step, [, title] = STEPS[st - 1];
   const body = [vBase, vWhy, vStructure, vContent, vImprove, vValidate][st - 1]();
@@ -169,7 +184,7 @@ export function vClimbPlan() {
   return h`<div class="steps"><div class="row between"><b>Étape ${st}/${NSTEPS} · ${title}</b>${st > 1 ? h`<button class="btn sm ghost" data-act="cpRestart">Recommencer</button>` : ''}</div>
       <div class="meter"><i style="width:${Math.round((st / NSTEPS) * 100)}%"></i></div><p class="tiny muted stephelp">ℹ️ ${STEP_HELP[st]}</p></div>
     ${body}
-    <div class="stepdock">${st > 1 ? h`<button class="btn" data-act="cpStep" data-d="-1">‹ Retour</button>` : h`<span></span>`}${st < NSTEPS ? h`<button class="btn pri" data-act="cpStep" data-d="1">${NEXT[st] || 'Suivant ›'}</button>` : ''}</div>`;
+    <div class="stepdock">${st > 1 ? h`<button class="btn" data-act="cpStep" data-d="-1">‹ Retour</button>` : h`<span></span>`}${st < NSTEPS ? h`<button class="btn pri" data-act="cpStep" data-d="1" ${st === SI.why && isClimb(c.sport) && c.aim === 'grade' && climbTarget(c) == null ? 'disabled' : ''}>${NEXT[st] || 'Suivant ›'}</button>` : ''}</div>`;
 }
 /* « Plus de contrôle » (dans L'essentiel) : combien l'app aide, et qui décide de l'ossature. */
 function vHow() {
@@ -256,10 +271,10 @@ function vWhy() {
   let detail = '';
   if (aim === 'grade') {
     const levels = levelsOf(kind), sys = sysOf(kind), max = sys ? knownMax(x, sys, kind) : null;
-    const t = c.target != null && c.target < levels.length ? c.target : Math.min(levels.length - 1, (max ?? Math.round(levels.length * 0.6)) + (levels.length > 10 ? 2 : 1));
-    const advice = goalAdvice(t, max, levels); c.targetShown = t;
+    const t = climbTarget(c), advice = t == null ? '' : goalAdvice(t, max, levels); c.targetShown = t;
     detail = h`<div class="card stack"><span class="kicker">À la fin, je veux avoir réussi</span>
-      ${levels.length <= 16 ? h`<div class="chips">${levels.map((l, i) => chip(i === t, l.label, `data-act="cpTarget" data-id="${i}"`))}</div>` : h`<select data-change="cpTargetSel">${levels.map((l, i) => h`<option value="${i}" ${i === t ? 'selected' : ''}>${l.label}</option>`)}</select>`}
+      ${t == null ? h`<p class="small muted">Ton maximum n’est pas renseigné. Choisis la cotation que tu veux atteindre ; aucune cible n’est supposée.</p>` : ''}
+      ${levels.length <= 16 ? h`<div class="chips">${levels.map((l, i) => chip(i === t, l.label, `data-act="cpTarget" data-id="${i}"`))}</div>` : h`<select data-change="cpTargetSel"><option value="" ${t == null ? 'selected' : ''}>Choisir ma cotation cible</option>${levels.map((l, i) => h`<option value="${i}" ${i === t ? 'selected' : ''}>${l.label}</option>`)}</select>`}
       <span class="kicker">En <span class="tiny muted">(un ou plusieurs styles, ou aucun)</span></span>
       <div class="chips">${climbStyles().sort((a, b) => a.label.localeCompare(b.label, 'fr')).map((st) => chip(c.styles.includes(st.id), st.label, `data-act="cpStyle" data-id="${st.id}"`))}<input class="chipin" data-change="styleQuick" data-target="cp" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
       ${advice ? h`<p class="small ${/ambitieux/.test(advice) ? 'warn-t' : 'muted'}">${advice}</p>` : h`<p class="tiny muted">Note ton maximum dans <button class="linkish acc-t" data-act="allGo" data-to="profile/perfs">Records et mesures</button> pour un conseil sur l’objectif.</p>`}</div>`;
@@ -353,11 +368,13 @@ INPUT.cpWords = (el) => { const c = CP(), v = el.value.slice(0, 240); if (v.trim
 // Objectif écrit avec ses mots : l'IA le relie à des capacités (réponse validée par le serveur, relue ici avant l'ajout) ;
 // sans IA (invité, hors ligne), lecture des mots-clés ; si rien n'est reconnu, l'utilisateur choisit le type de travail.
 ACT.cpAiAim = async () => {
-  const c = CP(), text = String(c.intentText || '').trim().slice(0, 200), sp = addSport(c); if (text.length < 3) { toast('Écris ce que tu veux travailler, en quelques mots.'); return; }
+  const c = CP(), owner = S.user?.id, current = () => ownsPlan(owner, c);
+  const text = String(c.intentText || '').trim().slice(0, 200), sp = addSport(c); if (text.length < 3) { toast('Écris ce que tu veux travailler, en quelques mots.'); return; }
   S.cpAiBusy = true; S.cpAiDraft = null; render();
   let r = null, why = '';
-  try { r = (await api('POST', '/api/ai/intent', { text, activityId: sp, kind: 'intent' }, { timeout: 45000 })).intent; if (r) r = { ...r, ai: true }; }
-  catch (e) { why = e.guest ? 'Sans compte, l’IA n’est pas disponible : l’app a lu tes mots.' : e.status === 503 ? 'IA indisponible : l’app a lu tes mots.' : e.message ? `IA : ${e.message}` : ''; }
+  try { r = (await api('POST', '/api/ai/intent', { text, activityId: sp, kind: 'intent' }, { timeout: 45000 })).intent; if (!current()) return; if (r) r = { ...r, ai: true }; }
+  catch (e) { if (!current()) return; why = e.guest ? 'Sans compte, l’IA n’est pas disponible : l’app a lu tes mots.' : e.status === 503 ? 'IA indisponible : l’app a lu tes mots.' : e.message ? `IA : ${e.message}` : ''; }
+  if (!current()) return;
   if (!r) { const caps = keywordCaps(text); r = { label: text.slice(0, 50), emoji: '✍️', summary: '', caps }; }
   S.cpAiBusy = false; S.cpAiDraft = { ...r, text, sport: sp, why, family: familyOfCaps(r.caps) }; render();
 };
@@ -560,7 +577,7 @@ function vValidate() {
       <div class="row wrapf"><button class="btn sm" data-act="cpEditAi">✍️ Modifier avec l’IA</button><button class="btn sm" data-act="cpStepTo" data-id="3">✏️ Changer la structure</button></div>
       <button class="btn pri big" data-act="cpGenerate">✅ Générer la séance</button></div>`;
 }
-ACT.cpGenerate = () => { const c = CP(); if (c.built) rebuild(); else buildNow(); c.generated = true; keep(); render(); scrollRes(); };
+ACT.cpGenerate = () => { if (!requireGradeTarget()) return; const c = CP(); if (c.built) rebuild(); else buildNow(); c.generated = true; keep(); render(); scrollRes(); };
 /** Format proposé selon le sport, le temps et le « pour quoi ». */
 function proposeParts() {
   const c = CP(), M = c.minutes || 60, kind = kindOf(c.sport);
@@ -575,7 +592,7 @@ function proposeParts() {
     c.planNotes = r.notes; c.planDropped = r.dropped.map((a) => a.label);
     if (r.phases.length) return r.phases;
   }
-  if (isClimb(c.sport) && c.aim === 'grade') return goalParts({ kind, target: c.targetShown ?? c.target ?? 0, levels: levelsOf(kind), styles: c.styles, minutes: M });
+  if (isClimb(c.sport) && c.aim === 'grade') return goalParts({ kind, target: climbTarget(c), levels: levelsOf(kind), styles: c.styles, minutes: M });
   if (isClimb(c.sport) && c.aim === 'surprise') { const r = surpriseClimbParts({ kind, minutes: M, aim: c.surAim || 'any', forme: FORME_MAP[c.forme] || 'normal', envId: c.envId, seed: c.seed || 1 }, ctx()); c.reasons = r.reasons; c.aimDone = r.aim; c.surName = r.name; c.surGoal = r.goal; c.surSystem = r.system?.id || ''; return r.parts; }
   if (isClimb(c.sport)) {
     const warm = Math.min(15, Math.round(M * 0.12)), cool = Math.min(10, Math.max(5, Math.round(M * 0.07))), rest = M - warm - cool, low = FORME_MAP[c.forme] === 'low';
@@ -594,7 +611,7 @@ const FORME_MAP = { exhausted: 'low', tired: 'low', ok: 'normal', fresh: 'normal
 function buildOpts() {
   const c = CP(), env = envOf(), x = ctx(), ints = [...intentsFor(c.sport, extraIntents()).filter((it) => (c.intents || []).includes(it.id)).map((it) => ({ label: it.label, caps: it.caps })), ...(c.focus ? [c.focus] : [])];
   const names = (c.goalIds || []).map((id) => x.goals.find((g) => g.id === id)).filter(Boolean).map(goalLabel);
-  const levels = levelsOf(kindOf(c.sport)), t = c.targetShown ?? c.target;
+  const levels = levelsOf(kindOf(c.sport)), t = climbTarget(c);
   const tgt = c.aim === 'target' && c.tMetric && Number.isFinite(c.tValue) ? targetLabel(c.tMetric, c.tValue) : '';
   const intent = sessIntent();
   if (aimsMode(c)) {
@@ -656,6 +673,7 @@ ACT.cpRoAdd = (el) => {
 };
 ACT.cpStep = (el) => {
   const c = CP(), d = Number(el.dataset.d), next = Math.max(1, Math.min(NSTEPS, c.step + d));
+  if (d > 0 && next >= SI.structure && !requireGradeTarget()) return;
   if (d > 0 && c.step <= SI.why && next >= SI.structure) freshStructure();
   if (d > 0 && c.step === SI.structure) { c.result = null; c.generated = false; buildNow(); }
   if (next < NSTEPS) c.generated = false;
@@ -669,14 +687,15 @@ function freshStructure() {
 }
 /** ⚡ Proposer ma séance : structure + exercices tout de suite, affichés à l'étape « Propositions ». */
 ACT.cpQuick = () => {
+  if (!requireGradeTarget()) return;
   const c = CP(); freshStructure(); c.result = null; c.generated = false; buildNow(); c.quick = true;
   c.step = SI.content; keep(); render(); window.scrollTo(0, 0);
 };
-ACT.cpQuickGo = () => { const c = CP(); c.step = NSTEPS; keep(); window.scrollTo(0, 0); ACT.cpGenerate(); };
+ACT.cpQuickGo = () => { if (!requireGradeTarget()) return; const c = CP(); c.step = NSTEPS; keep(); window.scrollTo(0, 0); ACT.cpGenerate(); };
 ACT.cpEnvPick = (el) => { const c = CP(), sp = el.dataset.sp; if (sp && sp !== c.sport) c.places = { ...(c.places || {}), [sp]: el.dataset.id }; else { c.envId = el.dataset.id; c.envPicked = true; c.sys = {}; } c.result = null; c.built = null; keep(); render(); };
 ACT.cpEnvNew = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); };
-const partsKey = () => { const c = CP(); return JSON.stringify([(c.aims || []).map((a) => `${a.key}:${a.when || 'auto'}`), sportsOf(c), c.places || {}, c.travel ?? 15, c.level || 'modere', c.minutes, c.aim, c.aim === 'grade' ? c.targetShown ?? c.target : c.aim === 'target' ? [c.tMetric, c.tValue] : '', c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme, c.envId, !!c.equal, winOn(c) ? winList(c) : '']); };
-ACT.cpRestart = () => { const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; keep(); render(); window.scrollTo(0, 0); };
+const partsKey = () => { const c = CP(); return JSON.stringify([(c.aims || []).map((a) => `${a.key}:${a.when || 'auto'}`), sportsOf(c), c.places || {}, c.travel ?? 15, c.level || 'modere', c.minutes, c.aim, c.aim === 'grade' ? climbTarget(c) : c.aim === 'target' ? [c.tMetric, c.tValue] : '', c.styles, c.aim === 'surprise' ? [c.surAim, c.seed] : '', c.forme, c.envId, !!c.equal, winOn(c) ? winList(c) : '']); };
+ACT.cpRestart = () => { const help = CP().help; S.cp = null; ls.set(key(), {}); CP().help = help; keep(); render(); window.scrollTo(0, 0); };
 /** Changer de sport principal : les objectifs « famille » suivent (« Force · Voie » → « Force · Bloc ») ; les autres gardent leur texte. */
 function remapAims(c, from, to) {
   if (from === to || sportsOf(c).includes(from)) return;
@@ -700,7 +719,7 @@ ACT.cpSport2 = (el) => {
 CHG.cpEnvFor = (el) => { if (el.value === '__new') { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); return; } const c = CP(); c.places = { ...(c.places || {}), [el.dataset.sp]: el.value }; c.result = null; c.built = null; keep(); render(); };
 CHG.cpTravel = (el) => { const c = CP(); c.travel = Math.max(0, Math.min(120, Math.round(Number(el.value) || 0))); c.result = null; c.built = null; keep(); render(); };
 /** Aller directement à une étape (depuis un résumé) ; la structure est (re)calculée si on avance au-delà des objectifs. */
-ACT.cpStepTo = (el) => { const c = CP(), n = Math.max(1, Math.min(NSTEPS, Number(el.dataset.id) || 1)); if (n >= SI.structure && c.step <= SI.why) freshStructure(); if (n > SI.structure && !c.built) buildNow(); if (n < NSTEPS) c.generated = false; c.step = n; keep(); render(); window.scrollTo(0, 0); };
+ACT.cpStepTo = (el) => { const c = CP(), n = Math.max(1, Math.min(NSTEPS, Number(el.dataset.id) || 1)); if (n >= SI.structure && !requireGradeTarget()) return; if (n >= SI.structure && c.step <= SI.why) freshStructure(); if (n > SI.structure && !c.built) buildNow(); if (n < NSTEPS) c.generated = false; c.step = n; keep(); render(); window.scrollTo(0, 0); };
 ACT.cpForme = (el) => { CP().forme = el.dataset.id; CP().formeFrom = ''; keep(); render(); };
 ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id; c.result = null; c.built = null; keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
@@ -821,7 +840,8 @@ function workLine(p) {
 }
 function rangeText(p) {
   const sys = phSys(p), levels = sortedLevels(sys), [lo, hi] = partRange(p, levels, sys ? knownMax(ctx(), sys, p.kind) : null);
-  const a = levels[lo]?.label, b = levels[hi]?.label; return a ? (a === b ? a : `${a}–${b}`) + (p.from == null ? ' (auto)' : '') : '';
+  if (lo == null) return 'Au ressenti (maximum non renseigné)';
+  const a = levels[lo]?.label, b = levels[hi]?.label; return a ? (a === b ? a : `${a}–${b}`) + (p.from == null && p.to == null ? ' (auto)' : '') : '';
 }
 /** Ce qu'il faut faire à chaque série : durée ou répétitions, et la charge. */
 const dose = (e) => {
@@ -882,7 +902,7 @@ ACT.cpAltPick = (el) => {
   closeSheet(); rebuild(); keep(); render(); toast('Exercice remplacé.');
 };
 ACT.cpSurprise = () => { closeSheet(); const c = CP(); c.aim = 'surprise'; c.result = null; c.step = Math.max(SI.why, c.step || 1); keep(); go('library', 'climbplan'); };
-ACT.cpNew = () => { closeSheet(); const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; go('library', 'climbplan'); };
+ACT.cpNew = () => { closeSheet(); const help = CP().help; S.cp = null; ls.set(key(), {}); CP().help = help; go('library', 'climbplan'); };
 ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
 /**
  * Une seule façon de créer une séance : « Séance du jour », « Que faire aujourd'hui ? », une séance pour un objectif,
@@ -891,7 +911,7 @@ ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
  */
 export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true, envId = '' } = {}) {
   closeSheet();
-  const help = CP().help || 'auto'; S.cp = null; ls.set(KEY, {}); const c = CP(), x = ctx();
+  const help = CP().help || 'auto'; S.cp = null; ls.set(key(), {}); const c = CP(), x = ctx();
   c.help = help; c.sport = sport || c.sport || Object.keys(x.activities)[0] || 'conditioning'; placeFor(c); c.minutes = Math.max(10, Math.min(300, minutes || S.settings.defaultMinutes || 45));
   c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = 'goals'; if (forme) c.forme = forme;
   if (envId && x.envs.some((v) => v.id === envId)) { c.envId = envId; c.envPicked = true; } else if (envId === 'none') { c.envId = ''; c.envPicked = true; }
@@ -907,7 +927,7 @@ CHG.cpEnv = (el) => { if (el.value === '__new') { keep(); setReturn('Retour à m
 CHG.cpSys = (el) => { CP().sys = { ...CP().sys, [el.dataset.k]: el.value }; CP().target = null; keep(); render(); };
 ACT.cpKind = (el) => { CP().kind = el.dataset.id; CP().target = null; keep(); render(); };
 ACT.cpTarget = (el) => { CP().target = Number(el.dataset.id); keep(); render(); };
-CHG.cpTargetSel = (el) => { CP().target = Number(el.value); keep(); render(); };
+CHG.cpTargetSel = (el) => { CP().target = el.value === '' ? null : Number(el.value); keep(); render(); };
 ACT.cpStyle = (el) => { const c = CP(), id = el.dataset.id; c.styles = c.styles.includes(id) ? c.styles.filter((x) => x !== id) : [...c.styles, id]; keep(); render(); };
 ACT.cpMin = (el) => { CP().minutes = Number(el.dataset.id); keep(); render(); };
 CHG.cpMinIn = (el) => { CP().minutes = Math.max(10, Math.min(300, Number(el.value) || 60)); keep(); render(); };
@@ -921,7 +941,7 @@ function rebuild() {
 }
 function startBuild(parts, bopts) { const c = CP(); c.built = parts.map((p) => ({ ...p, styles: [...(p.styles || [])] })); c.bopts = bopts; rebuild(); render(); scrollRes(); }
 ACT.cpPlay = () => { const s = CP().result; if (s) startPlayer(s, { fromGenerator: true }); };
-ACT.cpSave = () => { const s = CP().result; if (!s) return; const n = saveSeance(s); const help = CP().help; S.cp = null; ls.set(KEY, {}); CP().help = help; toast('Enregistrée dans Mes séances'); go('library', 'seance', n.id); };
+ACT.cpSave = () => { const s = CP().result; if (!s) return; const n = saveSeance(s); const help = CP().help; S.cp = null; ls.set(key(), {}); CP().help = help; toast('Enregistrée dans Mes séances'); go('library', 'seance', n.id); };
 const mv = (i, d) => { const p = CP().parts, j = i + d; if (j < 0 || j >= p.length) return; [p[i], p[j]] = [p[j], p[i]]; CP().result = null; CP().partsTouched = true; keep(); render(); };
 ACT.cpUp = (el) => mv(Number(el.dataset.i), -1);
 ACT.cpDown = (el) => mv(Number(el.dataset.i), 1);
@@ -999,12 +1019,13 @@ function linkParams(p, i) {
   if (p.type !== 'climb') return filtersHtml || h`<p class="tiny muted">Les exercices sont proposés à l’étape suivante, classés et expliqués.</p>`;
   const sys = phSys(p), levels = sortedLevels(sys), max = sys ? knownMax(ctx(), sys, p.kind) : null, [lo, hi] = partRange(p, levels, max);
   const L = adaptPart(p, priorLoad(c.parts, i), ctx().styles), props = proposals(p.kind, p.intensity), cur = p.structure || props[0].id;
-  const opt = (sel) => levels.map((l, k) => h`<option value="${k}" ${k === sel ? 'selected' : ''}>${l.label}</option>`);
+  const opt = (sel) => h`<option value="" ${sel == null ? 'selected' : ''}>${max == null ? 'Au ressenti' : 'Automatique'}</option>${levels.map((l, k) => h`<option value="${k}" ${k === sel ? 'selected' : ''}>${l.label}</option>`)}`;
   const sysList = systemsFor(p.kind), styl = climbStyles().sort((a, b) => a.label.localeCompare(b.label, 'fr'));
   return h`${sysList.length > 1 ? h`<label>Système de cotation<select data-change="cpPhSys" data-i="${i}">${sysList.map((y) => h`<option value="${y.id}" ${(p.systemId || sys?.id) === y.id ? 'selected' : ''}>${y.name}</option>`)}</select></label>` : ''}
-    <span class="kicker">Cotations ${p.from == null ? h`<span class="tiny muted">(auto selon l’intensité${max == null ? '' : ' et ton max'})</span>` : ''}</span>
+    <span class="kicker">Cotations ${p.from == null && p.to == null ? h`<span class="tiny muted">${max == null ? '(au ressenti)' : '(auto selon l’intensité et ton max)'}</span>` : ''}</span>
+    ${max == null && lo == null ? h`<p class="tiny muted">Maximum non renseigné : aucune cotation automatique. Garde le ressenti ou choisis ta plage.</p>` : ''}
     <div class="grid2"><label>De<select data-change="cpPartLv" data-i="${i}" data-k="from">${opt(lo)}</select></label><label>À<select data-change="cpPartLv" data-i="${i}" data-k="to">${opt(hi)}</select></label></div>
-    ${p.from != null ? h`<button class="btn sm ghost" data-act="cpPartAuto" data-i="${i}">↺ Cotations automatiques</button>` : ''}
+    ${p.from != null || p.to != null ? h`<button class="btn sm ghost" data-act="cpPartAuto" data-i="${i}">↺ ${max == null ? 'Revenir au ressenti' : 'Cotations automatiques'}</button>` : ''}
     ${fieldHead('Styles voulus', p, i, 'style', '(plusieurs possibles)')}
     <div class="chips">${styl.map((s) => chip((p.styles || []).includes(s.id), s.label, `data-act="cpPartStyle" data-i="${i}" data-id="${s.id}"`))}<input class="chipin" data-change="styleQuick" data-target="cpPart" data-i="${i}" maxlength="40" placeholder="＋ Autre style" aria-label="Ajouter un style"></div>
     <span class="kicker">Styles exclus</span>
@@ -1084,7 +1105,11 @@ ACT.cpPhStyleOut = (el) => upd(Number(el.dataset.i), (p) => { const l = p.styles
 CHG.cpPhSys = (el) => upd(Number(el.dataset.i), (p) => { p.systemId = el.value; delete p.from; delete p.to; });
 CHG.cpPartMinRow = (el) => { const p = CP().parts[Number(el.dataset.i)]; if (!p || p.locks?.minutes === 'user') return; p.minutes = Math.max(p.type === 'pause' ? 1 : 5, Math.min(300, Number(el.value) || p.minutes)); CP().result = null; CP().partsTouched = true; keep(); render(); };
 CHG.cpPartMin = (el) => upd(Number(el.dataset.i), (p) => { if (p.locks?.minutes === 'user') return; p.minutes = Math.max(p.type === 'pause' ? 1 : 5, Math.min(300, Number(el.value) || p.minutes)); });
-CHG.cpPartLv = (el) => upd(Number(el.dataset.i), (p) => { const sys = phSys(p), levels = sortedLevels(sys), [lo, hi] = partRange(p, levels, sys ? knownMax(ctx(), sys, p.kind) : null); p.from ??= lo; p.to ??= hi; p[el.dataset.k] = Number(el.value); });
+CHG.cpPartLv = (el) => upd(Number(el.dataset.i), (p) => {
+  if (el.value === '') { delete p.from; delete p.to; return; }
+  const sys = phSys(p), levels = sortedLevels(sys), [lo, hi] = partRange(p, levels, sys ? knownMax(ctx(), sys, p.kind) : null), chosen = Number(el.value);
+  p.from ??= lo ?? chosen; p.to ??= hi ?? chosen; p[el.dataset.k] = chosen;
+});
 ACT.cpPartAuto = (el) => upd(Number(el.dataset.i), (p) => { delete p.from; delete p.to; });
 ACT.cpPartStyle = (el) => upd(Number(el.dataset.i), (p) => { const id = el.dataset.id, s = p.styles || []; p.styles = s.includes(id) ? s.filter((x) => x !== id) : [...s, id]; });
 CHG.cpPartMove = (el) => upd(Number(el.dataset.i), (p) => { p.move = el.value; });
@@ -1134,7 +1159,7 @@ const dnaList = () => { try { return itemsOf('sdna').filter((x) => !x.deleted); 
 const modList = () => { try { return itemsOf('smodule').filter((x) => !x.deleted); } catch { return []; } };
 const parseJson = (t) => { try { return JSON.parse(t || '{}'); } catch { return null; } };
 ACT.cpDnaSave = async () => {
-  const c = CP(), name = await askText('Nom de cette structure', { value: c.aims?.[0]?.label || 'Ma structure', placeholder: 'Ex. « Préparation voie »', ok: 'Enregistrer', max: 60 }); if (!name) return;
+  const c = CP(), owner = S.user?.id, name = await askText('Nom de cette structure', { value: c.aims?.[0]?.label || 'Ma structure', placeholder: 'Ex. « Préparation voie »', ok: 'Enregistrer', max: 60 }); if (!name || !ownsPlan(owner, c)) return;
   const d = dnaFromPhases(c.parts, name); putItem('sdna', uid(), { name: d.name, sport: c.sport, json: JSON.stringify(d), summary: d.summary }); toast(`Structure « ${d.name} » enregistrée (${d.summary}).`, 4000);
 };
 ACT.cpDnaOpen = () => {
@@ -1149,8 +1174,8 @@ ACT.cpDnaUse = (el) => {
   pushHist(); c.parts = r.phases; c.partsTouched = true; c.result = null; keep(); closeSheet(); render(); toast(`Structure « ${x.name} » générée pour ${fmtMin(c.minutes)}.`);
 };
 ACT.cpModSave = async (el) => {
-  const c = CP(), p = c.parts[Number(el.dataset.i)]; if (!p) return;
-  const name = await askText('Nom du module', { value: `${phaseName(p)} — ${fmtMin(p.minutes)}`, placeholder: 'Ex. « Bloc technique dalle — 25 min »', ok: 'Enregistrer', max: 60 }); if (!name) return;
+  const c = CP(), owner = S.user?.id, p = c.parts[Number(el.dataset.i)]; if (!p) return;
+  const name = await askText('Nom du module', { value: `${phaseName(p)} — ${fmtMin(p.minutes)}`, placeholder: 'Ex. « Bloc technique dalle — 25 min »', ok: 'Enregistrer', max: 60 }); if (!name || !ownsPlan(owner, c)) return;
   const m = moduleFromPhases([p], name); putItem('smodule', uid(), { name: m.name, sport: c.sport, json: JSON.stringify(m), minutes: m.minutes }); toast(`Module « ${m.name} » enregistré.`);
 };
 ACT.cpModOpen = () => {
@@ -1163,9 +1188,9 @@ ACT.cpModOpen = () => {
 };
 CHG.cpModAt = (el) => { S.cpModAt = Number(el.value); };
 ACT.cpModUse = async (el) => {
-  const c = CP(), x = modList().find((d) => d.id === el.dataset.id), m = parseJson(x?.json); if (!m) return toast('Module illisible.');
+  const c = CP(), owner = S.user?.id, x = modList().find((d) => d.id === el.dataset.id), m = parseJson(x?.json); if (!m) return toast('Module illisible.');
   const r = insertModule(c.parts, m, S.cpModAt ?? c.parts.length);
-  if (!(await ask(`Insérer « ${x.name} » (${fmtMin(r.minutes)}) ?`, { ok: 'Insérer', detail: r.compat.join(' ') }))) return;
+  if (!(await ask(`Insérer « ${x.name} » (${fmtMin(r.minutes)}) ?`, { ok: 'Insérer', detail: r.compat.join(' ') })) || !ownsPlan(owner, c)) return;
   pushHist(); c.parts = r.phases; c.partsTouched = true; c.result = null; keep(); closeSheet(); render();
 };
 ACT.cpStrat = () => {
@@ -1180,9 +1205,10 @@ ACT.cpStrat = () => {
     <button class="btn" data-act="closeSheet">Fermer</button></div>`, { wide: true });
 };
 ACT.cpStratUse = async (el) => {
-  const c = CP(), s = (S.cpStrats || []).find((x) => x.id === el.dataset.id); if (!s) return;
+  const c = CP(), owner = S.user?.id, s = (S.cpStrats || []).find((x) => x.id === el.dataset.id); if (!s) return;
   const r = phasesFromDna(s.dna, c.minutes); if (!r.ok) return toast(r.error, 4500);
   const why = (await askText('Pourquoi ce chemin ?', { detail: 'Facultatif : ça sert à tes futures recommandations.', ok: 'Continuer', cancel: 'Passer', max: 160 })) || '';
+  if (!ownsPlan(owner, c)) return;
   c.parts = r.phases; c.partsTouched = true; c.partsFor = partsKey(); c.result = null; c.strategy = s.id;
   remember('strategy', `Chemin « ${s.title} »`, { reason: why, ref: s.id }); keep(); closeSheet();
   c.step = SI.structure; keep(); render(); window.scrollTo(0, 0); toast(`Chemin « ${s.title} » : structure prête à régler.`);
@@ -1217,12 +1243,15 @@ function editAiSheet() {
 }
 INPUT.cpEditText = (el) => { S.cpEdit = { ...(S.cpEdit || {}), text: el.value.slice(0, 400) }; };
 ACT.cpEditPlan = async () => {
-  const c = CP(), text = S.cpEdit?.text || '', base = c.built || c.parts;
+  const c = CP(), owner = S.user?.id, edit = S.cpEdit; if (!edit) return;
+  const current = () => ownsPlan(owner, c) && S.cpEdit === edit;
+  const text = edit.text || '', base = c.built || c.parts;
   let ops = parseRequest(text, base);
   if (!ops.length && text.trim().length > 5 && !S.user?.guest) {
-    try { const r = await api('POST', '/api/ai/session-edit', { text, phases: base.map((p, i) => ({ i, name: phaseName(p), role: p.role, minutes: p.minutes, intensity: p.intensity })) }); ops = cleanOps(r.ops, base.length); } catch { /* IA indisponible : on reste sur la lecture locale */ }
+    try { const r = await api('POST', '/api/ai/session-edit', { text, phases: base.map((p, i) => ({ i, name: phaseName(p), role: p.role, minutes: p.minutes, intensity: p.intensity })) }); if (!current()) return; ops = cleanOps(r.ops, base.length); } catch { if (!current()) return; /* IA indisponible : on reste sur la lecture locale */ }
   }
-  S.cpEdit.plan = planEdit(base, ops, { sport: c.sport }); S.cpEdit.plan.understood = ops.length > 0; editAiSheet();
+  if (!current()) return;
+  edit.plan = planEdit(base, ops, { sport: c.sport }); edit.plan.understood = ops.length > 0; editAiSheet();
 };
 ACT.cpEditApply = () => {
   const c = CP(), pl = S.cpEdit?.plan; if (!pl?.changes.length) return;

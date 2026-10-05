@@ -5,7 +5,14 @@ import { startServer } from './server.mjs';
 import { shiftDay, weekday, dayInZone } from '../public/agenda.js';
 const srv=await startServer(),browser=await chromium.launch(process.env.PW_EXEC ? {executablePath:process.env.PW_EXEC} : {}),errors=[];
 let n=0;
-const step=async(name,fn)=>{await fn();console.log('  ✓',name);n++;};
+const step=async(name,fn)=>{
+  try { await fn();console.log('  ✓',name);n++; }
+  catch(e) {
+    console.log('  ✗',name);
+    if(process.env.GITHUB_ACTIONS)console.error('::error title=Interface simple et agenda E2E::'+`${name} : ${e.message}`.slice(0,4000).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A'));
+    throw e;
+  }
+};
 const ctx=await browser.newContext({viewport:{width:390,height:844},timezoneId:'Europe/Paris',serviceWorkers:'allow'}),p=await ctx.newPage();
 p.on('pageerror',e=>errors.push(e.message));
 const poll=async(fn)=>{for(let i=0;i<60;i++){if(await fn())return;await p.waitForTimeout(200);}throw new Error('Synchronisation non terminée');};

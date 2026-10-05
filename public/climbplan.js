@@ -50,7 +50,8 @@ export function knownMax(ctx, sysObj, kind = 'bloc') {
   const same = perfs.filter((p) => p.grade.systemId === sysObj?.id).map((p) => levels.findIndex((l) => l.id === p.grade.levelId)).filter((i) => i >= 0);
   if (same.length) return Math.max(...same);
   const ref = bestReferenceLevel(perfs, ctx.systems, kind), lv = ref ? fromReference(ref.index, sysObj, kind) : null;
-  return lv ? levels.findIndex((l) => l.id === lv.id) : null;
+  const index = lv ? levels.findIndex((l) => l.id === lv.id) : -1;
+  return index >= 0 ? index : null;
 }
 const clampI = (i, n) => Math.max(0, Math.min(n - 1, i));
 const labelOf = (levels, i) => levels[clampI(i, levels.length)]?.label || '';
@@ -110,8 +111,12 @@ export function proposals(kind, intensity) {
 }
 /** Plage de cotations d'une partie : choisie, sinon selon l'intensité et le maximum connu. */
 export function partRange(p, levels, max) {
-  const n = levels.length, ref = levels.findIndex((l) => l.label === (p.kind === 'voie' ? '6a' : '5+')), m = max ?? (ref >= 0 ? ref : Math.round(n * 0.6));
-  if (p.from != null && p.to != null) return [clampI(Math.min(p.from, p.to), n), clampI(Math.max(p.from, p.to), n)];
+  const n = levels.length;
+  if (!n) return [null, null];
+  const chosen = [p.from, p.to].filter((i) => Number.isInteger(i) && i >= 0);
+  if (chosen.length) return [clampI(Math.min(...chosen), n), clampI(Math.max(...chosen), n)];
+  if (!Number.isInteger(max) || max < 0) return [null, null];
+  const m = clampI(max, n);
   // 8.28 : un cran = un niveau de la cotation (6A → 6A+). Avant, l'écart était doublé pour les longues échelles :
   // un grimpeur 6A se voyait proposer des blocs en 3 et une « force » en 4.
   const step = 1, off = { easy: [-4, -3], mod: [-3, -2], hard: [-2, 0], max: [-1, 0] }[p.intensity] || [-3, -1];
@@ -121,47 +126,52 @@ export function partRange(p, levels, max) {
 export function buildClimbPart(p, { levels, max = null, styles = {}, load = null, label = '' }) {
   const kind = p.kind === 'voie' ? 'voie' : 'bloc', notes = [];
   const out0 = (p.stylesOut || []);
-  let st = (p.styles || []).filter((x) => !out0.includes(x)), [lo, hi] = partRange(p, levels, max);
+  const s = p.structure || proposals(kind, p.intensity)[0].id, givenRange = partRange(p, levels, max), graded = givenRange[0] != null;
+  // Sans maximum ni plage choisie, les étapes suivent le ressenti : aucun niveau de l'échelle n'est supposé.
+  const relativeIntensity = ['volume', 'technique'].includes(s) ? 'easy' : ['limit', 'max'].includes(s) ? 'max' : p.intensity;
+  const relative = { easy: ['très faciles', 'faciles'], mod: ['faciles', 'modérés'], hard: ['modérés', 'soutenus', 'difficiles'], max: ['difficiles', 'proches de ta limite du jour'] }[relativeIntensity] || ['faciles', 'modérés'];
+  const workLevels = graded ? levels : relative.map((label) => ({ label }));
+  let st = (p.styles || []).filter((x) => !out0.includes(x)), [lo, hi] = graded ? givenRange : [0, workLevels.length - 1];
+  if (!graded) notes.push(max == null ? `Maximum de ${kind} non renseigné : choisis les difficultés au ressenti, sans cotation automatique.` : 'Échelle de cotation indisponible : choisis les difficultés au ressenti.');
   if (p.adapt && load) { const a = adaptPart(p, load, styles); st = a.styles; notes.push(...a.notes); lo = Math.max(0, lo - a.drop); hi = Math.max(lo, hi - a.drop); }
   const stTxt = st.length ? ` · ${joinFr(styleNames(st, styles))}` : '', unit = kind === 'voie' ? 'voies' : 'blocs';
   const per = kind === 'voie' ? 5 : 1; // minutes d'effort par essai
-  const s = p.structure || proposals(kind, p.intensity)[0].id;
   const mk = (name, sets, rest, o = {}) => normalizeEx({ id: uid(), emoji: kind === 'voie' ? '🧗' : '🪨', mode: 'reps', unit, repsMin: 1, repsMax: 1, sets, rest, block: 'main', part: label, repSec: per * 60,
     intensity: o.intensity || (p.intensity === 'easy' ? 'low' : p.intensity === 'mod' ? 'mod' : 'high'), risk: st.some((s) => FINGER.has(s)) && p.intensity !== 'easy' ? 'finger' : '',
     caps: { technique_escalade: 0.6, ...(st.some((s) => FINGER.has(s)) ? { force_doigts: 0.7 } : {}), ...(st.some((s) => POWER.has(s)) ? { puissance_haut: 0.6 } : {}), ...(kind === 'voie' || o.endu ? { endurance_doigts: 0.6 } : {}) },
     name, note: o.note || '', why: o.why || '', group: 'cp-' + s });
   const T = p.minutes, fit = (rest) => Math.max(1, Math.floor((T * 60) / (per * 60 + rest))), out = [];
-  const lvl = (i) => labelOf(levels, i);
+  const lvl = (i) => labelOf(workLevels, i), targetRange = (a, b) => graded ? range(workLevels, a, b) : a === b ? lvl(a) : `${lvl(a)} à ${lvl(b)}`;
   if (kind === 'bloc') {
     if (s === 'pyramid') {
       const steps = []; for (let i = lo; i <= hi; i++) steps.push(i); if (!steps.length) steps.push(hi);
       const w = steps.map((_, k) => steps.length - k), tot = w.reduce((a, b) => a + b, 0), n = fit(120);
       steps.forEach((i, k) => { const c = Math.max(1, Math.round((n * w[k]) / tot)); out.push(mk(`Blocs ${lvl(i)}${stTxt}`, c, i === hi ? 180 : 120, { note: k === 0 ? 'Monte d’un cran seulement quand tu réussis proprement.' : '' })); });
     } else if (s === 'limit') {
-      const n = Math.max(3, fit(180)); out.push(mk(`Essais sur blocs ${range(levels, Math.max(lo, hi - 1), hi)}${stTxt}`, n, 180, { note: 'Repos 3 min entre les essais ; change de bloc après 4 à 6 essais sans progrès.', why: 'Travailler au plus dur demande d’être frais : peu de blocs, de vrais repos.' }));
+      const n = Math.max(3, fit(180)); out.push(mk(`Essais sur blocs ${targetRange(Math.max(lo, hi - 1), hi)}${stTxt}`, n, 180, { note: 'Repos 3 min entre les essais ; change de bloc après 4 à 6 essais sans progrès.', why: 'Travailler au plus dur demande d’être frais : peu de blocs, de vrais repos.' }));
     } else if (s === 'styles') {
       const list = (st.length ? st : ['st-dalle', 'st-devers', 'st-reglettes', 'st-dynamique']).filter((x) => !out0.includes(x));
       const each = Math.max(1, Math.round(fit(120) / list.length));
-      for (const id of list) out.push(mk(`Blocs ${range(levels, lo, hi)} · ${styleNames([id], styles)[0]}`, each, 120));
+      for (const id of list) out.push(mk(`Blocs ${targetRange(lo, hi)} · ${styleNames([id], styles)[0]}`, each, 120));
     } else if (s === 'fourx4') {
-      out.push(mk(`4×4 : 4 blocs ${range(levels, lo, Math.max(lo, hi - 1))}${stTxt} enchaînés`, 4, 240, { endu: true, note: 'Enchaîne les 4 blocs sans repos, puis 4 min de repos. Arrête si les mouvements deviennent brouillons.' }));
+      out.push(mk(`4×4 : 4 blocs ${targetRange(lo, Math.max(lo, hi - 1))}${stTxt} enchaînés`, 4, 240, { endu: true, note: 'Enchaîne les 4 blocs sans repos, puis 4 min de repos. Arrête si les mouvements deviennent brouillons.' }));
     } else if (s === 'technique') {
       const drills = ['pieds silencieux', 'hanches contre le mur', 'bras tendus', 'regarder chaque pied'];
       const list = (st.length ? st : ['st-dalle', 'st-vertical']).filter((x) => !out0.includes(x)), each = Math.max(2, Math.round(fit(60) / list.length));
-      list.forEach((id, k) => out.push(mk(`Blocs ${range(levels, lo, hi)} · ${styleNames([id], styles)[0]} — ${drills[k % drills.length]}`, each, 60, { intensity: 'low' })));
+      list.forEach((id, k) => out.push(mk(`Blocs ${targetRange(lo, hi)} · ${styleNames([id], styles)[0]} — ${drills[k % drills.length]}`, each, 60, { intensity: 'low' })));
     } else {
-      out.push(mk(`Blocs faciles ${range(levels, lo, hi)}${stTxt}`, fit(60), 60, { intensity: 'low', note: 'Grimpe propre et fluide, sans te mettre dans le rouge.' }));
+      out.push(mk(`Blocs ${graded ? 'faciles ' : ''}${targetRange(lo, hi)}${stTxt}`, fit(60), 60, { intensity: 'low', note: 'Grimpe propre et fluide, sans te mettre dans le rouge.' }));
     }
   } else {
-    if (s === 'max') out.push(mk(`Voies ${range(levels, Math.max(lo, hi - 1), hi)}${stTxt}`, Math.max(2, fit(480)), 480, { note: 'Repos 8 min entre les voies. Lis la voie avant de partir.' }));
-    else if (s === 'pyramid') { const steps = [lo, Math.round((lo + hi) / 2), hi, Math.round((lo + hi) / 2)]; const n = Math.max(1, Math.round(fit(300) / steps.length)); steps.forEach((i) => out.push(mk(`Voie ${lvl(i)}${stTxt}`, n, 300))); }
-    else if (s === 'enchain') out.push(mk(`2 voies ${range(levels, lo, Math.max(lo, hi - 1))}${stTxt} à la suite`, Math.max(1, fit(420)), 420, { endu: true, note: 'Redescends et repars aussitôt ; repos 7 min entre les séries.' }));
-    else out.push(mk(`Voies faciles ${range(levels, lo, hi)}${stTxt}`, fit(120), 120, { intensity: 'low', endu: true, note: 'Grimpe sans t’arrêter, en respirant.' }));
+    if (s === 'max') out.push(mk(`Voies ${targetRange(Math.max(lo, hi - 1), hi)}${stTxt}`, Math.max(2, fit(480)), 480, { note: 'Repos 8 min entre les voies. Lis la voie avant de partir.' }));
+    else if (s === 'pyramid') { const steps = [lo, Math.round((lo + hi) / 2), hi, Math.round((lo + hi) / 2)]; const n = Math.max(1, Math.round(fit(300) / steps.length)); steps.forEach((i) => out.push(mk(`${graded ? 'Voie' : 'Voies'} ${lvl(i)}${stTxt}`, n, 300))); }
+    else if (s === 'enchain') out.push(mk(`2 voies ${targetRange(lo, Math.max(lo, hi - 1))}${stTxt} à la suite`, Math.max(1, fit(420)), 420, { endu: true, note: 'Redescends et repars aussitôt ; repos 7 min entre les séries.' }));
+    else out.push(mk(`Voies ${graded ? 'faciles ' : ''}${targetRange(lo, hi)}${stTxt}`, fit(120), 120, { intensity: 'low', endu: true, note: 'Grimpe sans t’arrêter, en respirant.' }));
   }
   // Nombre d'essais maximum choisi par l'utilisateur : jamais dépassé.
   if (p.attemptsMax) { let cut = false; for (const e of out) if (e.sets > p.attemptsMax) { e.sets = p.attemptsMax; cut = true; } if (cut) notes.push(`Au plus ${p.attemptsMax} essais, comme tu l’as choisi.`); }
   if (notes.length && out[0]) out[0].note = [notes.join(' '), out[0].note].filter(Boolean).join(' ');
-  return { exercises: out, notes, range: [lo, hi], styles: st };
+  return { exercises: out, notes, range: graded ? [lo, hi] : [null, null], styles: st };
 }
 
 /** Parties « corps » (échauffement, renfo, étirements…) : construites par le générateur habituel. */
@@ -238,7 +248,6 @@ export function buildFromParts(parts, ctx, opts = {}) {
     }
     // Système de cotation : celui choisi pour la phase, sinon celui de la séance, sinon celui du lieu (aucune équivalence inventée).
     const sys = (p.systemId && ctx.systems?.[p.systemId]) || opts.systems?.[p.kind] || pickSystem(ctx, p.kind, opts.envId), levels = sortedLevels(sys);
-    if (!levels.length) return;
     if (Array.isArray(p.pick) && !p.pick.length) return; // tout décoché : partie vide, comme demandé
     if (opts.envId && !availableEquipment(ctx, opts.envId).has('wall')) why.push(`⚠️ ${opts.envName || 'Ce lieu'} n’a pas de mur d’escalade dans son matériel : ajoute-le dans Profil › Mes lieux, ou choisis un autre lieu pour « ${label} ».`);
     const structs = p.pick?.length ? p.pick.filter((id) => STRUCTURES[p.kind === 'voie' ? 'voie' : 'bloc'][id]) : [p.structure || null];
@@ -265,6 +274,7 @@ export function buildFromParts(parts, ctx, opts = {}) {
  * échauffement général, échauffement en grimpant (loin sous l'objectif), montée, spécifique, essais sur l'objectif, retour au calme.
  */
 export function goalParts({ kind = 'bloc', target, levels, styles = [], minutes = 120, warm = null, stretch = 0 }) {
+  if (!levels.length || !Number.isInteger(target) || target < 0 || target >= levels.length) return [];
   const n = levels.length, T = clampI(target, n), step = n > 10 ? 2 : 1, M = Math.max(40, Math.min(300, minutes));
   // Échauffement général et étirements : au choix (0 = sans), sinon automatiques pour l'échauffement.
   const W = warm == null ? Math.min(15, Math.round(M * 0.12)) : Math.max(0, Math.min(45, warm)), X = Math.max(0, Math.min(45, stretch || 0));
@@ -284,7 +294,7 @@ export function goalParts({ kind = 'bloc', target, levels, styles = [], minutes 
 }
 /** Conseil honnête sur l'objectif, si le maximum connu le permet (sinon rien : on n'invente pas). */
 export function goalAdvice(target, max, levels) {
-  if (max == null) return '';
+  if (!Number.isInteger(target) || target < 0 || !Number.isInteger(max) || max < 0 || !levels.length) return '';
   const step = levels.length > 10 ? 2 : 1, gap = (target - max) / step;
   if (gap >= 2) return `Objectif ambitieux : ton maximum noté est ${labelOf(levels, max)}. Vise d’abord ${labelOf(levels, max + step)}, c’est plus réaliste aujourd’hui.`;
   if (gap >= 1) return `Un cran au-dessus de ton maximum noté (${labelOf(levels, max)}) : c’est un bel objectif, garde de l’énergie pour les essais.`;

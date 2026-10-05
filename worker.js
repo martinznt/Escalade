@@ -7,7 +7,8 @@ import { cleanRecurrence, cleanAgendaMeta, validDay, calendarIcsEvents } from '.
 import { cleanItem, cleanId, COLLECTIONS } from './public/items.js';
 import { legacyItems } from './server/migrate.js';
 import { interpretAgenda } from './server/agenda.js';
-import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, extractJson, DEFAULT_MODEL as AI_MODEL } from './server/ai.js';
+import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, extractJson } from './server/ai.js';
+import { runAI, aiError, aiStatus, saveAIConfig, hasAI } from './server/ai-runtime.js';
 import { cleanOps } from './public/sessionedit.js';
 import { estimateLevel } from './public/estimate.js';
 import { sessionMeta } from './public/sessionmeta.js';
@@ -17,17 +18,17 @@ import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server
 import { cleanChange, diffState, diffChange, afterOf, runChecks, buildAdminDraft, cleanAdminDraft, buildLab, cleanLab, AI_KINDS } from './server/studio.js';
 import { dataHealth, groupBugs, buildMaintenance, cleanMaintenance, analyzeDiff } from './server/health.js';
 import { CODE_FILES, searchCode, buildCodeEdit, cleanEdits, openPullRequest, REPO_OK } from './server/codeedit.js';
-import { findContext, buildAssistant, cleanAssistant, mergeItems, ASSIST_KINDS } from './server/assistant.js';
+import { findContext, buildAssistant, cleanAssistant, mergeItems, ASSIST_KINDS, APP_MAP } from './server/assistant.js';
 import { LIBRARY } from './public/library.js';
 import { FAQ } from './public/help.js';
 import { SPORT_INTENTS } from './public/intentions.js';
 import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX, cleanGroupState, GROUP_TTL } from './server/duo.js';
 import { cleanConfig as cleanGroupConfig, GROUP_MAX } from './public/group.js';
 import { changesRoute } from './server/changes.js';
-import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, TYPES as PUSH_TYPES, b64u } from './server/push.js';
+import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, broadcastNotice, TYPES as PUSH_TYPES, b64u } from './server/push.js';
 import { buildIcs } from './public/ics.js';
 
-const APP_VERSION = '8.32.1';
+const APP_VERSION = '8.32.2';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -49,8 +50,8 @@ const SECURITY_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-// Annonce d'une nouvelle version : dès la première requête reçue après le déploiement (sans attendre la tâche
-// planifiée de 15 min). Une seule vérification par instance du Worker ; la base garantit une seule annonce.
+// Annonce dès le déploiement par le workflow, ou dès la première visite ; reprise chaque minute.
+// La file durable en base conserve les appareils restant à joindre.
 let announcedBuild = '';
 function announceSoon(env, ctx) {
   const b = buildId(env);
@@ -62,7 +63,7 @@ function announceSoon(env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    announceSoon(env, ctx);
+    if (!(url.pathname === '/api/version' && url.searchParams.has('expected'))) announceSoon(env, ctx);
     try {
       const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : url.pathname.startsWith('/ical/') ? await icalFeed(request, env, url) : await serveAsset(request, env, url);
       if (url.protocol === 'https:') { const h = new Headers(res.headers); h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h }); }
@@ -126,6 +127,7 @@ function json(obj, status = 200, extra = {}) {
   return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS, ...extra } });
 }
 const fail = (error, status = 400, more = {}) => json({ ok: false, error, ...more }, status);
+const aiFailure = (e, fallback) => { const r = aiError(e, fallback); return fail(r.error, r.status, { quota: !!r.quota }); };
 
 const b64 = (bytes) => { let s = ''; for (const x of bytes) s += String.fromCharCode(x); return btoa(s).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', ''); };
 const unb64 = (s) => { s = s.replaceAll('-', '+').replaceAll('_', '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); };
@@ -273,7 +275,8 @@ const can = (u, role) => !!u?.isAdmin && (u.roles || []).some((r) => r === 'supe
 function roleFor(p, m) {
   if (/^\/api\/admin\/users\/[\w-]+\/(role|roles)$/.test(p)) return 'super';
   if (p.startsWith('/api/admin/users')) return 'users';
-  if (p.startsWith('/api/admin/bugs') || p === '/api/admin/push-status' || p.startsWith('/api/admin/code') || p === '/api/admin/maintenance') return 'technical';
+  if (p.startsWith('/api/admin/bugs') || p === '/api/admin/push-status' || p === '/api/admin/push-broadcast' || p.startsWith('/api/admin/code') || p === '/api/admin/maintenance') return 'technical';
+  if ((p === '/api/admin/ai' || p === '/api/admin/ai/test') && m === 'POST') return 'intelligence';
   if (p === '/api/admin/studio/ai' || p === '/api/admin/lab' || p === '/api/admin/health') return 'intelligence';
   if (p === '/api/admin/assistant/code') return 'technical';
   if (p === '/api/admin/assistant') return 'content';
@@ -349,18 +352,28 @@ async function handoffClaim(request, env, secure) {
   if (!v) return fail('Lien de transfert expiré ou déjà utilisé.', 404);
   const out = { ok: true, ls: v.ls || {}, guest: !!v.guest, snap: v.snap || null, user: null };
   if (!v.uid) return json(out);
-  const row = await db(env, 'SELECT id,username,email,is_admin FROM users WHERE id=?', v.uid).first();
+  const row = await db(env, 'SELECT id,username,email,is_admin,admin_roles FROM users WHERE id=?', v.uid).first();
   if (!row) return json(out);
   await revokePresented(request, env);
   const token = await createSession(env, row.id);
-  out.user = { id: row.id, username: row.username, email: row.email, isAdmin: !!row.is_admin };
+  out.user = { id: row.id, username: row.username, email: row.email, isAdmin: !!row.is_admin, roles: rolesOf(row) };
   return json(out, 200, { 'Set-Cookie': cookie('session', token, SESSION_DAYS * 86400, secure) });
 }
 
 /* ═════════════ Routeur API ═════════════ */
 async function handleApi(request, env, url) {
   const p = url.pathname, m = request.method;
-  if (p === '/api/version') return new Response(JSON.stringify({ version: APP_VERSION, build: buildId(env) }), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
+  if (p === '/api/version') {
+    const expected = url.searchParams.get('expected');
+    if (expected !== null) {
+      if (!/^\d+\.\d+\.\d+$/.test(expected)) return fail('Version attendue invalide.', 400);
+      if (expected !== APP_VERSION) return fail('Le nouveau déploiement n’est pas encore disponible.', 409);
+      if (!env.DB) return fail('Base de données non configurée.', 503);
+      try { await ensureSchema(env); await updateNotice(env, buildId(env)); }
+      catch (e) { console.error('annonce-déploiement', e?.message); return fail('L’annonce doit être réessayée.', 503); }
+    }
+    return new Response(JSON.stringify({ version: APP_VERSION, build: buildId(env), ...(expected === null ? {} : { announced: true }) }), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
+  }
   if (p === '/api/changes' && m === 'GET') return changesRoute(env);
   if (p === '/api/move' && m === 'GET') return json({ ok: true, to: moveTarget(env, url) });
   if (p === '/api/health') return json({ ok: true, db: !!env.DB, version: APP_VERSION, build: buildId(env), inviteRequired: !!env.INVITE_CODE, adminConfigured: !!env.EDIT_PASSWORD });
@@ -489,13 +502,17 @@ async function routeAuthed(request, env, url, auth, secure) {
 
   // Signalements de bugs
   if (p === '/api/bugs' && m === 'POST') return bugCreate(request, env, u);
+  if (p === '/api/ai/status' && m === 'GET') {
+    const state = await aiStatus(env);
+    return json({ available: state.available, provider: state.provider, label: state.label });
+  }
   if (p === '/api/ai/agenda' && m === 'POST') {
     const b = await readJson(request, 3000), message = str(b?.text, 600);
     if (message.length < 3) return fail('Décris ton activité ou ton planning.');
     if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Quota de demandes atteint : le formulaire reste disponible.', 429);
     const rows = (await db(env, "SELECT id FROM user_items WHERE user_id=? AND collection='activity' AND deleted=0", u.id).all()).results || [];
     try { const draft = await interpretAgenda(env, { message, kind: b?.kind === 'planning' ? 'planning' : 'journal', today: validDay(b?.today) ? b.today : new Date().toISOString().slice(0,10), allowed: [...Object.keys(ACTIVITIES), ...rows.map((x) => x.id)] }); return json({ok:true,draft}); }
-    catch (e) { return fail(e.status ? e.message : 'L’assistant est indisponible. Le formulaire reste utilisable.', e.status || 503); }
+    catch (e) { return aiFailure(e, 'L’assistant est indisponible. Le formulaire reste utilisable.'); }
   }
   if (p === '/api/ai/draft' && m === 'POST') return aiDraftRoute(request, env, u);
   if (p === '/api/ai/chat' && m === 'POST') return aiChatRoute(request, env, u);
@@ -503,32 +520,36 @@ async function routeAuthed(request, env, url, auth, secure) {
     // Traduit une demande en opérations sur la séance ; le client montre le plan et n'applique rien sans « Appliquer ».
     const b = await readJson(request, 8000), text = str(b?.text, 400), phases = Array.isArray(b?.phases) ? b.phases.slice(0, 20).map((x, i) => ({ i, name: str(x?.name, 60), role: str(x?.role, 20), minutes: clamp(x?.minutes, 0, 600, 0), intensity: str(x?.intensity, 8) })) : [];
     if (text.length < 3 || !phases.length) return fail('Demande ou séance manquante.');
-    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-e:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
     try {
-      const out = await env.AI.run(env.AI_MODEL || AI_MODEL, { max_tokens: 400, temperature: 0.1, messages: [
+      const out = await runAI(env, { max_tokens: 400, temperature: 0.1, messages: [
         { role: 'system', content: 'Tu traduis une demande de modification de séance en opérations JSON strictes : {"ops":[{"op":"total|keep|only|remove|add|intensity|shorten","idx":[indices des phases],"minutes":n,"role":"technique|endurance|force|puissance|mobilite|perf|pause","dir":-1|1}]}. Uniquement du JSON. N’invente aucune phase : utilise les indices fournis.' },
         { role: 'user', content: `Phases : ${JSON.stringify(phases)}\nDemande : ${text}` }] });
       const x = extractJson(out);
       return json({ ok: true, ops: cleanOps(x?.ops, phases.length) });
-    } catch (e) { console.error('ai-edit', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+    } catch (e) { console.error('ai-edit', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
   }
   if (p === '/api/ai/goal' && m === 'POST') {
-    const b = await readJson(request, 4000), text = str(b?.text, 300);
+    const b = await readJson(request, 6000), text = str(b?.text, 300);
     if (text.length < 3) return fail('Écris ton objectif.');
-    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Tu as beaucoup utilisé l’assistant : réessaie un peu plus tard.', 429);
-    try { return json({ ok: true, goal: await aiGoal(env, { text, profile: str(b?.profile, 900) }) }); }
-    catch (e) { console.error('ai-goal', e?.message); return json({ error: e.status ? e.message : 'L’assistant n’a pas pu répondre.' }, e.status === 502 ? 502 : 503); }
+    try {
+      const state = await aiStatus(env);
+      const shared = (state.provider === 'cloudflare' && b.profileConsent == null) || (b.profileConsent === true && b.profileProvider === state.provider);
+      return json({ ok: true, goal: await aiGoal(env, { text, profile: shared ? str(b?.profile, 3000) : '', expectedProvider: state.provider }) });
+    }
+    catch (e) { console.error('ai-goal', e?.message); return aiFailure(e); }
   }
   if (p === '/api/push/subscribe' && m === 'POST') return pushSubscribe(request, env, u);
   if (p === '/api/ai/intent' && m === 'POST') {
     const b = await readJson(request, 3000), text = str(b?.text, 200), kind = ['intent', 'strength', 'weakness'].includes(b?.kind) ? b.kind : 'intent';
     if (text.length < 2) return fail('Écris ce que tu veux travailler.');
-    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Tu as beaucoup utilisé l’assistant : réessaie un peu plus tard.', 429);
     try { return json({ ok: true, intent: await aiIntent(env, { text, activityId: str(b?.activityId, 60), kind }) }); }
-    catch (e) { console.error('ai-intent', e?.message); return json({ error: e.status ? e.message : 'L’assistant n’a pas pu répondre.' }, e.status === 502 ? 502 : 503); }
+    catch (e) { console.error('ai-intent', e?.message); return aiFailure(e); }
   }
   // Intentions communes (lecture pour tous) et propositions (envoyées aux administrateurs)
   if (p === '/api/community/intents' && m === 'GET') return json({ ok: true, intents: ((await db(env, 'SELECT id,activity,label,emoji,caps_json FROM community_intents ORDER BY created_at').all()).results || []).map((r) => ({ id: r.id, activityId: r.activity, label: r.label, emoji: r.emoji, caps: safeParse(r.caps_json) || {} })) });
@@ -561,6 +582,29 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (!u.isAdmin) return fail('Droit administrateur requis.', 403);
     const need = roleFor(p, m);
     if (need && !can(u, need)) return fail(`Rôle « ${ADMIN_ROLES[need]} » requis.`, 403);
+    if (p === '/api/admin/ai' && m === 'GET') return json({ ok: true, ...await aiStatus(env) });
+    if (p === '/api/admin/ai' && m === 'POST') {
+      const b = await readJson(request, 2000);
+      try { const r = await saveAIConfig(env, b); await auditStmt(env, u, 'ai-config', { type: 'ai', id: 'config', after: { model: r.model, budget: r.budget } }).run(); return json({ ok: true, ...r }); }
+      catch (e) { return aiFailure(e); }
+    }
+    if (p === '/api/admin/ai/test' && m === 'POST') {
+      if (await limited(env, 'ai-test:' + u.id, 3, 600000)) return fail('Trois tests par dix minutes suffisent. Réessaie plus tard.', 429);
+      const started = Date.now();
+      try {
+        const raw = await runAI(env, { max_tokens: 100, temperature: 0, messages: [{ role: 'system', content: 'Réponds uniquement avec un objet JSON {"reply":"L’IA est disponible."}.' }, { role: 'user', content: 'Vérifie que tu peux répondre en français.' }] }, { timeoutMs: 15000 });
+        const value = extractJson(raw)?.reply, reply = typeof value === 'string' ? str(value, 180) : '';
+        if (!reply) return fail('Le modèle n’a pas renvoyé une réponse exploitable. Choisis l’autre modèle ou réessaie.', 502);
+        return json({ ok: true, reply, elapsedMs: Date.now() - started, ...await aiStatus(env) });
+      } catch (e) { return aiFailure(e); }
+    }
+    if (p === '/api/admin/push-broadcast' && m === 'POST') {
+      const b = await readJson(request, 4000);
+      if (b?.confirmed !== true) return fail('Confirme l’envoi à tous les utilisateurs.');
+      if (b.version !== APP_VERSION || b.build !== buildId(env)) return fail('La version a changé. Actualise avant d’annoncer.', 409);
+      const r = await broadcastNotice(env, { ...b, actorId: u.id });
+      return r.error ? fail(r.error, r.status || 400) : json(r);
+    }
     if ((x = p.match(/^\/api\/admin\/users\/([\w-]{1,64})\/roles$/)) && m === 'POST') {
       const b = await readJson(request, 500), roles = [...new Set((Array.isArray(b?.roles) ? b.roles : []).filter((r) => ADMIN_ROLES[r]))];
       const t = await db(env, 'SELECT id,is_admin,admin_roles FROM users WHERE id=?', x[1]).first(); if (!t) return fail('Compte introuvable.', 404);
@@ -578,8 +622,8 @@ async function routeAuthed(request, env, url, auth, secure) {
       // Analyse des signalements ouverts : regroupement déterministe toujours ; propositions de l'IA si disponible. Rien n'est appliqué.
       const bugs = ((await db(env, "SELECT title,description,page,app_version,created_at FROM bug_reports WHERE status='open' ORDER BY created_at DESC LIMIT 60").all()).results || []).map((b) => ({ title: b.title, description: b.description, page: b.page, appVersion: b.app_version, createdAt: b.created_at }));
       const groups = groupBugs(bugs); let findings = null, ai = 'indisponible';
-      if (env.AI?.run && bugs.length && !(await limited(env, 'ai-mt:' + u.id, 6, 600000))) {
-        try { findings = cleanMaintenance(extractJson(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildMaintenance(bugs), max_tokens: 1200, temperature: 0.2 }))); ai = findings ? 'ok' : 'inutilisable'; } catch (e) { console.error('ai-maint', e?.message); ai = 'erreur'; }
+      if (hasAI(env) && bugs.length && !(await limited(env, 'ai-mt:' + u.id, 6, 600000))) {
+        try { findings = cleanMaintenance(extractJson(await runAI(env, { messages: buildMaintenance(bugs), max_tokens: 1200, temperature: 0.2 }))); ai = findings ? 'ok' : 'inutilisable'; } catch (e) { console.error('ai-maint', e?.message); ai = 'erreur'; }
       }
       await auditStmt(env, u, 'maintenance', { type: 'bugs', id: String(bugs.length), after: { groups: groups.length, findings: findings?.length || 0 } }).run();
       return json({ ok: true, open: bugs.length, groups, findings: findings || [], ai });
@@ -646,13 +690,13 @@ async function routeAuthed(request, env, url, auth, secure) {
       const b = await readJson(request, 30000), msgs = (Array.isArray(b?.messages) ? b.messages : []).slice(-8);
       const last = [...msgs].reverse().find((y) => y?.role === 'user');
       if (!last || str(last.content, 1500).length < 3) return fail('Écris ce que tu veux changer.');
-      if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur (Workers AI).', unavailable: true }, 503);
+      if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
       if (await limited(env, 'ai-code:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie dans quelques minutes.', 429);
       const files = await codeFiles(env), convo = msgs.filter((y) => y?.role === 'user').slice(-3).map((y) => str(y.content, 600)).join(' ');
       const snippets = searchCode(files, convo);
       let out;
-      try { out = cleanEdits(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildCodeEdit(msgs, snippets), max_tokens: 1600, temperature: 0.2 }), files); }
-      catch (e) { console.error('ai-code', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+      try { out = cleanEdits(await runAI(env, { messages: buildCodeEdit(msgs, snippets), max_tokens: 1600, temperature: 0.2 }), files); }
+      catch (e) { console.error('ai-code', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
       return json({ ok: true, ...out, impact: out.diff ? analyzeDiff(out.diff) : null, snippets: snippets.map(({ path, start, end }) => ({ path, start, end })), github: githubReady(env) });
     }
     if (p === '/api/admin/bugs' && m === 'GET') return adminBugs(url, env);
@@ -660,7 +704,7 @@ async function routeAuthed(request, env, url, auth, secure) {
       const st = async (k) => (await db(env, 'SELECT value FROM system_state WHERE key=?', k).first())?.value || '';
       const parse = async (k) => { try { return JSON.parse(await st(k) || 'null'); } catch { return null; } };
       const n = await db(env, 'SELECT COUNT(*) c FROM push_subs').first();
-      return json({ ok: true, build: buildId(env), lastBuild: await st('last_build'), last: await parse('last_notify'), cron: await parse('last_cron'), now: Date.now(), devices: Number(n?.c) || 0 });
+      return json({ ok: true, version: APP_VERSION, build: buildId(env), lastBuild: await st('last_build'), last: await parse('last_notify'), broadcast: await parse('last_broadcast'), cron: await parse('last_cron'), now: Date.now(), devices: Number(n?.c) || 0 });
     }
     if (p === '/api/admin/users' && m === 'GET') return adminUsers(env);
     if ((x = p.match(/^\/api\/admin\/users\/([\w-]{1,64})\/role$/)) && m === 'POST') {
@@ -722,7 +766,7 @@ async function register(request, env, secure) {
   await migrateLegacyForFirstUser(env, id);
   await revokePresented(request, env);
   const token = await createSession(env, id);
-  return json({ ok: true, user: { id, username, email, isAdmin: false } }, 200, { 'Set-Cookie': cookie('session', token, SESSION_DAYS * 86400, secure) });
+  return json({ ok: true, user: { id, username, email, isAdmin: false, roles: [] } }, 200, { 'Set-Cookie': cookie('session', token, SESSION_DAYS * 86400, secure) });
 }
 
 // Hachage factice : le temps de réponse ne révèle pas si un pseudo existe.
@@ -733,13 +777,13 @@ async function login(request, env, secure) {
   const username = str(b.username, 120), password = String(b.password ?? '').slice(0, 200);
   const rk = 'login:' + clientIp(request) + ':' + username.toLowerCase();
   if (await limited(env, rk, 10, 900000)) return fail('Trop d’essais. Réessaie dans quelques minutes.', 429);
-  const row = await db(env, 'SELECT id,username,email,is_admin,password_hash,password_salt FROM users WHERE lower(username)=lower(?) OR email=lower(?)', username, username).first();
+  const row = await db(env, 'SELECT id,username,email,is_admin,admin_roles,password_hash,password_salt FROM users WHERE lower(username)=lower(?) OR email=lower(?)', username, username).first();
   const computed = await passHash(password, row ? row.password_salt : DUMMY_SALT);
   if (!row || !safeEq(computed, row.password_hash)) return fail('Pseudo ou mot de passe incorrect.', 401);
   await rlReset(env, rk);
   await revokePresented(request, env);
   const token = await createSession(env, row.id);
-  return json({ ok: true, user: { id: row.id, username: row.username, email: row.email, isAdmin: !!row.is_admin } }, 200, { 'Set-Cookie': cookie('session', token, SESSION_DAYS * 86400, secure) });
+  return json({ ok: true, user: { id: row.id, username: row.username, email: row.email, isAdmin: !!row.is_admin, roles: rolesOf(row) } }, 200, { 'Set-Cookie': cookie('session', token, SESSION_DAYS * 86400, secure) });
 }
 async function logout(request, env, secure) {
   await revokePresented(request, env);
@@ -1205,10 +1249,10 @@ async function aiDraftRoute(request, env, u) {
   const b = await readJson(request, 4000);
   const text = str(b?.text, 300), kind = ['exercise', 'capacity', 'auto'].includes(b?.kind) ? b.kind : 'auto';
   if (text.length < 2) return fail('Décris en quelques mots ce que tu veux créer.');
-  if (!env.AI?.run) return json({ error: 'Assistant IA non activé sur ce serveur.', unavailable: true }, 503);
+  if (!hasAI(env)) return json({ error: 'Assistant IA non activé sur ce serveur.', unavailable: true }, 503);
   if (await limited(env, 'ai-m:' + u.id, 6, 600000) || await limited(env, 'ai-d:' + u.id, 40, DAY)) return fail('Tu as beaucoup utilisé l’assistant : réessaie un peu plus tard.', 429);
   try { const r = await aiDraft(env, { kind, text, activityId: str(b?.activityId, 60) }); return json({ ok: true, draft: r.draft, source: 'ia' }); }
-  catch (e) { console.error('ai', e?.message); return json({ error: e.status ? e.message : 'L’assistant IA n’a pas pu répondre. Réessaie dans un instant.', unavailable: e.status === 503 }, e.status === 502 ? 502 : 503); }
+  catch (e) { console.error('ai', e?.message); return aiFailure(e); }
 }
 // Services de notification des navigateurs (Chrome/Android, Firefox, Safari/iPhone, Edge/Windows) : aucun autre hôte accepté.
 const PUSH_HOSTS = /^(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|web\.push\.apple\.com|[\w-]+\.push\.apple\.com|[\w.-]+\.notify\.windows\.com)$/;
@@ -1501,11 +1545,11 @@ async function studioRoute(request, env, u, url, p, m) {
     const b = await readJson(request, 6000), text = str(b?.text, 1500), kind = String(b?.kind || '');
     if (!AI_KINDS.includes(kind)) return fail('Type non pris en charge par l’assistant.');
     if (text.length < 5) return fail('Décris ce que tu veux en quelques mots.');
-    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-s:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
     let data;
-    try { data = cleanAdminDraft(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildAdminDraft(kind, text), max_tokens: 900, temperature: 0.3 }), kind); }
-    catch (e) { console.error('ai-studio', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+    try { data = cleanAdminDraft(await runAI(env, { messages: buildAdminDraft(kind, text), max_tokens: 900, temperature: 0.3 }), kind); }
+    catch (e) { console.error('ai-studio', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
     if (!data) return fail('La proposition de l’assistant est inutilisable : rien n’a été créé.', 422);
     const itemId = GLOBAL_ID.test(String(b?.target || '')) ? b.target : 'g-' + uid().slice(0, 12);
     const id = await csCreate(env, u, { title: 'IA : ' + text.slice(0, 80), note: 'Brouillon rédigé par l’assistant à partir de : « ' + text.slice(0, 400) + ' ». À relire avant toute publication.', source: 'ai', items: [{ kind, id: itemId, op: 'put', data }] });
@@ -1517,13 +1561,19 @@ async function studioRoute(request, env, u, url, p, m) {
     const msgs = (Array.isArray(b?.messages) ? b.messages : []).slice(-12);
     const last = [...msgs].reverse().find((x) => x?.role === 'user');
     if (!last || str(last.content, 1500).length < 2) return fail('Écris ta demande.');
-    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur (Workers AI).', unavailable: true }, 503);
+    if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-as:' + u.id, 20, 600000)) return fail('Beaucoup de messages : réessaie dans quelques minutes.', 429);
+    let draftId = /^[\w-]{1,64}$/.test(String(b?.draftId || '')) ? String(b.draftId) : '';
+    const loadedDraft = draftId ? await csLoad(env, draftId) : null;
+    const ownDraft = loadedDraft?.cs.status === 'draft' && loadedDraft.cs.author_id === u.id ? loadedDraft : null;
+    if (!ownDraft) draftId = '';
     const rows = ((await db(env, 'SELECT kind,id,data_json,hidden FROM global_content LIMIT 600').all()).results || []).map((r) => ({ kind: r.kind, id: r.id, hidden: !!r.hidden, data: r.hidden ? null : safeParse(r.data_json) }));
     const faq = FAQ.map((f, i) => [f[0], f[1], 'f' + i]);
     const convo = msgs.filter((x) => x?.role === 'user').slice(-3).map((x) => str(x.content, 600)).join(' ');
-    const context = findContext(convo, { library: LIBRARY, faq, intents: SPORT_INTENTS, globals: rows.filter((r) => !r.hidden && ASSIST_KINDS[r.kind]) });
+    const context = findContext(convo, { library: LIBRARY, faq, intents: SPORT_INTENTS, globals: rows.filter((r) => !r.hidden && Object.hasOwn(ASSIST_KINDS, r.kind)), draft: ownDraft?.items || [] });
     const base = (kind, id) => {
+      const pending = ownDraft?.items.find((r) => r.kind === kind && r.id === id);
+      if (pending?.op === 'put') return pending.data;
       const g = rows.find((r) => r.kind === kind && r.id === id); if (g) return g.hidden ? {} : g.data;
       if (kind === 'exercise') return LIBRARY.find((x) => x.id === id) || null;
       if (kind === 'faq') { const f = faq.find((x) => x[2] === id); return f ? { q: f[0], a: f[1] } : null; }
@@ -1531,12 +1581,12 @@ async function studioRoute(request, env, u, url, p, m) {
       return null;
     };
     let out;
-    try { out = cleanAssistant(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildAssistant(msgs, context), max_tokens: 1400, temperature: 0.3 }), { base }); }
-    catch (e) { console.error('ai-assistant', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+    try { out = cleanAssistant(await runAI(env, { messages: buildAssistant(msgs, context), max_tokens: 2200, temperature: 0.2 }, { allowClarification: true }), { base, context, requireEvidence: true }); }
+    catch (e) { console.error('ai-assistant', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
     if (!out) return fail('Réponse de l’assistant inutilisable : reformule ta demande.', 422);
-    let draftId = /^[\w-]{1,64}$/.test(String(b?.draftId || '')) ? String(b.draftId) : '', added = 0;
+    let added = 0;
     if (out.items.length) {
-      const L = draftId ? await csLoad(env, draftId) : null;
+      const L = ownDraft;
       if (L && L.cs.status === 'draft' && L.cs.author_id === u.id) {
         const items = mergeItems(L.items.map(({ before, ...i }) => i), out.items).slice(0, 50), now = Date.now();
         await env.DB.batch([
@@ -1549,16 +1599,16 @@ async function studioRoute(request, env, u, url, p, m) {
       added = out.items.length;
     }
     const diff = out.items.length ? diffChange(out.items, await currentOf(env, out.items)) : [];
-    return json({ ok: true, reply: out.reply, questions: out.questions, needsCode: out.needsCode, rejected: out.rejected, explain: out.explain, added, draftId: added ? draftId : (draftId || ''), diff });
+    return json({ ok: true, reply: out.reply, status: out.status, sources: out.sourceRefs || [], questions: out.questions, needsCode: out.needsCode, rejected: out.rejected, explain: out.explain, added, draftId: added ? draftId : (draftId || ''), diff });
   }
   if (p === '/api/admin/lab' && m === 'POST') {
     const b = await readJson(request, 6000), text = str(b?.text, 2000);
     if (text.length < 10) return fail('Décris le problème ou l’idée en une ou deux phrases.');
-    if (!env.AI?.run) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
+    if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-l:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
     let lab;
-    try { lab = cleanLab(await env.AI.run(env.AI_MODEL || AI_MODEL, { messages: buildLab(text), max_tokens: 1400, temperature: 0.3 })); }
-    catch (e) { console.error('ai-lab', e?.message); return json({ error: 'L’assistant n’a pas pu répondre.' }, 503); }
+    try { lab = cleanLab(await runAI(env, { messages: buildLab(text), max_tokens: 1400, temperature: 0.3 })); }
+    catch (e) { console.error('ai-lab', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
     if (!lab) return fail('Réponse de l’assistant inutilisable. Reformule et réessaie.', 422);
     return json({ ok: true, lab });
   }
@@ -1655,12 +1705,16 @@ async function proposalReview(request, env, u, id) {
   return json({ ok: true, added });
 }
 async function aiChatRoute(request, env, u) {
-  const b = await readJson(request, 12000);
+  const b = await readJson(request, 30000);
   if (!b || !Array.isArray(b.messages)) return fail('Données invalides.');
-  if (!env.AI?.run) return json({ error: 'Coach non activé sur ce serveur.', unavailable: true }, 503);
+  if (!hasAI(env)) return json({ error: 'Coach non activé sur ce serveur.', unavailable: true }, 503);
   if (await limited(env, 'ai-c:' + u.id, 20, 600000) || await limited(env, 'ai-cd:' + u.id, 80, DAY)) return fail('Beaucoup de questions d’un coup : réessaie un peu plus tard.', 429);
-  try { return json({ ok: true, reply: await aiChat(env, { messages: b.messages, profile: str(b.profile, 900) }) }); }
-  catch (e) { console.error('ai-chat', e?.message); return json({ error: e.status ? e.message : 'Le coach n’a pas pu répondre. Réessaie dans un instant.' }, e.status === 400 ? 400 : e.status === 502 ? 502 : 503); }
+  try {
+    const state = await aiStatus(env);
+    const shared = (state.provider === 'cloudflare' && b.profileConsent == null) || (b.profileConsent === true && b.profileProvider === state.provider);
+    return json({ ok: true, ...await aiChat(env, { messages: b.messages, profile: shared ? str(b.profile, 3000) : '', expectedProvider: state.provider, appMap: APP_MAP }) });
+  }
+  catch (e) { console.error('ai-chat', e?.message); const err = aiError(e, 'Le coach n’a pas pu répondre. Réessaie dans un instant.'); return json({ error: err.error, quota: err.quota }, err.status); }
 }
 async function bugCreate(request, env, u) {
   const b = await readJson(request, 30000);
@@ -1710,14 +1764,14 @@ async function adminUsers(env) {
   return json({ ok: true, total: users.length, users });
 }
 async function adminBugs(url, env) {
-  const st = ['open', 'done'].includes(url.searchParams.get('status')) ? url.searchParams.get('status') : null;
+  const st = ['open', 'in_progress', 'done', 'ignored'].includes(url.searchParams.get('status')) ? url.searchParams.get('status') : null;
   const r = await db(env, `SELECT b.id,b.title,b.description,b.page,b.app_version,b.user_agent,b.status,b.created_at,b.updated_at,us.username FROM bug_reports b LEFT JOIN users us ON us.id=b.user_id
     ${st ? 'WHERE b.status=?' : ''} ORDER BY b.created_at DESC LIMIT 500`, ...(st ? [st] : [])).all();
   return json({ ok: true, reports: r.results.map((x) => ({ id: x.id, title: x.title, description: x.description, page: x.page, appVersion: x.app_version, userAgent: x.user_agent, status: x.status, createdAt: x.created_at, updatedAt: x.updated_at, author: x.username || 'compte supprimé' })) });
 }
 async function adminBugStatus(request, env, u, id) {
   const b = await readJson(request, 2000);
-  if (!b || !['open', 'done'].includes(b.status)) return fail('Statut invalide.');
+  if (!b || !['open', 'in_progress', 'done', 'ignored'].includes(b.status)) return fail('Statut invalide.');
   const r = await db(env, 'UPDATE bug_reports SET status=?,updated_at=? WHERE id=?', b.status, Date.now(), id).run();
   if (!r.meta?.changes) return fail('Signalement introuvable.', 404);
   await auditStmt(env, u, 'bug_status', { type: 'bug', id, after: { status: b.status } }).run();

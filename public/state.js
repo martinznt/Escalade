@@ -17,17 +17,20 @@ import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
 import { toast, tz, $ } from './ui.js';
 
-export const APP_VERSION = '8.32.1';
+export const APP_VERSION = '8.32.2';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
 export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr', notifSound: 'doux', redMode: false, interfaceMode: 'simple' };
-export const S = {
-  user: null, tab: 'home', sub: { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }, param: '',
-  settings: { ...DEFAULT_SETTINGS }, seances: { items: [], tomb: {} }, seancesDirty: false, seancesVer: 0,
+const initialAccountState = () => ({
+  settings: { ...DEFAULT_SETTINGS, avoid: {} }, seances: { items: [], tomb: {} }, seancesDirty: false, seancesVer: 0,
   history: [], events: [], personal: [], commonEx: [], items: new Map(), dirtyItems: new Set(), itemsCursor: 0,
   outbox: [], failed: [], conflicts: [], sync: 'idle', syncing: false, syncAgain: false, lastSync: 0, lastError: '', loaded: false,
   shared: { common: null, publicMine: null, detail: null, loading: false, error: '' }, admin: { bugs: null }, social: { me: null, feed: null, error: '' }, myBugs: null,
   gen: { activityId: '', mode: 'weaknesses', goalId: '', minutes: 30, intentions: [], envId: '', light: false, priorities: {}, plan: null, result: null, saved: false },
-  player: null, ver: 0, authMode: '', authError: '', prefill: '', search: { q: '', smart: true }, cal: null, filters: {},
+  player: null, search: { q: '', smart: true }, cal: null, filters: {},
+});
+export const S = {
+  user: null, tab: 'home', sub: { home: 'dash', progress: 'summary', library: 'seances', profile: 'home', settings: 'main' }, param: '',
+  ...initialAccountState(), ver: 0, authMode: '', authError: '', prefill: '',
 };
 export const bump = () => { S.ver++; };
 
@@ -54,8 +57,33 @@ const idb = {
   async set(k, v) { const d = await this.open(); return new Promise((res, rej) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(true); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }); },
   async del(k) { const d = await this.open(); return new Promise((res) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete = () => res(true); tx.onerror = () => res(false); }); },
 };
-const dataKey = () => `data:${S.user?.id}`;
-const pendingKey = () => `sea:pending:${S.user?.id}`;
+const pendingKey = (owner = S.user?.id) => `sea:pending:${owner}`;
+let accountOwner = null, accountEpoch = 0, localLoad = 0;
+const accountToken = () => ({ owner: S.user?.id ?? null, epoch: accountEpoch });
+const accountMatches = (token) => S.user?.id === token.owner && accountOwner === token.owner && accountEpoch === token.epoch;
+class AccountChanged extends Error { constructor() { super('Le compte a changé ; cette réponse a été ignorée.'); } }
+function checkAccount(token) { if (!accountMatches(token)) throw new AccountChanged(); }
+/** Ne garde en mémoire aucun brouillon ou donnée privée d'un autre compte. Les caches restent sous leur propre clé. */
+function ensureAccount() {
+  const owner = S.user?.id ?? null;
+  if (owner === accountOwner) return;
+  const previousOwner = accountOwner;
+  if (pendingPersist) { const pending = pendingPersist; pendingPersist = null; clearTimeout(persistT); void storeSnapshot(pending.owner, pending.snap); }
+  clearTimeout(syncT); clearTimeout(retryT);
+  accountOwner = owner; accountEpoch++; localLoad++;
+  Object.assign(S, initialAccountState());
+  // Ces fenêtres sont hors de #app : le rendu de connexion ne les remplace pas.
+  if (typeof document !== 'undefined') {
+    document.querySelector('#dialog [data-dlg="0"]')?.click();
+    for (const selector of ['#sheet', '#dialog', '#player', '#grp']) { const panel = document.querySelector(selector); if (panel) { panel.classList.remove('open'); panel.replaceChildren(); } }
+    const message = document.querySelector('#toast'); if (message) { message.className = ''; message.replaceChildren(); }
+    document.body?.classList.remove('grp-open', 'noscroll');
+  }
+  for (const name of ('lastOpenSeance lastOpenSeanceOwner clientStamp returnTo lastLoop lay setup ai goalDraft goalBack gDraft command cmdRaw cmdOptions quickDraft agendaDraft agendaEdit adapt importResult importText merge sharedDraft swapFor pickSrc sel cp cpAiBusy cpAiDraft cpEdit cpSheet cpStrats cpModAt cpRuleUnder cpRuleOver chat chatOwner chatBusy chatDraft coachStatus studio inbox notifUnread myBugs propCur propDraft ideaDraft textDraft textMode admAct group duo aq aqEnvPreset carnet pj pjWish gym gymEnv cprog progRun recap eg forme autoWeek bilan sysEdit aqEnvPreset boardEdit boardPb comp imp lp pl pace rmPick reportAt photoSel photoShow').split(' ')) S[name] = null;
+  // Au premier démarrage, parseHash a déjà lu l'identifiant d'un éventuel lien profond.
+  if (previousOwner !== null) S.param = '';
+  bump();
+}
 /** Écrit immédiatement (synchrone) tout ce qui n'est pas encore sur le serveur. */
 export function writePending() {
   if (!S.user) return;
@@ -65,19 +93,32 @@ export function writePending() {
 function snapshot() {
   return { v: 2, seances: S.seances, history: S.history.slice(0, 1500), events: S.events, settings: S.settings, personal: S.personal, commonEx: S.commonEx, items: [...S.items.values()], itemsCursor: S.itemsCursor, lastSync: S.lastSync };
 }
-let persistT = null;
-export function persist() { clearTimeout(persistT); persistT = setTimeout(() => persistNow(), 250); }
-export async function persistNow() {
+let persistT = null, pendingPersist = null;
+const copySnapshot = () => JSON.parse(JSON.stringify(snapshot()));
+export function persist() {
   if (!S.user) return;
   clearTimeout(persistT);
-  const snap = snapshot(), id = S.user.id; // identifiant figé : l'utilisateur peut changer pendant l'écriture asynchrone
+  // Figer aussi les données : une connexion différente peut intervenir avant les 250 ms.
+  pendingPersist = { owner: S.user.id, snap: copySnapshot() };
+  persistT = setTimeout(() => { const pending = pendingPersist; pendingPersist = null; if (pending) void storeSnapshot(pending.owner, pending.snap); }, 250);
+}
+async function storeSnapshot(id, snap) {
   try { await idb.set(`data:${id}`, snap); ls.del('sea:data:' + id); }
   catch { if (!ls.set('sea:data:' + id, snap)) toast('Impossible d’enregistrer sur cet appareil (stockage plein ou bloqué).', 5000, 'bad'); }
 }
+export async function persistNow() {
+  if (!S.user) return;
+  clearTimeout(persistT); pendingPersist = null;
+  await storeSnapshot(S.user.id, copySnapshot()); // écriture explicite : conserve aussi le transfert voulu du mode invité
+}
 export async function loadLocal() {
+  ensureAccount();
+  if (!S.user) return false;
+  const token = accountToken(), request = ++localLoad, owner = token.owner;
   let d = null;
-  try { d = await idb.get(dataKey()); } catch { /* repli */ }
-  if (!d) d = ls.get('sea:data:' + S.user.id, null) || migrateV7Local();
+  try { d = await idb.get(`data:${owner}`); } catch { /* repli */ }
+  if (!accountMatches(token) || request !== localLoad) return false;
+  if (!d) d = ls.get('sea:data:' + owner, null) || migrateV7Local(owner);
   if (d) {
     S.seances = { items: (d.seances?.items || []).map(normalizeSession), tomb: d.seances?.tomb || {} };
     S.history = (Array.isArray(d.history) ? d.history : []).map(normalizeHistory).filter(Boolean); S.events = (Array.isArray(d.events) ? d.events : []).filter((e) => e && typeof e === 'object'); S.settings = { ...DEFAULT_SETTINGS, ...(d.settings || {}) };
@@ -85,7 +126,7 @@ export async function loadLocal() {
     S.items = new Map((d.items || []).map((it) => [itemKey(it.c, it.id), it]));
     S.itemsCursor = d.itemsCursor || 0; S.lastSync = d.lastSync || 0;
   }
-  const p = ls.get(pendingKey(), null);
+  const p = ls.get(pendingKey(owner), null);
   if (p) {
     S.outbox = Array.isArray(p.outbox) ? p.outbox : [];
     S.failed = Array.isArray(p.failed) ? p.failed : [];
@@ -110,10 +151,10 @@ export async function loadLocal() {
   return !!d;
 }
 /** Anciennes données locales v7 (localStorage « sea:data:<id> » au format v1) : reprises sans perte. */
-function migrateV7Local() {
-  const d = ls.get('sea:data:' + S.user.id, null);
+function migrateV7Local(owner) {
+  const d = ls.get('sea:data:' + owner, null);
   if (!d) return null;
-  if (Array.isArray(d.outbox) && d.outbox.length) ls.set(pendingKey(), { v: 1, outbox: d.outbox.map((o) => ({ ...o, opId: o.opId || newOpId() })), failed: d.failedOutbox || [], dirtyItems: [], seances: null });
+  if (Array.isArray(d.outbox) && d.outbox.length) ls.set(pendingKey(owner), { v: 1, outbox: d.outbox.map((o) => ({ ...o, opId: o.opId || newOpId() })), failed: d.failedOutbox || [], dirtyItems: [], seances: null });
   return { ...d, commonEx: d.common || [] };
 }
 export async function clearLocal(userId) { try { await idb.del(`data:${userId}`); } catch { /* rien */ } ls.del(`sea:pending:${userId}`); ls.del('sea:data:' + userId); }
@@ -122,6 +163,7 @@ export async function clearLocal(userId) { try { await idb.del(`data:${userId}`)
 let onExpired = () => {};
 export const setOnExpired = (fn) => { onExpired = fn; };
 export async function api(method, path, body, opts = {}) {
+  const requestOwner = S.user?.id ?? null, requestEpoch = accountEpoch;
   if (S.user?.guest && !opts.guestOk) { const e = new Error('Mode invité : crée un compte gratuit (en haut des Paramètres : « Créer mon compte ») pour utiliser cette fonction. Tes données d’invité seront conservées.'); e.guest = true; throw e; }
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeout || 20000) : null;
@@ -135,28 +177,31 @@ export async function api(method, path, body, opts = {}) {
   finally { if (timer) clearTimeout(timer); }
   let data = null;
   try { data = await res.json(); } catch { /* pas de JSON */ }
-  if (res.status === 401 && !opts.quiet401) onExpired();
+  if (res.status === 401 && !opts.quiet401 && (S.user?.id ?? null) === requestOwner && accountEpoch === requestEpoch) onExpired();
   if (!res.ok) { const e = new Error(data?.error || `Erreur ${res.status}`); e.status = res.status; e.data = data; throw e; }
   return data || {};
 }
 
 /* ═════════ File d'attente ═════════ */
 let syncT = null, retryT = null;
-export function syncSoon(ms = 900) { clearTimeout(syncT); syncT = setTimeout(() => syncAll(), ms); }
+export function syncSoon(ms = 900) { const token = accountToken(); clearTimeout(syncT); syncT = setTimeout(() => { if (accountMatches(token)) syncAll(); }, ms); }
 export function queue(method, path, body, { coalesce = false } = {}) {
   if (coalesce) S.outbox = S.outbox.filter((o, i) => !(i > 0 && o.method === method && o.path === path)); // la dernière version remplace les précédentes non envoyées
   S.outbox.push({ opId: newOpId(), method, path, body, attempts: 0, at: Date.now(), label: describeOp({ method, path }) });
   writePending(); persist(); bump(); syncSoon();
 }
 class Pause extends Error {}
-async function flush() {
+async function flush(token) {
   while (S.outbox.length) {
+    checkAccount(token);
     const op = S.outbox[0];
     if (op.nextAt && op.nextAt > Date.now()) { clearTimeout(retryT); retryT = setTimeout(() => syncAll(), op.nextAt - Date.now() + 50); throw new Pause('attente'); }
     try {
       await api(op.method, op.path, op.body, { opId: op.opId });
+      checkAccount(token);
       S.outbox.shift(); writePending();
     } catch (e) {
+      checkAccount(token);
       const d = decideOutboxError(op, e);
       op.lastError = e.message;
       if (d.action === 'retry-later') { op.attempts = d.attempts; op.nextAt = Date.now() + (d.delay || 0); writePending(); if (d.delay) { clearTimeout(retryT); retryT = setTimeout(() => syncAll(), d.delay + 50); } throw e; }
@@ -197,14 +242,17 @@ export function restoreConflict(i) {
   const c = S.conflicts[i]; if (!c) return;
   putRaw(c.local); S.conflicts.splice(i, 1); writePending(); bump(); syncSoon(100);
 }
-async function syncItems() {
+async function syncItems(token) {
+  checkAccount(token);
   const dirty = [...S.dirtyItems].map((k) => S.items.get(k)).filter(Boolean);
   // Envois de 200 éléments au plus et d'environ 600 Ko au plus (les photos de voies sont plus lourdes).
   const chunks = []; let cur = [], size = 0;
   for (const x of dirty) { const n = JSON.stringify(x).length; if (cur.length && (cur.length >= 200 || size + n > 600000)) { chunks.push(cur); cur = []; size = 0; } cur.push({ ...x }); size += n; }
   if (cur.length) chunks.push(cur);
   for (const chunk of chunks) {
+    checkAccount(token);
     const r = await api('POST', '/api/items', { changes: chunk });
+    checkAccount(token);
     for (const a of r.applied || []) { const k = itemKey(a.c, a.id), cur = S.items.get(k); if (cur && cur.u === a.u) S.dirtyItems.delete(k); }
     for (const c of r.conflicts || []) {
       const k = itemKey(c.c, c.id), sent = chunk.find((x) => x.c === c.c && x.id === c.id), cur = S.items.get(k);
@@ -219,7 +267,9 @@ async function syncItems() {
   }
   let since = S.itemsCursor, r;
   do {
+    checkAccount(token);
     r = await api('GET', '/api/items?since=' + since);
+    checkAccount(token);
     for (const it of r.items || []) {
       const k = itemKey(it.c, it.id), cur = S.items.get(k);
       if (S.dirtyItems.has(k) && cur && cur.u >= it.u) continue; // modification locale plus récente, envoyée au prochain passage
@@ -247,9 +297,11 @@ export function deleteSeance(id) {
   S.seances.items = S.seances.items.filter((s) => s.id !== id); S.seances.tomb[id] = Date.now();
   S.seancesDirty = true; S.seancesVer++; writePending(); persist(); bump(); syncSoon();
 }
-async function syncSeances() {
+async function syncSeances(token) {
+  checkAccount(token);
   const ver = S.seancesVer;
   const r = await api('POST', '/api/sync', { items: S.seances.items, tomb: S.seances.tomb });
+  checkAccount(token);
   S.seances = mergeSeances(S.seances, { items: r.items.map(normalizeSession), tomb: r.tomb });
   if (S.seancesVer === ver) S.seancesDirty = false;
   writePending();
@@ -268,16 +320,19 @@ let setSyncUI = () => {};
 export const setSyncListener = (fn) => { setSyncUI = fn; };
 function setSync(s) { S.sync = s; setSyncUI(s); }
 export async function syncAll() {
+  ensureAccount();
   if (!S.user) return;
   if (S.user.guest) { setSync('guest'); return; } // invité : tout reste sur l'appareil ; envoyé si un compte est créé
   if (S.syncing) { S.syncAgain = true; return; }
   if (!navigator.onLine) { setSync('offline'); return; }
+  const token = accountToken();
   S.syncing = true; setSync('sync');
   try {
-    await flush();
-    await syncItems();
-    await syncSeances();
+    await flush(token); checkAccount(token);
+    await syncItems(token); checkAccount(token);
+    await syncSeances(token); checkAccount(token);
     const [hist, cal, set, ex] = await Promise.all([api('GET', '/api/history'), api('GET', '/api/calendar'), api('GET', '/api/settings'), api('GET', '/api/exercises')]);
+    checkAccount(token);
     // Le serveur fait foi, sauf pour ce qui attend encore dans la file (visible localement, jamais effacé en silence).
     const localPendingH = pendingBodies('/api/history'), delH = pendingDeletes('/api/history/');
     const failedH = S.failed.filter((f) => f.path === '/api/history' && f.method === 'POST').map((f) => ({ ...f.body, _failed: true }));
@@ -293,11 +348,14 @@ export async function syncAll() {
     S.lastSync = Date.now(); S.lastError = '';
     setSync(S.outbox.length || S.dirtyItems.size || S.seancesDirty ? 'pending' : 'ok');
   } catch (e) {
+    if (!accountMatches(token)) return;
     if (e instanceof Pause) setSync('pending');
     else { S.lastError = e.message; setSync(e.offline ? 'offline' : e.status === 401 ? 'auth' : 'error'); }
   } finally {
-    S.syncing = false; bump(); persist(); softRender();
-    if (S.syncAgain) { S.syncAgain = false; syncSoon(300); }
+    if (accountMatches(token)) {
+      S.syncing = false; bump(); persist(); softRender();
+      if (S.syncAgain) { S.syncAgain = false; syncSoon(300); }
+    }
   }
 }
 export function pendingCount() { return S.outbox.length + S.dirtyItems.size + (S.seancesDirty ? 1 : 0); }
@@ -316,7 +374,7 @@ export function ctx() {
 /* ═════════ Rendu et navigation ═════════ */
 let renderer = () => {};
 export const setRenderer = (fn) => { renderer = fn; };
-export const render = () => renderer();
+export const render = () => { ensureAccount(); return renderer(); };
 const inField = () => { const a = document.activeElement; return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && $('#app')?.contains(a); };
 export function softRender() { if (!inField() && !S.player && !document.querySelector('#sheet.open, #dialog.open')) render(); }
 export function go(tab, sub, param = '') {

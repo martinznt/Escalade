@@ -30,10 +30,10 @@ export function syncContent() {
   applyLayers(GL.items, m);
   setOverrides(textOverrides());
 }
-export async function loadGlobal() {
+export async function loadGlobal({ renderChange = true } = {}) {
   try {
     const r = await api('GET', '/api/global', undefined, { guestOk: true, quiet401: true, timeout: 8000 });
-    if (r.ver !== GL.ver || r.items.length !== GL.items.length) { GL = { ver: r.ver, items: r.items }; ls.set('sea:global', GL); sig = ''; render(); }
+    if (r.ver !== GL.ver || r.items.length !== GL.items.length) { GL = { ver: r.ver, items: r.items }; ls.set('sea:global', GL); sig = ''; if (renderChange) render(); else syncContent(); }
   } catch { /* hors ligne : la dernière version connue reste appliquée */ }
 }
 const isAdmin = () => !!S.user?.isAdmin && !S.user?.guest;

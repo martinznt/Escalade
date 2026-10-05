@@ -1,5 +1,5 @@
 // views-ai.js — « Créer avec l'assistant » : tu écris quelques mots (ex. « clipage en escalade »), l'IA intégrée de
-// Cloudflare propose une fiche complète (ce que c'est, comment le travailler, exercices, muscles, matériel), que tu
+// Le modèle choisi propose une fiche complète (description, exercices, muscles, matériel), que tu
 // relis et modifies AVANT de l'enregistrer. Sans IA disponible (hors ligne, serveur sans IA), un modèle vide est proposé.
 import { h, openSheet, closeSheet, toast, buzzOk, chip } from './ui.js';
 import { S, ACT, SUBMIT, ctx, render, queue, putItem } from './state.js';
@@ -26,23 +26,24 @@ function showAssistant() {
       ${a.error ? h`<p class="small warn-t">${a.error}</p>` : ''}
       <button class="btn pri big" type="submit" ${a.loading ? 'disabled' : ''}>${a.loading ? '⏳ L’assistant réfléchit…' : 'Créer la fiche'}</button>
       ${a.error ? h`<button type="button" class="btn ghost" data-act="aiManual">Remplir moi-même sans l’IA</button>` : ''}
-    </form><p class="tiny muted">Seul le texte que tu écris est envoyé à l’IA (hébergée chez Cloudflare), jamais tes performances ou ton historique.</p></div>`, { wide: true });
+    </form><p class="tiny muted">Le texte que tu écris est envoyé au modèle choisi pour le site (Gemini ou Cloudflare), sans joindre tes performances ni ton historique.</p></div>`, { wide: true });
 }
 ACT.aiOpen = (el) => openAssistant(el.dataset.id || 'auto');
 ACT.aiKind = (el) => { const f = document.querySelector('#sheet form[data-submit=aiAsk]'); if (f) S.ai.text = f.text.value; S.ai.kind = el.dataset.id; showAssistant(); };
 ACT.aiExample = (el) => { const i = document.querySelector('#sheet input[name=text]'); if (i) { i.value = el.dataset.v; i.focus(); } };
 SUBMIT.aiAsk = async (f) => {
+  const owner = S.user?.id, a = S.ai; if (!a || a.loading) return;
+  const current = () => S.user?.id === owner && S.ai === a;
   const d = Object.fromEntries(new FormData(f));
-  Object.assign(S.ai, { text: d.text, activityId: d.activityId, loading: true, error: '' }); showAssistant();
+  Object.assign(a, { text: d.text, activityId: d.activityId, loading: true, error: '' }); showAssistant();
   try {
-    const r = await api('POST', '/api/ai/draft', { text: d.text, kind: S.ai.kind, activityId: d.activityId }, { timeout: 45000 });
-    S.ai.draft = r.draft; S.ai.loading = false; showAssistant();
+    const r = await api('POST', '/api/ai/draft', { text: d.text, kind: a.kind, activityId: d.activityId }, { timeout: 45000 });
+    if (!current()) return; a.draft = r.draft;
   } catch (e) {
-    S.ai.loading = false;
-    S.ai.error = e.guest ? 'L’assistant IA demande un compte gratuit (en haut des Paramètres : « Créer mon compte »). En attendant, tu peux remplir la fiche toi-même.'
+    if (!current()) return;
+    a.error = e.guest ? 'L’assistant IA demande un compte gratuit (en haut des Paramètres : « Créer mon compte »). En attendant, tu peux remplir la fiche toi-même.'
       : e.offline ? 'Pas de connexion : l’assistant IA a besoin d’internet. Tu peux remplir la fiche toi-même.' : e.message;
-    showAssistant();
-  }
+  } finally { if (current()) { a.loading = false; if (document.querySelector('#sheet.open .ai')) showAssistant(); } }
 };
 ACT.aiManual = () => { S.ai.draft = S.ai.kind === 'capacity' ? { type: 'capacity', label: S.ai.text, emoji: '🎯', summary: '', why: '', howTo: [], linkedCaps: {}, exercises: [], manual: true } : { type: 'exercise', name: S.ai.text, emoji: '💪', summary: '', why: '', steps: [], cues: [], mistakes: [], variants: [], caps: {}, prim: [], sec: [], needs: [], mode: 'reps', sets: 3, repsMin: 8, repsMax: 10, secMin: 30, secMax: 30, rest: 90, diff: 2, manual: true }; showAssistant(); };
 ACT.aiAgain = () => { S.ai.draft = null; showAssistant(); };

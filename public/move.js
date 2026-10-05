@@ -76,7 +76,7 @@ export async function maybeClaim() {
   let r;
   try { r = await post('/api/handoff/claim', { code }); } catch (e) { console.error('Transfert impossible', e); return; }
   for (const [k, v] of Object.entries(r.ls || {})) if (/^sea:/.test(k) && k !== 'sea:user' && typeof v === 'string') { try { localStorage.setItem(k, v); } catch { /* plein */ } }
-  if (r.user) ls.set('sea:user', { id: r.user.id, username: r.user.username, isAdmin: !!r.user.isAdmin });
+  if (r.user) ls.set('sea:user', { id: r.user.id, username: r.user.username, isAdmin: !!r.user.isAdmin, roles: r.user.roles || [] });
   else if (r.guest) {
     if (r.snap) { try { await idb.set('data:guest', r.snap); } catch { ls.set('sea:data:guest', r.snap); } }
     ls.set('sea:user', { ...GUEST });

@@ -23,7 +23,7 @@ import { celebrate } from './fx.js';
 import { figure } from './anim.js';
 import { beep } from './sound.js';
 import { exWhat, exUse, exWhyHere } from './explain.js';
-import { FEELS, nextSetAdvice, restTip, toSupersets, mergeLog, snapshot, canResume } from './live.js';
+import { FEELS, nextSetAdvice, restTip, toSupersets, mergeLog, snapshot, canResume, playerSnapshotKey } from './live.js';
 import { adaptSession } from './adapt.js';
 import { AVOID_ZONES } from './intentions.js';
 
@@ -40,6 +40,7 @@ function speak(t) { if (!S.settings.voice || !window.speechSynthesis) return; tr
 async function wake() { if (!(S.settings.keepAwake || S.settings.handsFree) || !navigator.wakeLock) return; try { wakeLock = await navigator.wakeLock.request('screen'); } catch { /* refusé */ } }
 function unwake() { try { wakeLock?.release(); } catch { /* rien */ } wakeLock = null; }
 const cur = () => S.player.s.exercises[S.player.i];
+const ownsPlayer = (p = S.player) => !!p && p === S.player && p.ownerId === (S.user?.id ?? null);
 
 /* ───────── Horloge ───────── */
 export const clock = {
@@ -77,7 +78,7 @@ export function startPlayer(session, { eventId = null, eventDate = null, fromGen
   const fw = withFingerWarm(s.exercises, byId);
   if (fw.added) { s.exercises = fw.exercises; setTimeout(() => toast(`🖐️ Échauffement des doigts ajouté avant « ${fw.before} » (passe-le si tu es déjà chaud).`, 4500), 400); }
   S.player = {
-    s, eventId, eventDate, fromGenerator, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pauseStart: 0, pausedMs: 0,
+    ownerId: S.user?.id ?? null, s, eventId, eventDate, fromGenerator, i: 0, set: 0, side: 0, phase: 'ready', end: 0, total: 0, startedAt: Date.now(), paused: false, pauseStart: 0, pausedMs: 0,
     workStart: 0, workPausedMs: 0, restStart: 0, restMs: 0, remaining: 0, lastBeep: 0, swaps: [...(fromGenerator ? S.gen.swaps || [] : [])],
     log: s.exercises.map((e) => ({ name: e.name, libId: e.libId, group: e.group, intensity: e.intensity, risk: e.risk, muscles: e.muscles, caps: e.caps, prim: e.prim, sec: e.sec, isNew: e.isNew, sets: [] })),
     quiz: { felt: [], hardest: '', easiest: '', difficulty: 0, comment: '', likes: {}, answers: {} }, useBase: !!S.settings.autoBase, prs: [], warmAdded, hr: { sum: 0, n: 0, max: 0 }, program,
@@ -88,7 +89,7 @@ export function startPlayer(session, { eventId = null, eventDate = null, fromGen
   if (S.settings.handsFree) voiceStart(); // mode mains libres réglé dans Paramètres : actif dès le début
 }
 export function tick() {
-  const p = S.player; if (!p || p.paused || !(p.phase === 'rest' || p.phase === 'work')) return;
+  const p = S.player; if (!ownsPlayer(p) || p.paused || !(p.phase === 'rest' || p.phase === 'work')) return;
   const now = Date.now(), rem = Math.max(0, Math.ceil((p.end - now) / 1000));
   const t = $('#ptimer'), b = $('#pbar2'), c = $('#pclock');
   if (t) t.textContent = mmss(rem);
@@ -101,23 +102,23 @@ export function tick() {
   if (rem <= 0) onTimerEnd();
 }
 function onTimerEnd() {
-  const p = S.player; beep(1040, 350); buzz([300, 100, 300]); p.lastBeep = 0;
+  const p = S.player; if (!ownsPlayer(p)) return; beep(1040, 350); buzz([300, 100, 300]); p.lastBeep = 0;
   if (p.phase === 'rest') { endRest(p.end); const ex = cur(); speak(`Série ${p.set + 1} sur ${ex.sets}.`); draw(); }
   else if (p.phase === 'work') { speak('Terminé.'); completeSet(cur().mode === 'time' ? p.secs : 0); }
 }
 function endRest(at = Date.now()) {
-  const p = S.player;
+  const p = S.player; if (!ownsPlayer(p)) return;
   p.restMs += Math.max(0, Math.min(at, Date.now()) - p.restStart - (p.restPaused || 0));
   p.phase = 'ready'; p.restPaused = 0; initInputs(true);
 }
 function startRest(sec) {
-  const p = S.player, safe = Math.max(0, Number(sec) || 0), now = Date.now();
+  const p = S.player; if (!ownsPlayer(p)) return; const safe = Math.max(0, Number(sec) || 0), now = Date.now();
   if (safe <= 0) { p.phase = 'ready'; initInputs(true); draw(); return; }
   p.phase = 'rest'; p.restStart = now; p.restPaused = 0; p.end = now + safe * 1000; p.total = safe * 1000; p.remaining = safe * 1000; p.lastBeep = 0; p.said = '';
   speak(safe >= 60 && safe % 60 === 0 ? `Repos, ${safe / 60} minute${safe > 60 ? 's' : ''}.` : `Repos, ${safe} secondes.`); draw();
 }
 function completeSet(secondsDone) {
-  const p = S.player, ex = cur();
+  const p = S.player; if (!ownsPlayer(p)) return; const ex = cur();
   if (ex.perSide && p.side === 0) { p.side = 1; p.phase = 'ready'; buzz(80); toast('Change de côté'); draw(); return; }
   p.log[p.i].sets.push({ reps: ex.mode === 'reps' ? p.reps : 0, seconds: ex.mode === 'time' ? secondsDone : 0, load: p.load || 0, done: true });
   p.side = 0; p.duoWhy = 'set'; p.feelText = ''; buzzOk();
@@ -125,12 +126,12 @@ function completeSet(secondsDone) {
   else nextExercise();
 }
 function nextExercise() {
-  const p = S.player; p.i++; p.set = 0; p.side = 0; p.phase = 'ready';
+  const p = S.player; if (!ownsPlayer(p)) return; p.i++; p.set = 0; p.side = 0; p.phase = 'ready';
   if (p.i >= p.s.exercises.length) return finish(false);
   initInputs(false); sayExercise(cur()); draw(true);
 }
 function finish(aborted) {
-  const p = S.player;
+  const p = S.player; if (!ownsPlayer(p)) return;
   if (p.paused) clock.resume(p);
   if (p.phase === 'rest') endRest();
   p.phase = 'done'; p.aborted = aborted || p.log.some((l, i) => !l.sets.length && i >= p.i);
@@ -153,16 +154,16 @@ function finish(aborted) {
   draw();
   if (p.prs.length) setTimeout(() => celebrate(), 250);
 }
-function closePlayer() { duoHook?.('close'); clearInterval(timer); unwake(); voiceStop(); stopHr(); ls.del(SNAP_KEY); S.player = null; $('#player').classList.remove('open'); $('#player').innerHTML = ''; document.body.classList.remove('noscroll'); render(); }
+function closePlayer() { duoHook?.('close'); clearInterval(timer); unwake(); voiceStop(); stopHr(); const key = playerSnapshotKey(S.player?.ownerId); if (key) ls.del(key); S.player = null; $('#player').classList.remove('open'); $('#player').innerHTML = ''; document.body.classList.remove('noscroll'); render(); }
 
 /* ───────── Affichage ───────── */
 function draw(anim = false) {
-  const p = S.player; if (!p) return; const root = $('#player');
+  const p = S.player; if (!ownsPlayer(p)) return; const root = $('#player');
   if (p.phase === 'done') { root.innerHTML = vQuiz(p).s; duoHook?.('draw'); return; }
   const n = p.s.exercises.length, pct = Math.round((p.i / n) * 100);
   const big = !!S.settings.bigMode, warm = cur()?.block === 'warmup' && p.warmAdded;
   root.classList.toggle('redmode', !!S.settings.redMode);
-  try { ls.set(SNAP_KEY, snapshot(p)); } catch { /* stockage plein : pas de reprise possible, la séance continue */ }
+  try { const key = playerSnapshotKey(p.ownerId); if (key) ls.set(key, snapshot(p, Date.now(), p.ownerId)); } catch { /* stockage plein : pas de reprise possible, la séance continue */ }
   root.innerHTML = h`<div class="pl ${anim ? 'slide' : ''} ${big ? 'big' : ''}"><div class="row between"><button class="btn sm" data-act="pQuit">✕ Terminer</button><span class="muted small">Exercice ${p.i + 1} / ${n} · <span id="pclock">${mmss(Math.floor(clock.real(p) / 1000))}</span> <b id="phr" class="hr">${hrNow() ? `❤ ${hrNow()}` : ''}</b></span><button class="btn sm" data-act="pSkip">Passer ⏭</button></div>
     <div class="row ptools"><button class="btn sm ${S.settings.voice ? 'on' : ''}" data-act="pVoice" aria-pressed="${S.settings.voice ? 'true' : 'false'}">${S.settings.voice ? '🔊 Coach' : '🔇 Coach'}</button><button class="btn sm ${big ? 'on' : ''}" data-act="pBig" aria-pressed="${big ? 'true' : 'false'}">Aa Grand</button>${hrSupported() ? h`<button class="btn sm ${hrConnected() ? 'on' : ''}" data-act="pHr">${hrConnected() ? '❤ Cardio' : '❤ Capteur'}</button>` : ''}${S.user && !S.user.guest ? h`<button class="btn sm ${S.duo ? 'on' : ''}" data-act="duoOpen">👥 ${S.duo ? S.duo.members.length ? 'À ' + (S.duo.members.length + 1) : 'En attente' : 'À deux'}</button>` : ''}<button class="btn sm" data-act="pTools" aria-label="Outils de la séance : j’ai mal, il me reste peu de temps, note, mode nuit, commandes vocales">⋯ Outils</button></div>
     ${S.duo ? h`<div class="duobar small"><span class="dot ${S.duo.lost ? 'off' : ''}"></span>${S.duo.members.length ? `Avec ${S.duo.members.join(', ')}` : `Code ${S.duo.code} : en attente de ton partenaire`}${S.duo.lost ? ' · connexion perdue' : ''}</div>` : ''}
@@ -253,26 +254,26 @@ Object.assign(ACT, {
   pPause: () => { const p = S.player; if (!p || p.phase === 'done') return; if (p.paused) { const before = p.pauseStart; clock.resume(p); if (p.phase === 'rest') p.restPaused = (p.restPaused || 0) + (Date.now() - before); } else clock.pause(p); draw(); },
   pRestAdd: () => { const p = S.player; if (!p || p.phase !== 'rest') return; if (p.paused) p.remaining = Math.max(0, p.remaining || 0) + 30000; else p.end += 30000; p.total += 30000; draw(); },
   pRestSkip: () => { const p = S.player; if (p.paused) { const before = p.pauseStart; clock.resume(p); p.restPaused = (p.restPaused || 0) + (Date.now() - before); } endRest(); draw(); },
-  pSkip: async () => { if (!(await ask('Passer cet exercice ?', { ok: 'Passer' }))) return; if (S.player.phase === 'rest') endRest(); S.player.duoWhy = 'skip'; nextExercise(); },
+  pSkip: async () => { const p = S.player; if (!ownsPlayer(p) || !(await ask('Passer cet exercice ?', { ok: 'Passer' })) || !ownsPlayer(p)) return; if (p.phase === 'rest') endRest(); p.duoWhy = 'skip'; nextExercise(); },
   pQuit: async () => {
-    const p = S.player, any = p.log.some((l) => l.sets.length);
-    if (!any) { if (await ask('Quitter la séance sans rien enregistrer ?', { ok: 'Quitter', danger: true })) closePlayer(); return; }
-    if (await ask('Terminer maintenant ?', { ok: 'Terminer', detail: 'Tu pourras enregistrer ce qui a déjà été fait (la séance sera marquée « interrompue »).' })) finish(true);
+    const p = S.player; if (!ownsPlayer(p)) return; const any = p.log.some((l) => l.sets.length);
+    if (!any) { if (await ask('Quitter la séance sans rien enregistrer ?', { ok: 'Quitter', danger: true }) && ownsPlayer(p)) closePlayer(); return; }
+    if (await ask('Terminer maintenant ?', { ok: 'Terminer', detail: 'Tu pourras enregistrer ce qui a déjà été fait (la séance sera marquée « interrompue »).' }) && ownsPlayer(p)) finish(true);
   },
-  pDiscard: async () => { if (await ask('Ne pas enregistrer cette séance ?', { ok: 'Ne pas enregistrer', danger: true })) closePlayer(); },
+  pDiscard: async () => { const p = S.player; if (ownsPlayer(p) && await ask('Ne pas enregistrer cette séance ?', { ok: 'Ne pas enregistrer', danger: true }) && ownsPlayer(p)) closePlayer(); },
   pSave: () => saveResult(),
   pRedraw: () => draw(),
   pVoice: () => { S.settings.voice = !S.settings.voice; saveSettings(); if (S.settings.voice) speak('Coach activé.'); else try { speechSynthesis.cancel(); } catch { /* rien */ } draw(); },
   pBig: () => { S.settings.bigMode = !S.settings.bigMode; saveSettings(); draw(); },
   pSkipWarm: () => { const p = S.player; if (p.phase === 'rest') endRest(); p.duoWhy = 'skip'; while (p.i < p.s.exercises.length && p.s.exercises[p.i].block === 'warmup' && p.i < p.warmAdded) { p.i++; } p.i--; nextExercise(); },
   pHr: async () => {
+    const p = S.player; if (!ownsPlayer(p)) return;
     if (hrConnected()) { toast(`Fréquence cardiaque : ${hrNow()} bpm`); return; }
-    try { const name = await hrConnect(); toast(`${name} connecté`); startHr(); draw(); }
-    catch (e) { if (e?.name !== 'NotFoundError') toast('Connexion impossible : vérifie que le capteur est allumé et à proximité.', 4500); }
+    try { const name = await hrConnect(); if (!ownsPlayer(p)) return; toast(`${name} connecté`); startHr(); draw(); }
+    catch (e) { if (ownsPlayer(p) && e?.name !== 'NotFoundError') toast('Connexion impossible : vérifie que le capteur est allumé et à proximité.', 4500); }
   },
 });
 /* ───────── 8.30 : outils pendant la séance (ressenti, j'ai mal, il me reste X min, note, mode nuit, voix) ───────── */
-const SNAP_KEY = 'sea:player-snap';
 const setupId = (ex) => 'es-' + String(ex?.libId || exKey(ex?.name || '')).replace(/[^\w.-]/g, '_').slice(0, 60);
 const isBarbell = (ex) => (ex.needs || byId(ex.libId)?.needs || []).includes('barbell') || (/\b(barre|squat|soulevé de terre|développé couché|rowing barre)\b/i.test(ex.name || '') && !/haltère|machine|traction|kettlebell/i.test(ex.name || ''));
 Object.assign(ACT, {
@@ -295,9 +296,9 @@ Object.assign(ACT, {
     </div><button class="btn" data-act="closeSheet">Fermer</button></div>`);
   },
   pSetup: async () => {
-    const ex = cur(); if (!ex) return; closeSheet(); const id = setupId(ex), old = item('exsetup', id);
+    const p = S.player; if (!ownsPlayer(p)) return; const ex = cur(); if (!ex) return; closeSheet(); const id = setupId(ex), old = item('exsetup', id);
     const t = await askText(`Réglages pour « ${ex.name} »`, { value: old?.setup || '', placeholder: 'Ex. siège 4, dossier 2, prise large', max: 160, ok: 'Garder' });
-    if (t == null) return; putItem('exsetup', id, { key: ex.libId || exKey(ex.name), label: ex.name, setup: String(t).trim().slice(0, 160) }); toast(String(t).trim() ? 'Réglages gardés : affichés à chaque séance' : 'Réglages effacés'); draw();
+    if (t == null || !ownsPlayer(p)) return; putItem('exsetup', id, { key: ex.libId || exKey(ex.name), label: ex.name, setup: String(t).trim().slice(0, 160) }); toast(String(t).trim() ? 'Réglages gardés : affichés à chaque séance' : 'Réglages effacés'); draw();
   },
   pSwap: () => {
     const p = S.player, ex = cur(); if (!ex) return;
@@ -316,16 +317,16 @@ Object.assign(ACT, {
   pRed: () => { S.settings.redMode = !S.settings.redMode; saveSettings(); closeSheet(); draw(); },
   pHands: () => { S.settings.handsFree = !S.settings.handsFree; saveSettings(); closeSheet(); if (S.settings.handsFree) { voiceStart(); toast('Commandes vocales : dis « suivant », « pause », « facile », « j’ai mal »…', 4000); } else voiceStop(); draw(); },
   pNote: async () => {
-    const p = S.player, l = p?.log[p.i]; if (!l) return; closeSheet();
+    const p = S.player; if (!ownsPlayer(p)) return; const l = p.log[p.i]; if (!l) return; closeSheet();
     const t = await askText(`Note sur « ${l.name} »`, { value: l.note || '', placeholder: 'Ex. prise large, épaule qui tire un peu', max: 200, ok: 'Garder' });
-    if (t == null) return; l.note = String(t).trim().slice(0, 200); toast(l.note ? 'Note gardée' : 'Note effacée'); draw();
+    if (t == null || !ownsPlayer(p)) return; l.note = String(t).trim().slice(0, 200); toast(l.note ? 'Note gardée' : 'Note effacée'); draw();
   },
   pHurt: () => {
     openSheet(h`<div class="stack"><h2 style="margin:0">🩹 Où as-tu mal ?</h2><p class="tiny muted">La suite de la séance est adaptée pour ménager cette zone, pour cette fois. La douleur est aussi notée dans ton suivi (Profil › Mon corps et mes préférences).</p>
       <div class="chips">${AVOID_ZONES.map(([k, l]) => chip(false, l, `data-act="pHurtZone" data-id="${k}"`))}</div>
       <p class="tiny warn-t">Douleur vive, craquement, gonflement ou fourmillements : arrête la séance.</p><button class="btn" data-act="pHurtStop">⏹ Arrêter la séance</button></div>`);
   },
-  pHurtZone: (el) => { const z = el.dataset.id; putItem('pain', 'pn-' + uid().slice(0, 14), { zone: z, level: 5, side: '', when: 'effort', date: Date.now(), note: `Pendant « ${S.player?.s?.name || 'la séance'} »`, healed: false }); closeSheet(); adaptRest({ zones: [z] }); },
+  pHurtZone: (el) => { if (!ownsPlayer()) return; const z = el.dataset.id; putItem('pain', 'pn-' + uid().slice(0, 14), { zone: z, level: 5, side: '', when: 'effort', date: Date.now(), note: `Pendant « ${S.player.s.name} »`, healed: false }); closeSheet(); adaptRest({ zones: [z] }); },
   pHurtStop: () => { closeSheet(); finish(true); },
   pTime: () => {
     openSheet(h`<div class="stack"><h2 style="margin:0">⏱ Il me reste…</h2><div class="chips">${[5, 10, 15, 20, 30, 45].map((m) => chip(false, `${m} min`, `data-act="pTimeGo" data-id="${m}"`))}</div>
@@ -336,7 +337,7 @@ Object.assign(ACT, {
 });
 /** Adapte la suite de la séance en cours (exercice en cours inclus s'il n'est pas commencé). La séance d'origine ne change pas. */
 function adaptRest({ minutes = 0, zones = [], supersets = false } = {}) {
-  const p = S.player; if (!p || p.phase === 'done') return;
+  const p = S.player; if (!ownsPlayer(p) || p.phase === 'done') return;
   if (p.phase === 'rest') endRest();
   const from = p.log[p.i]?.sets?.length ? p.i + 1 : p.i, rest = p.s.exercises.slice(from);
   if (!rest.length) { toast('C’est la fin de la séance : rien à adapter.'); draw(); return; }
@@ -351,35 +352,38 @@ function adaptRest({ minutes = 0, zones = [], supersets = false } = {}) {
 /** Séance interrompue (app fermée, téléphone éteint) : carte « Reprendre » à l'accueil, 12 h au plus. */
 export function resumeCard() {
   if (S.player) return '';
-  let snap = null; try { snap = ls.get(SNAP_KEY, null); } catch { /* rien */ }
-  if (!canResume(snap)) return '';
+  const ownerId = S.user?.id ?? null, key = playerSnapshotKey(ownerId);
+  let snap = null; try { if (key) snap = ls.get(key, null); } catch { /* rien */ }
+  if (!canResume(snap, Date.now(), ownerId)) return '';
   const ex = snap.s.exercises[snap.i];
   return h`<section class="card acc-b stack"><b>⏯ Séance interrompue : « ${snap.s.name} »</b><span class="small muted">Exercice ${snap.i + 1} / ${snap.s.exercises.length}${ex ? ` (${ex.name})` : ''} · ${Math.round(snap.elapsed / 60000)} min déjà faites</span>
     <div class="row wrapf"><button class="btn pri" data-act="pResume">▶ Reprendre</button><button class="btn ghost" data-act="pResumeDrop">Oublier</button></div></section>`;
 }
 ACT.pResume = () => {
-  const snap = ls.get(SNAP_KEY, null); if (!canResume(snap)) return;
+  if (S.player) return;
+  const ownerId = S.user?.id ?? null, key = playerSnapshotKey(ownerId), snap = key ? ls.get(key, null) : null;
+  if (!canResume(snap, Date.now(), ownerId)) return;
   S.player = { ...snap, s: normalizeSession(snap.s), phase: 'ready', end: 0, total: 0, paused: false, pauseStart: 0, pausedMs: 0, workStart: 0, workPausedMs: 0, restStart: 0, restMs: 0, remaining: 0, lastBeep: 0,
     startedAt: Date.now() - snap.elapsed, quiz: { felt: [], hardest: '', easiest: '', difficulty: 0, comment: '', likes: {}, answers: {} }, useBase: !!S.settings.autoBase, prs: [], hr: { sum: 0, n: 0, max: 0 } };
   initInputs(false); $('#player').classList.add('open'); document.body.classList.add('noscroll');
   wake(); draw(); clearInterval(timer); timer = setInterval(tick, 250); sayExercise(cur());
   if (S.settings.handsFree) voiceStart();
 };
-ACT.pResumeDrop = () => { ls.del(SNAP_KEY); render(); };
+ACT.pResumeDrop = () => { const key = playerSnapshotKey(S.user?.id); if (key) ls.del(key); render(); };
 /* Grand affichage : un toucher n'importe où (hors boutons) fait l'action principale. */
 export function bigTap(e) {
-  const p = S.player; if (!p || !S.settings.bigMode || p.phase === 'done' || p.paused) return;
+  const p = S.player; if (!ownsPlayer(p) || !S.settings.bigMode || p.phase === 'done' || p.paused) return;
   if (e.target.closest('button, a, input, select, details, label, [data-act]')) return;
   if (p.phase === 'rest') ACT.pRestSkip(); else if (p.phase === 'work') ACT.pWorkDone(); else ACT.pGo();
 }
 let hrOff = null;
-function startHr() { hrOff?.(); hrOff = onHr((bpm) => { const p = S.player; if (!p || p.paused || p.phase === 'done') return; p.hr.sum += bpm; p.hr.n++; p.hr.max = Math.max(p.hr.max, bpm); }); }
+function startHr() { hrOff?.(); const p = S.player; hrOff = onHr((bpm) => { if (!ownsPlayer(p) || p.paused || p.phase === 'done') return; p.hr.sum += bpm; p.hr.n++; p.hr.max = Math.max(p.hr.max, bpm); }); }
 function stopHr() { hrOff?.(); hrOff = null; }
 INPUT.qComment = (el) => { if (S.player) S.player.quiz.comment = el.value.slice(0, 600); };
 CHG.qBase = (el) => { if (S.player) S.player.useBase = el.checked; };
 
 function saveResult() {
-  const p = S.player, c = ctx(), q = p.quiz;
+  const p = S.player; if (!ownsPlayer(p)) return; const c = ctx(), q = p.quiz;
   const done = doneExercises(p);
   const stored = getSeance(p.s.id);
   // Base de prescription : uniquement si l'utilisateur le demande, et seulement vers le haut (progression conservatrice).
@@ -429,21 +433,21 @@ export function hasFingerComplaint(history, now = Date.now()) {
 /* ───────── Mode mains libres (commandes vocales pendant la séance) ───────── */
 let rec = null, voiceOn = false;
 export function voiceStart() {
-  if (!S.settings.handsFree) return;
+  const p = S.player; if (!ownsPlayer(p) || !S.settings.handsFree) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { toast('Commandes vocales non disponibles ici : les gros boutons restent actifs.'); return; }
   voiceOn = true;
   try {
     rec = new SR(); rec.lang = 'fr-FR'; rec.continuous = true; rec.interimResults = false;
-    rec.onresult = (e) => handleVoice(norm(e.results[e.results.length - 1][0].transcript));
-    rec.onend = () => { if (voiceOn && S.player && S.player.phase !== 'done') { try { rec.start(); } catch { /* déjà lancé */ } } };
+    rec.onresult = (e) => { if (ownsPlayer(p)) handleVoice(norm(e.results[e.results.length - 1][0].transcript)); };
+    rec.onend = () => { if (voiceOn && ownsPlayer(p) && p.phase !== 'done') { try { rec.start(); } catch { /* déjà lancé */ } } };
     rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { voiceOn = false; toast('Micro refusé : commandes vocales désactivées.'); } };
     rec.start();
   } catch { voiceOn = false; }
 }
 function voiceStop() { voiceOn = false; try { rec?.stop(); } catch { /* rien */ } rec = null; }
 function handleVoice(t) {
-  const p = S.player; if (!p || p.phase === 'done') return;
+  const p = S.player; if (!ownsPlayer(p) || p.phase === 'done') return;
   const m = t.match(/(?:reste|plus que)\D{0,12}(\d{1,3})\s*min/);
   if (m) { adaptRest({ minutes: Number(m[1]) }); return; }
   if (/\bj ?ai mal\b|\bdouleur\b/.test(t)) { ACT.pHurt(); return; }
@@ -470,7 +474,7 @@ const posKey = (a) => a.i * 1000 + a.set * 2 + a.side;
  * Retourne 'done' si le partenaire a fini, true si l'affichage a changé.
  */
 export function applyDuo(st) {
-  const p = S.player; if (!p || p.phase === 'done' || !st) return false;
+  const p = S.player; if (!ownsPlayer(p) || p.phase === 'done' || !st) return false;
   if (st.phase === 'done') return 'done';
   const n = p.s.exercises.length, skip = st.why === 'skip';
   if (posKey(p) > posKey(st)) return false; // on est déjà plus loin : c'est notre état qui partira

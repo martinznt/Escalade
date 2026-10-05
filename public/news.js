@@ -182,6 +182,11 @@ export const NEWS = [
     ['settings','display','[data-act=a11ySize]','Lire plus confortablement','La taille du texte se règle à un seul endroit, avec les options d’accessibilité.'],
     ['settings','help','[data-act=helpTour]','Les visites restent facultatives','Passe une visite à n’importe quelle étape. Tu peux la relancer dans Aide.'],
   ] },
+  { v:'8.32.2', date:'2026-10-05', title:'Un calendrier plus fiable et un coach mieux informé', why:'Retrouve tes activités libres, corrige un bilan sans doublon et poursuis la conversation avec le coach. Les rubriques d’administration sont plus claires.', steps:[
+    ['home','cal','#main h1','Le prévu et le réalisé','Une activité libre a son bilan rapide. Retire une activité ajoutée par erreur, et choisis un rappel avant ton rendez-vous si tu le souhaites.'],
+    ['profile','home','.topicons','Un coach avec ton contexte','Choisis de joindre le résumé de ton profil au coach. Ses propositions peuvent préparer une séance ou ouvrir le bon écran. L’administration peut relier Gemini.'],
+    ['settings','main','.topicons','Organiser les pages','Organiser fonctionne depuis les sous-pages. Regarde l’aperçu, puis enregistre ou quitte. Tu retrouves la page que tu consultais.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

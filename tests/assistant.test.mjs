@@ -49,7 +49,7 @@ await ok('aucune exécution de code dans l’assistant', async () => {
 });
 
 console.log('Assistant du site : route');
-let reply = { reply: 'Je propose ceci.', changes: [{ kind: 'faq', id: 'n-doigts', data: { q: 'Que faire si j’ai mal aux doigts ?', a: 'Arrête la séance et repose-toi ; consulte si ça dure.' }, why: 'Question fréquente' }] };
+let reply = { status: 'ok', sources: ['request','app/map'], reply: 'Je propose ceci.', changes: [{ kind: 'faq', id: 'n-doigts', data: { q: 'Que faire si j’ai mal aux doigts ?', a: 'Arrête la séance et repose-toi ; consulte si ça dure.' }, why: 'Question fréquente' }] };
 const env = makeEnv({ AI: { run: async () => ({ response: JSON.stringify(reply) }) } });
 const A = new Client(env), U = new Client(env);
 await A.register('adminas'); await U.register('membreas');
@@ -63,13 +63,13 @@ await ok('proposition → brouillon jamais publié, différences renvoyées ; la
   assert.equal(r.status, 200); assert.equal(r.data.added, 1); assert.ok(r.data.draftId); draft = r.data.draftId;
   assert.equal(r.data.diff[0].isNew, true);
   assert.ok(!(await U.get('/api/global')).data.items.some((x) => x.id === 'n-doigts'), 'rien de publié');
-  reply = { reply: 'Ajouté aussi.', changes: [{ kind: 'announce', id: 'n-bilan', data: { title: 'Nouveau : le bilan physique', body: 'Dans Profil.' } }] };
+  reply = { status: 'ok', sources: ['request','app/map'], reply: 'Ajouté aussi.', changes: [{ kind: 'announce', id: 'n-bilan', data: { title: 'Nouveau : le bilan physique', body: 'Dans Profil.' } }] };
   const r2 = await A.post('/api/admin/assistant', { messages: [{ role: 'user', content: 'Ajoute une question sur les doigts' }, { role: 'assistant', content: 'Je propose ceci.' }, { role: 'user', content: 'Et une annonce' }], draftId: draft });
   assert.equal(r2.data.draftId, draft);
   const d = (await A.get('/api/admin/studio/' + draft)).data; assert.equal(d.set.status, 'draft'); assert.equal(d.items.length, 2); assert.equal(d.set.source, 'ai');
 });
 await ok('demande de code renvoyée sans rien créer ; message vide refusé', async () => {
-  reply = { reply: 'Voilà.', changes: [], needsCode: { title: 'Comparer deux séances', summary: 'Un écran qui compare.' } };
+  reply = { status: 'ok', sources: ['request','app/map'], reply: 'Voilà.', changes: [], needsCode: { title: 'Comparer deux séances', summary: 'Un écran qui compare.' } };
   const r = await A.post('/api/admin/assistant', { messages: [{ role: 'user', content: 'Je veux un écran pour comparer deux séances' }] });
   assert.equal(r.data.added, 0); assert.equal(r.data.needsCode.title, 'Comparer deux séances');
   assert.equal((await A.post('/api/admin/assistant', { messages: [] })).status, 400);

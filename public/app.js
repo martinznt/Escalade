@@ -14,8 +14,8 @@ import { pageTourBar } from './pagetour.js';
 import './timer.js';
 import './views-coach.js';
 import { checkBadges } from './views-motiv.js';
-import { topIcons } from './layout.js';
-import { refreshInbox } from './inbox.js';
+import { topIcons, layoutEditing, layoutEditor, layoutPreviewBar } from './layout.js';
+import { refreshInbox, refreshAnnouncements } from './inbox.js';
 import { vHome } from './views-home.js';
 import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
@@ -59,7 +59,7 @@ function doRender() {
   if (!S.loaded) { app.innerHTML = h`<main class="wrap">${skeleton(4)}</main>`.s; return; }
   document.documentElement.dataset.interface = S.settings.interfaceMode === 'advanced' ? 'advanced' : 'simple';
   let body;
-  try { body = pl ? vLanding(pl) : pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
+  try { body = layoutEditing() ? layoutEditor() : pl ? vLanding(pl) : pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
   catch (e) {
     console.error(e);
     const where = String(e?.stack || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/https?:\/\/[^/]+\//, '')).join(' · ');
@@ -68,7 +68,7 @@ function doRender() {
       <div class="row wrapf">${S.tab !== 'home' ? h`<button class="btn" data-act="tab" data-id="home">Retour à l’accueil</button>` : ''}<button class="btn" data-act="tab" data-id="settings">Paramètres</button></div></div>`;
   }
   app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
-    <main class="wrap" id="main">${demoBar()}${bannerBar()}${returnBar()}${advancedUI() ? hintsBar() : ''}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}${body}</main>
+    <main class="wrap" id="main">${demoBar()}<div id="site-banner">${bannerBar()}</div>${layoutEditing() ? '' : h`${returnBar()}${advancedUI() ? hintsBar() : ''}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}`}${layoutPreviewBar()}${body}</main>
     <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${icon(id, ic)}</span><span class="lbl">${id === 'profile' && !advancedUI() ? 'Moi' : label}</span></button>`)}</nav>`.s;
 }
 /** Bandeau de l'équipe (ex. maintenance prévue) : affiché jusqu'à sa date de fin, ou jusqu'à « Compris ». */
@@ -146,7 +146,7 @@ async function transferGuest(user) {
 }
 async function enter(user, fresh) {
   S.user = user; S.expiredShown = false; S.prefill = ''; S.loaded = false;
-  ls.set('sea:user', { id: user.id, username: user.username, isAdmin: !!user.isAdmin }); ls.set('sea:lastname', user.username);
+  ls.set('sea:user', { id: user.id, username: user.username, isAdmin: !!user.isAdmin, roles: user.roles || [] }); ls.set('sea:lastname', user.username);
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   render();
   await loadLocal();
@@ -331,7 +331,7 @@ ACT.updNow = async () => {
 ACT.updLater = () => { UPD.later = Date.now() + 3 * 3600000; renderUpdateBar(); };
 /** Vérifie s'il existe une version plus récente sur le serveur (sans compte, sans cache). */
 async function checkUpdate() {
-  try { await UPD.reg?.update(); } catch { /* hors ligne */ }
+  if (!UPD.swCheck || Date.now() - UPD.swCheck >= 10 * 60000) { UPD.swCheck = Date.now(); try { await UPD.reg?.update(); } catch { /* hors ligne */ } }
   try {
     const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return;
     const { build } = await r.json();
@@ -347,26 +347,55 @@ async function checkUpdate() {
 }
 window.__seaCheckUpdate = checkUpdate;
 function registerSW() {
-  checkUpdate(); setInterval(checkUpdate, 20 * 60000);
+  checkUpdate(); setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) checkUpdate(); }, 30000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('/sw.js').then((reg) => {
     UPD.reg = reg;
-    // Mise à jour demandée juste avant ce rechargement : si la nouvelle version attend encore, on l'active (sans reproposer le bandeau).
-    const asked = sessionStorage.getItem('sea:user-update');
-    if (reg.waiting && navigator.serviceWorker.controller) { if (asked) reg.waiting.postMessage('SKIP_WAITING'); else showUpdate(); }
-    else if (asked) sessionStorage.removeItem('sea:user-update');
+    const requested = () => !!sessionStorage.getItem('sea:user-update');
+    const watched = new WeakSet();
+    const watch = (w) => {
+      if (!w || watched.has(w)) return;
+      watched.add(w);
+      const changed = () => {
+        if (w.state === 'installed') {
+          if (requested()) w.postMessage('SKIP_WAITING');
+          else if (navigator.serviceWorker.controller) showUpdate();
+        }
+        if (w.state === 'redundant' && requested() && ![reg.installing, reg.waiting].some((worker) => worker && worker.state !== 'redundant')) sessionStorage.removeItem('sea:user-update');
+      };
+      w.addEventListener('statechange', changed);
+      changed();
+    };
+    // Le rechargement demandé peut arriver avant waiting, pendant le précache.
+    // register peut alors retrouver un Worker déjà en installation, sans nouvel événement updatefound.
+    watch(reg.installing);
+    if (reg.waiting) { if (requested()) reg.waiting.postMessage('SKIP_WAITING'); else if (navigator.serviceWorker.controller) showUpdate(); }
     reg.addEventListener('updatefound', () => {
-      const w = reg.installing; if (!w) return;
-      w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdate(); });
+      watch(reg.installing);
     });
-  }).catch(() => {});
+    // Aucun nouveau Worker : attendre la vérification, puis enlever une ancienne demande sans issue.
+    if (requested() && !reg.installing && !reg.waiting) reg.update().catch(() => {}).finally(() => {
+      if (requested() && !reg.installing && !reg.waiting) sessionStorage.removeItem('sea:user-update');
+      else watch(reg.installing);
+    });
+  }).catch(() => { sessionStorage.removeItem('sea:user-update'); });
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     // Nouvelle version activée : rechargement si l'utilisateur l'a demandée, jamais pendant une séance.
     if (reloading || S.player) return;
     if (sessionStorage.getItem('sea:user-update')) { reloading = true; sessionStorage.removeItem('sea:user-update'); location.reload(); }
   });
+}
+let publicationBusy = false;
+async function refreshPublication() {
+  if (publicationBusy || document.visibilityState !== 'visible' || !navigator.onLine) return;
+  publicationBusy = true;
+  try {
+    await loadGlobal({ renderChange: false });
+    const box = document.getElementById('site-banner'); if (box) box.innerHTML = bannerBar().s || '';
+    refreshAnnouncements();
+  } finally { publicationBusy = false; }
 }
 async function start() {
   if (await maybeMove()) return; // ancienne adresse : redirection vers la nouvelle, avec les données de l'appareil
@@ -378,7 +407,8 @@ async function start() {
   const doIt = new URLSearchParams(location.search).get('do');
   if (['timer', 'gen', 'checkin'].includes(doIt)) { history.replaceState(null, '', location.pathname + location.hash); setTimeout(() => { if (S.user) ({ timer: ACT.timerOpen, gen: ACT.genOpen, checkin: ACT.checkin })[doIt]?.(); }, 900); }
   registerSW();
-  loadGlobal(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadGlobal(); });
+  loadGlobal(); setInterval(refreshPublication, 30000);
+  document.addEventListener('visibilitychange', refreshPublication);
   catchLink();
   parseHash();
   const cached = ls.get('sea:user');
@@ -392,7 +422,7 @@ async function start() {
   try {
     const r = await api('GET', '/api/auth/me', undefined, { quiet401: true });
     if (!cached || cached.id !== r.user.id) { await enter(r.user, false); }
-    else { S.user = r.user; ls.set('sea:user', { id: r.user.id, username: r.user.username, isAdmin: !!r.user.isAdmin }); render(); }
+    else { S.user = r.user; ls.set('sea:user', { id: r.user.id, username: r.user.username, isAdmin: !!r.user.isAdmin, roles: r.user.roles || [] }); render(); }
   } catch (e) {
     if (e.status === 401 && cached) expireSession();
     else if (!cached && e.offline) { S.authError = 'Pas de connexion : connecte-toi une première fois en ligne.'; render(); }

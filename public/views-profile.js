@@ -444,16 +444,30 @@ ACT.goalsToggle = (el) => {
 ACT.goalWrite = (el) => openSheet(h`<form data-submit="goalAi" class="stack"><h2 style="margin:0">✍️ Mon objectif</h2>
   <p class="small muted">Écris-le comme tu le dirais à un coach. L’assistant en fait une fiche (capacités, mesure, étapes). Tu la relis et la modifies avant de l’enregistrer.</p>
   <textarea name="text" maxlength="300" rows="3" required placeholder="Ex. « Enchaîner le 6c du dévers avant l’été » ou « Courir 10 km sans m’arrêter »">${el?.dataset?.text || ''}</textarea>
+  <label class="chk tiny"><input type="checkbox" name="profileConsent">Joindre le résumé de mon profil</label>
+  <details class="how mini"><summary>Voir le résumé et son destinataire</summary><p class="tiny">${profileSummary()}</p><p class="tiny muted">Si tu coches cette option, ce résumé est joint à ta demande et transmis au modèle choisi pour le site : Google (Gemini) ou Cloudflare.</p></details>
   <button class="btn pri" type="submit">Analyser</button></form>`);
 /** Depuis l'assistant de séance : l'intention du jour devient un objectif SEULEMENT si on le demande (fiche relue avant). */
 ACT.goalFromText = (el) => { S.goalBack = el?.dataset?.back || ''; analyzeGoal(String(el?.dataset?.text || '').trim()); };
-SUBMIT.goalAi = async (f) => { S.goalBack = ''; await analyzeGoal(String(new FormData(f).get('text') || '').trim()); };
-async function analyzeGoal(text) {
+SUBMIT.goalAi = async (f) => { S.goalBack = ''; const data=new FormData(f);await analyzeGoal(String(data.get('text') || '').trim(),{shareProfile:data.has('profileConsent')}); };
+async function analyzeGoal(text, { shareProfile = false } = {}) {
   if (text.length < 3) return;
+  const owner=S.user?.id;
+  S.goalDraft=null;
   openSheet(h`<div class="stack"><h2 style="margin:0">✍️ Mon objectif</h2><p class="small">« ${text} »</p>${skeleton(2)}</div>`);
   let d = null, why = '';
-  try { d = (await api('POST', '/api/ai/goal', { text, profile: profileSummary() }, { timeout: 45000 })).goal; }
+  try {
+    const body={text,profileConsent:false};
+    if(shareProfile){
+      const status=await api('GET','/api/ai/status');if(S.user?.id!==owner)return;
+      if(!['cloudflare','gemini'].includes(status.provider))throw new Error('Le modèle n’a pas pu être vérifié. Réessaie ou continue sans joindre ton profil.');
+      Object.assign(body,{profile:profileSummary(),profileConsent:true,profileProvider:status.provider});
+    }
+    if(S.user?.id!==owner)return;
+    d=(await api('POST','/api/ai/goal',body,{timeout:45000})).goal;
+  }
   catch (e) { why = e.guest ? 'Crée un compte pour utiliser l’assistant.' : e.status === 503 ? 'Assistant indisponible pour le moment.' : e.message; }
+  if(S.user?.id!==owner)return;
   if (!d) d = localGoal(text);
   S.goalDraft = { ...d, text, why };
   openSheet(goalFiche(S.goalDraft), { wide: true });
@@ -807,7 +821,7 @@ function vPublic() {
   const p = so.me.profile, sh = p.share || {};
   const sel = (key, id) => (sh[key] || []).includes(id);
   const states = profileCapacities(c).filter((s) => s.level != null);
-  return h`<form data-submit="socSave" class="card"><h3>Mon profil public</h3><p class="tiny muted">Privé par défaut. Seules les informations cochées ici sont visibles, et uniquement selon la visibilité choisie.</p>
+  return h`<form data-submit="socSave" class="card public-settings"><h3>Mon profil public</h3><p class="tiny muted">Privé par défaut. Seules les informations cochées ici sont visibles, et uniquement selon la visibilité choisie.</p>
       <label>Visibilité<select name="visibility"><option value="private" ${p.visibility === 'private' ? 'selected' : ''}>Privé (personne)</option><option value="followers" ${p.visibility === 'followers' ? 'selected' : ''}>Abonnés acceptés</option><option value="public" ${p.visibility === 'public' ? 'selected' : ''}>Public</option></select></label>
       <label>Présentation<textarea name="bio" maxlength="500">${p.bio}</textarea></label>
       <label class="chk"><input type="checkbox" name="shareStats" ${p.shareStats ? 'checked' : ''}> Statistiques (séances, régularité)</label><label class="chk"><input type="checkbox" name="shareRecords" ${p.shareRecords ? 'checked' : ''}> Records des séances</label><label class="chk"><input type="checkbox" name="shareSessions" ${p.shareSessions ? 'checked' : ''}> Dernières séances réalisées</label>

@@ -54,14 +54,14 @@ function paintBadge() {
 function row(e, seen) {
   return h`<div class="nitem ${seen ? 'seen' : 'unread'}"><span class="nic">${e.icon}</span><div class="grow"><div class="row between"><b>${e.title}</b>${seen ? '' : h`<span class="tag acc">Nouveau</span>`}</div>
     ${seen ? '' : h`<div class="small">${e.text}</div>`}
-    ${e.kind === 'update' ? h`<div class="row wrapf"><button class="btn sm ${seen ? '' : 'pri'}" data-act="notifTour" data-v="${e.v}">🧭 Lancer la visite</button></div><details class="how mini"><summary>${seen ? 'Revoir' : 'Ce qui a changé'} (${e.steps.length})</summary>${seen ? h`<div class="small">${e.text}</div>` : ''}<ul class="small">${e.steps.map((st) => h`<li><b>${st[3]}</b> : ${st[4]}</li>`)}</ul></details>` : ''}
+    ${e.kind === 'update' ? h`<div class="row wrapf"><button class="btn sm ${seen ? '' : 'pri'}" data-act="notifTour" data-v="${e.v}">Voir la visite</button></div><details class="how mini"><summary>${seen ? 'Revoir' : 'Ce qui a changé'} (${e.steps.length})</summary>${seen ? h`<div class="small">${e.text}</div>` : ''}<ul class="small">${e.steps.map((st) => h`<li><b>${st[3]}</b> : ${st[4]}</li>`)}</ul></details>` : ''}
     ${e.kind === 'admin' ? h`<button class="btn sm pri" data-act="propOpen" data-id="${e.propId}">Voir et décider</button>` : ''}
     <div class="row between"><span class="tiny muted">${fmtDay(e.at)}</span>${seen ? h`<button class="btn sm ghost nseen" data-act="notifSeen" data-id="${e.id}" data-v="0" aria-label="Marquer comme non vue">↺ Non vue</button>` : h`<button class="btn sm nseen" data-act="notifSeen" data-id="${e.id}" data-v="1" aria-label="Marquer comme vue">✓ Vu</button>`}</div></div></div>`;
 }
 function inboxView() {
   const ids = seenIds(), before = ls.get(SEEN, 0), list = entries();
   const fresh = list.filter((e) => !isSeen(e, ids, before)), old = list.filter((e) => isSeen(e, ids, before));
-  return h`<div class="inbox"><div class="row between"><h2>🔔 Notifications</h2><button class="btn sm ghost" data-act="notifSettings">Réglages</button></div>
+  return h`<div class="inbox"><div class="row between"><h2>Notifications</h2><button class="btn sm ghost" data-act="notifSettings">Réglages</button></div>
     <div class="row between"><span class="kicker">Nouvelles${fresh.length ? ` (${fresh.length})` : ''}</span>${fresh.length > 1 ? h`<button class="btn sm ghost" data-act="notifAllSeen">✓ Tout marquer comme vu</button>` : ''}</div>
     ${fresh.length ? fresh.map((e) => row(e, false)) : h`<p class="small muted">Rien de nouveau. Tout est vu 👍</p>`}
     ${old.length ? h`<details class="oldn" ${fresh.length ? '' : 'open'}><summary class="kicker">Déjà vues (${old.length})</summary>${old.map((e) => row(e, true))}</details>` : ''}</div>`;
@@ -70,6 +70,7 @@ function repaint() {
   S.notifUnread = unreadCount(); paintBadge();
   const box = document.querySelector('#sheet .inbox'); if (box) box.outerHTML = inboxView().s;
 }
+export function refreshAnnouncements() { repaint(); }
 ACT.notifOpen = () => { openSheet(inboxView(), { wide: true }); S.notifUnread = unreadCount(); paintBadge(); refreshInbox().then(repaint); }; // à jour à chaque ouverture
 ACT.notifSeen = (el) => { setSeen([el.dataset.id], el.dataset.v === '1'); repaint(); };
 ACT.notifAllSeen = () => { setSeen(entries().map((e) => e.id), true); repaint(); };

@@ -103,7 +103,7 @@ export function buildAdminDraft(kind, text) {
 /** Sortie IA → données validées par cleanGlobal (ou null). Les champs inconnus sont ignorés. */
 export function cleanAdminDraft(raw, kind) {
   if (!AI_KINDS.includes(kind)) return null;
-  const x = typeof raw === 'object' && raw && !raw.response ? raw : extractJson(raw);
+  const x = extractJson(raw);
   return x && typeof x === 'object' ? cleanGlobal(kind, x) : null;
 }
 
@@ -116,7 +116,7 @@ export function buildLab(text) {
 }
 const strs = (a, n, len) => (Array.isArray(a) ? a.map((x) => str(x, len)).filter(Boolean).slice(0, n) : []);
 export function cleanLab(raw) {
-  const x = typeof raw === 'object' && raw && !raw.response ? raw : extractJson(raw);
+  const x = extractJson(raw);
   if (!x || typeof x !== 'object') return null;
   const reformulation = str(x.reformulation, 600);
   const solutions = (Array.isArray(x.solutions) ? x.solutions : []).slice(0, 4).map((s) => {

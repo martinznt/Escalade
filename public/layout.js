@@ -91,6 +91,9 @@ const store = (all) => putItem('config', 'layout', { lay: JSON.stringify(all).sl
 // En aperçu, la page s'affiche avec le brouillon de mise en page (pas encore enregistré).
 const shown = (page) => (S.lay?.page === page && S.lay.preview ? S.lay.list : layout(page));
 const editing = (page) => S.lay?.page === page && !S.lay.preview;
+export const layoutEditing = () => !!S.lay && editing(S.tab);
+export const layoutEditor = () => editor(S.lay.page);
+export const layoutPreviewBar = () => S.lay?.preview ? h`<div class="editdock top"><span class="grow small"><b>Aperçu</b> — pas encore enregistré</span><button class="btn sm" data-act="layBack">Continuer</button><button class="btn sm pri" data-act="laySave">Enregistrer</button></div>` : '';
 export function topIcons(page) {
   if (editing(page)) return h`<button class="btn sm" data-act="layQuit">✕ Quitter</button>`;
   const icons = shown(page).filter((e) => e.as === 'icon' && ICONS[e.id]);
@@ -106,7 +109,6 @@ export function topIcons(page) {
 export function composePage(page, renderers) {
   if (editing(page)) return editor(page);
   const feats = FEATURES[page], out = [], preview = S.lay?.page === page; let tiles = [], rows = [];
-  if (preview) out.push(h`<div class="editdock top"><span class="grow small"><b>👁 Aperçu</b> — pas encore enregistré</span><button class="btn sm" data-act="layBack">✏️ Continuer</button><button class="btn sm pri" data-act="laySave">✓ Enregistrer</button></div>`);
   // Tuiles consécutives → une grille ; lignes consécutives → une liste (comme dans les Paramètres).
   const flush = () => { if (tiles.length) { out.push(h`<div class="quick">${tiles}</div>`); tiles = []; } if (rows.length) { out.push(h`<div class="setmenu">${rows}</div>`); rows = []; } };
   for (const e of shown(page)) {
@@ -123,8 +125,8 @@ export function composePage(page, renderers) {
 function editor(page) {
   const list = S.lay.list, feats = FEATURES[page], n = list.length;
   const FORM = { big: 'Grand', icon: 'Icône', off: 'Masqué' };
-  const name = { home: 'l’Accueil', progress: 'Progrès', library: 'la Bibliothèque', profile: 'le Profil' }[page] || 'cette page';
-  return h`<section class="card editbar"><h2>✏️ Personnaliser ${name}</h2><p class="small">Choisis ce qui s’affiche sur ${name}, et dans quel ordre :</p>
+  const name = { home: 'l’Accueil', progress: 'Progrès', library: 'la Bibliothèque', profile: 'le Profil', settings: 'les Paramètres' }[page] || 'cette page';
+  return h`<section class="card editbar"><h2>Personnaliser ${name}</h2><p class="small">${page === 'settings' ? 'Choisis les raccourcis de l’en-tête des paramètres.' : 'Choisis les rubriques de la page principale de cet onglet et les raccourcis de son en-tête.'}</p>
     <ul class="clean tight small"><li><b>Grand</b> : un bloc sur la page</li><li><b>Icône</b> : un petit bouton en haut à droite</li><li><b>Masqué</b> : n’apparaît plus (tu peux le remettre ici)</li><li><b>↑ ↓</b> : l’ordre · <b>🎨</b> : la couleur</li></ul>
     <p class="tiny muted">Rien ne change tant que tu n’as pas enregistré. <b>👁 Aperçu</b> pour voir le résultat, <b>✕ Quitter</b> en haut pour sortir sans rien changer. <button class="linkish acc-t" data-act="layReset">Revenir à la mise en page de base</button></p></section>
     <div class="edlist">${list.map((e, i) => { const f = feats[e.id]; return h`<div class="edrow ${e.as}" ${e.color ? raw(`style="--wc:${e.color}"`) : ''}>
@@ -137,21 +139,22 @@ function editor(page) {
 }
 
 /* ───────── Actions du mode édition ───────── */
-ACT.layEdit = () => { const page = S.tab; if (!FEATURES[page]) return; S.lay = { page, list: layout(page).map((e) => ({ ...e })) }; render(); window.scrollTo(0, 0); };
+ACT.layEdit = () => { const page = S.tab; if (!FEATURES[page]) return; S.lay = { page, returnTo: { tab: S.tab, sub: S.sub[S.tab], param: S.param }, list: layout(page).map((e) => ({ ...e })) }; render(); window.scrollTo(0, 0); };
 const findE = (id) => S.lay?.list.find((e) => e.id === id);
 ACT.layMove = (el) => { const L = S.lay.list, i = L.findIndex((e) => e.id === el.dataset.id), j = i + Number(el.dataset.d); if (i < 0 || j < 0 || j >= L.length) return; [L[i], L[j]] = [L[j], L[i]]; render(); };
 ACT.layAs = (el) => { const e = findE(el.dataset.id); if (e) { e.as = el.dataset.v; render(); } };
 ACT.layColor = (el) => { const e = findE(el.dataset.id); if (e) { e.color = el.dataset.v; S.lay.pick = ''; render(); } };
 ACT.layPick = (el) => { S.lay.pick = S.lay.pick === el.dataset.id ? '' : el.dataset.id; render(); };
 ACT.layEditAt = (el) => { const [t, sub] = String(el.dataset.to).split('/'); go(t, sub); setTimeout(() => ACT.layEdit(), 150); };
-ACT.layCancel = () => { S.lay = null; render(); toast('Aucun changement enregistré.'); };
+const leaveLayout = () => { const back = S.lay?.returnTo; S.lay = null; if (back) go(back.tab, back.sub, back.param); else render(); window.scrollTo(0, 0); };
+ACT.layCancel = () => { leaveLayout(); toast('Aucun changement enregistré.'); };
 const changed = () => S.lay && JSON.stringify(S.lay.list.map(({ id, as, color }) => [id, as, color || ''])) !== JSON.stringify(layout(S.lay.page).map(({ id, as, color }) => [id, as, color || '']));
 ACT.layQuit = async () => {
   if (changed() && !(await ask('Quitter sans enregistrer ?', { ok: 'Quitter', detail: 'Tes changements de mise en page seront perdus.' }))) return;
-  S.lay = null; render(); window.scrollTo(0, 0);
+  leaveLayout();
 };
-ACT.layPreview = () => { if (!S.lay) return; S.lay.preview = true; render(); window.scrollTo(0, 0); };
-ACT.layBack = () => { if (!S.lay) return; S.lay.preview = false; render(); };
+ACT.layPreview = () => { if (!S.lay) return; S.lay.preview = true; const root = { home: 'dash', progress: 'summary', library: 'home', profile: 'home', settings: 'main' }[S.lay.page]; go(S.lay.page, root); window.scrollTo(0, 0); };
+ACT.layBack = () => { if (!S.lay) return; S.lay.preview = false; const back = S.lay.returnTo; if (back) go(back.tab, back.sub, back.param); else render(); };
 ACT.laySave = async () => {
   if (!S.lay) return;
   if (!isAdminUser() && !(await ask('Enregistrer cette mise en page ?', { ok: 'Oui, enregistrer', detail: 'Elle remplace la mise en page de cette page, sur tous tes appareils. Tu pourras revenir à la mise en page de base quand tu veux.' }))) return;
@@ -163,20 +166,20 @@ ACT.laySave = async () => {
     try {
       await saveLayoutGlobal({ pages: { ...(gl.pages || {}), [page]: list }, off: { ...(gl.off || {}), [page]: list.filter((e) => e.as === 'off').map((e) => e.id) } });
       const all = savedLayouts(); delete all[page]; store(all); // tu vois la même chose que tout le monde
-      S.lay = null; render(); toast('Mise en page enregistrée pour tout le monde ✓');
+      leaveLayout(); toast('Mise en page enregistrée pour tout le monde ✓');
     } catch (e) { toast(e.message, 4500, 'bad'); }
     return;
   }
   const all = savedLayouts(); all[S.lay.page] = list;
-  store(all); S.lay = null; render(); toast('Mise en page enregistrée ✓');
+  store(all); leaveLayout(); toast('Mise en page enregistrée ✓');
 };
 ACT.layReset = async (el) => {
   const scope = el?.dataset?.scope || (S.lay ? 'page' : 'all');
   if (!(await ask(scope === 'all' ? 'Revenir à la mise en page de base partout ?' : 'Revenir à la mise en page de base pour cette page ?', { ok: 'Oui, revenir à la base' }))) return;
   if (!(await ask('Vraiment ?', { ok: 'Oui, remettre comme au départ', danger: true, detail: 'Tes choix de place, de forme et de couleur seront effacés. Tes données (séances, historique…) ne sont pas touchées.' }))) return;
   if (scope === 'all') store({}); else { const all = savedLayouts(); delete all[S.lay.page]; store(all); }
-  if (S.lay) S.lay = null;
-  render(); toast('Mise en page de base remise');
+  if (S.lay) leaveLayout(); else render();
+  toast('Mise en page de base remise');
 };
 
 /* ───────── Toutes les fonctions, triées ───────── */

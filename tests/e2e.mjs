@@ -12,13 +12,20 @@ const require = createRequire(import.meta.url);
 let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 
-const env = makeEnv({ AI: { run: async (_m, o) => ({ response: o.messages ? `Conseil du coach : ${o.messages.at(-1).content}` : '{}' }) } });
+const env = makeEnv({ AI: { run: async (_m, o) => ({ response: o.messages ? JSON.stringify(o.messages.some((m) => m.role === 'system' && m.content.includes('Tu es l’assistant d’administration'))
+  ? { status: 'ok', sources: ['request', 'app/map'], reply: 'J’ai préparé une question sur les doigts dans un brouillon. Relis-la avant de publier.', changes: [{ kind: 'faq', id: 'n-e2e-doigts', op: 'put', data: { q: 'Comment ménager les doigts fatigués ?', a: 'Réduis les exercices intenses et garde un échauffement progressif.' } }] }
+  : { status: 'ok', basis: 'request', sources: ['request', 'app/map'], reply: `Conseil du coach : ${o.messages.at(-1).content}`, changes: [] }) : '{}' }) } });
 // Historique GitHub simulé pour « Voir les nouveautés » (aucun appel réseau pendant les tests).
 const realFetch = globalThis.fetch;
-globalThis.fetch = (u, o) => String(u).startsWith('https://api.github.com/') ? Promise.resolve(new Response(JSON.stringify([
+globalThis.fetch = (u, o) => String(u).startsWith('https://eutils.ncbi.nlm.nih.gov/') ? Promise.resolve(new Response('',{status:503})) : String(u).startsWith('https://api.github.com/') ? Promise.resolve(new Response(JSON.stringify([
   { commit: { message: 'Visite guidée plus immersive\n\n- Des flèches montrent chaque bouton', committer: { date: new Date(Date.now() + 60000).toISOString() } }, parents: [{}] },
 ]))) : realFetch(u, o);
 const srv = await startServer(env);
+// Fixture de diagnostic : le contrôleur répond avec son BUILD réel, même si un autre cache existe déjà.
+srv.after = async (request, response) => {
+  if (new URL(request.url).pathname !== '/sw.js') return response;
+  return new Response((await response.text()) + '\nself.addEventListener("message", e => { if (e.data?.readBuild) e.ports[0]?.postMessage(BUILD); });', { status: response.status, headers: response.headers });
+};
 const BASE = srv.base;
 const browser = await chromium.launch(process.env.PW_EXEC ? { executablePath: process.env.PW_EXEC } : {});
 const errors = [];
@@ -35,6 +42,12 @@ const newCtx = async ({ ask = false } = {}) => {
 let n = 0, cur = null;
 /** Attend qu'une condition (évaluée côté Node) devienne vraie. */
 async function poll(fn, ms = 12000, what = 'condition') { const t0 = Date.now(); for (;;) { if (await fn()) return; if (Date.now() - t0 > ms) throw new Error('Délai dépassé : ' + what); await new Promise((r) => setTimeout(r, 300)); } }
+const controllerBuild = (page) => page.evaluate(() => new Promise((resolve) => {
+  const worker = navigator.serviceWorker.controller; if (!worker) return resolve('');
+  const channel = new MessageChannel(), timer = setTimeout(() => { channel.port1.close(); resolve(''); }, 1000);
+  channel.port1.onmessage = (event) => { clearTimeout(timer); channel.port1.close(); resolve(event.data); };
+  worker.postMessage({ readBuild: true }, [channel.port2]);
+}));
 /** Deux validations de suite (mise en page) : la 2e boîte s'ouvre juste après la 1re. */
 const confirm2 = async (P) => { await P.click('#dialog.open [data-dlg="1"]'); await P.waitForFunction(() => /sûr|Vraiment/.test(document.querySelector('#dialog.open')?.textContent || '')); await P.click('#dialog.open [data-dlg="1"]'); await P.waitForSelector('#dialog:not(.open)', { state: 'attached' }); };
 const step = async (name, fn) => {
@@ -42,7 +55,13 @@ const step = async (name, fn) => {
     // Cette suite couvre les options avancées ; le parcours simple possède sa propre suite.
     if (cur && !cur.isClosed() && cur.url().startsWith(BASE)) await cur.evaluate(async () => { const {S,saveSettings,render}=await import('/state.js'); if(S.user && S.loaded && S.settings.interfaceMode !== 'advanced') { S.settings.interfaceMode='advanced';saveSettings();render(); } });
     n++; console.log('  ✓', name); }
-  catch (e) { console.log('  ✗', name); if (cur) await cur.screenshot({ path: '/tmp/e2e-fail.png', fullPage: true }).catch(() => {}); throw e; }
+  catch (e) {
+    console.log('  ✗', name);
+    // L'annotation reste consultable même lorsque GitHub exige une connexion pour les journaux.
+    if (process.env.GITHUB_ACTIONS) console.error('::error title=Parcours E2E::' + `${name} : ${e.message}`.slice(0,4000).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A'));
+    if (cur) await cur.screenshot({ path: '/tmp/e2e-fail.png', fullPage: true }).catch(() => {});
+    throw e;
+  }
 };
 // Choisir dans une liste : les longues listes passent par le sélecteur (recherche + catégories), comme un vrai utilisateur.
 const pickSel = async (P, sel, v) => {
@@ -254,7 +273,10 @@ await step('programme : création en 4 questions, calendrier rempli, séance du 
 await step('coach : question en un toucher, réponse affichée', async () => {
   await a.click('.topicons [data-act=allOpen]'); await A.waitForSelector('.allf'); await a.click('.allf [data-act=coachOpen]'); await A.waitForSelector('.chat [data-act=chatIdea]');
   await a.click('.chat [data-act=chatIdea]'); await A.waitForSelector('.msg.assistant:not(.typing)', { timeout: 10000 });
-  assert.match(await a.text('.msg.assistant'), /Conseil du coach/); await a.click('#sheet .back'); await a.tab('profile');
+  assert.match(await a.text('.msg.assistant'), /Conseil du coach/);
+  // Le centre du fond peut être recouvert par une longue conversation : utiliser le bouton visible.
+  await A.locator('#sheet').getByRole('button', { name: 'Fermer la fenêtre', exact: true }).click();
+  await A.waitForSelector('#sheet:not(.open)', { state: 'attached' }); await a.tab('profile');
 });
 await step('mon corps et mes objectifs : profil corporel, objectifs multiples, objectif écrit', async () => {
   await a.tab('profile'); await a.sub('profSub', 'body'); await A.waitForSelector('.bodyf');
@@ -367,13 +389,45 @@ await step('générateur : simulation, priorités, génération expliquée, enre
 await step('commande naturelle : « je n’ai que 12 minutes » reconstruit la séance ouverte', async () => {
   await a.tab('library'); await A.locator('[data-act=openSeance]').first().click(); await A.waitForSelector('input[data-change=sName]');
   const sid = await A.evaluate(() => location.hash.split('/')[3]);
+  const before = await A.evaluate(async (id) => (await import('/state.js')).getSeance(id), sid);
+  assert.ok(before?.exercises.length, 'une séance enregistrée est réellement ouverte');
   await a.tab('home');
-  const coach = async (q) => { await a.click('.topicons [data-act=allOpen]'); await a.click('.allf [data-act=coachOpen]'); await A.waitForSelector('.chat-in input'); await A.fill('.chat-in input', q); await a.click('.chat-in button[type=submit]'); };
-  await coach('Je n’ai que 12 minutes');
-  await A.waitForSelector('#toast.show'); assert.match(await a.text('#toast'), /12 min/);
-  await coach('quel temps fait-il ?'); // pas une consigne : c'est le coach qui répond, aucune action
-  await A.waitForSelector('.msg.assistant:not(.typing)'); await A.keyboard.press('Escape');
-  assert.ok(sid);
+  const coach = async (q, releaseStatus) => {
+    await a.click('.topicons [data-act=allOpen]'); await a.click('.allf [data-act=coachOpen]'); await A.waitForSelector('.chat-in input');
+    const replies = await a.count('.msg.assistant:not(.typing)');
+    await A.fill('.chat-in input', q);
+    if (releaseStatus) {
+      // Une réponse réseau entre l'appui et le relâchement ne doit pas remplacer le formulaire ni perdre le clic.
+      const button = A.locator('.chat-in button[type=submit]'); await button.scrollIntoViewIfNeeded();
+      const box = await button.boundingBox(); assert.ok(box);
+      await A.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await A.mouse.down(); releaseStatus();
+      await A.waitForSelector('#sheet .chat p:text-is("Modèle disponible · test clic conservé")'); await A.mouse.up();
+    } else await a.click('.chat-in button[type=submit]');
+    return replies;
+  };
+  let releaseStatus; const statusGate = new Promise((resolve) => { releaseStatus = resolve; });
+  const delayedStatus = async (route) => {
+    await statusGate; const response = await route.fetch(), data = await response.json();
+    await route.fulfill({ response, json: { ...data, label: 'Modèle disponible · test clic conservé' } });
+  };
+  await A.route('**/api/ai/status', delayedStatus, { times: 1 });
+  try { await coach('Je n’ai que 12 minutes', releaseStatus); }
+  finally { releaseStatus(); await A.unroute('**/api/ai/status', delayedStatus); }
+  // Le toast du générateur peut encore être affiché : on attend le résultat de cette commande.
+  await A.waitForSelector('#toast.show:has-text("reconstruite pour 12 min")'); assert.match(await a.text('#toast'), /12 min/);
+  await A.waitForSelector('#sheet:not(.open)', { state: 'attached' });
+  const rebuilt = await A.evaluate(async (id) => (await import('/state.js')).getSeance(id), sid);
+  assert.equal(rebuilt.context.plannedMin, 12, 'la séance sauvegardée ciblée reçoit la durée demandée');
+  assert.equal(rebuilt.name, before.name); assert.ok(rebuilt.updatedAt > before.updatedAt);
+  assert.ok(rebuilt.exercises.length > 0 && rebuilt.durationMin > 0);
+  assert.ok(rebuilt.exercises.every((e) => Number.isFinite(e.sets) && e.sets >= 1 && Number.isFinite(e.rest) && e.rest >= 0), 'exercices reconstruits valides');
+  await poll(async () => (await a.api('GET', '/api/sync')).data.items.some((s) => s.id === sid && s.context?.plannedMin === 12 && s.updatedAt >= rebuilt.updatedAt), 12000, 'séance reconstruite enregistrée sur le serveur');
+  const replies = await coach('quel temps fait-il ?'); // pas une consigne : c'est le coach qui répond, aucune action
+  await A.waitForFunction((count) => document.querySelectorAll('.msg.assistant:not(.typing)').length > count && !document.querySelector('.msg.typing'), replies);
+  assert.match(await A.locator('.msg.user .t').last().innerText(), /quel temps fait-il/);
+  assert.ok((await A.locator('.msg.assistant:not(.typing) .t').last().innerText()).trim());
+  assert.deepEqual(await A.evaluate(async (id) => (await import('/state.js')).getSeance(id), sid), rebuilt, 'une question libre ne modifie pas la séance');
+  await A.keyboard.press('Escape');
 });
 await step('« Que faire aujourd’hui ? » et tableau de bord personnalisé', async () => {
   assert.match(await a.text('main'), /Que faire aujourd’hui/);
@@ -528,6 +582,16 @@ await step('créer une séance (assistant en 6 étapes) : sport, lieu, cotation 
   await cpFresh(); await cpTo(1); await a.click('[data-act=cpSport][data-id=climbing_boulder]'); await a.click('[data-act=cpMin][data-id="150"]');
   assert.match(await a.text('#main'), /Matériel/);
   await cpTo(2); await a.click('[data-act=cpAim][data-id=grade]'); await a.click('[data-act=cpStyle][data-id=st-devers]');
+  assert.match(await a.text('#main'), /aucune cible n’est supposée/);
+  assert.equal(await A.evaluate(async () => (await import('/state.js')).S.cp.targetShown), null, 'aucune cotation choisie sans maximum connu');
+  assert.equal(await A.locator('.stepdock [data-act=cpStep][data-d="1"]').isDisabled(), true, 'une cotation doit être choisie avant la structure');
+  if (await a.count('[data-change=cpTargetSel]')) {
+    assert.equal(await A.inputValue('[data-change=cpTargetSel]'), ''); await pickSel(A, '[data-change=cpTargetSel]', '5');
+  } else {
+    assert.equal(await a.count('[data-act=cpTarget].on'), 0); await a.click('[data-act=cpTarget][data-id="5"]');
+  }
+  assert.equal(await A.locator('.stepdock [data-act=cpStep][data-d="1"]').isDisabled(), false);
+  assert.equal(await A.evaluate(async () => (await import('/state.js')).S.cp.target), 5, 'la cotation choisie est conservée');
   await cpTo(3); await A.waitForSelector('.cpart'); assert.ok(await a.count('.cpart') >= 3, 'un format proposé');
   await cpTo(4); await A.waitForSelector('#cpresult'); const r = await a.text('#cpresult');
   assert.match(r, /Échauffement en grimpant[\s\S]*Montée[\s\S]*Objectif/); assert.match(r, /dévers/);
@@ -762,7 +826,7 @@ await step('V1 : séance structurée (bloc → pause → voie), but ponctuel, pr
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');
-  await a.click('#sheet [data-act=sPublishDo][data-scope=common]'); await A.waitForSelector('#toast.show');
+  await a.click('#sheet [data-act=sPublishDo][data-scope=common]'); await A.waitForSelector('#toast.show:has-text("Publiée dans la bibliothèque commune")');
   const list = (await a.api('GET', '/api/shared?scope=common')).data.items; assert.equal(list.length, 1); assert.ok(list[0].level.level);
 });
 
@@ -868,8 +932,9 @@ await step('l’admin voit le signalement (texte échappé, auteur) et le marque
   await c.click('[data-act=setSub][data-id=bugs]');
   await C.waitForSelector('text=Le bouton ne répond pas');
   assert.equal(await c.count('.card script'), 0); assert.match(await c.text('main'), /par Bob/);
-  await C.locator('[data-act=bugStatus]').first().click(); await C.waitForTimeout(300);
-  const r = (await c.api('GET', '/api/admin/bugs')).data.reports; assert.equal(r[0].status, 'done');
+  const done = C.locator('[data-act=bugStatus][data-v="done"]').first(), id = await done.getAttribute('data-id');
+  assert.match(await done.innerText(), /traité/); await done.click();
+  await poll(async () => (await c.api('GET', '/api/admin/bugs')).data.reports.find((report) => report.id === id)?.status === 'done', 12000, 'signalement marqué traité sur le serveur');
 });
 await step('l’admin voit la liste de tous les comptes (sans leurs données privées)', async () => {
   await c.tab('settings'); await c.sub('setSub', 'admin'); await c.click('[data-act=setSub][data-id=users]'); await C.waitForSelector('.ulist .urow');
@@ -888,9 +953,34 @@ await step('Studio : brouillon invisible, vérifications, publication confirmée
   assert.ok((await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'publié pour tous');
   await c.click('[data-act=studioRollback]'); await c.confirm(); await C.waitForSelector('main .tag:has-text("Annulé")');
   assert.ok(!(await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'retour arrière');
-  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=audit]'); await C.waitForSelector('text=Lot publié');
+  let releaseStudio; const studioGate = new Promise((resolve) => { releaseStudio = resolve; });
+  const studioListURL = (url) => url.pathname === '/api/admin/studio';
+  const delayedStudio = async (route) => { await studioGate; await route.continue(); };
+  await C.route(studioListURL, delayedStudio, { times: 1 });
+  try {
+    await c.click('.subhead [data-act=setSub]'); await C.waitForSelector('#studio-tools > summary');
+    if (!(await C.locator('#studio-tools').evaluate((el) => el.open))) await c.click('#studio-tools > summary');
+    const audit = C.locator('#studio-tools [data-act=setSub][data-id=audit]'); await audit.scrollIntoViewIfNeeded();
+    const box = await audit.boundingBox(); assert.ok(box); await C.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await C.mouse.down();
+    releaseStudio(); await C.waitForSelector('#studio-rows :text("Aucun brouillon en attente.")');
+    assert.equal(await C.locator('#studio-tools').evaluate((el) => el.open), true, 'le chargement conserve le menu ouvert et son bouton pressé');
+    await C.mouse.up(); await C.waitForSelector('text=Lot publié');
+  } finally { releaseStudio(); await C.unroute(studioListURL, delayedStudio); }
   assert.match(await c.text('main'), /Retour arrière/); assert.ok(!(await c.text('main')).includes('secret-admin-de-test'));
-  await c.click('.subhead [data-act=setSub]'); await c.click('[data-act=setSub][data-id=lab]'); await C.waitForSelector('[data-act=labEx]');
+  let releaseBugs; const bugsGate = new Promise((resolve) => { releaseBugs = resolve; });
+  const bugListURL = (url) => url.pathname === '/api/admin/bugs';
+  const delayedBugs = async (route) => { await bugsGate; await route.continue(); };
+  await C.evaluate(async () => { window.__priorAdminBugs = (await import('/state.js')).S.admin.bugs; });
+  await C.route(bugListURL, delayedBugs, { times: 1 });
+  try {
+    await c.click('.subhead [data-act=setSub]'); await C.waitForSelector('#admin-advanced > summary');
+    if (!(await C.locator('#admin-advanced').evaluate((el) => el.open))) await c.click('#admin-advanced > summary');
+    const lab = C.locator('#admin-advanced [data-act=setSub][data-id=lab]'); await lab.scrollIntoViewIfNeeded();
+    const box = await lab.boundingBox(); assert.ok(box); await C.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await C.mouse.down(); releaseBugs();
+    await C.waitForFunction(async () => (await import('/state.js')).S.admin.bugs !== window.__priorAdminBugs);
+    assert.equal(await C.locator('#admin-advanced').evaluate((el) => el.open), true, 'les nouveaux compteurs ne referment pas les outils avancés');
+    await C.mouse.up(); await C.waitForSelector('[data-act=labEx]');
+  } finally { releaseBugs(); await C.unroute(bugListURL, delayedBugs); }
   await c.click('[data-act=labEx][data-i="1"]'); await C.waitForSelector('main summary:has-text("échauffement")');
   assert.equal(await (await b.api('GET', '/api/admin/studio')).status, 403, 'un membre n’a pas accès au Studio');
   // V2 : santé des données, maintenance et propositions de code (lecture ; rien n'est appliqué).
@@ -985,11 +1075,16 @@ await step('idée avec l’endroit : B vise un élément, l’admin y est emmen�
 });
 await step('Admin organisé en 3 groupes ; assistant du site : on lui écrit, il répond, rien n’est publié sans relecture', async () => {
   cur = C; await c.tab('settings'); await c.sub('setSub', 'admin');
-  const t = await c.text('#main'); assert.match(t, /Modifier l’app sans code[\s\S]*Les membres[\s\S]*Surveiller et comprendre/i);
+  for (const title of ['Modifier le site', 'Gérer les membres', 'Suivre le site']) assert.ok(await C.getByRole('region', { name: title, exact: true }).isVisible(), title);
   await c.click('[data-act=setSub][data-id=assistant]'); await C.waitForSelector('form[data-submit=asSend]');
   assert.match(await c.text('#main'), /tu relis puis tu publies/);
+  const published = (await b.api('GET', '/api/global')).data.items;
   await C.fill('textarea[name=t]', 'Ajoute une question sur les doigts'); await c.click('form[data-submit=asSend] button.pri');
-  await C.waitForSelector('.msg.assistant:has-text("Ajoute une question sur les doigts")', { timeout: 15000 });
+  await C.waitForSelector('.msg.assistant:not(.typing) [data-act=studioOpen]', { timeout: 15000 });
+  assert.match(await c.text('.msg.assistant'), /question sur les doigts[\s\S]*brouillon[\s\S]*Relis/);
+  assert.match(await c.text('.msg.assistant'), /Ajouté au brouillon : 1 modification/);
+  assert.equal(await c.count('.msg.assistant summary:text-is("Sources consultées")'), 1);
+  assert.deepEqual((await b.api('GET', '/api/global')).data.items, published, 'la proposition IA reste privée dans le brouillon avant publication');
   assert.equal(await c.count('.msg.user'), 1);
 });
 await step('admin sans code : réécrire un texte et envoyer une annonce ; l’autre compte les voit ; tout s’annule', async () => {
@@ -1109,8 +1204,9 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   await G.waitForSelector('#updbar [data-act=updNow]', { timeout: 20000 });
   await Promise.all([G.waitForNavigation({ timeout: 20000 }), g.click('#updbar [data-act=updNow]')]);
   await G.waitForSelector('nav.tabs');
-  // La page peut se recharger une seconde fois (activation de la nouvelle version) : une lecture interrompue compte comme « pas encore ».
-  await poll(async () => (await G.evaluate(async () => (await caches.keys()).join(',')).catch(() => '')).includes('deploy-e2e-2'), 15000, 'nouveau cache installé');
+  // Un cache est créé dès install ; attendre le BUILD du contrôleur réel, y compris un second rechargement.
+  await poll(async () => (await controllerBuild(G).catch(() => '')) === 'deploy-e2e-2', 20000, 'nouveau contrôleur activé');
+  await poll(async () => G.evaluate(async () => { const reg = await navigator.serviceWorker.getRegistration(); return reg?.active?.state === 'activated' && !reg.installing && !reg.waiting && !sessionStorage.getItem('sea:user-update'); }).catch(() => false), 10000, 'activation terminée sans nouvelle attente');
   await G.waitForSelector('#updbar.fresh [data-act=updWhat]', { timeout: 20000 }); // « L'app a été mise à jour »
   await g.click('#updbar [data-act=updWhat]'); await G.waitForSelector('#sheet.open .newslist li');
   assert.match(await g.text('#sheet .newslist'), /Visite guidée plus immersive[\s\S]*flèches/);
