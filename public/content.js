@@ -17,7 +17,7 @@ import { sessionMinutes } from './engine.js';
 
 /* ───────── Chargement et application des couches ───────── */
 const cached = ls.get('sea:global', null);
-let GL = { ver: cached?.ver || 0, items: Array.isArray(cached?.items) ? cached.items : [] }, sig = '';
+let GL = { ver: cached?.ver || 0, items: Array.isArray(cached?.items) ? cached.items : [] }, sig = '', globalRequest = 0;
 const safe = (j) => { try { const x = JSON.parse(j || '[]'); return Array.isArray(x) ? x : []; } catch { return []; } };
 function mine() {
   if (!S.user) return { ex: [], cat: [] };
@@ -31,8 +31,11 @@ export function syncContent() {
   setOverrides(textOverrides());
 }
 export async function loadGlobal({ renderChange = true } = {}) {
+  const request = ++globalRequest;
   try {
     const r = await api('GET', '/api/global', undefined, { guestOk: true, quiet401: true, timeout: 8000 });
+    // Une réponse de publication retardée ne doit pas réappliquer le contenu après un retour arrière.
+    if (request !== globalRequest) return;
     if (r.ver !== GL.ver || r.items.length !== GL.items.length) { GL = { ver: r.ver, items: r.items }; ls.set('sea:global', GL); sig = ''; if (renderChange) render(); else syncContent(); }
   } catch { /* hors ligne : la dernière version connue reste appliquée */ }
 }

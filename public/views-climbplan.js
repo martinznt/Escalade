@@ -196,6 +196,8 @@ function vHow() {
     <p class="tiny muted">${LEVELS[c.level || 'modere'][1]}</p>`;
 }
 ACT.cpLevel = (el) => { const c = CP(); c.level = el.dataset.id; c.partsTouched = false; keep(); render(); };
+// Une synchronisation peut refaire l'écran : garder le choix d'ouvrir ou de replier ces options.
+ACT.cpControls = (el) => { const panel = el.closest('details'); if (!panel) return; const c = CP(); c.controlsOpen = !panel.open; panel.open = c.controlsOpen; keep(); };
 /* Étape 1 · L'essentiel : sports (un principal + d'autres au choix), lieu de chacun, forme, temps — pré-remplis d'après
  * le profil. « ⚡ Proposer ma séance » construit tout de suite la structure et les exercices ; les étapes suivantes affinent. */
 const noWallSports = (c = CP()) => sportsOf(c).filter((sp) => isClimb(sp) && !availableEquipment(ctx(), effPlace(sp, c)).has('wall'));
@@ -206,7 +208,7 @@ function vBase() {
     ${aimsSummary()}
     ${bad.length ? h`<button class="btn pri big" disabled>⚡ Proposer ma séance</button><p class="tiny warn-t center">Choisis d’abord un lieu avec un mur d’escalade pour ${bad.map((sp) => sportLabel(sp)).join(', ')} (voir « Lieu » plus haut).</p>`
       : h`<button class="btn pri big" data-act="cpQuick">⚡ Proposer ma séance</button><p class="tiny muted center">L’app construit la structure et choisit les exercices pour ${fmtMin(c.minutes)}. Tu pourras tout ajuster ensuite, ou continuer étape par étape pour préciser.</p>`}
-    <details class="card fold" ${c.level && c.level !== 'modere' || c.help && c.help !== 'auto' ? 'open' : ''}><summary><span>🎛️ Plus de contrôle</span></summary>${vHow()}</details>`;
+    <details class="card fold" id="cp-controls" ${(c.controlsOpen ?? !!(c.level && c.level !== 'modere' || c.help && c.help !== 'auto')) ? 'open' : ''}><summary data-act="cpControls"><span>🎛️ Plus de contrôle</span></summary>${vHow()}</details>`;
 }
 const envOptions = (cur, x) => x.envs.map((e) => h`<option value="${e.id}" ${cur === e.id ? 'selected' : ''}>${e.name}</option>`);
 function wallWarn(sp) {

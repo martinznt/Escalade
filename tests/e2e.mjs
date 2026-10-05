@@ -785,7 +785,17 @@ await step('8.28 : « L’essentiel » puis ⚡ Proposer ma séance ; envies →
 await step('V1 : séance structurée (bloc → pause → voie), but ponctuel, propositions expliquées, amélioration appliquée, génération, séance faite, journal', async () => {
   const goalsN = async () => (await a.api('GET', '/api/items?since=0')).data.items.filter((i) => i.c === 'goal' && !i.deleted).length;
   const g0 = await goalsN();
-  await cpFresh('auto'); await cpMore(); await a.click('[data-act=cpLevel][data-id=precis]'); await cpTo(1);
+  await cpFresh('auto'); await cpMore();
+  // La fin d'une vraie synchro refait l'écran : les options ouvertes restent utilisables, même en mode par défaut.
+  const syncCreator = async () => {
+    await A.waitForFunction(async () => !(await import('/state.js')).S.syncing);
+    await A.evaluate(async () => { await (await import('/state.js')).syncAll(); });
+  };
+  await syncCreator(); assert.equal(await A.locator('#cp-controls').evaluate((el) => el.open), true, 'options du créateur ouvertes conservées après synchronisation');
+  await a.click('[data-act=cpHelp][data-id=auto]'); await a.click('[data-act=cpLevel][data-id=precis]');
+  await a.click('#cp-controls > summary'); await syncCreator();
+  assert.equal(await A.locator('#cp-controls').evaluate((el) => el.open), false, 'options repliées conservées même avec un niveau précis');
+  await cpMore(); await cpTo(1);
   await a.click('[data-act=cpSport][data-id=climbing_boulder]'); await a.click('[data-act=cpMin][data-id="45"]');
   await cpTo(2); await a.click('[data-act=cpAim][data-id=none]');
   await A.fill('textarea[data-input=cpWords]', 'Préparer puis performer en voie'); await A.press('textarea[data-input=cpWords]', 'Tab');
@@ -949,23 +959,63 @@ await step('Studio : brouillon invisible, vérifications, publication confirmée
   assert.match(await c.text('main'), /Question E2E/); assert.equal(await c.count('main b:text-is("E2E")'), 0, 'texte échappé');
   assert.ok(!(await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'brouillon invisible pour les membres');
   await c.click('[data-act=studioCheck]'); await C.waitForSelector('.checks li');
-  await c.click('[data-act=studioPublish]'); await c.confirm(); await C.waitForSelector('[data-act=studioRollback]');
-  assert.ok((await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'publié pour tous');
-  await c.click('[data-act=studioRollback]'); await c.confirm(); await C.waitForSelector('main .tag:has-text("Annulé")');
-  assert.ok(!(await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'retour arrière');
+  // Retenir les réponses réelles après lecture, pour garder leur état publication / rollback sous latence.
+  let releasePublishedGlobal, releaseRolledBackGlobal;
+  const publishedGlobalGate = new Promise((resolve) => { releasePublishedGlobal = resolve; });
+  const rolledBackGlobalGate = new Promise((resolve) => { releaseRolledBackGlobal = resolve; });
+  const globalSnapshots = [];
+  const studioGlobalURL = (url) => url.pathname === '/api/global';
+  const delayedStudioGlobal = async (route) => {
+    const response = await route.fetch(), body = await response.body(), data = JSON.parse(body.toString());
+    const published = data.items.some((item) => item.data?.q === 'Question E2E ?');
+    globalSnapshots.push({ published, ver: data.ver });
+    await (published ? publishedGlobalGate : rolledBackGlobalGate);
+    await route.fulfill({ response, body });
+  };
+  await C.route(studioGlobalURL, delayedStudioGlobal);
   let releaseStudio; const studioGate = new Promise((resolve) => { releaseStudio = resolve; });
   const studioListURL = (url) => url.pathname === '/api/admin/studio';
   const delayedStudio = async (route) => { await studioGate; await route.continue(); };
-  await C.route(studioListURL, delayedStudio, { times: 1 });
   try {
+    await c.click('[data-act=studioPublish]'); await c.confirm(); await C.waitForSelector('[data-act=studioRollback]');
+    await poll(() => globalSnapshots.some((snapshot) => snapshot.published), 12000, 'réponse globale publiée capturée avant retour arrière');
+    assert.ok((await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'publié pour tous');
+    await c.click('[data-act=studioRollback]'); await c.confirm(); await C.waitForSelector('main .tag:has-text("Annulé")');
+    await poll(() => globalSnapshots.some((snapshot) => !snapshot.published), 12000, 'réponse globale annulée capturée');
+    assert.ok(!(await b.api('GET', '/api/global')).data.items.some((x) => x.data?.q === 'Question E2E ?'), 'retour arrière');
+    await C.route(studioListURL, delayedStudio, { times: 1 });
     await c.click('.subhead [data-act=setSub]'); await C.waitForSelector('#studio-tools > summary');
     if (!(await C.locator('#studio-tools').evaluate((el) => el.open))) await c.click('#studio-tools > summary');
     const audit = C.locator('#studio-tools [data-act=setSub][data-id=audit]'); await audit.scrollIntoViewIfNeeded();
+    const pressedAudit = await audit.elementHandle();
     const box = await audit.boundingBox(); assert.ok(box); await C.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await C.mouse.down();
+    const rollbackDelivery = C.waitForResponse(async (r) => new URL(r.url()).pathname === '/api/global' && !(await r.json()).items.some((item) => item.data?.q === 'Question E2E ?'));
+    releaseRolledBackGlobal();
+    await (await rollbackDelivery).finished();
+    await C.waitForFunction((ver) => (JSON.parse(localStorage.getItem('sea:global'))?.ver ?? 0) === ver, globalSnapshots.find((snapshot) => !snapshot.published).ver);
+    assert.equal(await pressedAudit.evaluate((el) => el.isConnected && el === document.querySelector('#studio-tools [data-id=audit]')), true, 'la réponse globale du retour arrière conserve le bouton pressé');
+    const publicationDelivery = C.waitForResponse(async (r) => new URL(r.url()).pathname === '/api/global' && (await r.json()).items.some((item) => item.data?.q === 'Question E2E ?'));
+    releasePublishedGlobal();
+    await (await publicationDelivery).finished();
+    // Laisser le navigateur terminer la lecture de la réponse ancienne avant de vérifier cache et couches.
+    await C.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    const afterLatePublication = await C.evaluate(async () => ({
+      cache: JSON.parse(localStorage.getItem('sea:global')) || { ver: 0, items: [] },
+      globalItems: (await import('/global.js')).globalItems(),
+      faq: (await import('/help.js')).FAQ,
+    }));
+    assert.equal(afterLatePublication.cache.ver, globalSnapshots.find((snapshot) => !snapshot.published).ver, 'la réponse ancienne ne remplace pas la version annulée');
+    assert.ok(!afterLatePublication.cache.items.some((item) => item.data?.q === 'Question E2E ?'), 'la publication annulée reste absente du cache');
+    assert.ok(!afterLatePublication.globalItems.some((item) => item.data?.q === 'Question E2E ?'), 'la publication annulée reste absente de la couche globale');
+    assert.ok(!afterLatePublication.faq.some((item) => item[0] === 'Question E2E ?'), 'la publication annulée reste absente des questions appliquées');
+    assert.equal(await pressedAudit.evaluate((el) => el.isConnected && el === document.querySelector('#studio-tools [data-id=audit]')), true, 'la réponse globale ancienne de publication conserve le bouton pressé');
     releaseStudio(); await C.waitForSelector('#studio-rows :text("Aucun brouillon en attente.")');
     assert.equal(await C.locator('#studio-tools').evaluate((el) => el.open), true, 'le chargement conserve le menu ouvert et son bouton pressé');
-    await C.mouse.up(); await C.waitForSelector('text=Lot publié');
-  } finally { releaseStudio(); await C.unroute(studioListURL, delayedStudio); }
+    await C.mouse.up(); await C.waitForSelector('main :text("Lot publié")');
+  } finally {
+    releaseStudio(); releasePublishedGlobal(); releaseRolledBackGlobal();
+    await C.unroute(studioListURL, delayedStudio); await C.unroute(studioGlobalURL, delayedStudioGlobal);
+  }
   assert.match(await c.text('main'), /Retour arrière/); assert.ok(!(await c.text('main')).includes('secret-admin-de-test'));
   let releaseBugs; const bugsGate = new Promise((resolve) => { releaseBugs = resolve; });
   const bugListURL = (url) => url.pathname === '/api/admin/bugs';

@@ -20,11 +20,11 @@ const env=makeEnv({GEMINI_API_KEY:'mock-gemini-key-only-for-isolated-tests',AI:{
   return qwen(/raccourcis/i.test(last)?{status:'ok',sources:['draft:faq/n-ui-faq'],reply:'Réponse FAQ raccourcie.',changes:[{kind:'faq',id:'n-ui-faq',data:{a:'Depuis le calendrier.'}}]}:{status:'ok',sources:['app/map','request'],reply:'FAQ-A-PRIVEE préparée.',changes:[{kind:'faq',id:'n-ui-faq',data:{q:'Comment noter ma séance ?',a:'Depuis le calendrier, choisis ton sport et ton ressenti.'}}]});
 }}});
 const accounts={};
-for(const [name,roles] of [['AssistantA',['super']],['AssistantB',['content','intelligence']],['AssistantC',['content']]]){
+for(const [name,roles] of [['AssistantA',['super']],['AssistantB',['content','intelligence']],['AssistantC',['content']],['AssistantD',['intelligence']]]){
   const client=new Client(env);await client.register(name);await client.post('/api/admin/activate',{password:'secret-admin-de-test'});
   await client.post('/api/items',{changes:[{c:'config',id:'main',u:Date.now(),d:{setupDone:true,tourDone:true,asked:['acts','place','minutes','perWeek','goal','avoid']}}]});accounts[name]={client,id:(await client.get('/api/auth/me')).data.user.id,roles};
 }
-for(const name of ['AssistantB','AssistantC'])await accounts.AssistantA.client.post(`/api/admin/users/${accounts[name].id}/roles`,{roles:accounts[name].roles});
+for(const name of ['AssistantB','AssistantC','AssistantD'])await accounts.AssistantA.client.post(`/api/admin/users/${accounts[name].id}/roles`,{roles:accounts[name].roles});
 await accounts.AssistantA.client.post('/api/admin/ai',{model:'@cf/qwen/qwen3-30b-a3b-fp8',budget:8000});
 await accounts.AssistantA.client.post('/api/items',{changes:[{c:'env',id:'gemini-profile-place',u:Date.now(),d:{name:'LIEU-PROFIL-GEMINI',type:'maison',equipment:['bar'],isDefault:true}}]});
 const srv=await startServer(env),browser=await chromium.launch(process.env.PW_EXEC?{executablePath:process.env.PW_EXEC}:{}),errors=[];
@@ -74,6 +74,16 @@ try{
   });
   await step('rôle Contenu : état consultable, réglage et test réservés au rôle Intelligence',async()=>{
     await logout();await login('AssistantC');await assistant();await panel();assert.equal(await p.locator('[data-submit=asAIConfig]').count(),0);assert.equal(await p.locator('[data-act=asAITest]').count(),0);assert.match(await p.locator('main').innerText(),/Le rôle Intelligence permet/);assert.equal((await api('POST','/api/admin/ai/test',{})).status,403);assert.equal((await api('POST','/api/admin/ai',{model:'@cf/qwen/qwen3-30b-a3b-fp8',budget:1000})).status,403);
+  });
+  await step('rôle Intelligence seul : réglages accessibles depuis le menu, opérations Contenu interdites',async()=>{
+    await logout();await login('AssistantD');await go('#/settings/admin','[data-act=setSub][data-id=assistant]');
+    assert.equal(await p.locator('[data-act=setSub][data-id=content],[data-act=setSub][data-id=studio]').count(),0);await p.click('[data-act=setSub][data-id=assistant]');await panel();
+    assert.equal(await p.locator('[data-submit=asSend],[data-act=asCodeNow],[data-act=studioOpen],#aslog').count(),0);assert.match(await p.locator('main').innerText(),/Le rôle Contenu est nécessaire/);
+    const form=p.locator('[data-submit=asAIConfig]');assert.ok(await form.isVisible());await p.getByText('Style des réponses',{exact:true}).click();await form.locator('[name=answerStyle]').selectOption('direct');await form.locator('[name=budget]').fill('6100');
+    const savedResponse=p.waitForResponse(r=>new URL(r.url()).pathname==='/api/admin/ai'&&r.request().method()==='POST');await form.locator('button').click();assert.equal((await savedResponse).status(),200);await p.waitForFunction(async()=>((await import('/state.js')).S.admin.ai?.budget)===6100);
+    await p.click('[data-act=asAITest]');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('IA disponible, vérification réussie.'));await p.reload();await panel();assert.equal(await p.locator('[data-submit=asAIConfig] [name=budget]').inputValue(),'6100');assert.equal((await api('GET','/api/admin/ai')).data.preferences.answerStyle,'direct');
+    assert.equal((await api('POST','/api/admin/assistant',{messages:[{role:'user',content:'Ajoute une question fréquente.'}]})).status,403);assert.equal((await api('POST','/api/admin/studio',{title:'Modification interdite',items:[]})).status,403);assert.equal((await api('POST','/api/admin/assistant/code',{text:'Modifie le titre.'})).status,403);
+    await go('#/settings/content','main');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('Rôle « Contenu » nécessaire'));assert.equal(await p.locator('[data-submit=asSend],[data-act=contentNew],[data-act=studioNew]').count(),0);
   });
   await step('Gemini : modèle choisi, plafond en demandes et instructions de connexion sans champ clé',async()=>{
     await logout();await login('AssistantA');await assistant();await panel();await p.selectOption('[data-submit=asAIConfig] select[name=model]','gemini-3.8-flash');const budget=p.locator('[data-submit=asAIConfig] input[name=budget]');assert.equal(await budget.getAttribute('min'),'1');assert.equal(await budget.getAttribute('max'),'500');assert.equal(await budget.getAttribute('step'),'1');assert.equal(await budget.inputValue(),'40');await p.click('[data-submit=asAIConfig] button');await p.waitForFunction(async()=>((await import('/state.js')).S.admin.ai?.provider)==='gemini');await panel();assert.match(await p.locator('main').innerText(),/demandes/);assert.equal(await p.locator('input[name=apiKey],input[name=key],input[name=GEMINI_API_KEY]').count(),0);

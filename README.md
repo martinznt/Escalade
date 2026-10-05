@@ -1,10 +1,10 @@
-# Séances entraînement — v8.32.2
+# Séances entraînement — v8.32.3
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
 activité personnalisée. Chaque recommandation est expliquée (faits, estimations, données manquantes) ; rien n'est inventé.
 
-Les changements et vérifications de la version 8.32.2 sont dans [DELIVERY_8_32_2.md](DELIVERY_8_32_2.md).
+L’accès aux réglages IA par rôle est corrigé en [8.32.3](DELIVERY_8_32_3.md). Les changements et vérifications de la version 8.32.2 sont dans [DELIVERY_8_32_2.md](DELIVERY_8_32_2.md).
 La simplification des paramètres et des visites est décrite dans [DELIVERY_8_32_1.md](DELIVERY_8_32_1.md).
 Le bilan de la refonte et la couverture du cahier des charges restent dans [DELIVERY_8_32.md](DELIVERY_8_32.md). `FINAL_AUDIT.md` conserve l’audit historique de la version 8.30.
 
@@ -75,7 +75,7 @@ npm run test:e2e   # navigateur réel : parcours existants avancés puis interfa
 
 Les tests Worker utilisent une base D1 simulée par `node:sqlite` (Node 22+). Le test E2E démarre un serveur local
 (`tests/server.mjs`) qui exécute le vrai `worker.js` et sert `public/` comme le ferait Cloudflare.
-Le parcours `tests/account-local-isolation-e2e.mjs` contrôle les changements de compte, les réponses tardives, la conservation des intentions hors ligne et le transfert explicite depuis le mode invité. `tests/update-activation-e2e.mjs` contrôle l’installation ralentie, le contrôleur réellement actif et les visites facultatives. Dernière validation locale de la version 8.32.2 : 81 suites / 824 cas de logique et 10 suites / 149 étapes navigateur réussis. Les déploiements sont contrôlés séparément sur GitHub pour le commit publié.
+Le parcours `tests/account-local-isolation-e2e.mjs` contrôle les changements de compte, les réponses tardives, la conservation des intentions hors ligne et le transfert explicite depuis le mode invité. `tests/update-activation-e2e.mjs` contrôle l’installation ralentie, le contrôleur réellement actif et les visites facultatives. Dernière validation locale de la version 8.32.3 : 81 suites / 824 cas de logique et 10 suites / 150 étapes navigateur réussis. Les déploiements sont contrôlés séparément sur GitHub pour le commit publié.
 
 Si le téléchargement Playwright est bloqué et que Chromium est déjà installé, utiliser :
 

@@ -93,16 +93,17 @@ async function studioPost(action, body = {}) { return api('POST', `/api/admin/st
 ACT.studioCheck = async () => { try { const r = await studioPost('check'); toast(r.passed ? 'Vérifications passées ✓' : 'Des vérifications échouent', 3000, r.passed ? '' : 'bad'); } catch (e) { toast(e.message, 4000, 'bad'); } loadSet(curId()); };
 ACT.studioPublish = async () => {
   if (!(await ask('Publier ce lot pour tout le monde ?', { ok: 'Publier', detail: 'Les vérifications sont refaites avant. Tu pourras revenir en arrière.' }))) return;
-  try { await studioPost('publish', { confirm: true }); toast('Publié pour tout le monde'); loadGlobal(); } catch (e) { toast(e.message, 5000, 'bad'); }
+  // loadSet actualise ce détail ; une réponse globale tardive ne doit pas remplacer un bouton de navigation pressé.
+  try { await studioPost('publish', { confirm: true }); toast('Publié pour tout le monde'); loadGlobal({ renderChange: false }); } catch (e) { toast(e.message, 5000, 'bad'); }
   ST().sets = null; loadSet(curId());
 };
 ACT.studioDiscard = async () => { if (!(await ask('Abandonner ce brouillon ?', { ok: 'Abandonner', danger: true }))) return; try { await studioPost('discard'); toast('Brouillon abandonné'); } catch (e) { toast(e.message, 4000, 'bad'); } ST().sets = null; loadSet(curId()); };
 ACT.studioRollback = async () => {
   if (!(await ask('Revenir à l’état d’avant ce lot ?', { ok: 'Retour arrière', danger: true, detail: 'Chaque élément reprend sa valeur d’avant la publication, pour tout le monde.' }))) return;
-  try { await studioPost('rollback', { confirm: true }); toast('Retour arrière fait'); loadGlobal(); }
+  try { await studioPost('rollback', { confirm: true }); toast('Retour arrière fait'); loadGlobal({ renderChange: false }); }
   catch (e) {
     if (e.status === 409 && e.data?.conflicts?.length && await ask('Modifié depuis la publication', { ok: 'Forcer le retour arrière', danger: true, detail: `${e.data.conflicts.join(', ')} a changé depuis. Forcer écrase ces changements plus récents (ils restent dans les versions et le journal).` })) {
-      try { await studioPost('rollback', { confirm: true, force: true }); toast('Retour arrière forcé'); loadGlobal(); } catch (e2) { toast(e2.message, 4000, 'bad'); }
+      try { await studioPost('rollback', { confirm: true, force: true }); toast('Retour arrière forcé'); loadGlobal({ renderChange: false }); } catch (e2) { toast(e2.message, 4000, 'bad'); }
     } else if (e.status !== 409) toast(e.message, 4000, 'bad');
   }
   ST().sets = null; loadSet(curId());

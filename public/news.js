@@ -187,6 +187,9 @@ export const NEWS = [
     ['profile','home','.topicons','Un coach avec ton contexte','Choisis de joindre le résumé de ton profil au coach. Ses propositions peuvent préparer une séance ou ouvrir le bon écran. L’administration peut relier Gemini.'],
     ['settings','main','.topicons','Organiser les pages','Organiser fonctionne depuis les sous-pages. Regarde l’aperçu, puis enregistre ou quitte. Tu retrouves la page que tu consultais.'],
   ] },
+  { v:'8.32.3', date:'2026-10-05', title:'Des réglages et des actions plus fiables', why:'Les réglages IA sont accessibles au rôle Intelligence. Les options de séance et les menus d’administration restent ouverts pendant la synchronisation ; un contenu annulé reste annulé.', steps:[
+    ['settings','main','','Les réponses de l’IA','Le ton et la longueur des réponses peuvent être réglés par l’administration. Les demandes de précision, les sources vérifiées et la validation des modifications restent obligatoires.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

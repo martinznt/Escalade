@@ -65,7 +65,7 @@ const adminOnly = (fn, role) => () => (!S.user?.isAdmin ? h`<p class="small mute
 export function vSettings() {
   const subs = S.user.guest ? SUBS.filter(([k]) => k !== 'sync' && !ADMIN_PARENT[k] && k !== 'admin') : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant, 'content'), content: adminOnly(vAdminContent, 'content'), look: adminOnly(vAdminLook, 'content'), changes: adminOnly(vAdminChanges, 'content'), members: adminOnly(vAdminProposals, 'content'), bugs: adminOnly(vAdminBugs, 'technical'), users: adminOnly(vAdminUsers, 'users'), push: adminOnly(vAdminPush, 'technical'), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant), content: adminOnly(vAdminContent, 'content'), look: adminOnly(vAdminLook, 'content'), changes: adminOnly(vAdminChanges, 'content'), members: adminOnly(vAdminProposals, 'content'), bugs: adminOnly(vAdminBugs, 'technical'), users: adminOnly(vAdminUsers, 'users'), push: adminOnly(vAdminPush, 'technical'), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   if (sub === 'main') return h`<h1>Paramètres</h1><p class="tiny muted pagehelp">Choisis ton interface, puis le réglage à modifier.</p>${views.main()}`;
   if (ADMIN_PARENT[sub]) { const [pk, pl] = ADMIN_PARENT[sub]; return h`${subHead('setSub', pk, pl, ADMIN_TITLE[sub] || sub)}${views[sub]()}`; }
   return h`${subHead('setSub', 'main', 'Paramètres', subs.find(([k]) => k === sub)[1])}${views[sub]()}`;
@@ -372,7 +372,7 @@ function vAdmin() {
   const row = (role, r) => (canRole(role) ? [r] : []);
   const section = (title, description, rows) => rows.length ? h`<section class="card stack" aria-label="${title}"><h3>${title}</h3><p class="small muted">${description}</p>${menuList(rows)}</section>` : '';
   const edit = [
-      ...row('content', ['setSub', 'assistant', '💬', 'Assistant du site', 'Décris la modification ; relis le brouillon proposé avant de publier']),
+      ...(canRole('content') || canRole('intelligence') ? [['setSub', 'assistant', '💬', 'Assistant du site', canRole('content') ? 'Décris la modification ; relis le brouillon proposé avant de publier' : 'Modèle, style des réponses et limite quotidienne de l’IA']] : []),
       ...row('content', ['setSub', 'content', '🧩', 'Contenu de l’app', 'Exercices, séances prêtes, intentions par sport, aide, cotations']),
       ...row('content', ['setSub', 'look', '✏️', 'Textes et apparence', 'Textes, annonces et organisation des écrans pour tous les membres']),
       ...row('content', ['setSub', 'studio', '📝', 'Brouillons et publication', 'Vérifier et publier une modification, ou annuler une publication']),

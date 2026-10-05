@@ -11,6 +11,7 @@ const env=makeEnv({CF_VERSION_METADATA:{id:'activation-base'}}),client=new Clien
 await client.register('ActivationUpdate');
 await client.post('/api/items',{changes:[{c:'config',id:'main',u:Date.now(),d:{setupDone:true,tourDone:true,asked:['acts','place','minutes','perWeek','goal','avoid']}}]});
 const srv=await startServer(env);
+const appVersion=fs.readFileSync(new URL('../public/state.js',import.meta.url),'utf8').match(/export const APP_VERSION = '([^']+)'/)[1];
 let releaseInstall,gateRequests=0;
 srv.fail=(request)=>new URL(request.url).pathname==='/update-install-gate'?new Promise(resolve=>{gateRequests++;releaseInstall=()=>resolve(new Response('installation allowed'));}):null;
 srv.after=async(request,response)=>{
@@ -20,7 +21,7 @@ srv.after=async(request,response)=>{
 };
 const browser=await chromium.launch(process.env.PW_EXEC?{executablePath:process.env.PW_EXEC}:{});
 const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'allow'}),page=await context.newPage(),errors=[];
-await context.addInitScript(()=>{if(!localStorage.getItem('sea:news-toured'))localStorage.setItem('sea:news-toured',JSON.stringify('8.32.2'));localStorage.setItem('sea:q-snooze',JSON.stringify(Object.fromEntries(['acts','place','minutes','perWeek','goal','avoid'].map(key=>[key,9e15]))));});
+await context.addInitScript(version=>{if(!localStorage.getItem('sea:news-toured'))localStorage.setItem('sea:news-toured',JSON.stringify(version));localStorage.setItem('sea:q-snooze',JSON.stringify(Object.fromEntries(['acts','place','minutes','perWeek','goal','avoid'].map(key=>[key,9e15]))));},appVersion);
 page.on('pageerror',error=>errors.push(error.message));
 const steps=[];
 const step=async(name,fn)=>{await fn();steps.push(name);console.log('  ✓',name);};

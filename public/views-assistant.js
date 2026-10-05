@@ -6,6 +6,7 @@
 // La conversation reste sur cet appareil.
 import { h, toast, chip, tag, ask } from './ui.js';
 import { S, ACT, SUBMIT, INPUT, CHG, api, ls, render, go } from './state.js';
+import { canRole } from './views-studio.js';
 
 const key = () => 'sea:adminchat:' + (S.user?.id || 'guest');
 const KIND_L = { exercise: '💪 Exercice', intent: '🧭 Intention', faq: '❓ Question fréquente', announce: '📣 Annonce', hint: '💡 Raccourci', text: '✏️ Texte', style: '🎨 Style' };
@@ -54,7 +55,7 @@ function geminiGuide() {
 }
 function aiPanel() {
   if (S.admin.ai === undefined) { loadAIStatus(); }
-  const x = S.admin.ai, edit = (S.user?.roles || ['super']).some((r) => r === 'super' || r === 'intelligence');
+  const x = S.admin.ai, edit = canRole('intelligence');
   const model = x?.models.find((m) => m.id === x.model), spec = budgetSpec(model), unit = x?.unit || spec.unit;
   const prefs = { answerStyle: 'direct', detail: 'standard', reasoning: 'low', creativity: 0.1, ...x?.preferences };
   const provider = x?.provider || model?.provider || (String(x?.model || '').startsWith('gemini-') ? 'gemini' : 'cloudflare');
@@ -113,7 +114,9 @@ function bubble(m, i) {
     ${actionable && r.code ? codeCard(r.code, i) : ''}${evidence(r)}</div>`;
 }
 export function vAssistant() {
+  if (!canRole('content') && !canRole('intelligence')) return h`<div class="card"><p class="small">Rôle « Contenu » ou « Intelligence » nécessaire pour cette rubrique.</p></div>`;
   const c = C(), busy = S.admin.chatBusy;
+  if (!canRole('content')) return h`<div class="card stack"><p class="small">Choisis le modèle, le style des réponses et la limite d’utilisation de l’IA pour le site.</p>${aiPanel()}<p class="tiny muted">Le rôle Contenu est nécessaire pour préparer des modifications du site.</p></div>`;
   return h`<div class="card stack"><p class="small">Écris ce que tu veux changer, comme dans une conversation. L’assistant prépare les modifications ; <b>tu relis puis tu publies</b> dans le Studio.</p>${aiPanel()}
       <details class="how mini"><summary>Ce qu’il sait faire, et ce qu’il ne fait pas</summary>
         <p class="tiny"><b>Il peut</b> : créer ou modifier des exercices, des intentions de séance, des questions fréquentes, des annonces, des raccourcis, des styles, réécrire un texte de l’app (donne-lui le texte exact).</p>
