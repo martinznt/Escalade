@@ -1,3 +1,4 @@
+import { isExternal, externalLabel, externalOf } from './external.js';
 import { advancedUI } from './views-experience.js';
 // views-progress.js — Progrès : comparaisons personnelles, résumés, régularité, charge, historique, records,
 // timeline, journal, analyses descriptives et mode Lab. Toujours par rapport à soi-même, jamais aux autres.
@@ -89,10 +90,11 @@ function vHistory() {
 }
 ACT.histOpen = (el) => go('progress', 'history', el.dataset.id);
 const FEEL_E = Object.fromEntries(FEELS.map(([v, e]) => [v, e]));
-ACT.histRedo = async(el) => { const e = S.history.find((x) => x.id === el.dataset.id); if (!e) return; if(e.data?.quickLog && !e.data.exercises?.length){const {openWizard}=await import('./views-climbplan.js');openWizard({sport:e.data.activity,minutes:e.durationSeconds ? e.durationSeconds/60 : S.settings.defaultMinutes,envId:e.data.context?.env || ''});return;}startPlayer(sessionFromHistory(e, e.sessionId ? getSeance(e.sessionId) : null)); };
+ACT.histRedo = async(el) => { const e = S.history.find((x) => x.id === el.dataset.id); if (!e) return; if(isExternal(e)) return ACT.cpResume(); if(e.data?.quickLog && !e.data.exercises?.length){const {openWizard}=await import('./views-climbplan.js');openWizard({sport:e.data.activity,minutes:e.durationSeconds ? e.durationSeconds/60 : S.settings.defaultMinutes,envId:e.data.context?.env || ''});return;}startPlayer(sessionFromHistory(e, e.sessionId ? getSeance(e.sessionId) : null)); };
 function vEntry(e) {
   const q = e.data?.questionnaire || {}, d = e.data || {};
   return h`<h2 style="margin:0">${e.sessionName}</h2>
+    ${isExternal(e) ? h`<p class="small muted">${externalLabel(e)} · Import privé, exclu des demandes envoyées à l’IA.${externalOf(e).provider === 'strava' && externalOf(e).channel === 'api' && /^\d+$/.test(externalOf(e).id) ? h` <a href="https://www.strava.com/activities/${externalOf(e).id}" target="_blank" rel="noopener noreferrer">Voir sur Strava</a>` : ''}</p>` : ''}
     <div class="card"><p class="small">${fmtDateTime(e.startedAt)} · ${d.quickLog?.durationKnown === false ? 'durée non renseignée' : 'durée '+fmtDur(e.durationSeconds || 0)}${d.activeSeconds ? ' · actif ' + fmtDur(d.activeSeconds) : ''}${d.pausedSeconds ? ' · pause ' + fmtDur(d.pausedSeconds) : ''}${d.plannedMin ? ' · prévu ' + d.plannedMin + ' min' : ''}</p>
       ${d.quickLog?.performance ? h`<p class="small">Repère déclaré : ${d.quickLog.performance}</p>` : ''}${['before','after'].includes(d.quickLog?.order) ? h`<p class="small">${d.quickLog.order==='before'?'Avant':'Après'} la séance principale.</p>`:''}
       ${d.agenda?.planned ? h`<p class="tiny muted">Prévu : ${d.agenda.planned.title} · ${d.agenda.planned.date}${d.agenda.planned.time?' · '+d.agenda.planned.time:''}</p>`:''}
@@ -101,7 +103,7 @@ function vEntry(e) {
       ${d.rpe ? h`<p class="small">Ressenti : ${d.rpe}/5</p>` : ''}${d.note ? h`<p class="small">📝 ${d.note}</p>` : ''}${(q.answers || []).map((a) => h`<p class="small">${a.q} : ${a.a}</p>`)}${(d.swaps || []).length ? h`<p class="small">Remplacements : ${d.swaps.map((s) => `${s.from} → ${s.to}`).join(', ')}</p>` : ''}</div>
     <div class="card">${(d.exercises || []).map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${(x.sets || []).map((s) => (s.seconds ? `${s.seconds} s` : `${s.reps}${s.load ? ' × ' + s.load + ' kg' : ''}`) + (s.feel ? ' ' + (FEEL_E[s.feel] || '') : '')).join(' · ')}</div>${x.note ? h`<div class="tiny">📝 ${x.note}</div>` : ''}</div></div>`)}</div>
     ${mediaCard(e)}
-    <div class="row wrapf"><button class="btn pri" data-act="histRedo" data-id="${e.id}">${d.quickLog && !d.exercises?.length?'Préparer une séance similaire':'🔁 Refaire cette séance'}</button><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
+    <div class="row wrapf"><button class="btn pri" data-act="histRedo" data-id="${e.id}">${isExternal(e)?'Créer une séance':d.quickLog && !d.exercises?.length?'Préparer une séance similaire':'🔁 Refaire cette séance'}</button><button class="btn" data-act="histEdit" data-id="${e.id}">✎ Ressenti / note</button><button class="btn danger" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button></div>`;
 }
 /* Journal visuel : photos (réduites, synchronisées), liens vidéo, captures et notes liés à une séance. Privé au compte. */
 function mediaCard(e) {
@@ -129,7 +131,7 @@ export function recordsCards() {
   const key = S.progressEx && names.has(S.progressEx) ? S.progressEx : [...names.keys()][0] || '';
   const pts = [];
   for (const hh of [...c.history].reverse()) { const ex = (hh.data?.exercises || []).find((e) => exKey(e.name) === key); if (!ex) continue; const sets = (ex.sets || []).filter((s) => s.done !== false); const load = Math.max(0, ...sets.map((s) => s.load || 0)), sec = Math.max(0, ...sets.map((s) => s.seconds || 0)), reps = Math.max(0, ...sets.map((s) => s.reps || 0)); pts.push({ v: load || sec || reps, u: load ? 'kg' : sec ? 's' : 'rép.' }); }
-  return h`<div class="card"><h3>🏆 Records des séances</h3>${r.length ? r.map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.kind === 'perf' ? 'performance' : 'meilleure série'} · ${fmtDay(x.date)}</div></div><span>${x.text}</span></div>`) : h`<p class="muted small">Tes meilleures séries apparaîtront ici après tes séances.</p>`}</div>
+  return h`<div class="card"><h3>🏆 Records et mesures</h3>${r.length ? r.map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.kind === 'perf' ? 'performance' : 'meilleure série'} · ${fmtDay(x.date)}</div></div><span>${x.text}</span></div>`) : h`<p class="muted small">Tes mesures et meilleures séries apparaîtront ici après leur enregistrement.</p>`}</div>
     ${names.size ? h`<div class="card"><h3>Évolution d’un exercice</h3><select data-change="progEx" aria-label="Exercice">${[...names].map(([k, n]) => h`<option value="${k}" ${k === key ? 'selected' : ''}>${n}</option>`)}</select>${lineChart(pts, pts[0]?.u || '')}</div>` : ''}`;
 }
 CHG.progEx = (el) => { S.progressEx = el.value; render(); };
@@ -148,7 +150,7 @@ function vJournal() {
     ${list.length ? list.slice(0, max).map((e) => { const inner = h`<span class="ico sm">${e.icon}</span><div class="grow"><div class="row between wrapf"><b>${e.title}</b><span class="tiny muted">${e.kind === 'step' ? fmtDay(e.t) : fmtDateTime(e.t)}</span></div>${e.text ? h`<div class="small">${e.text}</div>` : ''}${e.note ? h`<div class="small muted">« ${e.note} »</div>` : ''}${e.more?.length ? h`<div class="tiny muted">${e.more.join(' · ')}</div>` : ''}</div>`;
         if (e.kind === 'media') return h`<div class="card journal media row">${inner}${e.media.hasPhoto ? h`<button class="btn sm" data-act="mediaView" data-id="${e.media.id}">Voir</button>` : ''}${e.media.url && /^https:\/\//.test(e.media.url) ? h`<a class="btn sm" href="${e.media.url}" target="_blank" rel="noopener noreferrer">Ouvrir</a>` : ''}${e.id ? h`<button class="btn sm ghost" data-act="histOpen" data-id="${e.id}">Séance</button>` : ''}</div>`;
         return e.kind === 'session' && e.id ? h`<button class="card pick journal session row" data-act="histOpen" data-id="${e.id}">${inner}<span class="chev">›</span></button>` : h`<div class="card journal ${e.kind} row">${inner}</div>`; })
-      : empty(f === 'all' ? 'Ton journal regroupera tes séances, blocs et voies, mesures, notes et étapes.' : 'Rien de ce type pour l’instant.', f === 'all' || f === 'session' ? h`<button class="btn pri" data-act="genOpen">▶ Faire la séance du jour</button> <button class="btn" data-act="cpNew">✨ Créer une séance</button>` : '')}
+      : empty(f === 'all' ? 'Ton journal regroupera tes séances, blocs et voies, mesures, notes et étapes.' : 'Rien de ce type pour l’instant.', f === 'all' || f === 'session' ? h`<button class="btn pri" data-act="genOpen">▶ Faire la séance du jour</button> <button class="btn" data-act="cpResume">Créer une séance</button>` : '')}
     ${list.length > max ? h`<button class="btn ghost" data-act="jMore">Voir plus (${list.length - max})</button>` : ''}`;
 }
 ACT.jFilter = (el) => { S.jf = el.dataset.id; S.jMax = 60; render(); };
@@ -174,6 +176,7 @@ function vLab() {
     <button class="btn pri" data-act="labNew">＋ Nouvelle expérience</button>
     ${labs.length ? labs.map((l) => { const r = labReport(l, c); return h`<div class="card"><div class="row between"><b>🧪 ${l.title}</b>${tag(({ running: 'en cours', done: 'terminée', abandoned: 'abandonnée' })[l.status], l.status === 'done' ? 'ok' : '')}</div>
       <p class="small">${l.hypothesis}</p>${l.criteria ? h`<p class="tiny">Critères observés : ${l.criteria}</p>` : ''}<p class="tiny muted">Du ${l.startDate} pendant ${l.weeks} semaine(s)${l.capId ? ' · capacité suivie : ' + (CAPACITIES[l.capId]?.label || l.capId) : ''}${l.metricId ? ' · mesure : ' + (c.metrics[l.metricId]?.label || l.metricId) : ''}</p>
+      ${l.protocol || l.notes ? h`<details class="how mini" ${advancedUI() ? 'open' : ''}><summary>Protocole et notes</summary>${l.protocol ? h`<p class="small"><b>Protocole :</b> ${l.protocol}</p>` : ''}${l.notes ? h`<p class="small"><b>Notes :</b> ${l.notes}</p>` : ''}</details>` : ''}
       ${meter(r.progress * 100)}<p class="small">${r.sessions} séance(s) pendant la période${r.capSets != null ? ` · ${r.capSets} séries pondérées sur la capacité` : ''}.</p><p class="small">${r.text}</p><p class="tiny muted">${r.disclaimer}</p>${l.conclusion ? h`<p class="small"><b>Conclusion :</b> ${l.conclusion}</p>` : ''}
       <div class="row wrapf"><button class="btn sm" data-act="labEdit" data-id="${l.id}">✎ Mettre à jour</button><button class="btn danger sm" data-act="labDel" data-id="${l.id}">Supprimer</button></div></div>`; }) : ''}`;
 }
@@ -182,6 +185,10 @@ function labForm(l) {
   return h`<h2 style="margin:0">${l ? 'Expérience' : 'Nouvelle expérience'}</h2><form data-submit="labSave" class="stack"><input type="hidden" name="id" value="${l?.id || ''}">
     <label>Titre<input name="title" required maxlength="80" value="${l?.title || ''}" placeholder="Ex. 2 séances de gainage par semaine"></label>
     <label>Hypothèse de départ<textarea name="hypothesis" maxlength="500">${l?.hypothesis || ''}</textarea></label>
+    <details class="how mini" ${advancedUI() ? 'open' : ''}><summary>Protocole et notes (facultatifs)</summary>
+      <label>Protocole<textarea name="protocol" rows="3" maxlength="1200" placeholder="Ce que tu comptes tester : exercices, fréquence, durée, ce que tu gardes identique…">${l?.protocol || ''}</textarea></label>
+      <label>Notes<textarea name="notes" rows="3" maxlength="1000" placeholder="Ce que tu observes au fil des séances, sensations, contexte…">${l?.notes || ''}</textarea></label>
+      <p class="tiny muted">Un suivi personnel reste descriptif ; il ne prouve pas que le protocole cause le résultat.</p></details>
     <label>Critères observés <span class="tiny muted">(ce que tu regardes : ressenti, réussites, mesure…)</span><input name="criteria" maxlength="300" value="${l?.criteria || ''}" placeholder="Ex. nombre de voies enchaînées, ressenti des avant-bras"></label>
     <div class="grid2"><label>Début<input type="date" name="startDate" value="${l?.startDate || today}"></label>${numberField('weeks', 'Durée', l?.weeks ?? 4, { min: 1, max: 52, step: 1, unit: 'semaines' })}</div>
     <div class="grid2"><label>Capacité suivie<select name="capId"><option value="">—</option>${Object.entries(CAPACITIES).map(([id, x]) => h`<option value="${id}" ${l?.capId === id ? 'selected' : ''}>${x.label}</option>`)}</select></label>
@@ -193,10 +200,15 @@ function labForm(l) {
 }
 ACT.labNew = () => openSheet(labForm(null), { wide: true });
 ACT.labEdit = (el) => { const l = item('lab', el.dataset.id); if (l) openSheet(labForm(l), { wide: true }); };
-SUBMIT.labSave = (f) => { const d = Object.fromEntries(new FormData(f)); putItem('lab', d.id || 'lab-' + uid().slice(0, 12), { title: d.title, hypothesis: d.hypothesis, criteria: d.criteria || '', startDate: d.startDate, weeks: Number(d.weeks) || 4, capId: d.capId, metricId: d.metricId, before: { value: d.before === '' ? null : Number(d.before), date: 0 }, after: { value: d.after === '' ? null : Number(d.after), date: 0 }, status: d.status, conclusion: d.conclusion }); closeSheet(); buzzOk(); toast('Expérience enregistrée'); render(); };
+SUBMIT.labSave = (f) => {
+  const d = Object.fromEntries(new FormData(f)), previous = d.id ? item('lab', d.id) || {} : {};
+  const measurement = (key) => { const old = previous[key] || {}, value = d[key] === '' ? null : Number(d[key]); return { ...old, value, date: value === (old.value ?? null) ? old.date || 0 : 0 }; };
+  putItem('lab', d.id || 'lab-' + uid().slice(0, 12), { ...previous, title: d.title, hypothesis: d.hypothesis, protocol: d.protocol || '', notes: d.notes || '', criteria: d.criteria || '', startDate: d.startDate, weeks: Number(d.weeks) || 4, capId: d.capId, metricId: d.metricId, before: measurement('before'), after: measurement('after'), status: d.status, conclusion: d.conclusion });
+  closeSheet(); buzzOk(); toast('Expérience enregistrée'); render();
+};
 ACT.labDel = async (el) => { if (await ask('Supprimer cette expérience ?', { danger: true, ok: 'Supprimer' })) { delItem('lab', el.dataset.id); render(); } };
 
 function simpleProgress() {
- const c=ctx(), days=S.benchDays || 30, b=benchmarks(c,days), r=regularity(c), less=undertrained(c).items.slice(0,3);
- return h`<section class="card"><h3>Ce qui change</h3><div class="chips">${[7,30,90].map((d) => chip(days===d, d+' jours', 'data-act="benchDays" data-id="'+d+'"'))}</div><p class="small">${r.text}</p>${b.capDiff.slice(0,4).map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.cur > x.prev ? 'Plus travaillé' : x.cur < x.prev ? 'Moins travaillé' : 'Stable'} · volume observé, pas une mesure de niveau</div></div></div>`)}${!b.capDiff.length ? h`<p class="muted small">Données insuffisantes pour comparer les capacités. Tes activités sont bien dans le journal.</p>` : ''}</section><details class="card"><summary>Ce qui mérite mon attention</summary>${less.map((x) => h`<p class="small">${x.text || x.label || x.capId}</p>`)}<p class="tiny muted">${loadAnalysis(c).text}</p></details><button class="btn" data-act="progSub" data-id="journal">Mon journal réel</button>`;
+ const c=ctx(), days=S.benchDays || 30, b=benchmarks(c,days), r=regularity(c), less=undertrained(c).items.slice(0,3), load=loadAnalysis(c);
+ return h`<section class="card"><h3>Ce qui change</h3><div class="chips">${[7,30,90].map((d) => chip(days===d, d+' jours', 'data-act="benchDays" data-id="'+d+'"'))}</div><p class="small">${r.text}</p>${b.capDiff.slice(0,4).map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">${x.cur > x.prev ? 'Plus travaillé' : x.cur < x.prev ? 'Moins travaillé' : 'Stable'} · volume observé, pas une mesure de niveau</div></div></div>`)}${!b.capDiff.length ? h`<p class="muted small">Données insuffisantes pour comparer les capacités. Tes activités sont bien dans le journal.</p>` : ''}</section><details class="card"><summary>Ce qui mérite mon attention</summary>${less.map((x) => h`<p class="small">${x.text || x.label || x.capId}</p>`)}<p class="small">${load.text}</p>${load.signals.length?h`<ul class="small">${load.signals.map(text=>h`<li>${text}</li>`)}</ul><p class="tiny muted">Ces observations décrivent tes séances et ton ressenti.</p>`:''}</details><button class="btn" data-act="progSub" data-id="journal">Mon journal réel</button>`;
 }

@@ -65,9 +65,9 @@ export function suggestRoutines(routines = [], phases = [], o = {}) {
     if (!r || r.off || !WHEN[r.when]) continue;
     if (phases.some((p) => p.routineId === r.id)) continue; // déjà dans la séance
     if ((r.sports || []).length && !r.sports.some((s) => sports.has(s))) continue; // pas pour ces sports
-    const missing = o.eq ? (r.needs || []).filter((k) => !o.eq.has(k)) : [];
     const at = insertIndex(phases, r.when), reasons = [];
-    let minutes = Math.max(3, Math.min(90, Math.round(Number(r.minutes) || 10))), effort = EFFORT[r.effort] ? r.effort : 'mod';
+    const equipment = o.equipmentAt?.(at) || o.eq, missing = equipment ? (r.needs || []).filter((k) => !equipment.has(k)) : [];
+    let minutes = Math.max(5, Math.min(90, Math.round(Number(r.minutes) || 10))), effort = EFFORT[r.effort] ? r.effort : 'mod';
     // Séance courte : le moment ne mange pas la séance (12 % du temps au plus, 5 min minimum).
     if (M < 60 && minutes > Math.max(5, M * 0.12)) { minutes = Math.min(minutes, r5(M * 0.12)); reasons.push(`séance courte (${M} min) : version de ${minutes} min`); }
     if (usesFingers(r) && r.when !== 'warmup') {
@@ -93,9 +93,14 @@ export function suggestRoutines(routines = [], phases = [], o = {}) {
 /** Ajoute un moment à la structure ; le temps est pris sur la plus longue phase modifiable (jamais sous 10 min). */
 export function insertRoutine(phases = [], sug) {
   const list = phases.map((p) => ({ ...p })), m = sug.phase.minutes;
-  const donor = list.filter((p) => p.type !== 'pause' && p.type !== 'routine' && p.locks?.minutes !== 'user' && p.role !== 'warmup' && p.role !== 'cool' && (p.minutes || 0) - m >= 10).sort((a, b) => b.minutes - a.minutes)[0];
-  if (donor) donor.minutes -= m;
-  list.splice(Math.min(sug.at, list.length), 0, { ...sug.phase });
+  const at=Math.min(sug.at,list.length), near=list[at]?.window?list[at]:list[at-1]?.window?list[at-1]:list[at]||list.at(-1);
+  const windowKey=p=>p?.window?`${p.window.envId}:${p.window.from}:${p.window.to}`:'';
+  const donor = list.filter((p) => p.type !== 'pause' && p.type !== 'routine' && p.locks?.minutes !== 'user' && p.role !== 'warmup' && p.role !== 'cool' && windowKey(p)===windowKey(near) && (p.minutes || 0) - m >= 10).sort((a, b) => b.minutes - a.minutes)[0];
+  if (!donor) return {phases,took:null,blocked:'Ce moment ne tient pas dans le temps modifiable de ce créneau. Déverrouille ou allonge un bloc de ce lieu.'};
+  donor.minutes -= m;
+  const phase={...sug.phase,...(near?.window?{window:{...near.window}}:{})};
+  if(list[at]?.place?.mode==='other'){phase.place={...list[at].place};list[at].place={mode:'same'};}
+  list.splice(at,0,phase);
   return { phases: list, took: donor ? { name: pname(donor), minutes: m } : null };
 }
 

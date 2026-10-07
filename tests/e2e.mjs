@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 let chromium;
 try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 
-const env = makeEnv({ AI: { run: async (_m, o) => ({ response: o.messages ? JSON.stringify(o.messages.some((m) => m.role === 'system' && m.content.includes('Tu es l’assistant d’administration'))
+const env = makeEnv({ AI: { run: async (_m, o) => ({ response: o.messages ? JSON.stringify(o.messages.some((m) => m.role === 'system' && m.content.includes("Transforme l'objectif écrit")) ? { status: 'ok', basis: 'request', sources: ['request', 'app/model'], label: 'Courir 10 km sans m’arrêter', description: 'Objectif déclaré : Endurance en course à pied.', activityId: 'running', caps: [{ id: 'endurance_aerobie', w: 1 }], target: null, missing: ['Repère de départ'], confidence: 'faible', steps: [], indicators: ['Distance réalisée sans arrêt'] } : o.messages.some((m) => m.role === 'system' && m.content.includes('Donne-lui un nom court')) ? { status: 'ok', basis: 'request', sources: ['request', 'app/model'], label: o.messages.at(-1).content.slice(0, 40), summary: 'Mobilité des hanches demandée.', emoji: '🧘', caps: [{ id: 'mobilite_hanches', w: 1 }] } : o.messages.some((m) => m.role === 'system' && m.content.includes('Tu es l’assistant d’administration'))
   ? { status: 'ok', sources: ['request', 'app/map'], reply: 'J’ai préparé une question sur les doigts dans un brouillon. Relis-la avant de publier.', changes: [{ kind: 'faq', id: 'n-e2e-doigts', op: 'put', data: { q: 'Comment ménager les doigts fatigués ?', a: 'Réduis les exercices intenses et garde un échauffement progressif.' } }] }
   : { status: 'ok', basis: 'request', sources: ['request', 'app/map'], reply: `Conseil du coach : ${o.messages.at(-1).content}`, changes: [] }) : '{}' }) } });
 // Historique GitHub simulé pour « Voir les nouveautés » (aucun appel réseau pendant les tests).
@@ -111,7 +111,7 @@ await step('première ouverture : page d’accueil claire (présentation, créer
   assert.equal(await A.title(), 'Séances entraînement');
   assert.match(await a.text('main'), /coach d’entraînement/); assert.equal(await a.count('[data-act=authPick][data-id=register]'), 1);
   assert.equal(await A.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(0, 0, 0)', 'mode sombre noir pur');
-  const man = await (await A.request.get(BASE + '/manifest.json')).json(); assert.equal(man.name, 'Séances entraînement'); assert.equal(man.display, 'standalone'); assert.equal(man.background_color, '#000000');
+  const man = await (await A.request.get(BASE + '/manifest.json')).json(); assert.equal(man.name, 'Séances entraînement'); assert.equal(man.display, 'standalone'); assert.equal(man.background_color, '#223341');
   await a.noOverflow('connexion');
 });
 await step('mauvais identifiants : message clair', async () => {
@@ -574,7 +574,7 @@ const cpTo = async (n) => {
   }
 };
 // Les exercices ne sont générés qu'après la dernière validation (étape 6).
-const cpFinish = async () => { await cpTo(6); await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpSave]'); };
+const cpFinish = async () => { await cpTo(6); if(await a.count('[data-act=cpKeepTotal]')) await a.click('[data-act=cpKeepTotal]'); await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpSave]'); };
 // « Plus de contrôle » (qui choisit, niveau de structure) est replié dans « L'essentiel » : on l'ouvre avant d'y toucher.
 const cpMore = async () => { if (!(await A.evaluate(() => document.querySelector('details:has([data-act=cpHelp])')?.open))) await a.click('details:has([data-act=cpHelp]) > summary'); };
 const cpFresh = async (help = 'auto') => { await a.tab('library'); await a.sub('libSub', 'climbplan'); await A.waitForSelector('.steps'); if (await a.count('[data-act=cpRestart]')) await a.click('[data-act=cpRestart]'); await cpMore(); await a.click(`[data-act=cpHelp][data-id=${help}]`); };
@@ -645,6 +645,7 @@ await step('tous les sports comme l’escalade : course « 10 km en 50 min » �
   await cpFresh('auto');
 });
 await step('8.29 : plusieurs sports, objectifs classés ; n°1 « Performer · Voie » mis à la fin → toute la séance s’adapte ; lieu d’une phase + déplacement, filtres, structure finale minute par minute', async () => {
+  await A.evaluate(async()=>{(await import('/state.js')).putItem('env','e2e-autre-voie',{name:'Autre salle de voie E2E',type:'salle',equipment:['wall','leadwall']});});
   await cpFresh('auto'); await cpTo(1); await a.click('[data-act=cpSport][data-id=climbing_route]'); await a.click('[data-act=cpMin][data-id="150"]');
   await a.click('[data-act=cpSport2][data-id=climbing_boulder]');
   await cpTo(2); assert.match(await a.text('.steps b'), /Étape 2\/6 · Tes objectifs/);
@@ -654,7 +655,7 @@ await step('8.29 : plusieurs sports, objectifs classés ; n°1 « Performer · V
   await a.click('[data-act=cpAimAdd][data-k="fam:force@climbing_boulder"]');
   await a.click('[data-act=cpAimUp][data-i="2"]'); // la force passe n°2
   assert.match(await a.text('.aimlist'), /1\s*🚀 Performer · Voie[\s\S]*2\s*🏋️ Force · Bloc[\s\S]*3\s*🎯 Technique · Bloc/);
-  // Objectif avec ses mots : sans IA disponible, l'app lit les mots-clés et montre ce qu'elle a compris avant l'ajout.
+  // Objectif avec ses mots : réponse IA simulée avec références vérifiées avant l'ajout.
   await A.fill('textarea[data-input=cpWords]', 'souplesse des hanches'); await a.click('[data-act=cpAiAim]'); await A.waitForSelector('[data-act=cpAiAdd]');
   if (await a.count('[data-act=cpAiAdd][disabled]')) await a.click('[data-act=cpAiFam][data-id=mobilite]');
   await a.click('[data-act=cpAiAdd]'); await A.waitForFunction(() => document.querySelectorAll('.aimrow').length === 4);
@@ -672,7 +673,7 @@ await step('8.29 : plusieurs sports, objectifs classés ; n°1 « Performer · V
   await A.locator('[data-act=cpEdit]').nth(tags2.indexOf(true)).click(); await A.waitForSelector('#sheet .chainlink');
   assert.equal(await a.count('#sheet .chainlink'), 8); assert.match(await a.text('#sheet'), /1 · Type de phase[\s\S]*3 · Précisément[\s\S]*6 · Lieu[\s\S]*8 · Ce que l’app décide/);
   await a.click('#sheet [data-act=cpPhPlace][data-id=other]'); await A.waitForSelector('#sheet select[data-change=cpPhEnv]');
-  const other = await A.evaluate(async () => { const st = await import('/state.js'), def = st.S.cp.envId || st.ctx().defEnv?.id || ''; return [...document.querySelectorAll('#sheet select[data-change=cpPhEnv] option')].map((o) => o.value).find((v) => v && v !== def); });
+  const other = await A.evaluate(async () => { const st = await import('/state.js'), def = st.S.cp.envId || st.ctx().defEnv?.id || ''; return [...document.querySelectorAll('#sheet select[data-change=cpPhEnv] option')].map((o) => o.value).find((v) => v && v !== def && st.ctx().envs.find((env)=>env.id===v)?.equipment?.includes('leadwall')); });
   assert.ok(other, 'un autre lieu que celui de la séance'); await A.selectOption('#sheet select[data-change=cpPhEnv]', other); await A.waitForTimeout(150);
   await A.fill('#sheet input[data-change=cpPhTravel]', '15'); await A.press('#sheet input[data-change=cpPhTravel]', 'Tab'); await A.waitForTimeout(150);
   await A.keyboard.press('Escape'); await A.waitForTimeout(150);
@@ -682,7 +683,10 @@ await step('8.29 : plusieurs sports, objectifs classés ; n°1 « Performer · V
   assert.match(await a.text('#main'), /Intensité : Modérée/);
   await cpTo(6); const v = await a.text('#main');
   assert.match(v, /Ta structure finale/); assert.match(v, /Charge estimée/); assert.match(v, /🎯 1\. Performer · Voie · 2\. Force · Bloc · 3\. Technique · Bloc/);
-  assert.match(v, /0:00–0:\d\d/); assert.match(v, /Sert ton objectif n°1 : Performer · Voie/); assert.match(v, /🚗 Trajet vers .* · 15 min/);
+  assert.match(v, /0:00–0:\d\d/); assert.match(v, /Objectifs associés : n°1 Performer · Voie/); assert.match(v, /🚗 Trajet vers .* · 15 min/);
+  assert.match(v,/165 min pour 150 min disponibles/);
+  await a.click('[data-act=cpGenerate]'); assert.equal(await a.count('#cpresult [data-act=cpPlay]'),0,'le déplacement ne dépasse pas silencieusement le budget');
+  await cpTo(1); await A.fill('input[data-change=cpMinIn]','165'); await A.press('input[data-change=cpMinIn]','Tab'); await cpTo(6);
   await a.click('[data-act=cpGenerate]'); await A.waitForSelector('#cpresult [data-act=cpPlay]');
   assert.match(await a.text('#cpresult'), /Déplacement/);
 });

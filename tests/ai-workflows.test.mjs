@@ -7,7 +7,11 @@ const env=makeEnv({AI:{run:async(model,input)=>{calls++;lastInput={model,input};
 const A=new Client(env),B=new Client(env),U=new Client(env),guest=new Client(env);
 await A.register('AIRoot');await B.register('AIContent');await U.register('AIMember');await A.post('/api/admin/activate',{password:'Adm1n-Secret!'});await B.post('/api/admin/activate',{password:'Adm1n-Secret!'});
 const bid=(await B.get('/api/auth/me')).data.user.id;
+const originalFetch=globalThis.fetch;
+// Ces propositions utilisent la demande et la taxonomie locale, sans article scientifique simulé.
+globalThis.fetch=async(input)=>{assert.ok(String(input).startsWith('https://eutils.ncbi.nlm.nih.gov/'),'aucun appel réseau réel dans cette suite');return new Response('',{status:503});};
 
+try {
 await ok('réglages IA : réservés aux admins, consultation sans appel modèle',async()=>{
   for(const client of [guest,U])for(const method of ['GET','POST'])assert.equal((await client.call(method,'/api/admin/ai',method==='GET'?undefined:{model:DEFAULT_MODEL,budget:8000})).status,client===guest?401:403);
   const before=calls,status=await A.get('/api/admin/ai');assert.equal(status.status,200);assert.equal(status.data.available,true);assert.equal(status.data.model,DEFAULT_MODEL);assert.equal(status.data.estimated,true);assert.equal(status.data.budget,8000);assert.ok(status.data.models.length>=2);assert.equal(calls,before);
@@ -28,10 +32,10 @@ await ok('coach Qwen : réponse et boutons séparés, aucune donnée enregistré
 });
 
 await ok('création, objectif, intention et agenda Qwen : formats utiles, brouillons sans sauvegarde',async()=>{
-  reply={type:'exercise',name:'Traction simple',summary:'Tire le corps vers la barre.',caps:{tirage_vertical:0.8},prim:['biceps'],needs:['bar'],steps:['Monte sans élan.']};let r=await U.post('/api/ai/draft',{text:'une traction simple',kind:'exercise'});assert.equal(r.status,200);assert.equal(r.data.draft.name,'Traction simple');assert.deepEqual(r.data.draft.caps,{tirage_vertical:0.8});
-  reply={label:'Douze tractions',metricId:'max_tractions',target:12,caps:{tirage_vertical:0.9},activityId:'strength'};r=await U.post('/api/ai/goal',{text:'Faire 12 tractions',profile:'Matériel déclaré : barre'});assert.equal(r.status,200);assert.equal(r.data.goal.target,12);assert.equal(r.data.goal.metricId,'max_tractions');assert.match(lastInput.input.messages[0].content,/Matériel déclaré : barre/);
-  reply={label:'Force des jambes',summary:'Un travail de jambes.',caps:{force_jambes:0.8}};r=await U.post('/api/ai/intent',{text:'mieux pousser sur les jambes'});assert.equal(r.status,200);assert.deepEqual(r.data.intent.caps,{force_jambes:0.8});
-  reply={activities:[{activityId:'climbing_route',minutes:null}],days:[2,5],place:'Nicole Abar',confidence:'medium'};r=await U.post('/api/ai/agenda',{text:'Tous les mardis et vendredis voie à Nicole Abar',kind:'planning'});assert.equal(r.status,200);assert.deepEqual(r.data.draft.days,[2,5]);assert.equal(r.data.draft.activities[0].minutes,'');assert.equal((await U.get('/api/history')).data.history.length,0);assert.equal((await U.get('/api/calendar')).data.events.length,0);
+  reply={status:'ok',basis:'request',sources:['request','app/model'],type:'exercise',name:'Traction simple',summary:'Tire le corps vers la barre.',caps:{tirage_vertical:0.8},prim:['biceps'],needs:['bar'],steps:['Monte sans élan.']};let r=await U.post('/api/ai/draft',{text:'une traction simple',kind:'exercise'});assert.equal(r.status,200);assert.equal(r.data.draft.name,'Traction simple');assert.deepEqual(r.data.draft.caps,{tirage_vertical:0.8});
+  reply={status:'ok',basis:'request',sources:['request','app/model'],label:'Douze tractions',metricId:'max_tractions',target:12,caps:{tirage_vertical:0.9},activityId:'strength'};r=await U.post('/api/ai/goal',{text:'Faire 12 tractions',profile:'Matériel déclaré : barre'});assert.equal(r.status,200);assert.equal(r.data.goal.target,12);assert.equal(r.data.goal.metricId,'max_tractions');assert.match(lastInput.input.messages[0].content,/Matériel déclaré : barre/);
+  reply={status:'ok',basis:'request',sources:['request','app/model'],label:'Force des jambes',summary:'Un travail de jambes.',caps:{force_jambes:0.8}};r=await U.post('/api/ai/intent',{text:'mieux pousser sur les jambes'});assert.equal(r.status,200);assert.deepEqual(r.data.intent.caps,{force_jambes:0.8});
+  reply={status:'ok',basis:'request',sources:['request','app/model'],activities:[{activityId:'climbing_route',minutes:null}],days:[2,5],place:'Nicole Abar',confidence:'medium'};r=await U.post('/api/ai/agenda',{text:'Tous les mardis et vendredis voie à Nicole Abar',kind:'planning'});assert.equal(r.status,200);assert.deepEqual(r.data.draft.days,[2,5]);assert.equal(r.data.draft.activities[0].minutes,'');assert.equal((await U.get('/api/history')).data.history.length,0);assert.equal((await U.get('/api/calendar')).data.events.length,0);
 });
 
 await ok('test IA administrateur : réponse JSON bornée, réserve comptée et trois essais maximum',async()=>{
@@ -58,3 +62,4 @@ await ok('binding absent : administration indique l’état sans promettre un fo
   const no=new Client(makeEnv());await no.register('AIUnavailable');await no.post('/api/admin/activate',{password:'Adm1n-Secret!'});const r=await no.get('/api/admin/ai');assert.equal(r.status,200);assert.equal(r.data.available,false);assert.equal(r.data.used,0);
 });
 done('tests parcours et réglages IA');
+} finally { globalThis.fetch=originalFetch; }

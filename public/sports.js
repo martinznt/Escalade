@@ -182,31 +182,51 @@ export function laps(taps = [], { pool = 25, start } = {}) {
 }
 
 /* ═════════ Import GPX / TCX ═════════ */
-const hav = (a, b) => { const R = 6371, dLat = ((b.lat - a.lat) * Math.PI) / 180, dLon = ((b.lon - a.lon) * Math.PI) / 180, x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
+const hav = (a, b) => { const R = 6371, dLat = ((b.lat - a.lat) * Math.PI) / 180, dLon = ((b.lon - a.lon) * Math.PI) / 180, x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(Math.max(0, Math.min(1, x)))); };
 const tag = (s, name) => { const m = s.match(new RegExp(`<(?:\\w+:)?${name}\\b[^>]*>([^<]*)</(?:\\w+:)?${name}>`, 'i')); return m ? m[1].trim() : ''; };
+const trackNumber = (value) => { if (value == null || String(value).trim() === '') return null; const n = Number(value); return Number.isFinite(n) ? n : null; };
 /** Lit un fichier GPX ou TCX (texte) : sport, départ, durée, distance, dénivelé positif, fréquence cardiaque. */
 export function parseTrack(text) {
-  const s = String(text || '').slice(0, 25e6), tcx = /<TrainingCenterDatabase/i.test(s), pts = [];
-  const re = tcx ? /<Trackpoint>([\s\S]*?)<\/Trackpoint>/gi : /<trkpt\b([^>]*)>([\s\S]*?)<\/trkpt>/gi;
+  const s = String(text || ''); if (s.length > 25e6) return null;
+  const tcx = /<(?:\w+:)?TrainingCenterDatabase\b/i.test(s), pts = [];
+  const re = tcx ? /<(?:\w+:)?Trackpoint\b[^>]*>([\s\S]*?)<\/(?:\w+:)?Trackpoint>/gi : /<(?:\w+:)?trkpt\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?trkpt>/gi;
+  const boundaries = [...s.matchAll(tcx ? /<\/?(?:\w+:)?Track\b[^>]*>/gi : /<\/?(?:\w+:)?(?:trk|trkseg)\b[^>]*>/gi)].map((m) => m.index);
+  let segment = 0;
   for (const m of s.matchAll(re)) {
-    if (pts.length > 200000) break;
+    if (pts.length >= 200000) return null;
+    while (segment < boundaries.length && boundaries[segment] < m.index) segment++;
     const body = tcx ? m[1] : m[2], attrs = tcx ? '' : m[1];
-    const lat = Number(tcx ? tag(body, 'LatitudeDegrees') : (attrs.match(/lat="([-\d.]+)"/) || [])[1]), lon = Number(tcx ? tag(body, 'LongitudeDegrees') : (attrs.match(/lon="([-\d.]+)"/) || [])[1]);
-    const time = Date.parse(tag(body, tcx ? 'Time' : 'time')), ele = Number(tag(body, tcx ? 'AltitudeMeters' : 'ele')), hr = Number(tcx ? ((body.match(/<HeartRateBpm>[\s\S]*?<Value>(\d+)<\/Value>/i) || [])[1]) : tag(body, 'hr')), dm = tcx ? Number(tag(body, 'DistanceMeters')) : NaN;
-    pts.push({ lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null, time: Number.isFinite(time) ? time : null, ele: Number.isFinite(ele) ? ele : null, hr: hr > 20 && hr < 250 ? hr : null, dm: Number.isFinite(dm) ? dm : null });
+    const lat = trackNumber(tcx ? tag(body, 'LatitudeDegrees') : (attrs.match(/\blat=['"]([-\d.]+)['"]/i) || [])[1]), lon = trackNumber(tcx ? tag(body, 'LongitudeDegrees') : (attrs.match(/\blon=['"]([-\d.]+)['"]/i) || [])[1]);
+    const time = Date.parse(tag(body, tcx ? 'Time' : 'time')), ele = trackNumber(tag(body, tcx ? 'AltitudeMeters' : 'ele'));
+    const hrBlock = tcx ? (body.match(/<(?:\w+:)?HeartRateBpm\b[^>]*>([\s\S]*?)<\/(?:\w+:)?HeartRateBpm>/i) || [])[1] : '';
+    const hr = trackNumber(tcx ? tag(hrBlock || '', 'Value') : tag(body, 'hr')), dm = tcx ? trackNumber(tag(body, 'DistanceMeters')) : null;
+    pts.push({ segment, lat: lat != null && Math.abs(lat) <= 90 ? lat : null, lon: lon != null && Math.abs(lon) <= 180 ? lon : null, time: Number.isFinite(time) ? time : null, ele, hr: hr > 20 && hr < 250 ? hr : null, dm: dm != null && dm >= 0 ? dm : null });
   }
-  const timed = pts.filter((p) => p.time);
+  const timed = pts.filter((p) => p.time != null);
   if (!timed.length) return null;
-  let km = 0; for (let i = 1; i < pts.length; i++) if (pts[i].lat != null && pts[i - 1].lat != null) km += hav(pts[i - 1], pts[i]);
-  const lastDm = [...pts].reverse().find((p) => p.dm != null)?.dm; if (lastDm) km = lastDm / 1000;
-  let gain = 0, ref = null; for (const p of pts) { if (p.ele == null) continue; if (ref == null) ref = p.ele; else if (p.ele - ref >= 3) { gain += p.ele - ref; ref = p.ele; } else if (ref - p.ele >= 3) ref = p.ele; }
-  const hrs = pts.map((p) => p.hr).filter(Boolean), sport = tcx ? ((s.match(/<Activity\s+Sport="(\w+)"/i) || [])[1] || '') : tag(s, 'type');
+  let km = 0, distanceKnown = false; for (let i = 1; i < pts.length; i++) if (pts[i].segment === pts[i - 1].segment && [pts[i].lat, pts[i].lon, pts[i - 1].lat, pts[i - 1].lon].every((v) => v != null)) { km += hav(pts[i - 1], pts[i]); distanceKnown = true; }
+  const lastDm = [...pts].reverse().find((p) => p.dm != null)?.dm; if (lastDm != null) { km = lastDm / 1000; distanceKnown = true; }
+  let gain = 0, ref = null, elevationPairs = 0, elevationSegment = -1; for (const p of pts) { if (p.segment !== elevationSegment) { ref = null; elevationSegment = p.segment; } if (p.ele == null) continue; if (ref == null) ref = p.ele; else { elevationPairs++; if (p.ele - ref >= 3) { gain += p.ele - ref; ref = p.ele; } else if (ref - p.ele >= 3) ref = p.ele; } }
+  const hrs = pts.map((p) => p.hr).filter(Boolean), sport = tcx ? ((s.match(/<(?:\w+:)?Activity\b[^>]*\bSport=['"]([^'"]+)['"]/i) || [])[1] || '') : tag(s, 'type');
   const start = timed[0].time, dur = Math.round((timed.at(-1).time - start) / 1000);
   const name = tag(s, 'name').slice(0, 80);
-  return { sport: String(sport).toLowerCase(), start, durationSec: dur, distanceKm: Math.round(km * 100) / 100, gain: Math.round(gain), hrAvg: hrs.length ? Math.round(hrs.reduce((t, x) => t + x, 0) / hrs.length) : null, hrMax: hrs.length ? Math.max(...hrs) : null, points: pts.length, name, pace: km > 0.2 ? fmtPace(dur / 60 / km) : '' };
+  return { sport: String(sport).toLowerCase(), start, durationSec: dur, distanceKm: distanceKnown ? Math.round(km * 100) / 100 : null, gain: elevationPairs ? Math.round(gain) : null, hrAvg: hrs.length ? Math.round(hrs.reduce((t, x) => t + x, 0) / hrs.length) : null, hrMax: hrs.length ? hrs.reduce((a, b) => Math.max(a, b), 0) : null, points: pts.length, name, pace: distanceKnown && km > 0.2 ? fmtPace(dur / 60 / km) : '' };
+}
+/** Identifiant propre au compte : réimporter le même fichier ne crée pas une seconde séance. */
+export async function trackImportId(text, owner) {
+  if (!globalThis.crypto?.subtle || !owner) throw new Error('Impossible de préparer cet import sur cet appareil.');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${owner}\n${String(text || '')}`));
+  return 'file-' + [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, '0')).join('').slice(0, 58);
+}
+export async function trackFingerprint(text) {
+  if (!globalThis.crypto?.subtle) throw new Error('Impossible de préparer cet import sur cet appareil.');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text || '')));
+  return [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, '0')).join('');
 }
 /** Sport de l'app d'après le fichier (course, natation…), sinon d'après l'allure. */
 export function trackActivity(t) {
+  if (/boulder|bloc/.test(t.sport)) return 'climbing_boulder';
+  if (/climb|escalade/.test(t.sport)) return 'climbing_route';
   if (/run|course|jog|trail/.test(t.sport)) return 'running';
   if (/swim|nata/.test(t.sport)) return 'swimming';
   if (/bik|cycl|vélo|velo/.test(t.sport)) return 'conditioning';

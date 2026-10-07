@@ -5,6 +5,7 @@
 import { cleanGlobal } from './global.js';
 import { CAPACITIES, METRICS, SKILLS } from '../public/model.js';
 import { LIBRARY } from '../public/library.js';
+import { contextSources, proposalInstructions } from './ai-proposal-evidence.js';
 
 const key = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const SEV = { high: 3, mid: 2, low: 1 };
@@ -56,16 +57,22 @@ export function groupBugs(bugs = []) {
   }
   return [...groups.values()].sort((a, b) => b.count - a.count || b.recent - a.recent).map((g) => ({ ...g, text: `${g.count} signalement(s) sur « ${g.page} » : ${g.titles.join(' ; ')}` }));
 }
-export function buildMaintenance(bugs) {
+export function buildMaintenance(bugs, { sources = [] } = {}) {
   return [
-    { role: 'system', content: 'Tu aides un administrateur à analyser des signalements d’une app d’entraînement. Réponds en JSON strict : {"findings":[{"title":"…","detail":"…","severity":"faible|moyen|élevé","proposal":"…","area":"contenu|données|configuration|code"}]}. Pas de code exécutable, pas de commande. N’invente pas de faits : appuie-toi seulement sur les signalements fournis.' },
-    { role: 'user', content: JSON.stringify(bugs.slice(0, 40).map((b) => ({ titre: String(b.title || '').slice(0, 120), description: String(b.description || '').slice(0, 400), page: b.page || '', version: b.appVersion || '' }))) },
+    { role: 'system', content: `Tu aides un administrateur à analyser des signalements d’une app d’entraînement. Réponds en JSON strict : {"findings":[{"title":"…","detail":"…","severity":"faible|moyen|élevé","proposal":"…","area":"contenu|données|configuration|code","sources":["report:0"]}]}. Pas de code exécutable, pas de commande. Les bugs sont des déclarations d’utilisateurs, pas des incidents reproduits : détail rapporté, cause et correction hypothétiques à tester. Cite pour chaque finding les identifiants report:N des signalements qui le soutiennent. N’affirme aucun test, vérification du code ou correction effectuée.\n${sources.length ? proposalInstructions(sources) : ''}` },
+    { role: 'user', content: JSON.stringify(maintenanceReports(bugs)) },
   ];
 }
+export const maintenanceReports = (bugs = []) => bugs.slice(0, 40).map((b, i) => ({ source: `report:${i}`, titre: String(b.title || '').slice(0, 120), description: String(b.description || '').slice(0, 400), page: String(b.page || '').slice(0, 80), version: String(b.appVersion || '').slice(0, 30) }));
+export function maintenanceSources(bugs) {
+  return contextSources({ text: 'Analyser les signalements ouverts sans rien appliquer.', model: 'Seuls les signalements ci-dessous ont été lus. Ils décrivent des problèmes rapportés, sans reproduction ni inspection du code. Les causes, sévérités et corrections proposées sont des hypothèses à relire et tester.', additional: maintenanceReports(bugs).map((report) => ({ id: report.source, label: 'Signalement utilisateur : ' + report.titre, kind: 'request', excerpt: JSON.stringify(report) })) });
+}
 const s = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, n);
-export function cleanMaintenance(x) {
+export function cleanMaintenance(x, { sources = [], requireEvidence = false } = {}) {
+  const refs = new Map(sources.filter((source) => /^report:\d+$/.test(source.id)).map(({ excerpt, ...source }) => [source.id, source]));
+  if (requireEvidence && (!Array.isArray(x?.findings) || x.findings.some((finding) => !Array.isArray(finding?.sources) || !finding.sources.length || finding.sources.length > 40 || finding.sources.some((id) => typeof id !== 'string' || !refs.has(id))))) return null;
   const list = (Array.isArray(x?.findings) ? x.findings : []).slice(0, 10).map((f) => ({ title: s(f?.title, 120), detail: s(f?.detail, 600), proposal: s(f?.proposal, 600),
-    severity: ['faible', 'moyen', 'élevé'].includes(f?.severity) ? f.severity : 'moyen', area: ['contenu', 'données', 'configuration', 'code'].includes(f?.area) ? f.area : 'code' })).filter((f) => f.title);
+    severity: ['faible', 'moyen', 'élevé'].includes(f?.severity) ? f.severity : 'moyen', area: ['contenu', 'données', 'configuration', 'code'].includes(f?.area) ? f.area : 'code', ...(requireEvidence ? { basis: 'reported', sources: [...new Set(f.sources)].map((id) => refs.get(id)) } : {}) })).filter((f) => f.title);
   return list.length ? list : null;
 }
 

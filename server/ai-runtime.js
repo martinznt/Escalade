@@ -66,11 +66,12 @@ function checkedResponse(raw,{json,allowClarification}) {
   if(!json || allowClarification)return raw;
   let value=raw && typeof raw==='object' ? raw.response ?? raw.result ?? raw : null;
   if(!value || typeof value!=='object' || Array.isArray(value))value=null;
-  if(!value || !['status','understood','needsClarification'].some((name)=>Object.hasOwn(value,name))){
+  if(!value || !['status','understood','understanding','needsClarification','needs_clarification','grounded','verified','question','questions'].some((name)=>Object.hasOwn(value,name))){
     try{value=JSON.parse(responseText(raw).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch{return raw;}
   }
-  if(value?.status==='clarify' || value?.status==='unverified' || value?.understood===false || value?.needsClarification===true){
-    const text=typeof value.question==='string' && value.question.trim() ? value.question : typeof value.reply==='string' ? value.reply : '';
+  const question=typeof value?.question==='string' && value.question.trim() ? value.question : (Array.isArray(value?.questions) ? value.questions : []).find((item)=>typeof item==='string' && item.trim());
+  if(value?.status==='clarify' || value?.status==='unverified' || value?.understood===false || value?.understanding===false || ['unclear','unknown','not_understood'].includes(value?.understanding) || value?.needsClarification===true || value?.needs_clarification===true || value?.grounded===false || value?.verified===false || question){
+    const text=question || (value?.status==='unverified' || value?.grounded===false || value?.verified===false ? 'Les informations nécessaires ne sont pas vérifiables. Aucun changement n’a été appliqué.' : 'Je ne comprends pas assez précisément ta demande. Peux-tu la préciser ?');
     const message=text.replace(/[\u0000-\u001f<>]/g,' ').replace(/\s+/g,' ').trim().slice(0,240) || 'Je ne comprends pas assez précisément ta demande. Peux-tu la préciser ?';
     throw safeError(message,422,'AI_CLARIFY');
   }

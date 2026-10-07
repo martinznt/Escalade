@@ -42,7 +42,7 @@ await ok('aucune exécution de code : pas d’eval, new Function ni shell dans l
 
 console.log('Studio : routes');
 let aiCalls = 0;
-const env = makeEnv({ AI: { run: async (_m, o) => { aiCalls++; const sys = o.messages[0].content; return { response: /analyser un problème/.test(sys) ? JSON.stringify({ reformulation: 'Reformulé', rules: ['Règle'], questions: [], solutions: [{ title: 'Ajouter une FAQ', how: 'Une question fréquente', pros: ['rapide'], cons: ['peu visible'], risk: 'faible', change: { kind: 'faq', data: { q: 'Où est le minuteur ?', a: 'Dans le menu.' } } }] }) : '{"title":"Nouveauté","body":"Le Studio arrive.","emoji":"📣"}' }; } } });
+const env = makeEnv({ AI: { run: async (_m, o) => { aiCalls++; const sys = o.messages[0].content; return { response: /analyser un problème/.test(sys) ? JSON.stringify({ status: 'ok', basis: 'app', sources: ['request','app/model'], reformulation: 'Reformulé', rules: ['Règle'], questions: [], solutions: [{ title: 'Ajouter une FAQ', how: 'Une question fréquente', pros: ['rapide'], cons: ['peu visible'], risk: 'faible', change: { kind: 'faq', data: { q: 'Où est le minuteur ?', a: 'Dans le menu.' } } }] }) : '{"status":"ok","basis":"request","sources":["request","app/model"],"title":"Nouveauté","body":"Le Studio arrive.","emoji":"📣"}' }; } } });
 const A = new Client(env), U = new Client(env);
 await A.register('admin1'); await U.register('membre');
 await A.post('/api/admin/activate', { password: 'Adm1n-Secret!' });

@@ -17,7 +17,7 @@ await ok('IA indisponible, réponse invalide et délai : échec explicite et auc
   assert.equal((await invalid.DB.prepare('SELECT COUNT(*) n FROM calendar_events').first()).n,0);
   assert.equal((await slow.DB.prepare('SELECT COUNT(*) n FROM history').first()).n,0);
 });
-const env=makeEnv({AI:{run:async()=>({response:JSON.stringify({activities:[{activityId:'climbing_route',minutes:90},{activityId:'climbing_boulder',minutes:20,order:'before'}],confidence:'medium'})})}}),u=new Client(env);await u.register('AgendaAI');
+const env=makeEnv({AI:{run:async()=>({response:JSON.stringify({status:'ok',basis:'request',sources:['request','app/model'],activities:[{activityId:'climbing_route',minutes:90},{activityId:'climbing_boulder',minutes:20,order:'before'}],confidence:'medium'})})}}),u=new Client(env);await u.register('AgendaAI');
 await ok('API interprète un brouillon sans sauvegarder, garde le modèle configurable et refuse les visiteurs',async()=>{
   assert.equal((await new Client(env).post('/api/ai/agenda',{text:'voie'})).status,401);
   const r=await u.post('/api/ai/agenda',{text:'1 h 30 de voie et 20 min de bloc avant'});assert.equal(r.status,200);assert.equal(r.data.draft.activities.length,2);assert.equal((await u.get('/api/history')).data.history.length,0);assert.equal((await u.get('/api/calendar')).data.events.length,0);

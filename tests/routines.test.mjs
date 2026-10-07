@@ -55,4 +55,18 @@ ok('spray wall : reprise sans escalade, récupération après une séance dure, 
   assert.notEqual(R.sprayAdvice(lastPow, now).focus, 'puissance', 'pas deux fois le même type de suite');
   assert.match(R.sprayAdvice(lastPow, now).why, /1 séance de spray wall en 30 jours, la dernière en puissance/);
 });
+ok('créneaux et verrous : un moment prend du temps sur place, sans déplacement anticipé ni total ajouté',()=>{
+  const a={from:1080,to:1140,envId:'a'},b={from:1200,to:1260,envId:'b'};
+  const ph=P([{id:'a',type:'climb',minutes:90,window:a},{id:'b',type:'climb',minutes:40,window:b,place:{mode:'other',envId:'b',travelMin:60}}]);
+  const sug={at:1,phase:{type:'routine',minutes:10,goal:'Moment',role:'prep'}};
+  const r=R.insertRoutine(ph,sug);
+  assert.equal(r.phases[0].minutes,90);assert.equal(r.phases[2].minutes,30);
+  assert.deepEqual(r.phases[1].window,b);assert.equal(r.phases[1].place.envId,'b');assert.equal(r.phases[2].place.mode,'same');
+  const locked=ph.map(p=>({...p,locks:{...p.locks,minutes:'user'}}));
+  const refused=R.insertRoutine(locked,sug);assert.ok(refused.blocked);assert.deepEqual(refused.phases,locked);
+});
+ok('matériel des moments : celui du lieu réel d’insertion, pas l’union de tous les lieux',()=>{
+  const s=R.suggestRoutines([mk('nofoot')],base,{sports:['climbing_boulder'],eq,equipmentAt:()=>new Set(['band']),minutes:115,now});
+  assert.equal(s[0].ok,false);assert.ok(s[0].missing.length);
+});
 console.log(`\n${n} tests des moments OK`);

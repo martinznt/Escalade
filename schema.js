@@ -1,7 +1,7 @@
 // schema.js — tables D1. Le worker les crée / complète tout seul au premier appel (CREATE TABLE IF NOT EXISTS
 // + migrations idempotentes de worker.js upgradeSchema) : aucune commande à lancer, compatible avec la base existante.
 // Aucune table existante n'est supprimée ; les colonnes ajoutées ont des valeurs par défaut.
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 13;
 export const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, email TEXT UNIQUE, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
@@ -12,6 +12,13 @@ export const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS idx_calendar_user_date ON calendar_events(user_id,event_date)",
   "CREATE TABLE IF NOT EXISTS history (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_id TEXT, session_name TEXT NOT NULL, started_at INTEGER NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT 0, data_json TEXT NOT NULL DEFAULT '{}', FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_history_user_date ON history(user_id,started_at)",
+  // V13 : Strava, exclusivement privé. Aucun jeton OAuth n'est stocké en clair ni envoyé au navigateur.
+  "CREATE TABLE IF NOT EXISTS strava_connections (user_id TEXT PRIMARY KEY, connection_id TEXT NOT NULL UNIQUE, athlete_id TEXT NOT NULL, tokens_cipher TEXT NOT NULL, scopes_json TEXT NOT NULL, connected_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revision INTEGER NOT NULL DEFAULT 0, lease TEXT NOT NULL DEFAULT '', lease_until INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE TABLE IF NOT EXISTS strava_oauth_states (state_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_hash TEXT NOT NULL, connection_id TEXT NOT NULL DEFAULT '', claimed INTEGER NOT NULL DEFAULT 0, expires_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(session_hash) REFERENCES sessions(token_hash) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_strava_states_user ON strava_oauth_states(user_id,expires_at)",
+  "CREATE TABLE IF NOT EXISTS strava_previews (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_hash TEXT NOT NULL, connection_id TEXT NOT NULL, activities_json TEXT NOT NULL, expires_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(session_hash) REFERENCES sessions(token_hash) ON DELETE CASCADE, FOREIGN KEY(connection_id) REFERENCES strava_connections(connection_id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_strava_previews_user ON strava_previews(user_id,expires_at)",
+  "CREATE TABLE IF NOT EXISTS external_activity_imports (user_id TEXT NOT NULL, provider TEXT NOT NULL, activity_id TEXT NOT NULL, history_id TEXT NOT NULL UNIQUE, PRIMARY KEY(user_id,provider,activity_id), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(history_id) REFERENCES history(id) ON DELETE CASCADE)",
   "CREATE TABLE IF NOT EXISTS common_exercises (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, data_json TEXT NOT NULL, created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL)",
   "CREATE TABLE IF NOT EXISTS user_exercises (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, data_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(user_id,name), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE TABLE IF NOT EXISTS system_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -37,6 +44,12 @@ export const SCHEMA = [
   // Données personnelles structurées (profil, performances, objectifs, cotations, styles, matériel…), fusion élément par élément.
   "CREATE TABLE IF NOT EXISTS user_items (user_id TEXT NOT NULL, collection TEXT NOT NULL, id TEXT NOT NULL, data_json TEXT NOT NULL, updated_at INTEGER NOT NULL, server_at INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id,collection,id), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_items_sync ON user_items(user_id,server_at)",
+  // Icônes générées sur l'appareil : cinq PNG sans métadonnées, immuables sous un jeton opaque.
+  "CREATE TABLE IF NOT EXISTS custom_app_icons (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, content_hash TEXT NOT NULL, byte_size INTEGER NOT NULL, created_at INTEGER NOT NULL, icon192 BLOB NOT NULL, icon512 BLOB NOT NULL, apple180 BLOB NOT NULL, maskable512 BLOB NOT NULL, badge96 BLOB NOT NULL, UNIQUE(user_id,content_hash), FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_custom_icons_user ON custom_app_icons(user_id,created_at)",
+  "CREATE TABLE IF NOT EXISTS custom_icon_uploads (upload_token TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, byte_size INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 0, completed_token TEXT NOT NULL DEFAULT '', hashes_json TEXT NOT NULL DEFAULT '{}', icon192 BLOB, icon512 BLOB, apple180 BLOB, maskable512 BLOB, badge96 BLOB, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_custom_uploads_user ON custom_icon_uploads(user_id,expires_at)",
+  "CREATE INDEX IF NOT EXISTS idx_custom_uploads_expiry ON custom_icon_uploads(expires_at)",
   // Séances partagées : scope 'common' (bibliothèque commune) ou 'public' (profil public). owner_id NULL = compte supprimé.
   "CREATE TABLE IF NOT EXISTS shared_sessions (id TEXT PRIMARY KEY, owner_id TEXT, scope TEXT NOT NULL, title TEXT NOT NULL, activity TEXT NOT NULL DEFAULT '', data_json TEXT NOT NULL, level_json TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, FOREIGN KEY(owner_id) REFERENCES users(id) ON DELETE SET NULL)",
   "CREATE INDEX IF NOT EXISTS idx_shared_scope ON shared_sessions(scope,updated_at)",
@@ -71,6 +84,7 @@ export const SCHEMA = [
 ];
 // Colonnes ajoutées aux tables existantes (migration idempotente : ajoutées seulement si absentes).
 export const ADD_COLUMNS = [
+  ['custom_icon_uploads', 'hashes_json', "TEXT NOT NULL DEFAULT '{}'"],
   ['users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0'],
   ['calendar_events', 'event_time', "TEXT NOT NULL DEFAULT ''"], // heure prévue « HH:MM » (vide = pas d'heure)
   ['users', 'admin_since', 'INTEGER'],

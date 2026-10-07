@@ -191,11 +191,13 @@ export function targetLabel(metricId, value) {
 }
 /** Format proposé par défaut pour un sport à structures (sans objectif chiffré). */
 export function defaultWorkParts(sport, minutes = 60, forme = 'normal', move = '') {
-  const fam = sportFamily(sport), M = Math.max(20, Math.min(240, minutes)), W = Math.min(15, Math.max(5, Math.round(M * 0.15))), C = Math.min(10, Math.max(5, Math.round(M * 0.1))), R = Math.max(10, M - W - C), low = forme === 'low';
-  const main = Math.round((R * (fam === 'run' || fam === 'swim' ? 0.6 : 0.5)) / 5) * 5, rest = Math.max(5, R - main);
+  // Le temps demandé est tenu : moins de 20 min → échauffement + une seule partie de travail (5 min au moins chacune).
+  const fam = sportFamily(sport), M = Math.max(10, Math.min(300, Math.round(Number(minutes) || 60))), short = M < 20, W = short ? 5 : Math.min(15, Math.max(5, Math.round(M * 0.15))), C = short ? 0 : Math.min(10, Math.max(5, Math.round(M * 0.1))), R = M - W - C, low = forme === 'low';
+  const main = short ? R : Math.max(5, Math.min(R - 5, Math.round((R * (fam === 'run' || fam === 'swim' ? 0.6 : 0.5)) / 5) * 5)), rest = R - main;
   const S1 = { run: low ? 'footing' : 'seuil', swim: low ? 'continu' : 'fractionne', load: low ? 'technique' : 'cinq', body: low ? 'sousmax' : 'pyramide' }[fam];
   const P = (o) => ({ type: 'work', activity: sport, ...(move && (fam === 'load' || fam === 'body') ? { move } : {}), ...o });
   const second = fam === 'run' ? P({ intensity: 'easy', structure: 'footing', minutes: rest }) : fam === 'swim' ? P({ intensity: 'easy', structure: 'technique', minutes: rest }) : { type: 'main', activity: sport, minutes: rest };
+  if (short) return [{ type: 'warmup', minutes: W }, P({ intensity: low ? 'easy' : 'hard', structure: S1, minutes: main })];
   return [{ type: 'warmup', minutes: W }, P({ intensity: low ? 'easy' : 'hard', structure: S1, minutes: main }), second, { type: 'cool', minutes: C }];
 }
 export const workTitle = (p) => { const s = SPORT_STRUCTS[sportFamily(p.activity)]?.[p.structure] || sportProposals(sportFamily(p.activity), p.intensity || 'mod')[0]; return `${EMOJI[sportFamily(p.activity)] || '💪'} ${s?.name || 'Travail'}`; };

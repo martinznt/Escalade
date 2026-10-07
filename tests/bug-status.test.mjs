@@ -107,4 +107,15 @@ await ok('journal : chaque transition conserve le responsable, le signalement et
   assert.doesNotMatch(JSON.stringify(events), /Adm1n-Secret|motdepasse|Le bouton ne répond pas/);
 });
 
+await ok('titre facultatif : la description fournit un titre et le rejeu ne crée pas de doublon', async () => {
+  const response = await content.post('/api/bugs', { id: 'bug-auto-title', description: 'Le bouton reste bloqué sur la page du profil.', page: 'profile/goals' });
+  assert.equal(response.status, 200);
+  const report = (await mine(content))[0];
+  assert.equal(report.title, 'Le bouton reste bloqué sur la page du profil.');
+  assert.equal(report.page, 'profile/goals');
+  assert.equal((await content.post('/api/bugs', { id: 'bug-auto-title', description: 'Une autre description.' })).data.replay, true);
+  assert.equal((await mine(content)).length, 1);
+  assert.equal((await content.post('/api/bugs', { description: '' })).status, 400);
+});
+
 done('tests de suivi des signalements');

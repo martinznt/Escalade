@@ -65,4 +65,10 @@ ok('séance complète construite pour un autre sport, avec le bon sport et des p
   const d = defaultWorkParts('strength', 60, 'normal', 'couche_1rm'); assert.equal(d[1].move, 'couche_1rm'); assert.equal(d[2].type, 'main');
   assert.equal(defaultWorkParts('running', 45, 'low')[1].structure, 'footing');
 });
+ok('structure par défaut : le temps choisi est tenu pile, de 10 min à 5 h, chaque partie 5 min au moins', () => {
+  for (const sp of ['running', 'swimming', 'strength', 'conditioning', 'calisthenics']) for (const M of [10, 12, 15, 19, 20, 23, 25, 37, 45, 60, 90, 150, 240, 300]) {
+    const d = defaultWorkParts(sp, M); assert.equal(d.reduce((t, p) => t + p.minutes, 0), M, `${sp} ${M}`); assert.ok(d.every((p) => p.minutes >= 5), `${sp} ${M}`);
+  }
+  assert.deepEqual(defaultWorkParts('conditioning', 12).map((p) => p.type), ['warmup', 'work'], 'moins de 20 min : pas de retour au calme séparé');
+});
 console.log(`${n} tests des séances tous sports OK`);

@@ -1,6 +1,7 @@
 // Préférences de présentation et explications : le moteur sportif n'utilise jamais interfaceMode.
 import { learnedPreferences, activeGoals, goalLabel, perfText, availableEquipment } from './brain.js';
 import { CAPACITIES, EQUIPMENT } from './model.js';
+import { isExternal } from './external.js';
 /** Résumé visible du contexte du coach, borné et tiré des données existantes. */
 export function coachProfile(c) {
   const brief = (v, n = 160) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, n);
@@ -18,13 +19,13 @@ export function coachProfile(c) {
   if (avoid.length) parts.push('Zones à ménager : ' + avoid.join(', '));
   const recentPains = (c.pains || []).filter((p) => !p.healed && c.now - (p.date || 0) <= 7 * 86400000 && c.now >= p.date && p.level >= 3).slice(-3);
   if (recentPains.length) parts.push('Douleurs déclarées récentes : ' + recentPains.map((p) => brief(p.zone, 40) + ' ' + p.level + '/10').join(', '));
-  const perfs = (c.perfs || []).filter((p) => !p.unknown).slice(0, 4).map((p) => (p.source === 'measured' ? 'mesuré' : 'déclaré') + ' : ' + brief(c.metrics[p.metricId]?.label || p.metricId, 70) + ' ' + brief(perfText(p, c), 100));
+  const perfs = (c.perfs || []).filter((p) => !p.unknown && p.source !== 'imported' && !isExternal(p)).slice(0, 4).map((p) => (p.source === 'measured' ? 'mesuré' : 'déclaré') + ' : ' + brief(c.metrics[p.metricId]?.label || p.metricId, 70) + ' ' + brief(perfText(p, c), 100));
   if (perfs.length) parts.push('Repères : ' + perfs.join(' ; '));
   const levels = Object.values(c.capdecl || {}).filter((d) => d.level >= 0).slice(0, 3).map((d) => (CAPACITIES[d.capId]?.label || d.capId) + ' : niveau déclaré ' + d.level + '/2');
   if (levels.length) parts.push(levels.join(' ; '));
   const prefs = Object.values(c.prefs || {}).filter((p) => p.source === 'explicit' || p.confidence === 'confirmed').slice(0, 3).map((p) => brief(p.label || p.key) + ' : ' + brief(p.value, 60));
   if (prefs.length) parts.push('Préférences confirmées : ' + prefs.join(' ; '));
-  const last = (c.history || []).slice(0, 5).map((h) => brief(h.sessionName, 90) + ' (' + new Date(h.startedAt).toLocaleDateString('fr-FR') + ', ' + (h.data?.quickLog?.durationKnown === false ? 'durée non renseignée' : Math.round((h.durationSeconds || 0) / 60) + ' min') + (h.data?.rpe ? ', effort déclaré ' + h.data.rpe + '/5' : '') + ')' + (h.data?.quickLog?.performance ? ' ; repère déclaré : ' + brief(h.data.quickLog.performance, 80) : ''));
+  const last = (c.history || []).filter((entry) => !isExternal(entry)).slice(0, 5).map((h) => brief(h.sessionName, 90) + ' (' + new Date(h.startedAt).toLocaleDateString('fr-FR') + ', ' + (h.data?.quickLog?.durationKnown === false ? 'durée non renseignée' : Math.round((h.durationSeconds || 0) / 60) + ' min') + (h.data?.rpe ? ', effort déclaré ' + h.data.rpe + '/5' : '') + ')' + (h.data?.quickLog?.performance ? ' ; repère déclaré : ' + brief(h.data.quickLog.performance, 80) : ''));
   parts.push(last.length ? 'Dernières séances réalisées : ' + last.join(' ; ') : 'Aucune séance réalisée enregistrée');
   return parts.join('\n').slice(0, 3000);
 }

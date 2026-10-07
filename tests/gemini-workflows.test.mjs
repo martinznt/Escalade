@@ -20,22 +20,24 @@ function responseFor(body) {
     { command: 'Fais une séance de 20 minutes pour les jambes', label: 'Préparer cette séance' },
     { to: 'settings/admin' }, { to: 'https://evil.test/' },
   ] };
-  if (system.includes('Tu interprètes une demande de')) return { activities: [
+  if (system.includes('Tu interprètes une demande de')) return { status: 'ok', basis: 'request', sources: ['request','app/model'], activities: [
     { activityId: 'climbing_route', minutes: null, place: 'Nicole Abar', order: 'main' },
     { activityId: 'activité-inconnue', minutes: 60 },
   ], days: [2,5], confidence: 'medium' };
-  if (system.includes('modification de séance en opérations')) return { ops: [
+  if (system.includes('modification de séance en opérations')) return { status: 'ok', basis: 'request', sources: ['request','app/model','session/phases'], ops: [
     { op: 'total', minutes: 20 }, { op: 'remove', idx: [99] }, { op: 'exécuter', command: 'interdit' },
   ] };
   if (system.includes('Transforme l\'objectif écrit')) return {
+    status: 'ok', basis: 'request', sources: ['request','app/model'],
     label: 'Douze tractions', metricId: 'max_tractions', target: 12, caps: { tirage_vertical: 0.9 }, activityId: 'strength',
   };
-  if (system.includes('L\'utilisateur décrit')) return { label: 'Force des jambes', summary: 'Travailler la poussée.', caps: { force_jambes: 0.8, capacité_inconnue: 1 } };
+  if (system.includes('L\'utilisateur décrit')) return { status: 'ok', basis: 'request', sources: ['request','app/model'], label: 'Force des jambes', summary: 'Travailler la poussée.', caps: { force_jambes: 0.8, capacité_inconnue: 1 } };
   if (system.includes('Crée la fiche d\'un exercice')) return {
+    status: 'ok', basis: 'request', sources: ['request','app/model'],
     type: 'exercise', name: 'Traction stricte', summary: 'Monte sans élan.', steps: ['Tire vers la barre.'],
     caps: { tirage_vertical: 0.8, constructor: 1 }, prim: ['biceps','muscle-inconnu'], needs: ['bar','matériel-inconnu'],
   };
-  if (system.includes('UNE proposition de contenu commun')) return { q: 'Où se trouve le calendrier ?', a: 'Sur la page Aujourd’hui.', champInconnu: 'ignoré' };
+  if (system.includes('UNE proposition de contenu commun')) return { status: 'ok', basis: 'app', sources: ['request','app/model'], q: 'Où se trouve le calendrier ?', a: 'Sur la page Aujourd’hui.', champInconnu: 'ignoré' };
   if (system.includes('Tu es l’assistant d’administration')) return last.includes('Réécris la réponse')
     ? { status: 'ok', sources: ['draft:faq/n-gemini-faq'], reply: 'Je corrige le même brouillon.', changes: [{ kind: 'faq', id: 'n-gemini-faq', data: { a: 'Dans Aujourd’hui, ouvre Calendrier.' } }] }
     : { status: 'ok', sources: ['request','app/map'], reply: 'Voici une proposition à relire.', changes: [
@@ -44,16 +46,24 @@ function responseFor(body) {
       { kind: 'announce', id: 'n-gemini-active', data: { title: 'Piège', body: '<script>alert(1)</script>' } },
     ] };
   if (system.includes('analyser un problème ou une idée')) return {
+    status: 'ok', basis: 'app', sources: ['request','app/model'],
     reformulation: 'Le calendrier est difficile à trouver.', rules: ['Garder les cinq onglets.'], questions: [],
     solutions: [{ title: 'Aide dans l’accueil', how: 'Ajouter une réponse courte.', pros: ['Simple'], cons: ['À lire'], risk: 'faible',
       change: { kind: 'faq', data: { q: 'Où est le calendrier ?', a: 'Dans Aujourd’hui.' } } }],
   };
-  if (system.includes('PETITE modification du code')) return { reply: 'Relis les extraits avant de modifier.', title: '', summary: '', edits: [] };
-  if (system.includes('analyser des signalements')) return { findings: [{ title: 'Le bouton du calendrier bloque', detail: 'Un signalement.', severity: 'moyen', proposal: 'Vérifier le bouton.', area: 'code' }] };
+  if (system.includes('PETITE modification du code')) {
+    const excerpts = [...system.matchAll(/source « (code:public\/[\w-]+\.(?:js|css|html):\d+-\d+) »/g)].map(match => match[1]);
+    return excerpts.length
+      ? { status: 'ok', sources: ['admin/code/request',...excerpts], reply: 'Relis les extraits avant de modifier.', title: '', summary: '', edits: [] }
+      : { status: 'clarify', sources: [], reply: 'Précise le texte et fournis son extrait.', questions: ['Quel texte exact veux-tu changer ?'], title: '', summary: '', edits: [] };
+  }
+  if (system.includes('analyser des signalements')) return { status: 'ok', basis: 'request', sources: ['request','app/model','report:0'], findings: [{ title: 'Le bouton du calendrier bloque', detail: 'Un signalement.', severity: 'moyen', proposal: 'Vérifier le bouton.', area: 'code', sources: ['report:0'] }] };
   if (system.includes('{"reply":"L’IA est disponible."}')) return { reply: 'L’IA est disponible.' };
   throw new Error('Le test ne connaît pas ce format de demande Gemini.');
 }
 globalThis.fetch = async (url, options) => {
+  // Aucun résumé scientifique n'est fourni : les propositions restent fondées sur la demande et le modèle interne.
+  if (String(url).startsWith('https://eutils.ncbi.nlm.nih.gov/')) return new Response('', { status: 503 });
   assert.equal(String(url), ENDPOINT, 'aucun autre appel réseau n’est autorisé dans cette suite');
   assert.equal(options.method, 'POST'); assert.equal(options.redirect, 'error');
   assert.equal(new Headers(options.headers).get('x-goog-api-key'), KEY);

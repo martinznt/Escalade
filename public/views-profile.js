@@ -5,7 +5,7 @@ import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, c
 import { composePage, savedLayouts } from './layout.js';
 import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
-import { S, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
+import { S, accountToken, accountMatches, ACT, SUBMIT, CHG, INPUT, ctx, go, render, putItem, delItem, item, itemsOf, saveSettings, saveSeance, api, newId } from './state.js';
 import { uid, normalizeEx, normalizeSession } from './shared.js';
 import { capOptionGroups, CAPACITIES, CAP_FAMILIES, MUSCLES, METRICS, ACTIVITIES, SKILLS, EQUIPMENT, EQUIPMENT_GROUPS, ENV_TYPES, ENV_TEMPLATES, BUILTIN_STYLES, GYM_AREAS, metricTierText, metricsForCap } from './model.js';
 import { BUILTIN_SYSTEMS, TEMPLATES as GRADE_TEMPLATES, systemFromTemplate, addLevel, moveLevel, removeLevel, renameLevel, setMapping, sortedLevels, gradeSnapshot, maximaSummary, snapshotText, REFERENCE, LEVEL_WORDS } from './grading.js';
@@ -15,7 +15,7 @@ import { openWizard } from './views-climbplan.js';
 import { vCarnet, projectsSection, doneProjects, fingerCard, pyramidCard } from './views-climb.js';
 import { recordsCards } from './views-progress.js';
 import { bodyFields, bodyToggle, cleanBody, bodyAdjust } from './body.js';
-import { sourcesLine } from './srcui.js';
+import { sourcesLine, aiEvidence, aiProposalReady } from './srcui.js';
 import { GOALS, INTENT_OF } from './views-setup.js';
 import { profileSummary } from './views-coach.js';
 import { byId } from './library.js';
@@ -65,7 +65,7 @@ function completeCard(c, acts, goals, climbing) {
     <div class="setmenu">${left.map(([, ic, t, to]) => h`<button class="setrow" data-act="allGo" data-to="${to}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b></span><span class="chev">›</span></button>`)}</div></section>`;
 }
 function vHub() {
-  if (!advancedUI() && !S.lay && !savedLayouts().profile) { const c = ctx(); return h`<h1>Moi</h1><p class="small muted">${Object.values(c.activities).map((a) => a.label).join(' · ') || 'Mon entraînement'}</p>${menuList([['profSub','activities','🏅','Mon entraînement','Sports et niveaux'],['profSub','goals','🎯','Mes objectifs','Ce que je veux réussir'],['profSub','equipment','📍','Mes lieux et matériel','Mon contexte'],['profSub','perfs','🏆','Mes repères','Mesures, records et cotations']])}<details class="card"><summary>Préférences, capacités et autres détails</summary>${menuList([['profSub','body','❤️','Mes préférences et mon corps','Mes choix, les zones à ménager'],['profSub','analyse','🔎','Comprendre mes capacités','Les faits, les estimations et les inconnues'],['profSub','climbing','🧗','Carnet d’escalade','Blocs, voies et projets'],['profSub','public','🌍','Partage','Je choisis ce que je partage']])}</details>`; }
+  if (!advancedUI() && !S.lay && !savedLayouts().profile) { const c = ctx(); return h`<h1>Moi</h1><p class="small muted">${Object.values(c.activities).map((a) => a.label).join(' · ') || 'Mon entraînement'}</p>${menuList([['profSub','activities','🏅','Mon entraînement','Sports et niveaux'],['profSub','goals','🎯','Mes objectifs','Ce que je veux réussir'],['profSub','equipment','📍','Mes lieux et matériel','Mon contexte'],['profSub','perfs','🏆','Mes repères','Mesures, records et cotations']])}<details class="card"><summary>Préférences, capacités et autres détails</summary>${menuList([['profSub','bilan','📋','Mon bilan physique','Mes repères et les tests disponibles'],['profSub','body','❤️','Mes préférences et mon corps','Mes choix, les zones à ménager'],['profSub','analyse','🔎','Comprendre mes capacités','Les faits, les estimations et les inconnues'],['profSub','climbing','🧗','Carnet d’escalade','Blocs, voies et projets'],['profSub','public','🌍','Partage','Je choisis ce que je partage']])}</details>`; }
   const c = ctx(), acts = Object.values(c.activities), st = profileCapacities(c), sw = strengthsWeaknesses(st), goals = activeGoals(c);
   const known = st.filter((x) => x.level != null).length;
   const bil = assessment(c), envies = bil.envies;
@@ -441,44 +441,59 @@ ACT.goalsToggle = (el) => {
   const goals = [...cur].slice(0, 8);
   putItem('config', 'main', { ...m, goals, goal: goals[0] || '', intent: INTENT_OF[goals[0]] || '' }); render();
 };
-ACT.goalWrite = (el) => openSheet(h`<form data-submit="goalAi" class="stack"><h2 style="margin:0">✍️ Mon objectif</h2>
+ACT.goalWrite = (el) => { S.goalDraft = null; openGoalEntry(el?.dataset?.text || ''); };
+function openGoalEntry(text = '', error = '', localAvailable = false) {
+  openSheet(h`<form data-submit="goalAi" class="stack"><h2 style="margin:0">✍️ Mon objectif</h2>
   <p class="small muted">Écris-le comme tu le dirais à un coach. L’assistant en fait une fiche (capacités, mesure, étapes). Tu la relis et la modifies avant de l’enregistrer.</p>
-  <textarea name="text" maxlength="300" rows="3" required placeholder="Ex. « Enchaîner le 6c du dévers avant l’été » ou « Courir 10 km sans m’arrêter »">${el?.dataset?.text || ''}</textarea>
+  <textarea name="text" maxlength="300" rows="3" required placeholder="Ex. « Enchaîner le 6c du dévers avant l’été » ou « Courir 10 km sans m’arrêter »">${text}</textarea>
+  ${error ? h`<p class="small warn-t" role="status">${error}</p><p class="tiny muted">Aucun objectif n’a été préparé ni enregistré. Précise ta demande avant de réessayer.</p>` : ''}
   <label class="chk tiny"><input type="checkbox" name="profileConsent">Joindre le résumé de mon profil</label>
   <details class="how mini"><summary>Voir le résumé et son destinataire</summary><p class="tiny">${profileSummary()}</p><p class="tiny muted">Si tu coches cette option, ce résumé est joint à ta demande et transmis au modèle choisi pour le site : Google (Gemini) ou Cloudflare.</p></details>
-  <button class="btn pri" type="submit">Analyser</button></form>`);
+  <button class="btn pri" type="submit">Analyser</button>${localAvailable ? h`<button class="btn ghost" type="button" data-act="goalLocal" data-text="${text}">Préparer une fiche locale, sans IA</button>` : ''}</form>`);
+}
 /** Depuis l'assistant de séance : l'intention du jour devient un objectif SEULEMENT si on le demande (fiche relue avant). */
 ACT.goalFromText = (el) => { S.goalBack = el?.dataset?.back || ''; analyzeGoal(String(el?.dataset?.text || '').trim()); };
 SUBMIT.goalAi = async (f) => { S.goalBack = ''; const data=new FormData(f);await analyzeGoal(String(data.get('text') || '').trim(),{shareProfile:data.has('profileConsent')}); };
 async function analyzeGoal(text, { shareProfile = false } = {}) {
   if (text.length < 3) return;
-  const owner=S.user?.id;
-  S.goalDraft=null;
-  openSheet(h`<div class="stack"><h2 style="margin:0">✍️ Mon objectif</h2><p class="small">« ${text} »</p>${skeleton(2)}</div>`);
-  let d = null, why = '';
+  const token = accountToken(), pending = { pending: true };
+  S.goalDraft = pending;
+  const current = () => accountMatches(token) && S.goalDraft === pending && !!document.querySelector('#sheet.open .goal-loading');
+  openSheet(h`<div class="stack goal-loading"><h2 style="margin:0">✍️ Mon objectif</h2><p class="small">« ${text} »</p>${skeleton(2)}</div>`);
   try {
     const body={text,profileConsent:false};
     if(shareProfile){
-      const status=await api('GET','/api/ai/status');if(S.user?.id!==owner)return;
+      const status=await api('GET','/api/ai/status');if(!current())return;
       if(!['cloudflare','gemini'].includes(status.provider))throw new Error('Le modèle n’a pas pu être vérifié. Réessaie ou continue sans joindre ton profil.');
       Object.assign(body,{profile:profileSummary(),profileConsent:true,profileProvider:status.provider});
     }
-    if(S.user?.id!==owner)return;
-    d=(await api('POST','/api/ai/goal',body,{timeout:45000})).goal;
+    if(!current())return;
+    const d=(await api('POST','/api/ai/goal',body,{timeout:45000})).goal;
+    if (!current() || !document.querySelector('#sheet.open .goal-loading')) return;
+    if (!aiProposalReady(d)) throw Object.assign(new Error('Cette fiche ne peut pas être vérifiée. Précise ton objectif.'), { status: 422 });
+    S.goalDraft = { ...d, text, source: 'ia' };
+    openSheet(goalFiche(S.goalDraft), { wide: true });
   }
-  catch (e) { why = e.guest ? 'Crée un compte pour utiliser l’assistant.' : e.status === 503 ? 'Assistant indisponible pour le moment.' : e.message; }
-  if(S.user?.id!==owner)return;
-  if (!d) d = localGoal(text);
-  S.goalDraft = { ...d, text, why };
-  openSheet(goalFiche(S.goalDraft), { wide: true });
+  catch (e) {
+    if (!current() || !document.querySelector('#sheet.open .goal-loading')) return;
+    S.goalDraft = null;
+    const why = e.guest ? 'Crée un compte pour utiliser l’assistant.' : e.message || 'L’assistant n’a pas fourni de fiche vérifiable.';
+    openGoalEntry(text, why, e.guest || e.offline || [503, 429].includes(e.status));
+  }
 }
+ACT.goalLocal = (el) => {
+  const text = String(document.querySelector('[data-submit=goalAi] [name=text]')?.value || el.dataset.text || '').trim();
+  if (text.length < 3) return toast('Écris ton objectif.');
+  S.goalDraft = { ...localGoal(text), text, source: 'local' };
+  openSheet(goalFiche(S.goalDraft), { wide: true });
+};
 const REASON_IC = { fact: '📊', rule: '📐', inference: '🤔', missing: '❔' };
 /** Fiche d'objectif modifiable : rien n'est enregistré avant « Enregistrer ». */
 function goalFiche(d) {
   const x = ctx(), mets = Object.entries(x.metrics || {}).filter(([, m]) => m.kind !== 'grade');
-  const capsAll = [...new Set([...d.caps.map((c) => c.id), ...Object.keys(ACTIVITIES[d.activityId]?.caps || {})])];
+  const capsAll = [...new Set([...d.caps.map((c) => c.id), ...Object.keys(ACTIVITIES[d.activityId]?.caps || {}), ...(!d.caps.length && d.source === 'local' ? Object.keys(CAPACITIES) : [])])];
   return h`<form data-submit="goalFicheSave" class="stack"><h2 style="margin:0">🎯 Fiche de l’objectif</h2>
-    ${d.why ? h`<p class="tiny warn-t">${d.why} Fiche faite sans l’assistant, à partir des mots de ton objectif.</p>` : ''}
+    ${d.source === 'local' ? h`<p class="tiny muted">Fiche locale préparée sans IA à partir de tes mots. Les capacités suggérées restent des estimations à corriger.</p>` : h`<p class="tiny muted">Proposition de l’assistant à relire.</p>${aiEvidence(d)}`}
     <label>Nom court<input name="label" maxlength="80" required value="${d.label}"></label>
     <label>Description<textarea name="summary" maxlength="300" rows="2">${d.summary || ''}</textarea></label>
     <label>Sport<select name="activityId"><option value="">— aucun en particulier —</option>${Object.entries(ACTIVITIES).map(([id, a]) => h`<option value="${id}" ${d.activityId === id ? 'selected' : ''}>${a.emoji} ${a.label}</option>`)}</select></label>
@@ -493,7 +508,6 @@ function goalFiche(d) {
     ${d.skillId && SKILLS[d.skillId] ? h`<label class="row"><input type="checkbox" name="skillId" value="${d.skillId}" checked><span class="small">Lier à la figure « ${SKILLS[d.skillId].label} » (étapes et critères de l’app)</span></label>` : ''}
     <label>Critères de réussite <span class="tiny muted">(un par ligne)</span><textarea name="criteria" rows="2" maxlength="600">${(d.criteria || []).join('\n')}</textarea></label>
     ${d.exercises?.length ? h`<span class="kicker">Exercices liés <span class="tiny muted">(décoche ceux que tu ne veux pas)</span></span><div class="stack tight">${d.exercises.map((id) => h`<label class="row"><input type="checkbox" name="ex" value="${id}" checked><span class="small">${byId(id)?.name || id}</span></label>`)}</div>` : ''}
-    ${d.confidence ? h`<p class="tiny muted">Confiance de l’assistant : ${d.confidence}.</p>` : ''}
     ${d.missing?.length ? h`<div class="card flat"><b class="small">❔ Ce qui manque pour être plus précis</b><ul class="clean tight small">${d.missing.map((m) => h`<li>${m}</li>`)}</ul></div>` : ''}
     <details class="how mini"><summary>Pourquoi cette fiche ? Comment le sais-tu ?</summary>${[['fact', '📊 Informations connues'], ['rule', '🔗 Relations existantes'], ['inference', '🤔 Estimations'], ['missing', '❔ Incertitudes']].map(([k, t]) => { const l = (d.how || []).filter((r) => r.cat === k); return l.length ? h`<b class="tiny">${t}</b><ul class="clean tight small">${l.map((r) => h`<li>${r.text}</li>`)}</ul>` : ''; })}</details>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer l’objectif</button><button class="btn" type="button" data-act="goalWrite" data-text="${d.text || ''}">Reformuler</button></div></form>`;
@@ -511,12 +525,12 @@ function localGoal(text) {
   if (/gainage|abdo|planche|front lever/.test(t)) add('gainage_anterieur', 0.9);
   if (/poids|maigr|mincir|kilos/.test(t)) { add('endurance_aerobie', 0.9); add('force_jambes', 0.5); }
   const activityId = /voie|falaise/.test(t) ? 'climbing_route' : /bloc|escalad|grimp/.test(t) ? 'climbing_boulder' : /cour|km|footing|marathon/.test(t) ? 'running' : /nage|natation|piscine/.test(t) ? 'swimming' : '';
-  return { label: text.slice(0, 80), summary: '', activityId, caps: caps.slice(0, 5), indicators: [], steps: [], metricId: /poids|kilos|maigr/.test(t) ? 'body_weight' : '', target: null, weeks: 0, confidence: 'faible',
+  return { label: text.slice(0, 80), summary: '', activityId, caps: caps.slice(0, 5), indicators: [], steps: [], metricId: /poids|kilos|maigr/.test(t) ? 'body_weight' : '', target: null, weeks: 0,
     missing: ['Une mesure et une cible, si tu en as', ...(caps.length ? [] : ['Ce qu’il faut travailler : coche les capacités'])],
     how: [{ cat: 'fact', text: `Ton texte : « ${text.slice(0, 160)} »` }, { cat: 'rule', text: 'Mots-clés de ton texte reliés aux capacités de l’app (sans assistant).' }] };
 }
 SUBMIT.goalFicheSave = (f) => {
-  const d = S.goalDraft; if (!d) return;
+  const d = S.goalDraft; if (!d || d.pending) return;
   const fd = new FormData(f), num = (v) => { const n = Number(String(v || '').replace(',', '.')); return String(v || '').trim() !== '' && Number.isFinite(n) ? n : null; };
   const caps = [...fd.entries()].filter(([k, v]) => k.startsWith('cap:') && Number(v) > 0).map(([k, v]) => ({ id: k.slice(4), w: Number(v) })).filter((c) => CAPACITIES[c.id]).slice(0, 6);
   const metricId = ctx().metrics[fd.get('metricId')] ? String(fd.get('metricId')) : '', target = metricId ? num(fd.get('target')) : null, weeks = Math.max(0, Math.min(52, Math.round(num(fd.get('weeks')) || 0)));
@@ -525,7 +539,7 @@ SUBMIT.goalFicheSave = (f) => {
   const lines = (k, n, len) => String(fd.get(k) || '').split('\n').map((x) => x.trim().slice(0, len)).filter(Boolean).slice(0, n);
   const id = 'g-' + uid().slice(0, 12), act = ACTIVITIES[fd.get('activityId')] ? String(fd.get('activityId')) : '';
   const gtype = ['custom', 'metric', 'grade', 'sessions', 'ascents', 'skill'].includes(fd.get('gtype')) ? String(fd.get('gtype')) : 'custom', skillId = SKILLS[fd.get('skillId')] ? String(fd.get('skillId')) : '';
-  putItem('goal', id, { type: skillId ? 'skill' : metricId && gtype === 'custom' ? 'metric' : gtype === 'skill' && !skillId ? 'custom' : gtype, skillId, criteria: lines('criteria', 4, 160), exercises: fd.getAll('ex').map(String).filter((x) => byId(x)).slice(0, 8), source: 'ia', label, metricId, target, current: null, unit: metricId ? ctx().metrics[metricId]?.unit || '' : '', caps, activityId: act, status: 'active', startedAt: Date.now(),
+  putItem('goal', id, { type: skillId ? 'skill' : metricId && gtype === 'custom' ? 'metric' : gtype === 'skill' && !skillId ? 'custom' : gtype, skillId, criteria: lines('criteria', 4, 160), exercises: fd.getAll('ex').map(String).filter((x) => byId(x)).slice(0, 8), source: d.source === 'ia' ? 'ia' : 'local', label, metricId, target, current: null, unit: metricId ? ctx().metrics[metricId]?.unit || '' : '', caps, activityId: act, status: 'active', startedAt: Date.now(),
     deadline: weeks ? new Date(Date.now() + weeks * 7 * 86400000).toISOString().slice(0, 10) : '', note: [String(fd.get('summary') || '').trim(), ...lines('indicators', 4, 140).map((x) => `📈 ${x}`), ...lines('steps', 5, 160).map((x, k) => `${k + 1}. ${x}`)].join(' · ').slice(0, 300) });
   const back = S.goalBack; S.goalDraft = null; S.goalBack = ''; closeSheet(); toast('Objectif enregistré');
   if (back === 'cp' && S.cp) { S.cp.intentGoal = id; S.cp.goalIds = [...new Set([...(S.cp.goalIds || []), id])]; go('library', 'climbplan'); } else go('profile', 'goals', id);

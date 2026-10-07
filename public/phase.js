@@ -67,6 +67,7 @@ export function normalizePhase(p = {}, i = 0, sport = '') {
     role: ROLES[x.role] ? x.role : defaultRole({ ...x, type }),
     roleLabel: x.role === 'custom' ? str(x.roleLabel, 40) : '',
     goal: str(x.goal, 200),
+    ...(Array.isArray(x.aimLinks) || x.aimKey || x.prepFor ? { aimLinks: normalizeAimLinks(x) } : {}),
     priorities: capList(x.priorities),
     intensity: oneOf(x.intensity, INTENSITIES, type === 'pause' ? 'easy' : 'mod'),
     fatigue: oneOf(x.fatigue, Object.keys(FATIGUE), 'mod'),
@@ -99,7 +100,7 @@ export function normalizePhase(p = {}, i = 0, sport = '') {
 }
 export const normalizePhases = (list = [], sport = '') => {
   const seen = new Set();
-  return (Array.isArray(list) ? list : []).slice(0, 20).map((p, i) => {
+  return (Array.isArray(list) ? list : []).slice(0, 40).map((p, i) => {
     const n = normalizePhase(p, i, sport);
     if (seen.has(n.id)) n.id = `ph-${i + 1}-${seen.size}`; // identifiants uniques et stables
     seen.add(n.id); return n;
@@ -132,6 +133,25 @@ export function fitDurations(phases, total) {
   while (last.minutes < 5) { const big = free.slice(0, -1).sort((a, b) => b.minutes - a.minutes)[0]; if (!big || big.minutes <= 5) break; big.minutes -= 5; last.minutes += 5; }
   return { phases: list, ok: totalMinutes(list) === T, error: '' };
 }
+/**
+ * Proposition automatique plus longue que le temps disponible (séance courte) : on garde l'échauffement et le travail
+ * principal, on retire d'abord le retour au calme puis les parties secondaires, puis on ajuste les durées (5 min au
+ * moins, verrous respectés). Retourne { phases, ok, dropped } ; rien n'est retiré si la structure tient déjà.
+ */
+export function fitShort(phases, total) {
+  const T = Math.round(Number(total)), list = phases.map((p) => ({ ...p })), dropped = [];
+  const free = (p) => p.locks?.minutes !== 'user';
+  for (let guard = 0; guard < 12 && list.length > 1 && list.length * 5 > T; guard++) {
+    let k = -1;
+    for (let i = list.length - 1; i >= 0 && k < 0; i--) if (list[i].type === 'cool' && free(list[i])) k = i;
+    if (k < 0) { const work = list.map((p, i) => i).filter((i) => !['warmup', 'prep', 'pause', 'cool'].includes(list[i].type) && free(list[i])); if (work.length > 1) k = work.at(-1); }
+    if (k < 0) break;
+    dropped.push(list[k]); list.splice(k, 1);
+  }
+  if (totalMinutes(list) === T) return { phases: list, ok: true, dropped };
+  const r = fitDurations(list, T);
+  return { phases: r.ok ? r.phases : list, ok: r.ok, dropped };
+}
 /** Remplace une phase sans toucher aux autres (et sans casser ses verrous). */
 export function updatePhase(phases, id, patch) {
   return phases.map((p, i) => (p.id !== id ? p : normalizePhase({ ...p, ...patch, id, locks: { ...p.locks, ...(patch.locks || {}) } }, i, p.activity)));
@@ -151,3 +171,4 @@ export function sessionIntent(x = {}) {
     ...(Object.keys(cleanTradeoffs(x.tradeoffs)).length ? { tradeoffs: cleanTradeoffs(x.tradeoffs) } : {}),
     ...(Object.keys(cleanLevel(x.filters)).length ? { filters: cleanLevel(x.filters) } : {}) };
 }
+import { normalizeAimLinks } from './objectivelinks.js';

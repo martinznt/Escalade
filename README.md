@@ -1,8 +1,10 @@
-# Séances entraînement — v8.32.4
+# Séances entraînement — v8.33.0
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
-activité personnalisée. Chaque recommandation est expliquée (faits, estimations, données manquantes) ; rien n'est inventé.
+activité personnalisée. Les recommandations distinguent faits, estimations et données manquantes ; les réponses IA sont contrôlées avant de proposer des changements.
+
+La [version 8.33.0](DELIVERY_8_33.md) apporte : objectifs distincts des phases, choix et création guidée d’icônes par compte, notifications personnalisées, contrôles de provenance étendus à l’IA, recherche admin et imports sportifs avec un connecteur Strava à configurer. Elle a été revérifiée le 7 octobre (correctif des séances courtes compris) puis envoyée sur `main` par Pull Request, ce qui déclenche le déploiement automatique existant. Gemini, Strava, les icônes installées et les notifications restent à activer ou à vérifier soi-même : les opérations Cloudflare sont dans [CLOUDFLARE_GUIDE.md](CLOUDFLARE_GUIDE.md).
 
 Les appuis pendant le chargement du Studio sont protégés en [8.32.4](DELIVERY_8_32_4.md). L’accès aux réglages IA par rôle est corrigé en [8.32.3](DELIVERY_8_32_3.md). Les changements et vérifications de la version 8.32.2 sont dans [DELIVERY_8_32_2.md](DELIVERY_8_32_2.md).
 La simplification des paramètres et des visites est décrite dans [DELIVERY_8_32_1.md](DELIVERY_8_32_1.md).
@@ -18,6 +20,8 @@ Le bilan de la refonte et la couverture du cahier des charges restent dans [DELI
 | Hors ligne | `public/sw.js` (précache versionné, identique à la liste servie par le Worker) |
 
 ## Déploiement Cloudflare
+
+Pour les ressources déjà configurées, suivre le [guide manuel](CLOUDFLARE_GUIDE.md). Les étapes ci-dessous décrivent l’installation initiale et ne déclenchent aucune action à distance.
 
 1. Garder `wrangler.json` (bindings `DB` pour D1, `SEANCES_KV` pour l'ancienne version, `ASSETS` pour `public/`).
 2. L’assistant peut utiliser **Gemini Flash** via l’API Google ou **Workers AI** via le binding `AI` existant. Avec le secret serveur `GEMINI_API_KEY` et aucun fournisseur enregistré dans l’administration, Gemini est sélectionné par défaut ; sans cette clé ni réglage, Workers AI reste le choix initial. Un fournisseur choisi dans l’administration reste celui utilisé : aucune bascule automatique après une erreur ou un quota atteint. L’activation de Gemini est décrite ci-dessous ; les formulaires et calculs sportifs restent disponibles sans IA.

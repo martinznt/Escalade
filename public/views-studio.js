@@ -3,13 +3,15 @@
 // avant/après et journal. Laboratoire : analyser un problème (assistant) et voir les règles actuelles sur des exemples.
 // Rien n'est exécuté : l'assistant ne rédige que des brouillons validés par le serveur, publiés seulement sur confirmation.
 import { h, $, toast, openSheet, closeSheet, ask, askText, chip, tag, fmtDateTime, relDate, skeleton, menuList } from './ui.js';
-import { S, ACT, SUBMIT, INPUT, CHG, go, render, api } from './state.js';
+import { S, accountToken, accountMatches, ACT, SUBMIT, INPUT, CHG, go, render, api } from './state.js';
+import { aiEvidence, aiProposalReady } from './srcui.js';
 import { uid } from './shared.js';
 import { loadGlobal } from './content.js';
 import { analyzeSession, REASON, phaseName } from './phaseplan.js';
 import { normalizePhases, activityLabel, ROLES } from './phase.js';
 
 const ST = () => (S.studio ||= { sets: null, err: '', filter: 'draft', cur: null, audit: null, lab: { text: '', res: null, busy: false, ex: 0 } });
+const ownsStudio = (token, st) => accountMatches(token) && S.studio === st;
 export const STATUS = { draft: ['📝', 'Brouillon', 'warn'], published: ['✅', 'Publié', 'ok'], rolled_back: ['↩️', 'Annulé', ''], discarded: ['🗑', 'Abandonné', ''] };
 export const SOURCE = { admin: 'Administrateur', direct: 'Modification directe', proposal: 'Proposition acceptée', ai: '🤖 Assistant', lab: '🧠 Laboratoire' };
 const KIND = { exercise: '💪 Exercice', catalog: '🗂 Séance prête', intent: '🧭 Intention', format: '🧩 Format', grading: '🧗 Cotation', style: '🎨 Style', text: '✏️ Texte', announce: '📣 Annonce', hint: '💡 Raccourci', layout: '🧩 Mise en page', faq: '❓ Question', source: '📚 Source' };
@@ -56,15 +58,15 @@ if (typeof document !== 'undefined') {
 }
 
 async function loadSets() {
-  const st = ST(), owner = S.user?.id;
-  try { const r = await api('GET', '/api/admin/studio' + (st.filter === 'all' ? '' : '?status=' + st.filter)); if (S.user?.id !== owner || S.studio !== st) return; st.sets = r.sets; st.err = ''; }
-  catch (e) { if (S.user?.id !== owner || S.studio !== st) return; st.err = e.offline ? 'Connexion requise.' : e.message; }
+  const st = ST(), token = accountToken(), owner = token.owner;
+  try { const r = await api('GET', '/api/admin/studio' + (st.filter === 'all' ? '' : '?status=' + st.filter)); if (!ownsStudio(token, st)) return; st.sets = r.sets; st.err = ''; }
+  catch (e) { if (!ownsStudio(token, st)) return; st.err = e.offline ? 'Connexion requise.' : e.message; }
   paintStudioRows(st, owner);
 }
 async function loadSet(id) {
-  const st = ST(), owner = S.user?.id;
-  try { const r = await api('GET', '/api/admin/studio/' + encodeURIComponent(id)); if (S.user?.id !== owner || S.studio !== st) return; st.cur = r; }
-  catch (e) { if (S.user?.id !== owner || S.studio !== st) return; st.cur = { error: e.offline ? 'Connexion requise.' : e.message, set: { id } }; }
+  const st = ST(), token = accountToken(), owner = token.owner;
+  try { const r = await api('GET', '/api/admin/studio/' + encodeURIComponent(id)); if (!ownsStudio(token, st)) return; st.cur = r; }
+  catch (e) { if (!ownsStudio(token, st)) return; st.cur = { error: e.offline ? 'Connexion requise.' : e.message, set: { id } }; }
   if (S.tab === 'settings' && S.sub.settings === 'studioSet' && S.param === id) render();
 }
 const notAdmin = () => h`<div class="card"><p class="small">Réservé aux administrateurs.</p><button class="btn" data-act="setSub" data-id="admin">🛡️ Administration</button></div>`;
@@ -110,7 +112,7 @@ export function vStudioSet() {
   const c = d.set, last = d.tests[0];
   return h`<div class="card"><h2 style="margin:0">${c.title}</h2><div class="row wrapf tight">${tag(STATUS[c.status][1], STATUS[c.status][2])}${tag(SOURCE[c.source] || c.source)}</div>
       <p class="tiny muted">Créé par ${c.author || '—'} · ${fmtDateTime(c.createdAt)}${c.publishedAt ? ` · publié par ${c.publisher || '—'} le ${fmtDateTime(c.publishedAt)}` : ''}${c.rolledBackAt ? ` · annulé par ${c.roller || '—'} le ${fmtDateTime(c.rolledBackAt)}` : ''}</p>
-      ${c.note ? h`<p class="small">${c.note}</p>` : ''}</div>
+      ${c.note ? h`<p class="small">${c.note}</p>` : ''}${st.proposalEvidence?.id === c.id ? aiEvidence(st.proposalEvidence) : ['ai','lab'].includes(c.source) ? h`<p class="tiny muted">Les références de cette génération ne sont pas conservées dans ce lot. Relis son contenu avant publication ; son origine IA ne prouve pas son exactitude.</p>` : ''}</div>
     ${d.diff.map((x, i) => h`<div class="card"><div class="row between"><b>${KIND[x.kind] || x.kind} · ${x.id}</b>${tag(x.isNew ? 'nouveau' : OP[x.op], x.isNew ? 'acc' : '')}</div>
       ${x.changes.length ? h`<ul class="diff">${x.changes.map((ch) => h`<li><b>${ch.path}</b> : ${ch.type === 'added' ? h`<ins>${val(ch.after)}</ins>` : ch.type === 'removed' ? h`<del>${val(ch.before)}</del>` : h`<del>${val(ch.before)}</del> → <ins>${val(ch.after)}</ins>`}</li>`)}</ul>` : h`<p class="small muted">Aucune différence avec le contenu actuel.</p>`}
       <div class="row wrapf">${c.status === 'draft' && FORMS[x.kind] && d.items[i]?.op === 'put' ? h`<button class="btn sm" data-act="studioEdit" data-i="${i}">✏️ Modifier</button>` : ''}<button class="btn sm ghost" data-act="studioVersions" data-k="${x.kind}" data-id="${x.id}">🕑 Versions</button></div></div>`)}
@@ -119,31 +121,40 @@ export function vStudioSet() {
       ${c.status === 'published' ? h`<button class="btn" data-act="studioRollback">↩️ Retour arrière</button><p class="tiny muted">Rétablit l’état d’avant la publication, élément par élément.</p>` : ''}</div>`;
 }
 const curId = () => ST().cur?.set?.id;
-async function studioPost(action, body = {}) { return api('POST', `/api/admin/studio/${encodeURIComponent(curId())}/${action}`, body); }
-ACT.studioCheck = async () => { try { const r = await studioPost('check'); toast(r.passed ? 'Vérifications passées ✓' : 'Des vérifications échouent', 3000, r.passed ? '' : 'bad'); } catch (e) { toast(e.message, 4000, 'bad'); } loadSet(curId()); };
+async function studioPost(action, body = {}, id = curId()) { return api('POST', `/api/admin/studio/${encodeURIComponent(id)}/${action}`, body); }
+const studioSelection = () => { const st = ST(), token = accountToken(), id = curId(); return { st, id, current: () => ownsStudio(token, st) && curId() === id }; };
+ACT.studioCheck = async () => { const t = studioSelection(); try { const r = await studioPost('check', {}, t.id); if (!t.current()) return; toast(r.passed ? 'Vérifications passées ✓' : 'Des vérifications échouent', 3000, r.passed ? '' : 'bad'); } catch (e) { if (!t.current()) return; toast(e.message, 4000, 'bad'); } loadSet(t.id); };
 ACT.studioPublish = async () => {
+  const t = studioSelection();
   if (!(await ask('Publier ce lot pour tout le monde ?', { ok: 'Publier', detail: 'Les vérifications sont refaites avant. Tu pourras revenir en arrière.' }))) return;
+  if (!t.current()) return;
   // loadSet actualise ce détail ; une réponse globale tardive ne doit pas remplacer un bouton de navigation pressé.
-  try { await studioPost('publish', { confirm: true }); toast('Publié pour tout le monde'); loadGlobal({ renderChange: false }); } catch (e) { toast(e.message, 5000, 'bad'); }
-  ST().sets = null; loadSet(curId());
+  try { await studioPost('publish', { confirm: true }, t.id); if (!t.current()) return; toast('Publié pour tout le monde'); loadGlobal({ renderChange: false }); } catch (e) { if (!t.current()) return; toast(e.message, 5000, 'bad'); }
+  t.st.sets = null; loadSet(t.id);
 };
-ACT.studioDiscard = async () => { if (!(await ask('Abandonner ce brouillon ?', { ok: 'Abandonner', danger: true }))) return; try { await studioPost('discard'); toast('Brouillon abandonné'); } catch (e) { toast(e.message, 4000, 'bad'); } ST().sets = null; loadSet(curId()); };
+ACT.studioDiscard = async () => { const t = studioSelection(); if (!(await ask('Abandonner ce brouillon ?', { ok: 'Abandonner', danger: true })) || !t.current()) return; try { await studioPost('discard', {}, t.id); if (!t.current()) return; toast('Brouillon abandonné'); } catch (e) { if (!t.current()) return; toast(e.message, 4000, 'bad'); } t.st.sets = null; loadSet(t.id); };
 ACT.studioRollback = async () => {
+  const t = studioSelection();
   if (!(await ask('Revenir à l’état d’avant ce lot ?', { ok: 'Retour arrière', danger: true, detail: 'Chaque élément reprend sa valeur d’avant la publication, pour tout le monde.' }))) return;
-  try { await studioPost('rollback', { confirm: true }); toast('Retour arrière fait'); loadGlobal({ renderChange: false }); }
+  if (!t.current()) return;
+  try { await studioPost('rollback', { confirm: true }, t.id); if (!t.current()) return; toast('Retour arrière fait'); loadGlobal({ renderChange: false }); }
   catch (e) {
+    if (!t.current()) return;
     if (e.status === 409 && e.data?.conflicts?.length && await ask('Modifié depuis la publication', { ok: 'Forcer le retour arrière', danger: true, detail: `${e.data.conflicts.join(', ')} a changé depuis. Forcer écrase ces changements plus récents (ils restent dans les versions et le journal).` })) {
-      try { await studioPost('rollback', { confirm: true, force: true }); toast('Retour arrière forcé'); loadGlobal({ renderChange: false }); } catch (e2) { toast(e2.message, 4000, 'bad'); }
+      if (!t.current()) return;
+      try { await studioPost('rollback', { confirm: true, force: true }, t.id); if (!t.current()) return; toast('Retour arrière forcé'); loadGlobal({ renderChange: false }); } catch (e2) { if (!t.current()) return; toast(e2.message, 4000, 'bad'); }
     } else if (e.status !== 409) toast(e.message, 4000, 'bad');
   }
-  ST().sets = null; loadSet(curId());
+  if (!t.current()) return; t.st.sets = null; loadSet(t.id);
 };
 ACT.studioVersions = async (el) => {
+  const st = ST(), token = accountToken(), current = () => ownsStudio(token, st);
   try {
     const { versions } = await api('GET', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}`);
+    if (!current()) return;
     openSheet(h`<h2 style="margin:0">🕑 Versions · ${el.dataset.id}</h2>${versions.length ? versions.map((v, k) => h`<details class="how mini"><summary>v${v.version} · ${fmtDateTime(v.at)} · ${v.by || '—'} ${v.hidden ? '(masqué)' : v.data == null ? '(origine)' : ''}</summary><pre class="txt">${v.data ? JSON.stringify(v.data, null, 1) : '—'}</pre>
       <div class="row wrapf">${versions[k + 1] ? h`<button class="btn sm" data-act="verDiff" data-k="${el.dataset.k}" data-id="${el.dataset.id}" data-a="${versions[k + 1].version}" data-b="${v.version}">Comparer avec v${versions[k + 1].version}</button>` : ''}${k ? h`<button class="btn sm" data-act="verRestore" data-k="${el.dataset.k}" data-id="${el.dataset.id}" data-v="${v.version}">↩️ Restaurer (brouillon)</button>` : ''}</div></details>`) : h`<p class="small muted">Pas encore de version publiée.</p>`}<button class="btn" data-act="closeSheet">Fermer</button>`, { wide: true });
-  } catch (e) { toast(e.message, 4000, 'bad'); }
+  } catch (e) { if (current()) toast(e.message, 4000, 'bad'); }
 };
 
 /* Brouillons sans code : formulaire par type simple. */
@@ -160,17 +171,18 @@ ACT.studioNew = () => draftForm();
 ACT.studioEdit = (el) => { const i = Number(el.dataset.i), it = ST().cur.items[i]; draftForm({ kind: it.kind, data: it.data || {}, i }); };
 CHG.studioKind = (el) => { const f = el.form; draftForm({ kind: el.value, title: f.title?.value || '' }); };
 SUBMIT.studioDraftGo = async (f) => {
+  const t = studioSelection(), current = () => t.current() && f.isConnected;
   const d = Object.fromEntries(new FormData(f)), kind = d.kind, i = Number(d.i);
   const data = Object.fromEntries(FORMS[kind].map(([k]) => [k, d[k]]));
   try {
     if (i >= 0) {
       const items = ST().cur.items.map((it, k) => (k === i ? { ...it, data } : it));
-      await api('PUT', '/api/admin/studio/' + encodeURIComponent(curId()), { items }); closeSheet(); toast('Brouillon modifié'); loadSet(curId());
+      await api('PUT', '/api/admin/studio/' + encodeURIComponent(t.id), { items }); if (!current()) return; closeSheet(); toast('Brouillon modifié'); loadSet(t.id);
     } else {
       const r = await api('POST', '/api/admin/studio', { title: d.title || KIND[kind], items: [{ kind, id: 'g-' + uid().slice(0, 12), op: 'put', data }] });
-      closeSheet(); toast('Brouillon créé'); ST().sets = null; go('settings', 'studioSet', r.id); loadSet(r.id);
+      if (!current()) return; closeSheet(); toast('Brouillon créé'); t.st.sets = null; go('settings', 'studioSet', r.id); loadSet(r.id);
     }
-  } catch (e) { toast(e.message, 5000, 'bad'); }
+  } catch (e) { if (current()) toast(e.message, 5000, 'bad'); }
 };
 ACT.studioAi = () => openSheet(h`<form data-submit="studioAiGo" class="stack"><h2 style="margin:0">🤖 Brouillon avec l’assistant</h2>
   <label>Type<select name="kind">${['faq', 'announce', 'text', 'style', 'intent', 'exercise'].map((k) => h`<option value="${k}">${KIND[k]}</option>`)}</select></label>
@@ -178,13 +190,22 @@ ACT.studioAi = () => openSheet(h`<form data-submit="studioAiGo" class="stack"><h
   <p class="tiny muted">L’assistant rédige un brouillon ; le serveur le vérifie champ par champ. Rien n’est publié sans toi.</p>
   <button class="btn pri big">Rédiger le brouillon</button></form>`);
 SUBMIT.studioAiGo = async (f) => {
-  const d = Object.fromEntries(new FormData(f)), btn = f.querySelector('button'); btn.disabled = true; btn.textContent = 'L’assistant rédige…';
-  try { const r = await api('POST', '/api/admin/studio/ai', { kind: d.kind, text: d.text }, { timeout: 45000 }); closeSheet(); toast('Brouillon rédigé : relis-le'); ST().sets = null; go('settings', 'studioSet', r.id); loadSet(r.id); }
-  catch (e) { toast(e.message, 5000, 'bad'); btn.disabled = false; btn.textContent = 'Rédiger le brouillon'; }
+  const st = ST(), token = accountToken(), d = Object.fromEntries(new FormData(f)), btn = f.querySelector('button'); if (btn.disabled) return;
+  const current = () => ownsStudio(token, st) && f.isConnected;
+  f.querySelector('[role=status]')?.remove(); btn.disabled = true; btn.textContent = 'L’assistant rédige…';
+  try {
+    const r = await api('POST', '/api/admin/studio/ai', { kind: d.kind, text: d.text }, { timeout: 45000 }); if (!current()) return;
+    if (!aiProposalReady(r)) throw Object.assign(new Error('L’assistant n’a pas fourni de références vérifiables. Aucun brouillon n’a été ouvert ; précise ta demande.'), { status: 422 });
+    st.proposalEvidence = r; closeSheet(); toast('Brouillon rédigé : relis-le'); st.sets = null; go('settings', 'studioSet', r.id); loadSet(r.id);
+  } catch (e) {
+    if (!current()) return;
+    const notice = document.createElement('p'); notice.className = 'small warn-t'; notice.setAttribute('role', 'status'); notice.textContent = e.message || 'Assistant indisponible.'; btn.before(notice);
+    btn.disabled = false; btn.textContent = 'Rédiger le brouillon';
+  }
 };
 
 /* Journal. */
-async function loadAudit() { try { ST().audit = (await api('GET', '/api/admin/audit?limit=200')).events; } catch (e) { ST().audit = { error: e.offline ? 'Connexion requise.' : e.message }; } render(); }
+async function loadAudit() { const st = ST(), token = accountToken(); try { const r = await api('GET', '/api/admin/audit?limit=200'); if (!ownsStudio(token, st)) return; st.audit = r.events; } catch (e) { if (!ownsStudio(token, st)) return; st.audit = { error: e.offline ? 'Connexion requise.' : e.message }; } render(); }
 export function vAudit() {
   if (!S.user?.isAdmin) return notAdmin();
   const a = ST().audit; if (!a) setTimeout(loadAudit, 0);
@@ -210,7 +231,8 @@ export function vLab() {
       <label>Décris-le<textarea rows="4" maxlength="2000" data-input="labText" placeholder="Ex. les débutants ne trouvent pas le minuteur ; les séances longues finissent trop fort…">${L.text}</textarea></label>
       <button class="btn pri" data-act="labGo" ${L.busy ? 'disabled' : ''}>${L.busy ? 'Analyse…' : 'Analyser avec l’assistant'}</button>
       <p class="tiny muted">L’assistant reformule, relève les règles en jeu et propose des solutions avec avantages et inconvénients. Il ne change rien : une solution devient au mieux un brouillon.</p>
-      ${r ? h`<p><b>Reformulation</b> : ${r.reformulation || '—'}</p>${r.rules.length ? h`<p class="small"><b>Règles en jeu</b></p><ul>${r.rules.map((x) => h`<li class="small">${x}</li>`)}</ul>` : ''}${r.questions.length ? h`<p class="small"><b>À préciser</b></p><ul>${r.questions.map((x) => h`<li class="small">${x}</li>`)}</ul>` : ''}
+      ${L.error ? h`<p class="small warn-t" role="status">${L.error}</p><p class="tiny muted">Aucune solution n’a été préparée.</p>` : ''}
+      ${r ? h`${aiEvidence(r)}<p><b>Reformulation</b> : ${r.reformulation || '—'}</p>${r.rules.length ? h`<p class="small"><b>Règles en jeu</b></p><ul>${r.rules.map((x) => h`<li class="small">${x}</li>`)}</ul>` : ''}${r.questions.length ? h`<p class="small"><b>À préciser</b></p><ul>${r.questions.map((x) => h`<li class="small">${x}</li>`)}</ul>` : ''}
         ${r.solutions.map((s, i) => h`<div class="card flat"><div class="row between"><b>${s.title}</b>${tag('risque ' + s.risk, s.risk === 'élevé' ? 'warn' : s.risk === 'faible' ? 'ok' : '')}</div>${s.how ? h`<p class="small">${s.how}</p>` : ''}
           ${s.pros.length ? h`<p class="tiny"><b>Pour</b> : ${s.pros.join(' · ')}</p>` : ''}${s.cons.length ? h`<p class="tiny"><b>Contre</b> : ${s.cons.join(' · ')}</p>` : ''}
           ${s.change ? canRole('content') ? h`<button class="btn sm" data-act="labDraft" data-i="${i}">📝 Créer un brouillon (${KIND[s.change.kind]})</button>` : h`<p class="tiny muted">Le rôle Contenu est nécessaire pour préparer et publier cette modification.</p>` : h`<p class="tiny muted">Demande un changement du code de l’app : à faire par une mise à jour, pas depuis le Studio.</p>`}</div>`)}` : ''}</div>
@@ -219,18 +241,21 @@ export function vLab() {
       <p class="small">${phases.map((p) => `${phaseName(p)} (${activityLabel(p.activity) === '—' ? ROLES[p.role][1] : activityLabel(p.activity)}, ${p.minutes} min)`).join(' → ')}</p>
       ${sug.length ? sug.map((s) => h`<details class="how mini"><summary>${s.title}</summary><p class="small">${s.text}</p><ul>${s.why.map((w) => h`<li class="tiny">${REASON[w.cat]?.[0] || ''} ${REASON[w.cat]?.[1] || ''} : ${w.text}</li>`)}</ul></details>`) : h`<p class="small muted">Aucune règle ne se déclenche sur cet exemple.</p>`}</div>`;
 }
-INPUT.labText = (el) => { ST().lab.text = el.value.slice(0, 2000); };
+INPUT.labText = (el) => { const L = ST().lab, text = el.value.slice(0, 2000); if (text !== L.text) { L.res = null; L.error = ''; } L.text = text; };
 ACT.labEx = (el) => { ST().lab.ex = Number(el.dataset.i); render(); };
 ACT.labGo = async () => {
-  const L = ST().lab; if (L.text.trim().length < 10) { toast('Décris le problème en une ou deux phrases.'); return; }
-  L.busy = true; render();
-  try { L.res = (await api('POST', '/api/admin/lab', { text: L.text }, { timeout: 45000 })).lab; } catch (e) { toast(e.message, 5000, 'bad'); }
-  L.busy = false; render();
+  const st = ST(), token = accountToken(), L = st.lab, text = L.text; if (L.busy) return; if (text.trim().length < 10) { toast('Décris le problème en une ou deux phrases.'); return; }
+  const current = () => ownsStudio(token, st) && st.lab === L && L.text === text;
+  L.busy = true; L.res = null; L.error = ''; render();
+  try { const r = (await api('POST', '/api/admin/lab', { text }, { timeout: 45000 })).lab; if (!current()) return; if (!aiProposalReady(r)) throw Object.assign(new Error('L’analyse n’a pas de références vérifiables. Précise le problème.'), { status: 422 }); L.res = r; }
+  catch (e) { if (!current()) return; L.error = e.message || 'Assistant indisponible.'; }
+  finally { if (ownsStudio(token, st) && st.lab === L) { L.busy = false; render(); } }
 };
 ACT.labDraft = async (el) => {
-  const s = ST().lab.res?.solutions?.[Number(el.dataset.i)]; if (!s?.change) return;
-  try { const r = await api('POST', '/api/admin/studio', { title: 'Lab : ' + s.title, note: 'Issu du Laboratoire : ' + (ST().lab.res.reformulation || ''), source: 'lab', items: [{ kind: s.change.kind, id: 'g-' + uid().slice(0, 12), op: 'put', data: s.change.data }] }); toast('Brouillon créé : relis-le'); ST().sets = null; go('settings', 'studioSet', r.id); loadSet(r.id); }
-  catch (e) { toast(e.message, 5000, 'bad'); }
+  const st = ST(), token = accountToken(), result = st.lab.res, s = result?.solutions?.[Number(el.dataset.i)]; if (!s?.change || !aiProposalReady(result)) return;
+  const current = () => ownsStudio(token, st) && st.lab.res === result;
+  try { const r = await api('POST', '/api/admin/studio', { title: 'Lab : ' + s.title, note: 'Issu du Laboratoire : ' + (result.reformulation || ''), source: 'lab', items: [{ kind: s.change.kind, id: 'g-' + uid().slice(0, 12), op: 'put', data: s.change.data }] }); if (!current()) return; st.proposalEvidence = { ...result, id: r.id }; toast('Brouillon créé : relis-le'); st.sets = null; go('settings', 'studioSet', r.id); loadSet(r.id); }
+  catch (e) { if (current()) toast(e.message, 5000, 'bad'); }
 };
 
 /* ═════════ V2 : santé des données, maintenance (IA), propositions de code, rôles ═════════ */
@@ -241,7 +266,7 @@ const SEV_L = { high: ['🔴', 'Important'], mid: ['🟠', 'Moyen'], low: ['🟡
 const TYPE_L = { 'no-caps': 'Exercices sans capacités', 'bad-relation': 'Relations contradictoires', 'no-metric': 'Capacités sans métrique', 'hard-goal': 'Objectifs difficiles à évaluer', duplicate: 'Doublons', orphan: 'Données orphelines', 'old-structure': 'Anciennes structures' };
 export function vHealth() {
   if (!canRole('intelligence')) return roleNeeded('intelligence');
-  const st = ST(); if (!st.health) { st.health = { loading: true }; api('GET', '/api/admin/health').then((r) => { st.health = r; render(); }).catch((e) => { st.health = { error: e.message }; render(); }); }
+  const st = ST(); if (!st.health) { const token = accountToken(), pending = { loading: true }, current = () => ownsStudio(token, st) && st.health === pending; st.health = pending; api('GET', '/api/admin/health').then((r) => { if (!current()) return; st.health = r; render(); }).catch((e) => { if (!current()) return; st.health = { error: e.message }; render(); }); }
   const r = st.health;
   if (r.loading) return skeleton(3);
   if (r.error) return h`<div class="card"><p class="err small">${r.error}</p></div>`;
@@ -253,23 +278,33 @@ export function vHealth() {
 }
 ACT.healthReload = () => { ST().health = null; render(); };
 ACT.healthFix = async (el) => {
-  const x = ST().health?.issues?.[Number(el.dataset.id)]; if (!x?.fix) return;
-  try { const r = await api('POST', '/api/admin/studio', { title: `Santé : ${TYPE_L[x.type] || x.type} — ${x.target}`, note: x.text, items: [x.fix] }); toast('Brouillon créé : vérifie puis publie.'); ST().sets = null; go('settings', 'studioSet', r.id); }
-  catch (e) { toast(e.message, 5000, 'bad'); }
+  const st = ST(), token = accountToken(), health = st.health, x = health?.issues?.[Number(el.dataset.id)]; if (!x?.fix) return;
+  const current = () => ownsStudio(token, st) && st.health === health;
+  try { const r = await api('POST', '/api/admin/studio', { title: `Santé : ${TYPE_L[x.type] || x.type} — ${x.target}`, note: x.text, items: [x.fix] }); if (!current()) return; toast('Brouillon créé : vérifie puis publie.'); st.sets = null; go('settings', 'studioSet', r.id); }
+  catch (e) { if (current()) toast(e.message, 5000, 'bad'); }
 };
 export function vMaint() {
   if (!canRole('technical')) return roleNeeded('technical');
   const m = ST().maint;
   return h`<div class="card stack"><h3>🛠️ Maintenance</h3><p class="small">L’app regroupe les signalements ouverts ; l’assistant (s’il est activé) propose des pistes. <b>Rien n’est appliqué</b> : chaque piste peut devenir un brouillon de contenu ou une proposition de code, validés par un administrateur.</p>
       <button class="btn pri" data-act="maintRun" ${m?.busy ? 'disabled' : ''}>${m?.busy ? 'Analyse…' : 'Analyser les signalements'}</button></div>
-    ${m?.res ? h`<div class="card"><h3>${m.res.open} signalement(s) ouvert(s)</h3>${m.res.groups.map((g) => h`<div class="item"><div class="grow small">${g.text}</div></div>`)}</div>
+    ${m?.error ? h`<div class="card"><p class="small warn-t" role="status">${m.error}</p><p class="tiny muted">Aucune piste n’a été préparée ni appliquée.</p></div>` : ''}
+    ${m?.res ? h`<div class="card"><h3>${m.res.open} signalement(s) ouvert(s)</h3><p class="tiny muted">Déclarations des membres : ce regroupement ne prouve pas qu’un bug a été reproduit.</p>${m.res.groups.map((g) => h`<div class="item"><div class="grow small">${g.text}</div></div>`)}</div>
+      ${aiProposalReady(m.res) ? h`<div class="card">${aiEvidence(m.res)}</div>` : ''}
       <div class="card"><h3>Pistes de l’assistant</h3>${m.res.findings.length ? m.res.findings.map((f) => h`<div class="card flat"><div class="row between wrapf"><b>${f.title}</b>${tag(f.severity, f.severity === 'élevé' ? 'warn' : '')}</div><p class="small">${f.detail}</p><p class="small">➜ ${f.proposal}</p><p class="tiny muted">Domaine : ${f.area}</p>
-          ${f.area === 'code' ? h`<button class="btn sm" data-act="codeNew" data-t="${f.title}" data-s="${f.proposal}">💻 Préparer une proposition de code</button>` : ''}</div>`) : h`<p class="small muted">${m.res.ai === 'indisponible' ? 'Assistant non activé sur ce serveur : seul le regroupement est disponible.' : 'Aucune piste.'}</p>`}</div>` : ''}`;
+          ${aiEvidence(f)}<p class="tiny muted">Piste issue des signalements, à vérifier avant toute correction.</p>
+          ${f.area === 'code' ? h`<button class="btn sm" data-act="codeNew" data-t="${f.title}" data-s="${f.proposal}">💻 Préparer une proposition de code</button>` : ''}</div>`) : h`<p class="small muted">${m.res.ai === 'indisponible' ? 'Assistant indisponible pour cette analyse : seul le regroupement est disponible.' : m.res.ai === 'unverified' ? (m.res.clarification || 'L’assistant n’a pas pu établir de piste vérifiable. Précise les signalements ; aucune correction n’a été préparée.') : m.res.ai === 'erreur' ? 'L’analyse a échoué. Le regroupement est conservé ; aucune correction n’a été préparée.' : 'Aucune piste.'}</p>`}</div>` : ''}`;
 }
-ACT.maintRun = async () => { const st = ST(); st.maint = { busy: true }; render(); try { st.maint = { res: await api('POST', '/api/admin/maintenance', {}, { timeout: 45000 }) }; } catch (e) { st.maint = null; toast(e.message, 5000, 'bad'); } render(); };
+ACT.maintRun = async () => {
+  const st = ST(), token = accountToken(); if (st.maint?.busy) return;
+  const pending = { busy: true }, current = () => ownsStudio(token, st) && st.maint === pending; st.maint = pending; render();
+  try { const r = await api('POST', '/api/admin/maintenance', {}, { timeout: 45000 }); if (!current()) return; if (r.ai === 'ok' && !aiProposalReady(r)) throw Object.assign(new Error('Les pistes n’ont pas de références vérifiables. Aucune modification n’a été préparée.'), { status: 422 }); if (r.ai !== 'ok') r.findings = []; st.maint = { res: r }; }
+  catch (e) { if (!current()) return; st.maint = { error: e.message || 'Assistant indisponible.' }; }
+  if (ownsStudio(token, st)) render();
+};
 export function vCode() {
   if (!canRole('technical')) return roleNeeded('technical');
-  const st = ST(); if (!st.code) { st.code = { loading: true }; api('GET', '/api/admin/code').then((r) => { st.code = r; render(); }).catch((e) => { st.code = { error: e.message }; render(); }); }
+  const st = ST(); if (!st.code) { const token = accountToken(), pending = { loading: true }, current = () => ownsStudio(token, st) && st.code === pending; st.code = pending; api('GET', '/api/admin/code').then((r) => { if (!current()) return; st.code = r; render(); }).catch((e) => { if (!current()) return; st.code = { error: e.message }; render(); }); }
   const c = st.code, SL = CODE_SL;
   return h`<div class="card stack"><h3>💻 Propositions de code</h3><p class="small">Proposition → diff → analyse d’impact → validation (par un autre administrateur, ou par toi seul si tu es le seul, en le confirmant) → <b>Pull Request sur GitHub</b>, où les tests du dépôt tournent → tu fusionnes toi-même sur GitHub. <b>L’app ne fusionne et ne déploie jamais de code.</b></p>
       <p class="tiny muted">Le plus simple : demande la modification à l’« Assistant du site » (💻 Proposer dans le code), il prépare des remplacements exacts vérifiés.</p>
@@ -284,12 +319,12 @@ ACT.codeNew = (el) => openSheet(h`<form data-submit="codeGo" class="stack"><h2 s
   <label>Tests prévus / lancés<textarea name="tests" rows="2" maxlength="2000" placeholder="npm test, npm run test:e2e…"></textarea></label>
   <p class="tiny muted">L’analyse d’impact est faite par le serveur. Secrets et exécution dynamique (eval, new Function, shell) sont refusés.</p>
   <button class="btn pri big">Enregistrer la proposition</button></form>`, { wide: true });
-SUBMIT.codeGo = async (f) => { const d = Object.fromEntries(new FormData(f)); try { const r = await api('POST', '/api/admin/code', d); closeSheet(); toast('Proposition enregistrée'); ST().code = null; go('settings', 'codeItem', r.id); } catch (e) { toast(e.message, 6000, 'bad'); } };
+SUBMIT.codeGo = async (f) => { const st = ST(), token = accountToken(), current = () => ownsStudio(token, st) && f.isConnected, d = Object.fromEntries(new FormData(f)); try { const r = await api('POST', '/api/admin/code', d); if (!current()) return; closeSheet(); toast('Proposition enregistrée'); st.code = null; go('settings', 'codeItem', r.id); } catch (e) { if (current()) toast(e.message, 6000, 'bad'); } };
 ACT.codeOpen = (el) => { ST().codeItem = null; go('settings', 'codeItem', el.dataset.id); };
 export function vCodeItem() {
   if (!canRole('technical')) return roleNeeded('technical');
   const st = ST(), it = st.codeItem;
-  if (!it || it.id !== S.param) { if (!st.codeLoading) { st.codeLoading = true; api('GET', '/api/admin/code/' + encodeURIComponent(S.param)).then((r) => { st.codeItem = r.item; st.codeLoading = false; render(); }).catch((e) => { st.codeLoading = false; toast(e.message); }); } return skeleton(2); }
+  if (!it || it.id !== S.param) { if (st.codeLoading !== S.param) { const token = accountToken(), id = S.param, current = () => ownsStudio(token, st) && st.codeLoading === id; st.codeLoading = id; api('GET', '/api/admin/code/' + encodeURIComponent(id)).then((r) => { if (!current()) return; st.codeItem = r.item; st.codeLoading = null; render(); }).catch((e) => { if (!current()) return; st.codeLoading = null; toast(e.message); }); } return skeleton(2); }
   const im = it.impact || {};
   return h`<div class="card stack"><h2 style="margin:0">${it.title}</h2><p class="tiny muted">Par ${it.author || '—'} · ${fmtDateTime(it.createdAt)} · ${it.status === 'draft' ? 'à examiner' : it.status === 'rejected' ? `refusée par ${it.reviewer || '—'}` : `validée par ${it.reviewer || '—'}${it.status === 'pr' ? ' · Pull Request ouverte' : ''}`}</p>
       ${it.summary ? h`<p class="small">${it.summary}</p>` : ''}
@@ -305,31 +340,39 @@ export function vCodeItem() {
       <p class="tiny muted">Valider ne déploie rien. Seule la fusion sur GitHub change le site.</p></div>`;
 }
 ACT.codeReview = async (el) => {
-  const approve = el.dataset.d === 'approve';
+  const st = ST(), token = accountToken(), item = st.codeItem, current = () => ownsStudio(token, st) && st.codeItem === item, approve = el.dataset.d === 'approve'; if (!item) return;
   if (!(await ask(approve ? 'Valider cette proposition ?' : 'Refuser cette proposition ?', { ok: approve ? 'Valider' : 'Refuser', danger: !approve, detail: approve ? 'Ensuite tu pourras ouvrir la Pull Request sur GitHub. L’app ne fusionne et ne déploie jamais de code.' : '' }))) return;
+  if (!current()) return;
   const note = (await askText('Note (facultatif)', { ok: 'Envoyer', cancel: 'Sans note', max: 300 })) || '';
-  const id = encodeURIComponent(ST().codeItem.id), done = () => { toast(approve ? 'Validée : prête pour GitHub' : 'Refusée'); ST().codeItem = null; ST().code = null; render(); };
+  if (!current()) return;
+  const id = encodeURIComponent(item.id), done = () => { if (!current()) return; toast(approve ? 'Validée : prête pour GitHub' : 'Refusée'); st.codeItem = null; st.code = null; render(); };
   try { await api('POST', `/api/admin/code/${id}/review`, { decision: el.dataset.d, note }); done(); }
   catch (e) {
+    if (!current()) return;
     // Seul administrateur : on peut valider seul, après une confirmation explicite (notée au journal).
     if (e.status === 409 && e.data?.soloPossible && (await ask('Tu es le seul administrateur : valider seul ?', { ok: 'Je valide seul', detail: 'D’habitude, un autre administrateur relit. Ce choix est noté au journal. La Pull Request GitHub reste à relire avant de fusionner.' }))) {
-      try { await api('POST', `/api/admin/code/${id}/review`, { decision: el.dataset.d, note, solo: true }); done(); } catch (e2) { toast(e2.message, 5000, 'bad'); }
+      if (!current()) return;
+      try { await api('POST', `/api/admin/code/${id}/review`, { decision: el.dataset.d, note, solo: true }); done(); } catch (e2) { if (current()) toast(e2.message, 5000, 'bad'); }
     } else toast(e.message, 5000, 'bad');
   }
 };
 ACT.codePr = async () => {
-  const it = ST().codeItem; if (!it) return;
+  const st = ST(), token = accountToken(), it = st.codeItem; if (!it) return; const current = () => ownsStudio(token, st) && st.codeItem === it;
   if (!(await ask('Créer la Pull Request sur GitHub ?', { ok: 'Créer la Pull Request', detail: 'Une branche avec ces remplacements et une Pull Request seront créées sur ton dépôt. Rien n’est fusionné ni déployé : tu le fais toi-même sur GitHub.' }))) return;
-  try { const r = await api('POST', `/api/admin/code/${encodeURIComponent(it.id)}/pr`, {}, { timeout: 45000 }); toast(r.already ? 'Pull Request déjà ouverte' : 'Pull Request créée ✓'); ST().codeItem = null; ST().code = null; render(); }
-  catch (e) { toast(e.message, 7000, 'bad'); }
+  if (!current()) return;
+  try { const r = await api('POST', `/api/admin/code/${encodeURIComponent(it.id)}/pr`, {}, { timeout: 45000 }); if (!current()) return; toast(r.already ? 'Pull Request déjà ouverte' : 'Pull Request créée ✓'); st.codeItem = null; st.code = null; render(); }
+  catch (e) { if (current()) toast(e.message, 7000, 'bad'); }
 };
 ACT.verDiff = async (el) => {
+  const st = ST(), token = accountToken(), current = () => ownsStudio(token, st);
   try { const r = await api('GET', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}/diff?a=${el.dataset.a}&b=${el.dataset.b}`);
-    toast(r.changes.length ? `v${el.dataset.a} → v${el.dataset.b} : ${r.changes.map((c) => c.path).join(', ')}` : 'Identiques', 6000); } catch (e) { toast(e.message, 4000, 'bad'); }
+    if (!current()) return; toast(r.changes.length ? `v${el.dataset.a} → v${el.dataset.b} : ${r.changes.map((c) => c.path).join(', ')}` : 'Identiques', 6000); } catch (e) { if (current()) toast(e.message, 4000, 'bad'); }
 };
 ACT.verRestore = async (el) => {
+  const st = ST(), token = accountToken(), current = () => ownsStudio(token, st);
   if (!(await ask(`Préparer un brouillon qui rétablit la version ${el.dataset.v} ?`, { ok: 'Préparer', detail: 'Rien n’est publié : tu vérifies puis tu publies depuis le Studio.' }))) return;
-  try { const r = await api('POST', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}/restore`, { version: Number(el.dataset.v) }); closeSheet(); ST().sets = null; go('settings', 'studioSet', r.id); } catch (e) { toast(e.message, 4000, 'bad'); }
+  if (!current()) return;
+  try { const r = await api('POST', `/api/admin/versions/${el.dataset.k}/${encodeURIComponent(el.dataset.id)}/restore`, { version: Number(el.dataset.v) }); if (!current()) return; closeSheet(); st.sets = null; go('settings', 'studioSet', r.id); } catch (e) { if (current()) toast(e.message, 4000, 'bad'); }
 };
 
 SUBMIT.studioFind = (form) => { ST().query = String(new FormData(form).get('query') || '').trim().slice(0,120); render(); };

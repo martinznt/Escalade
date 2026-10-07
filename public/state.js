@@ -11,13 +11,14 @@
 //  - une opération définitivement refusée n'est jamais effacée en silence : elle va dans « actions en échec »
 //    (Réessayer / Abandonner) et un message l'annonce.
 
+import { externalProvider } from './external.js';
 import { uid, normalizeSession, normalizeHistory, mergeSeances, readStored } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
 import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
 import { toast, tz, $ } from './ui.js';
 
-export const APP_VERSION = '8.32.4';
+export const APP_VERSION = '8.33.0';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
 export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr', notifSound: 'doux', redMode: false, interfaceMode: 'simple' };
 const initialAccountState = () => ({
@@ -58,9 +59,9 @@ const idb = {
   async del(k) { const d = await this.open(); return new Promise((res) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete = () => res(true); tx.onerror = () => res(false); }); },
 };
 const pendingKey = (owner = S.user?.id) => `sea:pending:${owner}`;
-let accountOwner = null, accountEpoch = 0, localLoad = 0;
-const accountToken = () => ({ owner: S.user?.id ?? null, epoch: accountEpoch });
-const accountMatches = (token) => S.user?.id === token.owner && accountOwner === token.owner && accountEpoch === token.epoch;
+let accountOwner = null, accountEpoch = 0, localLoad = 0, historyRevision = 0;
+export const accountToken = () => ({ owner: S.user?.id ?? null, epoch: accountEpoch });
+export const accountMatches = (token) => S.user?.id === token.owner && accountOwner === token.owner && accountEpoch === token.epoch;
 class AccountChanged extends Error { constructor() { super('Le compte a changé ; cette réponse a été ignorée.'); } }
 function checkAccount(token) { if (!accountMatches(token)) throw new AccountChanged(); }
 /** Ne garde en mémoire aucun brouillon ou donnée privée d'un autre compte. Les caches restent sous leur propre clé. */
@@ -79,7 +80,7 @@ function ensureAccount() {
     const message = document.querySelector('#toast'); if (message) { message.className = ''; message.replaceChildren(); }
     document.body?.classList.remove('grp-open', 'noscroll');
   }
-  for (const name of ('lastOpenSeance lastOpenSeanceOwner clientStamp returnTo lastLoop lay setup ai goalDraft goalBack gDraft command cmdRaw cmdOptions quickDraft agendaDraft agendaEdit adapt importResult importText merge sharedDraft swapFor pickSrc sel cp cpAiBusy cpAiDraft cpEdit cpSheet cpStrats cpModAt cpRuleUnder cpRuleOver chat chatOwner chatBusy chatDraft coachStatus studio inbox notifUnread myBugs propCur propDraft ideaDraft textDraft textMode admAct group duo aq aqEnvPreset carnet pj pjWish gym gymEnv cprog progRun recap eg forme autoWeek bilan sysEdit aqEnvPreset boardEdit boardPb comp imp lp pl pace rmPick reportAt photoSel photoShow').split(' ')) S[name] = null;
+  for (const name of ('lastOpenSeance lastOpenSeanceOwner clientStamp returnTo lastLoop lay setup ai goalDraft goalBack gDraft command cmdRaw cmdOptions quickDraft agendaDraft agendaEdit adapt importResult importText merge sharedDraft swapFor pickSrc sel cp cpAiBusy cpAiDraft cpEdit cpSheet cpStrats cpModAt cpRuleUnder cpRuleOver chat chatOwner chatBusy chatDraft coachStatus studio inbox notifUnread myBugs bugFrom propCur propDraft ideaDraft textDraft textMode admAct group duo aq aqEnvPreset carnet pj pjWish gym gymEnv cprog progRun recap eg forme autoWeek bilan sysEdit aqEnvPreset boardEdit boardPb comp imp csv connections lp pl pace rmPick reportAt photoSel photoShow').split(' ')) S[name] = null;
   // Au premier démarrage, parseHash a déjà lu l'identifiant d'un éventuel lien profond.
   if (previousOwner !== null) S.param = '';
   bump();
@@ -199,15 +200,16 @@ async function flush(token) {
     try {
       await api(op.method, op.path, op.body, { opId: op.opId });
       checkAccount(token);
-      S.outbox.shift(); writePending();
+      S.outbox = S.outbox.filter((pending) => pending !== op); writePending();
     } catch (e) {
       checkAccount(token);
+      if (!S.outbox.includes(op)) continue; // Une déconnexion peut avoir supprimé cet import pendant son envoi.
       const d = decideOutboxError(op, e);
       op.lastError = e.message;
       if (d.action === 'retry-later') { op.attempts = d.attempts; op.nextAt = Date.now() + (d.delay || 0); writePending(); if (d.delay) { clearTimeout(retryT); retryT = setTimeout(() => syncAll(), d.delay + 50); } throw e; }
       if (d.action === 'pause-auth') throw e;
       S.failed.push({ ...op, error: d.reason, status: e.status || 0, failedAt: Date.now() });
-      S.outbox.shift(); writePending();
+      S.outbox = S.outbox.filter((pending) => pending !== op); writePending();
       toast(d.action === 'drop-poisoned' ? `Action mise de côté après des erreurs serveur répétées : ${op.label}. Voir Paramètres › Synchronisation.` : `Action refusée par le serveur (${op.label}) : ${d.reason}. Voir Paramètres › Synchronisation.`, 6000, 'bad');
     }
   }
@@ -306,6 +308,17 @@ async function syncSeances(token) {
   if (S.seancesVer === ver) S.seancesDirty = false;
   writePending();
 }
+/** Invalide les lectures commencées avant un ajout direct ou une suppression distante. */
+export function historyChanged() { historyRevision++; localLoad++; if (S.syncing) S.syncAgain = true; }
+export function purgeExternalHistory(provider) {
+  const removed = new Set(S.history.filter((entry) => externalProvider(entry) === provider).map((entry) => entry.id));
+  const related = (op) => externalProvider(op.body) === provider || removed.has(op.body?.id) || (op.path?.startsWith('/api/history/') && removed.has(decodeURIComponent(op.path.slice('/api/history/'.length))));
+  S.history = S.history.filter((entry) => externalProvider(entry) !== provider);
+  S.outbox = S.outbox.filter((op) => !related(op)); S.failed = S.failed.filter((op) => !related(op));
+  S.conflicts = S.conflicts.filter((op) => !related(op) && externalProvider(op.local) !== provider);
+  if (S.imp?.source === provider) S.imp = null;
+  historyChanged(); writePending(); bump(); persist(); syncSoon(100);
+}
 export function addHistory(entry) { S.history.unshift(entry); S.history.sort((a, b) => b.startedAt - a.startedAt); queue('POST', '/api/history', entry); }
 export function updateHistory(entry) { const i = S.history.findIndex((x) => x.id === entry.id); if (i >= 0) S.history[i] = entry; queue('POST', '/api/history', entry); }
 export function deleteHistory(id) { S.history = S.history.filter((x) => x.id !== id); queue('DELETE', `/api/history/${encodeURIComponent(id)}`); }
@@ -331,6 +344,7 @@ export async function syncAll() {
     await flush(token); checkAccount(token);
     await syncItems(token); checkAccount(token);
     await syncSeances(token); checkAccount(token);
+    const readRevision = historyRevision;
     const [hist, cal, set, ex] = await Promise.all([api('GET', '/api/history'), api('GET', '/api/calendar'), api('GET', '/api/settings'), api('GET', '/api/exercises')]);
     checkAccount(token);
     // Le serveur fait foi, sauf pour ce qui attend encore dans la file (visible localement, jamais effacé en silence).
@@ -338,7 +352,8 @@ export async function syncAll() {
     const failedH = S.failed.filter((f) => f.path === '/api/history' && f.method === 'POST').map((f) => ({ ...f.body, _failed: true }));
     const byId = new Map(hist.history.filter((x) => !delH.has(x.id)).map((x) => [x.id, x]));
     for (const x of [...localPendingH, ...failedH]) if (x?.id) byId.set(x.id, x);
-    S.history = [...byId.values()].map(normalizeHistory).filter(Boolean).sort((a, b) => b.startedAt - a.startedAt);
+    if (readRevision === historyRevision) S.history = [...byId.values()].map(normalizeHistory).filter(Boolean).sort((a, b) => b.startedAt - a.startedAt);
+    else S.syncAgain = true;
     const localPendingE = pendingBodies('/api/calendar'), delE = pendingDeletes('/api/calendar/');
     const byE = new Map(cal.events.filter((x) => !delE.has(x.id)).map((x) => [x.id, x]));
     for (const x of localPendingE) if (x?.id) byE.set(x.id, x);
@@ -378,6 +393,7 @@ export const render = () => { ensureAccount(); return renderer(); };
 const inField = () => { const a = document.activeElement; return a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && $('#app')?.contains(a); };
 export function softRender() { if (!inField() && !S.player && !document.querySelector('#sheet.open, #dialog.open')) render(); }
 export function go(tab, sub, param = '') {
+  if (tab === 'settings' && sub === 'bug' && !(S.tab === 'settings' && S.sub.settings === 'bug')) S.bugFrom = { owner: S.user?.id, page: `${S.tab}/${S.sub[S.tab] || ''}` };
   if (sub) S.sub[tab] = sub;
   const hash = `#/${tab}/${sub || S.sub[tab] || ''}${param ? '/' + encodeURIComponent(param) : ''}`;
   if (location.hash === hash) { S.tab = tab; S.param = param; render(); }

@@ -54,7 +54,7 @@ export const SCHEMAS = {
   // Activité personnalisée ou activation d'une activité native (preset = identifiant natif).
   activity: { label: ['s', 60], emoji: ['s', 8], preset: ['s', 40], aliases: ['strs', 20, 60], archived: ['b'] },
   // Catégorie d'une activité (native ou personnalisée). Sans capacité liée, la catégorie est elle-même un nœud du graphe.
-  category: { activityId: ['id'], label: ['s', 60], description: ['s', 180], caps: ['caps', 8], archived: ['b'], emoji: ['s', 8], guide: ['s', 600], howTo: ['strs', 6, 220], source: ['e', ['', 'ia'], ''],
+  category: { activityId: ['id'], label: ['s', 60], description: ['s', 180], caps: ['caps', 8], archived: ['b'], emoji: ['s', 8], guide: ['s', 600], howTo: ['strs', 6, 220], source: ['e', ['', 'ia', 'local'], ''],
     // Ajout personnel depuis « Séance du jour » : intention, ou force / faiblesse écrite avec ses mots.
     kind: ['e', ['', 'intent', 'focus'], ''], side: ['e', ['', 'strength', 'weakness'], ''] },
   // Définition d'une métrique personnalisée (ce qui est mesuré).
@@ -70,7 +70,7 @@ export const SCHEMAS = {
     target: ['n', -1e7, 1e7, null], current: ['n', -1e7, 1e7, null], unit: ['s', 20], gradeTarget: ['obj', GRADE_SNAPSHOT], activityId: ['id'], caps: ['caps', 8],
     status: ['e', ['active', 'done', 'archived'], 'active'], deadline: ['day'], startedAt: ['n', 0, 9e15, 0], doneAt: ['n', 0, 9e15, 0], note: ['s', 300],
     // V2 : critères de réussite, exercices liés, origine (fiche relue de l'assistant).
-    criteria: ['strs', 4, 160], exercises: ['ids', 8], source: ['e', ['', 'ia'], ''],
+    criteria: ['strs', 4, 160], exercises: ['ids', 8], source: ['e', ['', 'ia', 'local'], ''],
   },
   // Journal d'escalade : un bloc / une voie tenté(e) ou réussi(e), avec la cotation au moment de la saisie.
   ascent: {
@@ -122,6 +122,7 @@ export const SCHEMAS = {
   capdecl: { capId: ['id'], level: ['e', [-1, 0, 1, 2], -1], note: ['s', 200] },
   lab: {
     title: ['s', 80], hypothesis: ['s', 500], goalId: ['id'], capId: ['id'], metricId: ['id'], startDate: ['day'], weeks: ['n', 1, 52, 4],
+    protocol: ['s', 1200], notes: ['s', 1000],
     before: ['obj', { value: ['n', -1e7, 1e7, null], note: ['s', 300], date: ['n', 0, 9e15, 0] }],
     after: ['obj', { value: ['n', -1e7, 1e7, null], note: ['s', 300], date: ['n', 0, 9e15, 0] }],
     status: ['e', ['running', 'done', 'abandoned'], 'running'], conclusion: ['s', 800], criteria: ['s', 300],
@@ -164,6 +165,11 @@ export const SCHEMAS = {
     // Apparence choisie (item « appearance ») : suit le compte sur tous les appareils.
     mode: ['e', ['dark', 'light', 'auto', ''], ''], palette: ['s', 20], accent: ['s', 20], radius: ['s', 20], size: ['s', 4], density: ['s', 12], motion: ['s', 4], setupLater: ['n', 0, 9e15, 0], setupHidden: ['b'], tourDone: ['b'],
     vibe: ['s', 20],
+    // Icône d'installation choisie pour ce compte (item « app-icon »).
+    appIcon: ['e', ['seances','gold','slate','white','forest','ocean','climb','route','rope','mono','terra','custom'], 'seances'],
+    appIconToken: ['s', 80], appIconDesign: ['s', 4000], appIconDraft: ['s', 4000],
+    notificationIcon: ['e', ['app','seances','gold','slate','white','forest','ocean','climb','route','rope','mono','terra','custom'], 'app'],
+    notificationToken: ['s', 80], notificationDesign: ['s', 4000], notificationDraft: ['s', 4000],
     easy: ['s', 4], cb: ['s', 4], big: ['s', 4], contrast: ['s', 4],
     // Objectifs (plusieurs) et profil corporel (item « body ») : déclarés, tous facultatifs.
     goals: ['strs', 8, 20], age: ['n', 8, 100, null], height: ['n', 100, 230, null], weight: ['n', 25, 300, null], sex: ['e', ['f', 'h', 'x', ''], ''],

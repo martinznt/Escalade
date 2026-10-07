@@ -20,15 +20,15 @@ const api=(path)=>p.evaluate(async path=>(await(await fetch(path)).json()),path)
 const today=dayInZone(Date.now(),'Europe/Paris');let tuesday=today;while(weekday(tuesday)!==2)tuesday=shiftDay(tuesday,-1);const friday=shiftDay(tuesday,3);
 try {
   await step('nouveau compte : interface simple par défaut',async()=>{
-    await p.goto(srv.base);await p.click('[data-act=authPick][data-id=register]');await p.fill('input[name=username]','SimpleAgenda');await p.fill('input[name=password]','motdepasse1');await p.click('button[type=submit]');await p.waitForSelector('nav.tabs');
+    await p.goto(srv.base);await p.click('[data-act=authPick][data-id=register]');await p.fill('input[name=username]','SimpleAgendaMobileCompte');await p.fill('input[name=password]','motdepasse1');await p.click('button[type=submit]');await p.waitForSelector('nav.tabs');
     await p.evaluate(async()=>{const m=await import('/state.js');m.putItem('config','main',{tourDone:true,asked:['acts','place','minutes','perWeek','goal','avoid']});});
     await p.click('[data-act=setupSkip]');await p.waitForSelector('[data-act=expressOpen]');assert.equal(await p.locator('html').getAttribute('data-interface'),'simple');
   });
-  await step('paramètres en un toucher : cinq rubriques et un seul choix d’interface',async()=>{
+  await step('paramètres en un toucher : six rubriques et un seul choix d’interface',async()=>{
     await p.getByRole('button',{name:'Paramètres',exact:true}).click();
     await p.waitForSelector('.setmain > .setmenu .setrow');
     assert.equal(await p.locator('nav .ico svg').count(),5);
-    assert.equal(await p.locator('.setmain > .setmenu .setrow').count(),5);
+    assert.equal(await p.locator('.setmain > .setmenu .setrow').count(),6);
     assert.equal(await p.locator('[data-act=interfaceSet]').count(),2);
     assert.ok(await p.locator('[data-act=interfaceSet][data-v=simple]').isVisible());
     assert.equal(await p.locator('#settings-more').getAttribute('open'),null);
@@ -58,10 +58,17 @@ try {
     await p.fill('[data-input=setFind]','profil questionnaire');await p.click('#setfindres [data-act=findGo]');
     await p.waitForSelector('[data-act=setupAgain].found');assert.ok(await p.locator('#settings-more [data-act=setupAgain][data-id=quiz]').isVisible());
     for(const [width,height] of [[320,568],[390,844],[1280,900]]) {
-      await p.setViewportSize({width,height});await p.click('nav [data-id=settings]');
-      assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-      assert.ok(await p.locator('[data-act=interfaceSet][data-v=simple]').isVisible());
-      await p.screenshot({path:`/tmp/escalade-settings-${width}.png`,fullPage:true});
+      await p.setViewportSize({width,height});
+      for(const mode of ['dark','light']) {
+        await p.click('nav [data-id=settings]');await p.click('[data-act=setSub][data-id=display]');await p.click(`[data-act=appear][data-k=mode][data-v=${mode}]`);await p.click('nav [data-id=settings]');await p.waitForSelector('.setmain:not([hidden])');
+        const noOverflow=async state=>assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${width}px ${mode}, ${state}`);
+        await noOverflow('options repliées');assert.ok(await p.locator('[data-act=interfaceSet][data-v=simple]').isVisible());
+        assert.equal(await p.locator('.set-account-name').innerText(),'👤 SimpleAgendaMobileCompte');
+        const logout=await p.locator('[data-act=logout]').boundingBox();assert.ok(logout&&logout.x>=0&&logout.x+logout.width<=width,'bouton de déconnexion entièrement visible');
+        await p.click('details:has([data-act=chpass]) > summary');await noOverflow('compte ouvert');assert.ok(await p.locator('[data-act=chpass]').isVisible());
+        await p.click('#settings-more > summary');await noOverflow('compte et profil ouverts');assert.ok(await p.locator('#settings-more [data-act=setupAgain][data-id=quiz]').isVisible());
+        await p.screenshot({path:`/tmp/escalade-settings-${width}-${mode}.png`,fullPage:true});
+      }
     }
     await p.setViewportSize({width:390,height:844});await p.click('[data-act=setSub][data-id=display]');
     await p.click('[data-act=appear][data-k=mode][data-v=light]');assert.equal(await p.locator('html').getAttribute('data-mode'),'light');
@@ -139,7 +146,8 @@ try {
   });
   await step('bilan hors ligne : fermeture, réouverture et synchronisation sans doublon',async()=>{
     await p.click('nav [data-id=home]');await poll(()=>p.evaluate(async()=>!!(await navigator.serviceWorker.ready).active));
-    await ctx.setOffline(true);await p.click('[data-act=quickLog]');await p.fill('[name=minutes-0]','15');await p.selectOption('[name=activity-0]','running');await p.click('[data-submit=quickSave] button[type=submit]');await p.reload();await p.waitForSelector('nav.tabs');assert.equal(await p.locator('html').getAttribute('data-interface'),'simple');
+    await ctx.setOffline(true);await p.click('[data-act=quickLog]:not([data-id]),[data-act=quickLog][data-id=""]');await p.fill('[name=minutes-0]','15');await p.selectOption('[name=activity-0]','running');await p.click('[data-submit=quickSave] button[type=submit]');await p.reload();await p.waitForSelector('nav.tabs');assert.equal(await p.locator('html').getAttribute('data-interface'),'simple');
+    await p.waitForFunction(async()=>(await import('/state.js')).S.loaded);
     const local=await p.evaluate(async()=>{const {S}=await import('/state.js');return S.history.length;});assert.equal(local,4);await ctx.setOffline(false);await p.evaluate(async()=>{const {syncAll}=await import('/state.js');await syncAll();});await poll(async()=>(await api('/api/history')).history.length===4);await p.reload();await p.waitForSelector('nav.tabs');assert.equal((await api('/api/history')).history.length,4);
     assert.equal(await p.evaluate(async()=>{const {ctx}=await import('/state.js'),{exKey}=await import('/shared.js');return ctx().prefs[exKey('Tractions')]?.value;}),'evite');
   });

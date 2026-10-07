@@ -1,5 +1,7 @@
+import { cleanExternal, externalOf } from './external.js';
 // shared.js — code commun au serveur (worker.js) et au navigateur (app.js).
 // Aucune dépendance au DOM : testable avec Node.
+import { normalizeAimLinks } from './objectivelinks.js';
 
 export const uid = () =>
   globalThis.crypto?.randomUUID?.() ?? 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -135,20 +137,31 @@ export function normalizeHistory(h) {
   return {
     ...h, sessionName: String(h.sessionName ?? 'Séance'), startedAt: Number(h.startedAt) || 0, durationSeconds: Math.max(0, Number(h.durationSeconds) || 0),
     data: {
-      ...d, rpe: Number(d.rpe) || 0, questionnaire: q, swaps: arr(d.swaps).filter((x) => x && typeof x === 'object'), context: d.context && typeof d.context === 'object' ? { ...d.context, equipment: arr(d.context.equipment) } : d.context,
+      ...d, ...(cleanExternal(externalOf(h)) ? { external: cleanExternal(externalOf(h)) } : {}), rpe: Number(d.rpe) || 0, questionnaire: q, swaps: arr(d.swaps).filter((x) => x && typeof x === 'object'), context: d.context && typeof d.context === 'object' ? { ...d.context, equipment: arr(d.context.equipment) } : d.context,
       exercises: arr(d.exercises).filter((e) => e && typeof e === 'object').map((e) => ({ ...e, name: String(e.name ?? ''), sets: sets(e.sets), caps: obj(e.caps), prim: arr(e.prim), sec: arr(e.sec), muscles: arr(e.muscles) })),
     },
   };
 }
 export function normalizeContext(c) {
   c = c && typeof c === 'object' ? c : {};
+  const catalog = Array.isArray(c.aims) ? c.aims : [], aims = normalizeAimLinks({ aimLinks: catalog }, catalog).map((a) => {
+    const original = catalog.find((x) => x?.key === a.key) || {}, rawValue = original.target?.value;
+    const value = typeof rawValue === 'number' || typeof rawValue === 'string' && rawValue.trim() ? Number(rawValue) : NaN;
+    return { ...a, sport: str(original.sport, 60), family: str(original.family, 30), when: ['auto','start','middle','end'].includes(original.when) ? original.when : 'auto', ...(original.target?.metricId && Number.isFinite(value) ? { target: { metricId: str(original.target.metricId, 60), value } } : {}) };
+  });
   return {
     env: ID_RE.test(String(c.env || '')) ? String(c.env) : '', envName: str(c.envName, 60), equipment: idList(c.equipment, 30),
     plannedMin: clamp(c.plannedMin, 0, 600, 0), goalId: ID_RE.test(String(c.goalId || '')) ? String(c.goalId) : '', place: str(c.place, 80), ...(/^[\w:.-]{1,80}$/.test(String(c.adaptedFrom || '')) ? { adaptedFrom: String(c.adaptedFrom) } : {}),
     // V1 : intention ponctuelle de la séance (jamais un objectif du compte) et ossature validée, phase par phase.
     ...(c.intent && typeof c.intent === 'object' && (c.intent.text || c.intent.priorities?.length) ? { intent: { text: str(c.intent.text, 240), priorities: idList(c.intent.priorities, 6) } } : {}),
-    ...(Array.isArray(c.phases) && c.phases.length ? { phases: c.phases.slice(0, 20).filter((p) => p && typeof p === 'object').map((p) => ({ id: str(p.id, 40), type: str(p.type, 20), activity: str(p.activity, 60), role: str(p.role, 20), goal: str(p.goal, 200), minutes: clamp(p.minutes, 0, 600, 0), intensity: str(p.intensity, 8), priorities: idList(p.priorities, 6),
-      ...(p.envId ? { envId: str(p.envId, 80) } : {}), ...(p.travelMin ? { travelMin: clamp(p.travelMin, 0, 180, 0) } : {}), ...(Array.isArray(p.subIntents) && p.subIntents.length ? { subIntents: p.subIntents.map((x) => str(x, 60)).filter((x) => /^[\w.-]+$/.test(x)).slice(0, 12) } : {}), ...(p.objective ? { objective: true } : {}) })) } : {}),
+    ...(aims.length ? { aims } : {}),
+    ...(Array.isArray(c.goals) ? { goals: strs(c.goals, 30, 80) } : {}),
+    ...((c.goalIds || aims.filter((a) => a.goalId)).length ? { goalIds: idList(c.goalIds || aims.map((a) => a.goalId).filter(Boolean), 30) } : {}),
+    ...(Array.isArray(c.phases) && c.phases.length ? { phases: c.phases.slice(0, 40).filter((p) => p && typeof p === 'object').map((p) => ({ id: str(p.id, 40), type: str(p.type, 20), activity: str(p.activity, 60), role: str(p.role, 20), goal: str(p.goal, 200), minutes: clamp(p.minutes, 0, 600, 0), intensity: str(p.intensity, 8), priorities: idList(p.priorities, 6),
+      ...(p.envId ? { envId: str(p.envId, 80) } : {}), ...(p.travelMin ? { travelMin: clamp(p.travelMin, 0, 180, 0) } : {}), ...(Array.isArray(p.subIntents) && p.subIntents.length ? { subIntents: p.subIntents.map((x) => str(x, 60)).filter((x) => /^[\w.-]+$/.test(x)).slice(0, 12) } : {}), ...(p.objective ? { objective: true } : {}),
+      ...(Array.isArray(p.aimLinks) || p.aimKey || p.prepFor || p.objective && aims.length === 1 ? { aimLinks: normalizeAimLinks(p, aims) } : {}),
+      ...(p.window && Number.isFinite(p.window.from) && Number.isFinite(p.window.to) && p.window.to > p.window.from ? { window: { from: p.window.from, to: p.window.to, envId: str(p.window.envId, 80) } } : {}),
+      ...(p.locks && typeof p.locks === 'object' ? { locks: Object.fromEntries(Object.entries(p.locks).filter(([k, v]) => ['minutes','activity','place','goal','intensity','style','exercises','order','rest'].includes(k) && ['user','free','app'].includes(v))) } : {}) })) } : {}),
   };
 }
 function normalizeExplain(e) {

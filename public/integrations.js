@@ -1,0 +1,28 @@
+// Catalogue informatif : capacités non activées explicitement distinguées des imports disponibles.
+// Sources et limites de vérification : SPORTS_INTEGRATIONS_RESEARCH.md (2026-10-06).
+export const APPS = [
+  { id: 'strava', name: 'Strava', kind: 'direct', url: 'https://www.strava.com/', description: 'Connexion avec autorisation du compte, puis sélection des activités à importer. Activation par l’administrateur nécessaire.' },
+  { id: 'garmin', name: 'Garmin Connect', kind: 'unverified', url: 'https://connect.garmin.com/', description: 'Connexion au compte non disponible ici. Si ton compte propose un export GPX ou TCX, tu peux vérifier puis importer ce fichier. Les fichiers FIT ne sont pas pris en charge.' },
+  { id: 'polar', name: 'Polar Flow', kind: 'unverified', url: 'https://flow.polar.com/', description: 'Polar propose une API officielle. Le connecteur pour Mes séances reste à développer.' },
+  { id: 'suunto', name: 'Suunto', kind: 'unverified', url: 'https://www.suunto.com/', description: 'Les conditions de connexion et les exports disponibles dans ton compte restent à vérifier.' },
+  { id: 'coros', name: 'COROS', kind: 'unverified', url: 'https://coros.com/', description: 'Les conditions de connexion et les exports disponibles dans ton compte restent à vérifier.' },
+  { id: 'apple', name: 'Apple Santé', kind: 'mobile', url: 'https://developer.apple.com/health-fitness/', description: 'L’accès HealthKit demande une application iPhone compatible. Ce site ne peut pas lire directement Apple Santé.' },
+  { id: 'healthconnect', name: 'Health Connect · Android', kind: 'mobile', url: 'https://developer.android.com/health-and-fitness/guides/health-connect', description: 'L’accès aux données demande une application Android compatible. Il n’est pas disponible directement dans ce site.' },
+  { id: 'samsung', name: 'Samsung Health', kind: 'unverified', url: 'https://developer.samsung.com/health', description: 'Une intégration mobile et les droits d’accès doivent être étudiés. Aucun compte Samsung n’est connecté ici.' },
+  { id: 'fitbit', name: 'Fitbit', kind: 'unverified', url: 'https://dev.fitbit.com/', description: 'Le contrat actuel d’accès aux données et le connecteur restent à vérifier.' },
+  { id: 'trainingpeaks', name: 'TrainingPeaks', kind: 'partner', url: 'https://www.trainingpeaks.com/', description: 'Son API demande une admission partenaire ; certaines données dépendent de l’abonnement. Connexion non disponible ici.' },
+  { id: 'intervals', name: 'Intervals.icu', kind: 'unverified', url: 'https://intervals.icu/', description: 'Le service annonce une API ouverte. Le connecteur pour Mes séances reste à développer.' },
+  { id: 'komoot', name: 'Komoot', kind: 'unverified', url: 'https://www.komoot.com/', description: 'Un parcours planifié ne représente pas une séance réalisée. La connexion et les formats d’export du compte restent à vérifier.' },
+  { id: 'crimpd', name: 'Crimpd', kind: 'unverified', url: 'https://www.crimpd.com/', description: 'Bibliothèque et suivi d’entraînement en escalade. Aucun accès officiel au compte n’a encore été confirmé pour Mes séances.' },
+  { id: 'lattice', name: 'Lattice', kind: 'unverified', url: 'https://latticetraining.com/', description: 'Entraînement en escalade. L’accès au compte et les conditions d’export restent à confirmer auprès de l’éditeur.' },
+  { id: 'kaya', name: 'KAYA', kind: 'unverified', url: 'https://www.kayaclimb.com/', description: 'Carnet d’escalade. Connexion et formats d’export compatibles à confirmer.' },
+  { id: 'vertical-life', name: 'Vertical-Life', kind: 'unverified', url: 'https://www.vertical-life.info/', description: 'Carnet et salles d’escalade. Connexion et formats d’export compatibles à confirmer.' },
+  { id: 'thecrag', name: 'theCrag', kind: 'unverified', url: 'https://www.thecrag.com/', description: 'Une API et des exports ont été documentés par le passé. Leur disponibilité actuelle et la correspondance des colonnes restent à vérifier.' },
+  { id: '8a', name: '8a.nu', kind: 'unverified', url: 'https://www.8a.nu/', description: 'Carnet d’escalade. Connexion et formats d’export compatibles à confirmer.' },
+  { id: 'myclimb', name: 'MyClimb', kind: 'unverified', url: 'https://www.myclimb.com/', description: 'Suivi d’escalade. Connexion et formats d’export compatibles à confirmer.' },
+  { id: 'griptonite', name: 'Griptonite', kind: 'unverified', url: 'https://griptonite.io/', description: 'Suivi en salle. Connexion et formats d’export compatibles à confirmer.' },
+  { id: 'grippy', name: 'Grippy', kind: 'unverified', description: 'L’éditeur, l’accès aux données et les exports compatibles doivent encore être vérifiés.' },
+  { id: 'moonboard', name: 'MoonBoard', kind: 'unverified', url: 'https://www.moonboard.com/', description: 'Les problèmes et ascensions du compte ne sont pas synchronisés. Un accès autorisé par l’éditeur reste à établir.' },
+  { id: 'kilter', name: 'Kilter Board', kind: 'unverified', url: 'https://kilterboardapp.com/', description: 'Les problèmes et ascensions du compte ne sont pas synchronisés. Un accès autorisé par l’éditeur reste à établir.' },
+  { id: 'tension', name: 'Tension Board', kind: 'unverified', url: 'https://tensionboardapp.com/', description: 'Les problèmes et ascensions du compte ne sont pas synchronisés. Un accès autorisé par l’éditeur reste à établir.' },
+];

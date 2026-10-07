@@ -54,4 +54,30 @@ ok('rien de faux : pas de mur → signalé sans modification automatique ; inten
   const wall = s.find((x) => x.id === 'no-wall'); assert.equal(wall.patch, null);
   assert.ok(s.some((x) => x.id === 'missing-mobilite_hanches'));
 });
+ok('seuls les objectifs associés guident la phase ; rang et contribution pondèrent les capacités', () => {
+  const aims = [{key:'pieds',label:'Pieds',rank:0,caps:{technique_pieds:1}}, {key:'force',label:'Force',rank:1,goalId:'g-force',caps:{force_doigts:1}}];
+  const p = {aimLinks:[{key:'pieds'}],priorities:[]};
+  const t = phaseTargets(p,{aims,goals:[{id:'g-force',label:'Force profil',caps:[{id:'force_doigts',w:1}]}]});
+  assert.equal(t.targets.technique_pieds,4); assert.equal(t.targets.force_doigts,undefined);
+  assert.equal(phaseTargets({aimLinks:[{key:'force'}]},{aims}).targets.force_doigts,3);
+  assert.ok(Math.abs(phaseTargets({aimLinks:[{key:'force',contribution:'preparation'}]},{aims}).targets.force_doigts-1.05)<1e-10);
+  assert.deepEqual(phaseTargets({aimLinks:[]},{goals:[{caps:[{id:'force_doigts',w:1}]}]}).targets,{});
+});
+ok('une suggestion ancienne recontrôle les verrous actuels et refuse entièrement une redistribution bloquée', () => {
+  const ph = PREP_PERF(), s = analyzeSession(ph,ctx,{}).find((x) => x.id==='fatigue-minutes');
+  ph.find((p) => p.id==='v').locks.minutes='user';
+  assert.equal(applySuggestion(ph,s).applied,false); assert.equal(ph[0].minutes,120);
+  const intensity = analyzeSession(ph,ctx,{}).find((x) => x.id==='fatigue-intensity');
+  ph[0].locks.intensity='user'; assert.equal(applySuggestion(ph,intensity).applied,false);
+});
+ok('les suggestions ne déplacent pas le temps entre créneaux et une insertion doit être financée sur place', () => {
+  const windows = [{from:1080,to:1140,envId:'a'}, {from:1200,to:1260,envId:'b'}];
+  const ph = normalizePhases([{id:'a',type:'main',minutes:60,intensity:'hard',window:windows[0]}, {id:'b',type:'main',minutes:60,intensity:'max',window:windows[1]}]);
+  assert.equal(applySuggestion(ph,{patch:[{op:'set',id:'a',field:'minutes',value:40},{op:'give',to:'b',minutes:20}]}).applied,false);
+  const ins = applySuggestion(ph,{patch:[{op:'insert',at:1,phase:{type:'warmup',minutes:10}}]});
+  assert.equal(ins.applied,true); assert.equal(ins.phases[0].minutes,60); assert.equal(ins.phases.at(-1).minutes,50);
+  assert.deepEqual(ins.phases[1].window,windows[1]);
+  const locked = ph.map((p) => ({...p,locks:{...p.locks,minutes:'user'}}));
+  assert.equal(applySuggestion(locked,{patch:[{op:'insert',at:0,phase:{type:'warmup',minutes:10}}]}).applied,false);
+});
 console.log(`${n} tests des propositions et de l’analyse OK`);

@@ -1,7 +1,7 @@
 // inbox.js — la boîte de notifications (icône 🔔) : toutes les mises à jour et à quoi elles servent,
 // les réponses à tes propositions, et (administrateurs) les propositions à traiter. Pastille = non lus.
 import { h, openSheet, closeSheet, fmtDay } from './ui.js';
-import { S, ACT, api, ls, go, item, putItem } from './state.js';
+import { S, ACT, api, ls, go, item, putItem, accountToken, accountMatches } from './state.js';
 import { NEWS } from './news.js';
 import { announcements } from './global.js';
 import { startTour } from './tour.js';
@@ -31,17 +31,22 @@ function setSeen(ids, seen) {
   if (!seen) { const before = ls.get(SEEN, 0), list = entries().filter((e) => ids.includes(e.id) && e.at <= before); if (list.length) ls.set(SEEN, Math.min(...list.map((e) => e.at)) - 1); } // « non vue » l'emporte sur l'ancienne date
 }
 export function unreadCount() { const ids = seenIds(), before = ls.get(SEEN, 0); return entries().filter((e) => !isSeen(e, ids, before)).length; }
+let inboxRequest = 0;
 export async function refreshInbox({ sound = false } = {}) {
-  if (!S.user || S.user.guest) { S.notifUnread = 0; return; }
+  if (!S.user || S.user.guest) { S.notifUnread = 0; return false; }
+  const token = accountToken(), request = ++inboxRequest;
   const before = S.notifUnread || 0;
   try {
     const [mine, adm] = await Promise.all([api('GET', '/api/proposals/mine').catch(() => null), S.user.isAdmin ? api('GET', '/api/admin/proposals').catch(() => null) : null]);
-    S.inbox = { mine: mine?.proposals || S.inbox?.mine || [], adminList: adm ? adm.proposals : S.inbox?.adminList || [] };
+    if (!accountMatches(token) || request !== inboxRequest) return false;
+    S.inbox = { mine: mine?.proposals || S.inbox?.mine || [], adminList: S.user.isAdmin ? adm?.proposals || S.inbox?.adminList || [] : [] };
   } catch { /* hors ligne */ }
+  if (!accountMatches(token) || request !== inboxRequest) return false;
   if (!ls.get(SEEN, null)) ls.set(SEEN, Math.min(Date.now(), Math.max(...NEWS.map((n) => t(n.date || '2026-09-27')))) - 1); // premier passage : seulement la dernière version
   S.notifUnread = unreadCount();
   if (sound && S.notifUnread > before && (S.settings.notifSound || 'doux') !== 'aucun') beep(880, 160, S.settings.notifSound || 'doux');
   paintBadge();
+  return true;
 }
 /** Met à jour seulement la pastille de l'icône 🔔 (sans redessiner la page : une saisie en cours n'est pas perdue). */
 function paintBadge() {
@@ -71,7 +76,11 @@ function repaint() {
   const box = document.querySelector('#sheet .inbox'); if (box) box.outerHTML = inboxView().s;
 }
 export function refreshAnnouncements() { repaint(); }
-ACT.notifOpen = () => { openSheet(inboxView(), { wide: true }); S.notifUnread = unreadCount(); paintBadge(); refreshInbox().then(repaint); }; // à jour à chaque ouverture
+ACT.notifOpen = () => {
+  openSheet(inboxView(), { wide: true }); S.notifUnread = unreadCount(); paintBadge();
+  const token = accountToken(), panel = document.querySelector('#sheet .inbox');
+  return refreshInbox().then((updated) => { if (updated && accountMatches(token) && document.querySelector('#sheet .inbox') === panel) repaint(); });
+};
 ACT.notifSeen = (el) => { setSeen([el.dataset.id], el.dataset.v === '1'); repaint(); };
 ACT.notifAllSeen = () => { setSeen(entries().map((e) => e.id), true); repaint(); };
 ACT.notifTour = (el) => { const n = NEWS.find((x) => x.v === el.dataset.v); closeSheet(); if (n) setTimeout(() => startTour({ steps: n.steps }), 150); };

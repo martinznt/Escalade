@@ -34,7 +34,7 @@ await ok('maintenance : regroupement déterministe ; sortie IA nettoyée', async
 });
 
 console.log('Administration V2 : routes');
-const env = makeEnv({ AI: { run: async () => ({ response: '{"findings":[{"title":"Le lecteur se bloque","detail":"2 signalements","severity":"élevé","proposal":"Vérifier la pause","area":"code"}]}' }) } });
+const env = makeEnv({ AI: { run: async () => ({ response: '{"status":"ok","basis":"request","sources":["request","app/model","report:0","report:1"],"findings":[{"title":"Le lecteur se bloque","detail":"2 signalements rapportés","severity":"élevé","proposal":"Vérifier la pause","area":"code","sources":["report:0","report:1"]}]}' }) } });
 const A = new Client(env), B = new Client(env), U = new Client(env);
 await A.register('superadm'); await B.register('contenu'); await U.register('membre');
 for (const c of [A, B]) assert.equal((await c.post('/api/admin/activate', { password: 'Adm1n-Secret!' })).status, 200);

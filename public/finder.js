@@ -9,6 +9,7 @@ const E = (kind, icon, title, sub, to, keys = '', extra = {}) => ({ kind, icon, 
 export const SETTINGS_INDEX = [
   E('setting', '⚙️', 'Interface simple ou avancée', 'Paramètres', 'settings/main', 'interface affichage mode simple avance avancee expert complique complexite detail', { sel: '[data-act=interfaceSet]' }),
   E('setting', '🌙', 'Thème sombre ou clair', 'Affichage', 'settings/display', 'mode nuit jour clair sombre couleur fond noir blanc', { sel: '[data-k=mode]' }),
+  E('setting', '🖼️', 'Icône de l’application', 'Affichage', 'settings/display', 'icone icon app application accueil telephone installer installation android iphone pwa sobre dore', { sel: '#app-icons' }),
   E('setting', '🎨', 'Ambiance', 'Affichage', 'settings/display', 'style look chaleureux muscu neon nature minimal apparence', { sel: '.vibes' }),
   E('setting', '🖍️', 'Couleur principale', 'Affichage', 'settings/display', 'couleur accent palette or bleu vert rouge rose violet', { sel: '.palette' }),
   E('setting', '🔠', 'Taille du texte', 'Affichage', 'settings/display', 'police grand petit lisible ecriture zoom', { sel: '[data-act=a11ySize]' }),
@@ -34,6 +35,7 @@ export const SETTINGS_INDEX = [
   E('setting', '🔕', 'Types de notifications', 'Notifications', 'settings/notifs', 'mises a jour reponses silencieux types push', { sel: '.card' }),
   E('setting', '🎶', 'Son des notifications', 'Notifications', 'settings/notifs', 'son notification sonnerie', { sel: 'select[name=notifSound]' }),
   E('setting', '📥', 'Exporter mes données', 'Mes données', 'settings/data', 'export sauvegarde telecharger json fichier', { sel: '[data-act=export]' }),
+  E('setting', '🔗', 'Applications connectées', 'Paramètres', 'settings/integrations', 'strava garmin polar montre import escalade crimpd kaya applications sport'),
   E('setting', '📄', 'Importer un historique (CSV)', 'Mes données', 'settings/data', 'import csv tableur excel fichier', { sel: 'input[data-change=csvFile]' }),
   E('setting', '🔄', 'Synchronisation', 'Paramètres', 'settings/sync', 'synchro envoi hors ligne attente serveur', {}),
   E('setting', '🧭', 'Visite guidée', 'Aide', 'settings/help', 'tuto tutoriel aide decouvrir visite', { sel: '[data-act=helpTour]' }),
@@ -50,7 +52,7 @@ export const SETTINGS_INDEX = [
 /** Fonctions de l'app (onglets, rubriques, outils). act = action à lancer ; to = page/sous-page. */
 export const FEATURE_INDEX = [
   E('feature', '🎯', 'Séance du jour', 'Accueil', '', 'generer seance aujourd hui proposer creer', { act: 'genOpen' }),
-  E('feature', '✨', 'Créer une séance', 'Bibliothèque', '', 'creer generer sur mesure format parties echauffement etirements duree objectif guide composer structurer escalade', { act: 'cpNew' }),
+  E('feature', '✨', 'Créer une séance', 'Bibliothèque', '', 'creer generer sur mesure format parties echauffement etirements duree objectif guide composer structurer escalade', { act: 'cpResume' }),
   E('feature', '＋', 'Nouvelle séance', 'Bibliothèque', '', 'creer ajouter seance main coller', { act: 'newChoose', to: 'library/home' }),
   E('feature', '📋', 'Mes séances', 'Bibliothèque', 'library/seances', 'seances enregistrees liste modeles archives', {}),
   E('feature', '⇅', 'Trier et filtrer mes séances', 'Bibliothèque', 'library/seances', 'trier filtrer lieu salle sport style categorie forme duree intense douce ranger classer', { sel: '[data-act=sfOpen]' }),
@@ -77,6 +79,7 @@ export const FEATURE_INDEX = [
   E('feature', '🧪', 'Lab (expériences)', 'Mon analyse', 'progress/lab', 'graphique courbe lab details', {}),
   E('feature', '📸', 'Bilan du mois', 'Progrès', '', 'bilan mois image partager recap', { act: 'recapOpen' }),
   E('feature', '🫀', 'Mon corps', 'Profil', 'profile/body', 'age poids taille silhouette forme corps pesee', {}),
+  E('feature', '📋', 'Mon bilan physique', 'Moi', 'profile/bilan', 'bilan physique condition tests reperes questionnaire forme', {}),
   E('feature', '🏅', 'Mes sports', 'Profil', 'profile/activities', 'sport activites categories', {}),
   E('feature', '🎯', 'Objectifs', 'Profil', 'profile/goals', 'objectif but perte de poids figure front lever', {}),
   E('feature', '🧰', 'Matériel et lieux', 'Profil', 'profile/equipment', 'materiel salle maison lieu barre poutre', {}),

@@ -8,6 +8,7 @@ import { CAPACITIES, MUSCLES, EQUIPMENT, ACTIVITIES, METRICS, SKILLS } from '../
 import { LIBRARY } from '../public/library.js';
 import { DEFAULT_MODEL, runAI, responseText, hasAI, aiPreferences } from './ai-runtime.js';
 import { localChatSources, researchSources } from './ai-evidence.js';
+import { proposalSources, proposalInstructions, requireProposalEvidence } from './ai-proposal-evidence.js';
 import { cleanCoachActions, COACH_ROUTES } from '../public/commands.js';
 
 export { DEFAULT_MODEL } from './ai-runtime.js';
@@ -22,7 +23,7 @@ const caps = (v) => {
   return Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1]).slice(0, 5));
 };
 
-export function buildMessages(kind, text, activityId) {
+export function buildMessages(kind, text, activityId, { sources = [] } = {}) {
   const capList = Object.entries(CAPACITIES).map(([id, c]) => `${id} (${c.label})`).join(', ');
   const muscleList = Object.entries(MUSCLES).map(([id, m]) => `${id} (${m.label})`).join(', ');
   const eqList = Object.entries(EQUIPMENT).map(([id, l]) => `${id} (${l})`).join(', ');
@@ -38,7 +39,7 @@ Activité de l'utilisateur : ${act}.`;
   const ask = kind === 'exercise' ? `Crée la fiche d'un exercice. Format exact : ${exSchema}`
     : kind === 'capacity' ? `Explique cette capacité (compétence ou qualité physique/technique) et comment la travailler, avec 2 à 4 exercices concrets. Format exact : ${capSchema}`
     : `Décide s'il s'agit d'un exercice précis (type "exercise") ou d'une capacité/compétence à développer (type "capacity"), puis réponds avec le format correspondant. Exercice : ${exSchema} Capacité : ${capSchema}`;
-  return [{ role: 'system', content: common + '\n' + ask }, { role: 'user', content: str(text, 300) }];
+  return [{ role: 'system', content: common + '\n' + ask + (sources.length ? '\n' + proposalInstructions(sources) : '') }, { role: 'user', content: str(text, 300) }];
 }
 
 /** Extrait l'objet JSON de la réponse du modèle (texte ou objet) ; null si illisible. */
@@ -92,12 +93,13 @@ export function cleanDraft(raw, kind) {
 }
 
 /** Appel du fournisseur sélectionné. Lève une erreur explicite en cas d'échec. */
-export async function aiDraft(env, { kind, text, activityId }) {
+export async function aiDraft(env, { kind, text, activityId, evidenceOptions }) {
   if (!hasAI(env)) { const e = new Error('Assistant IA non activé sur ce serveur.'); e.status = 503; throw e; }
-  const resp = await runAI(env, { messages: buildMessages(kind, text, activityId), max_tokens: 1200, temperature: 0.2 }, { json: true });
-  const draft = cleanDraft(extractJson(resp), kind);
+  const sources = await proposalSources({ text, evidenceOptions });
+  const resp = await runAI(env, { messages: buildMessages(kind, text, activityId, { sources }), max_tokens: 1200, temperature: 0.2 }, { json: true, allowClarification: true });
+  const value = extractJson(resp), evidence = requireProposalEvidence(value, sources), draft = cleanDraft(value, kind);
   if (!draft) { const e = new Error('L’assistant n’a pas donné de réponse exploitable. Reformule ou réessaie.'); e.status = 502; e.aiSafe = true; throw e; }
-  return { draft };
+  return { draft: { ...draft, ...evidence } };
 }
 
 /* ───────── Discussion avec le coach ───────── */
@@ -123,7 +125,7 @@ Profil visible de l'utilisateur : ${str(profile, 3000) || 'non renseigné'}.
 Sources effectivement consultées pour cette réponse :
 ${sources.map((source) => `[${source.id}] ${source.label}\n${source.excerpt}`).join('\n\n') || '(aucune référence scientifique consultée)'}
 Présentation : ${preferences.answerStyle === 'pedagogical' ? 'explique simplement le raisonnement' : 'réponds directement'}, longueur ${preferences.detail || 'standard'}.
-Réponds UNIQUEMENT en JSON {"status":"ok|clarify|unverified","basis":"app|request|profile|research","sources":["identifiant exact d’une source fournie"],"reply":"réponse en français","actions":[{"command":"phrase de demande de séance","label":"Préparer cette séance"},{"to":"settings/main","label":"Ouvrir les paramètres"}]}. status="ok" exige des sources pertinentes. status="clarify" ou "unverified" exige actions=[]. N’ajoute que les actions pertinentes.`;
+Réponds UNIQUEMENT en JSON {"status":"ok|clarify|unverified","basis":"app|request|profile|research","sources":["identifiant exact d’une source fournie"],"reply":"réponse en français","question":"question précise seulement si status=clarify, sinon vide","actions":[{"command":"phrase de demande de séance","label":"Préparer cette séance"},{"to":"settings/main","label":"Ouvrir les paramètres"}]}. status="ok" exige des sources pertinentes. status="clarify" ou "unverified" exige actions=[]. N’ajoute que les actions pertinentes.`;
   const msgs = (Array.isArray(messages) ? messages : []).filter((m) => m?.role === 'user' || m?.role === 'assistant').slice(-8).map((m) => ({ role: m.role, content: str(m.content, 1500) + (m.role === 'assistant' && cleanCoachActions(m.actions).length ? '\nActions proposées : ' + JSON.stringify(cleanCoachActions(m.actions)) : '') })).filter((m) => m.content);
   return [{ role: 'system', content: sys }, ...msgs];
 }
@@ -145,10 +147,12 @@ export async function aiChat(env, { messages, profile, expectedProvider, appMap 
   const structured = extractJson(raw);
   const reply = typeof structured?.reply === 'string' ? cleanReply(structured.reply).replace(/https?:\/\/[^\s<>]+/gi, '[voir les sources]') : '';
   if (!reply) { const e = new Error('Le coach n’a pas su répondre. Reformule ta question.'); e.status = 502; e.aiSafe = true; throw e; }
-  const status = ['ok', 'clarify', 'unverified'].includes(structured.status) ? structured.status : 'unverified';
-  if (status !== 'ok' || structured.understood === false || structured.needsClarification === true) return {
-    reply: status === 'clarify' || status === 'unverified' && structured.status === 'unverified' ? reply : 'Je n’ai pas de réponse assez vérifiable pour cette demande. Peux-tu préciser ce que tu veux savoir ?',
-    actions: [], status: status === 'clarify' || structured.understood === false || structured.needsClarification === true ? 'clarify' : 'unverified', sources: [],
+  let status = ['ok', 'clarify', 'unverified'].includes(structured.status) ? structured.status : 'unverified';
+  if (structured.grounded === false || structured.verified === false) status = 'unverified';
+  if (structured.understood === false || structured.understanding === false || ['unclear','unknown','not_understood'].includes(structured.understanding) || structured.needsClarification === true || structured.needs_clarification === true || typeof structured.question === 'string' && structured.question.trim() || Array.isArray(structured.questions) && structured.questions.some((question) => typeof question === 'string' && question.trim())) status = 'clarify';
+  if (status !== 'ok') return {
+    reply: status === 'clarify' && typeof structured.question === 'string' && structured.question.trim() ? cleanReply(structured.question).replace(/https?:\/\/[^\s<>]+/gi, '[voir les sources]').slice(0, 240) : 'Je n’ai pas de réponse assez vérifiable pour cette demande. Peux-tu préciser ce que tu veux savoir ?',
+    actions: [], status, sources: [],
   };
   const validReferences = Array.isArray(structured.sources) && structured.sources.length <= 8 && structured.sources.every((id) => typeof id === 'string');
   const requested = validReferences ? [...new Set(structured.sources)] : [];
@@ -161,7 +165,7 @@ export async function aiChat(env, { messages, profile, expectedProvider, appMap 
 }
 
 /* ───────── Objectif écrit avec ses mots → fiche d'objectif structurée (relue et modifiée avant l'enregistrement) ───────── */
-export function buildGoal(text, profile) {
+export function buildGoal(text, profile, { sources = [] } = {}) {
   const capList = Object.entries(CAPACITIES).map(([id, c]) => `${id} (${c.label})`).join(', ');
   const metList = Object.entries(METRICS).map(([id, m]) => `${id} (${m.label}${m.unit ? ', ' + m.unit : ''})`).join(', ');
   const actList = Object.entries(ACTIVITIES).map(([id, a]) => `${id} (${a.label})`).join(', ');
@@ -174,7 +178,8 @@ Mesures autorisées : ${metList}.
 Figures autorisées : ${Object.entries(SKILLS).map(([id, k]) => `${id} (${k.label})`).join(', ')}.
 Exercices autorisés (3 au plus, identifiants exacts) : ${LIBRARY.filter((e) => e.role === 'main').slice(0, 120).map((e) => e.id).join(', ')}.
 Ne donne une cible chiffrée QUE si l'utilisateur écrit lui-même ce nombre. Sinon target = null et ajoute dans missing ce qu'il faudrait préciser. Pas de conseil médical. Perte de poids : progressive et raisonnable, sans régime.
-Profil : ${str(profile, 3000) || 'non renseigné'}.` }, { role: 'user', content: str(text, 300) }];
+Profil : ${str(profile, 3000) || 'non renseigné'}.
+${sources.length ? proposalInstructions(sources) : ''}` }, { role: 'user', content: str(text, 300) }];
 }
 /** Nombres écrits par l'utilisateur (« 10 km en 50 min » → [10, 50] ; « 7,5 » → 7.5). */
 export const numbersIn = (text) => (String(text || '').match(/\d+(?:[.,]\d+)?/g) || []).map((x) => Number(x.replace(',', '.')));
@@ -195,7 +200,7 @@ export function cleanGoal(x, text = '', { hadProfile = false } = {}) {
   if (raw != null && target == null) missing.unshift('Cible chiffrée : tu ne l’as pas écrite, elle n’est pas ajoutée. Ajoute-la si tu en as une.');
   const how = [
     { cat: 'fact', text: `Ton texte : « ${str(text, 160)} »` },
-    ...(hadProfile ? [{ cat: 'fact', text: 'Ton profil (sports, séances récentes, objectifs) a été pris en compte.' }] : [{ cat: 'missing', text: 'Profil peu rempli : la fiche s’appuie surtout sur ton texte.' }]),
+    ...(hadProfile ? [{ cat: 'fact', text: 'Le résumé de ton profil a été transmis à l’assistant.' }] : [{ cat: 'missing', text: 'Aucun résumé de profil transmis : la fiche s’appuie sur ton texte.' }]),
     { cat: 'rule', text: 'Capacités, sports et mesures choisis uniquement dans les listes structurées de l’app.' },
     ...(target != null ? [{ cat: 'fact', text: `Cible ${target} : écrite par toi.` }] : []),
     ...(num(x.weeks, 0, 52, 0) ? [{ cat: 'inference', text: `Durée d’environ ${num(x.weeks, 0, 52, 0)} semaines : estimation, pas une garantie.` }] : []),
@@ -207,28 +212,31 @@ export function cleanGoal(x, text = '', { hadProfile = false } = {}) {
   const type = skillId ? 'skill' : metricId ? 'metric' : ['grade', 'sessions', 'ascents', 'custom'].includes(x.type) ? x.type : 'custom';
   const actCaps = ACTIVITIES[activityId]?.caps || {}, linked = Object.keys(c).filter((id) => actCaps[id]);
   if (linked.length) how.push({ cat: 'rule', text: `Relation existante : ${linked.map((id) => CAPACITIES[id].label.toLowerCase()).join(', ')} ${linked.length > 1 ? 'comptent' : 'compte'} pour ${ACTIVITIES[activityId].label} dans le modèle.` });
-  if (exercises.length) how.push({ cat: 'rule', text: `Exercices liés à ces capacités dans la bibliothèque : ${exercises.map((id) => LIBRARY.find((e) => e.id === id).name).join(', ')}.` });
+  if (exercises.length) how.push({ cat: 'inference', text: `Exercices proposés parmi ceux de la bibliothèque : ${exercises.map((id) => LIBRARY.find((e) => e.id === id).name).join(', ')}. Leur choix reste à relire.` });
   if (skillId) how.push({ cat: 'rule', text: `Figure connue de l’app : ${SKILLS[skillId].label} (étapes et critères existants).` });
   how.push({ cat: 'inference', text: `Poids des capacités et étapes : estimation de l’assistant, à corriger si besoin (confiance ${['haute', 'moyenne', 'faible'].includes(x.confidence) ? x.confidence : 'moyenne'}).` });
   for (const m of missing.slice(0, 3)) how.push({ cat: 'missing', text: m });
   return { label, type, skillId, criteria: list(x.criteria, 4, 160), exercises, summary: str(x.description ?? x.summary, 300), activityId, caps: Object.entries(c).map(([id, w]) => ({ id, w })), indicators: list(x.indicators, 4, 140), steps: list(x.steps, 5, 160), metricId, target, weeks: num(x.weeks, 0, 52, 0), confidence: ['haute', 'moyenne', 'faible'].includes(x.confidence) ? x.confidence : 'moyenne', missing: missing.slice(0, 5), how };
 }
-export async function aiGoal(env, { text, profile, expectedProvider }) {
+export async function aiGoal(env, { text, profile, expectedProvider, evidenceOptions }) {
   if (!hasAI(env)) { const e = new Error('Assistant non activé sur ce serveur.'); e.status = 503; throw e; }
-  const goal = cleanGoal(extractJson(await runAI(env, { messages: buildGoal(text, profile), max_tokens: 1200, temperature: 0.2 }, { json: true, expectedProvider })), text, { hadProfile: !!str(profile, 900) });
+  const sources = await proposalSources({ text, profile, evidenceOptions });
+  const value = extractJson(await runAI(env, { messages: buildGoal(text, profile, { sources }), max_tokens: 1200, temperature: 0.2 }, { json: true, expectedProvider, allowClarification: true }));
+  const evidence = requireProposalEvidence(value, sources), goal = cleanGoal(value, text, { hadProfile: !!str(profile, 900) });
   if (!goal) { const e = new Error('L’assistant n’a pas compris cet objectif. Reformule-le.'); e.status = 502; e.aiSafe = true; throw e; }
-  return goal;
+  return { ...goal, ...evidence };
 }
 
 /* ───────── Intention, force ou faiblesse écrite avec ses mots → capacités ───────── */
-export function buildIntent(text, activityId, kind) {
+export function buildIntent(text, activityId, kind, { sources = [] } = {}) {
   const capList = Object.entries(CAPACITIES).map(([id, c]) => `${id} (${c.label})`).join(', ');
   const what = kind === 'strength' ? 'un point fort à faire progresser' : kind === 'weakness' ? 'un point faible à travailler' : 'une intention de séance (ce que la personne veut travailler)';
   return [{ role: 'system', content: `Tu es un entraîneur sportif francophone. Réponds UNIQUEMENT par un objet JSON valide.
 L'utilisateur décrit ${what}. Donne-lui un nom court et relie-le aux capacités qu'il faut entraîner.
 Format : {"label":"nom court (max 40 caractères)","emoji":"1 emoji","summary":"1 phrase simple","caps":[{"id":"...","w":0.8}]}
 Capacités autorisées (1 à 4, identifiants exacts) : ${capList}.
-Sport : ${ACTIVITIES[activityId]?.label || 'non précisé'}.` }, { role: 'user', content: str(text, 200) }];
+Sport : ${ACTIVITIES[activityId]?.label || 'non précisé'}.
+${sources.length ? proposalInstructions(sources) : ''}` }, { role: 'user', content: str(text, 200) }];
 }
 export function cleanIntent(x, text = '') {
   if (!x || typeof x !== 'object') return null;
@@ -236,10 +244,12 @@ export function cleanIntent(x, text = '') {
   if (!Object.keys(c).length) return null;
   return { label: str(x.label, 40) || str(text, 40), emoji: str(x.emoji, 8) || '✨', summary: str(x.summary, 200), caps: c };
 }
-export async function aiIntent(env, { text, activityId, kind }) {
+export async function aiIntent(env, { text, activityId, kind, evidenceOptions }) {
   if (!hasAI(env)) { const e = new Error('Assistant non activé sur ce serveur.'); e.status = 503; throw e; }
-  const r = cleanIntent(extractJson(await runAI(env, { messages: buildIntent(text, activityId, kind), max_tokens: 500, temperature: 0.2 }, { json: true })), text);
+  const sources = await proposalSources({ text, evidenceOptions });
+  const value = extractJson(await runAI(env, { messages: buildIntent(text, activityId, kind, { sources }), max_tokens: 700, temperature: 0.2 }, { json: true, allowClarification: true }));
+  const evidence = requireProposalEvidence(value, sources), r = cleanIntent(value, text);
   if (!r) { const e = new Error('L’assistant n’a pas su relier ça à un entraînement. Reformule.'); e.status = 502; e.aiSafe = true; throw e; }
-  return r;
+  return { ...r, ...evidence };
 }
 export const cleanCaps = caps;

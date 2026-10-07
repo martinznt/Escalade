@@ -4,6 +4,7 @@
 // n'est prise telle quelle, et rien n'est jamais exécuté (pas d'eval, pas de code, pas de shell). Testé.
 import { KINDS, ID_OK, cleanGlobal } from './global.js';
 import { extractJson } from './ai.js';
+import { proposalInstructions } from './ai-proposal-evidence.js';
 
 export const OPS = { put: 'Créer ou remplacer', hide: 'Masquer pour tous', delete: 'Revenir à l’origine' };
 export const STATUS = { draft: 'Brouillon', published: 'Publié', rolled_back: 'Annulé (retour arrière)', discarded: 'Abandonné' };
@@ -94,9 +95,9 @@ const KIND_HELP = {
   style: '{"label":"…","activity":"climbing_boulder"}',
 };
 export const AI_KINDS = Object.keys(KIND_HELP);
-export function buildAdminDraft(kind, text) {
+export function buildAdminDraft(kind, text, { sources = [] } = {}) {
   return [
-    { role: 'system', content: `Tu aides un administrateur d'une app d'entraînement sportif. Tu rédiges UNE proposition de contenu commun de type « ${kind} », au format JSON strict : ${KIND_HELP[kind]}. Uniquement du JSON, sans code, sans HTML, sans lien. N'invente aucune donnée chiffrée qui ne figure pas dans la demande ; laisse vide ce que tu ne sais pas. Ta proposition sera relue et validée par l'administrateur avant toute publication.` },
+    { role: 'system', content: `Tu aides un administrateur d'une app d'entraînement sportif. Tu rédiges UNE proposition de contenu commun de type « ${kind} », au format JSON strict : ${KIND_HELP[kind]}. Uniquement du JSON, sans code, sans HTML, sans lien. N'invente aucune donnée chiffrée qui ne figure pas dans la demande ; laisse vide ce que tu ne sais pas. Ta proposition sera relue et validée par l'administrateur avant toute publication.\n${sources.length ? proposalInstructions(sources) : ''}` },
     { role: 'user', content: str(text, 1500) },
   ];
 }
@@ -108,9 +109,9 @@ export function cleanAdminDraft(raw, kind) {
 }
 
 /* ───────── Laboratoire : reformuler, identifier les règles, proposer des solutions avec avantages / inconvénients ───────── */
-export function buildLab(text) {
+export function buildLab(text, { sources = [] } = {}) {
   return [
-    { role: 'system', content: 'Tu aides un administrateur à analyser un problème ou une idée pour une app d’entraînement sportif. Réponds en JSON strict : {"reformulation":"…","rules":["règle ou contrainte en jeu"],"questions":["information manquante"],"solutions":[{"title":"…","how":"…","pros":["…"],"cons":["…"],"risk":"faible|moyen|élevé","change":null}]}. « change » peut contenir une proposition de contenu commun {"kind":"announce|faq|text|exercise|intent|style","data":{…}} seulement si c’est pertinent ; sinon null. Pas de code, pas de commande, pas de HTML. N’invente pas de faits : si une information manque, mets-la dans « questions ».' },
+    { role: 'system', content: `Tu aides un administrateur à analyser un problème ou une idée pour une app d’entraînement sportif. Réponds en JSON strict : {"reformulation":"…","rules":["règle ou contrainte en jeu"],"questions":["information manquante"],"solutions":[{"title":"…","how":"…","pros":["…"],"cons":["…"],"risk":"faible|moyen|élevé","change":null}]}. « change » peut contenir une proposition de contenu commun {"kind":"announce|faq|text|exercise|intent|style","data":{…}} seulement si c’est pertinent ; sinon null. Pas de code, pas de commande, pas de HTML. N’invente pas de faits : si une information manque, mets-la dans « questions ». Les avantages, risques et solutions sont des hypothèses à relire, pas des effets testés.\n${sources.length ? proposalInstructions(sources) : ''}` },
     { role: 'user', content: str(text, 2000) },
   ];
 }

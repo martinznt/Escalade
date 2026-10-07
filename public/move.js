@@ -58,7 +58,10 @@ export async function maybeMove() {
 export async function maybeClaim() {
   const q = new URLSearchParams(location.search), code = q.get('handoff');
   if (q.get('from') === 'app') ls.set('sea:reinstall', 1); // venu de l'ancienne application : proposer de réinstaller
-  if (location.search) history.replaceState(null, '', location.pathname + location.hash);
+  if (q.has('handoff') || q.has('from')) {
+    q.delete('handoff'); q.delete('from');
+    history.replaceState(null, '', location.pathname + (q.size ? '?' + q.toString() : '') + location.hash);
+  }
   if (!code) return;
   if (ls.get('sea:user')) return; // déjà utilisé ici : on ne remplace rien
   let info;

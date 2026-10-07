@@ -57,7 +57,7 @@ await ok('Pull Request : branche, fichier modifié sur la version GitHub, PR ouv
 });
 await ok('de bout en bout côté serveur : assistant → proposition (revérifiée) → validation seul confirmée → Pull Request', async () => {
   const realFetch = globalThis.fetch, gh = [];
-  const AI = { run: async () => ({ response: JSON.stringify({ reply: 'Je renomme le bouton.', title: 'Bouton ✏️ : « Organiser »', summary: 'Le petit mot sous ✏️ devient « Organiser ».', edits: [{ path: 'public/layout.js', find: '<small>Page</small>', replace: '<small>Organiser</small>' }] }) }) };
+  const AI = { run: async (_model, input) => ({ response: JSON.stringify({ status: 'ok', sources: [C.CODE_REQUEST_SOURCE, input.messages[0].content.match(/source « (code:public\/layout\.js:[^»]+) »/)?.[1]], reply: 'Je renomme le bouton.', title: 'Bouton ✏️ : « Organiser »', summary: 'Le petit mot sous ✏️ devient « Organiser ».', edits: [{ path: 'public/layout.js', find: '<small>Page</small>', replace: '<small>Organiser</small>' }] }) }) };
   const env = makeEnv({ AI, ASSETS: { fetch: async (req) => { const p = new URL(req.url).pathname; return p === '/layout.js' ? new Response('const a = `<small>Page</small>`;\n') : new Response('// ' + p + '\n'); } } });
   const a = new Client(env); await a.register('solo'); await a.post('/api/admin/activate', { password: 'Adm1n-Secret!' });
   const r = await a.post('/api/admin/assistant/code', { messages: [{ role: 'user', content: 'Renomme « Page » sous le bouton ✏️ en « Organiser »' }] });

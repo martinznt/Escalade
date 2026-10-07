@@ -35,17 +35,28 @@ export function parseCSV(text) {
 /* ───────── Valeurs ───────── */
 export function parseDateCell(v) {
   const s = String(v || '').trim();
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
-  if (m) return mk(+m[1], +m[2], +m[3], m[4], m[5]);
-  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})(?:\s+(\d{1,2})[:h](\d{2}))?$/);
-  if (m) { const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]); return mk(y, +m[2], +m[1], m[4], m[5]); }
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:?\d{2})?)?$/i);
+  if (m) {
+    let offset;
+    if (m[8]) {
+      const zone=m[8];
+      if(zone.toUpperCase()==='Z')offset=0;
+      else { const z=/^([+-])(\d{2}):?(\d{2})$/.exec(zone), hours=Number(z[2]), minutes=Number(z[3]);if(hours>23||minutes>59)return null;offset=(hours*60+minutes)*(z[1]==='-'?-1:1); }
+    }
+    return mk(+m[1],+m[2],+m[3],m[4],m[5],m[6],m[7]?Number(m[7].slice(0,3).padEnd(3,'0')):0,offset);
+  }
+  m = s.match(/^(\d{1,2})([/.-])(\d{1,2})\2(\d{2}|\d{4})(?:\s+(\d{1,2})[:h](\d{2})(?::(\d{2}))?)?$/);
+  if (m) { const y = m[4].length === 2 ? 2000 + Number(m[4]) : Number(m[4]); return mk(y,+m[3],+m[1],m[5],m[6],m[7]); }
   return null;
 }
-function mk(y, mo, d, h, mi) {
+function mk(y, mo, d, h, mi, sec, ms=0, offset) {
   if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1990 || y > 2100) return null;
-  const t = new Date(y, mo - 1, d, h ? Number(h) : 12, mi ? Number(mi) : 0).getTime();
-  const back = new Date(t);
-  return back.getDate() === d && back.getMonth() === mo - 1 ? t : null;
+  const hour=h==null?12:Number(h),minute=mi==null?0:Number(mi),second=sec==null?0:Number(sec);
+  if(hour>23||minute>59||second>59)return null;
+  const utc=offset!==undefined,t=utc?Date.UTC(y,mo-1,d,hour,minute,second,ms):new Date(y,mo-1,d,hour,minute,second,ms).getTime();
+  const back=new Date(t),prefix=utc?'getUTC':'get';
+  if(back[prefix+'FullYear']()!==y||back[prefix+'Month']()!==mo-1||back[prefix+'Date']()!==d||back[prefix+'Hours']()!==hour||back[prefix+'Minutes']()!==minute||back[prefix+'Seconds']()!==second)return null;
+  return utc?t-offset*60000:t;
 }
 export function parseNumberCell(v) {
   const s = String(v ?? '').trim().replace(/\s/g, '').replace(',', '.').replace(/(kg|reps?|s|min|km|m|cm)$/i, '');
@@ -55,13 +66,14 @@ export function parseNumberCell(v) {
 }
 /** Durée : « 45 », « 45 min », « 1:05:00 », « 12:30 » (min:s), « 1h10 ». Retourne des secondes. */
 export function parseDurationCell(v) {
-  const s = norm(v);
+  const s = String(v ?? '').trim().toLocaleLowerCase('fr-FR');
   if (!s) return null;
-  let m = String(v).trim().match(/^(\d+):(\d{2}):(\d{2})$/); if (m) return +m[1] * 3600 + +m[2] * 60 + +m[3];
-  m = String(v).trim().match(/^(\d+):(\d{2})$/); if (m) return +m[1] * 60 + +m[2];
-  m = s.match(/^(\d+)\s*h\s*(\d+)?$/); if (m) return +m[1] * 3600 + (+m[2] || 0) * 60;
-  m = s.match(/^(\d+(?:\.\d+)?)\s*(?:min|mn|minutes?)?$/); if (m) return Math.round(Number(m[1]) * 60);
-  m = s.match(/^(\d+)\s*s(?:ec)?$/); if (m) return Number(m[1]);
+  const finite=n=>Number.isFinite(n)?n:NaN;
+  let m = s.match(/^(\d+):(\d{2}):(\d{2})$/); if (m) return +m[2]>59||+m[3]>59?NaN:finite(+m[1]*3600 + +m[2]*60 + +m[3]);
+  m = s.match(/^(\d+):(\d{2})$/); if (m) return +m[2]>59?NaN:finite(+m[1]*60 + +m[2]);
+  m = s.match(/^(\d+)\s*h(?:\s*(\d+)(?:\s*(?:min|mn|minutes?))?)?$/); if (m) return +m[2]>59?NaN:finite(+m[1]*3600 + (+m[2]||0)*60);
+  m = s.match(/^(\d+(?:[.,]\d+)?)\s*(?:min|mn|minutes?)?$/); if (m) return finite(Math.round(Number(m[1].replace(',','.'))*60));
+  m = s.match(/^(\d+(?:[.,]\d+)?)\s*(?:s|sec|secondes?|seconds?)$/); if (m) return finite(Math.round(Number(m[1].replace(',','.'))));
   return NaN;
 }
 
@@ -72,6 +84,8 @@ export const TARGETS = {
     sessionName: { label: 'Nom de la séance', words: ['seance', 'session', 'nom', 'titre', 'workout', 'entrainement'] },
     duration: { label: 'Durée de la séance', words: ['duree', 'duration', 'temps total'] },
     activity: { label: 'Activité', words: ['activite', 'sport', 'discipline'] },
+    place: { label: 'Lieu', words: ['lieu', 'salle', 'site', 'location', 'gym'] },
+    performance: { label: 'Performance / cotation déclarée', words: ['performance', 'cotation', 'grade', 'resultat', 'result'] },
     exercise: { label: 'Exercice', words: ['exercice', 'exercise', 'mouvement', 'movement'] },
     sets: { label: 'Séries', words: ['series', 'serie', 'sets', 'set'] },
     reps: { label: 'Répétitions', words: ['reps', 'rep', 'repetitions', 'repetition'] },
@@ -152,20 +166,26 @@ export function buildImport(parsed, mapping, kind = 'history', { metricMap = {},
   parsed.rows.forEach((r, i) => {
     const date = parseDateCell(col(r, 'date'));
     if (!date) { errors.push({ row: i + 2, error: 'date illisible' }); skipped++; return; }
-    if (date > now + 86400000) { errors.push({ row: i + 2, error: 'date dans le futur : une séance à venir n’est pas un historique' }); skipped++; return; }
+    if (date < now - 5 * 365 * 86400000) { errors.push({ row: i + 2, error: 'date trop ancienne : l’historique accepte les cinq dernières années (5 × 365 jours)' }); skipped++; return; }
+    if (date > now + 10 * 60000) { errors.push({ row: i + 2, error: 'date dans le futur : une séance à venir n’est pas un historique (10 min de tolérance)' }); skipped++; return; }
     const name = col(r, 'sessionName') || 'Séance importée';
     const key = date + '|' + name;
-    const s = sessions.get(key) || { id: 'csv-' + hash(key), sessionName: name.slice(0, 100), startedAt: date, durationSeconds: 0, data: { rpe: 0, note: '', activity: '', exercises: [] } };
+    const exName = col(r, 'exercise');
+    const n=parseNumberCell(col(r,'sets')),reps=parseNumberCell(col(r,'reps')),load=parseNumberCell(col(r,'load')),sec=parseNumberCell(col(r,'seconds'));
+    if(exName&&[n,reps,load,sec].some((x)=>Number.isNaN(x))){errors.push({row:i+2,error:'nombre illisible dans séries / reps / charge / secondes'});skipped++;return;}
+    const id='csv-'+hash(key),s = sessions.get(key) || { id, sessionName: name.slice(0, 100), startedAt: date, durationSeconds: 0, data: { rpe: 0, note: '', activity: '', exercises: [], quickLog:{durationKnown:false,performance:'',order:'main'},external:{provider:'file',id,channel:'file',private:true,excludeAI:true} } };
     const dur = chk.used.duration != null ? parseDurationCell(col(r, 'duration')) : null;
+    if (dur > 86400) { errors.push({ row: i + 2, error: 'durée supérieure à 24 h : ligne non importée' }); skipped++; return; }
     if (dur != null && Number.isNaN(dur)) errors.push({ row: i + 2, error: 'durée illisible (ignorée)' });
-    else if (dur) s.durationSeconds = Math.max(s.durationSeconds, dur);
+    else if (dur != null) {s.durationSeconds = Math.max(s.durationSeconds, dur);s.data.quickLog.durationKnown=true;}
     const rpe = parseNumberCell(col(r, 'rpe')); if (rpe && !Number.isNaN(rpe)) s.data.rpe = Math.max(1, Math.min(5, Math.round(rpe)));
     if (col(r, 'note')) s.data.note = (s.data.note ? s.data.note + ' — ' : '') + col(r, 'note').slice(0, 300);
     if (col(r, 'activity')) s.data.activity = col(r, 'activity').slice(0, 60);
-    const exName = col(r, 'exercise');
+    const append=(a,b,max)=>!a?b.slice(0,max):a.split(' — ').includes(b)?a:(a+' — '+b).slice(0,max);
+    const place=col(r,'place').slice(0,60),performance=col(r,'performance').slice(0,100);
+    if(place)s.data.context={...s.data.context,envName:append(s.data.context?.envName||'',place,60)};
+    if(performance)s.data.quickLog.performance=append(s.data.quickLog.performance,performance,100);
     if (exName) {
-      const n = parseNumberCell(col(r, 'sets')), reps = parseNumberCell(col(r, 'reps')), load = parseNumberCell(col(r, 'load')), sec = parseNumberCell(col(r, 'seconds'));
-      if ([n, reps, load, sec].some((x) => Number.isNaN(x))) { errors.push({ row: i + 2, error: 'nombre illisible dans séries / reps / charge / secondes' }); skipped++; return; }
       const count = Math.max(1, Math.min(30, Math.round(n || 1)));
       s.data.exercises.push({ name: exName.slice(0, 80), sets: Array.from({ length: count }, () => ({ reps: reps || 0, load: load || 0, seconds: sec || 0, done: true })) });
     }

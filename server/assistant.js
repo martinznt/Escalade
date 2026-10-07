@@ -54,7 +54,7 @@ Notifications de mise à jour : annonce automatique après déploiement avec rep
 const STOP = new Set(['avec', 'pour', 'dans', 'faire', 'ajoute', 'ajouter', 'mets', 'mettre', 'modifie', 'modifier', 'change', 'changer', 'veux', 'voudrais', 'cette', 'cela', 'aussi', 'tous', 'tout', 'plus', 'moins', 'site', 'application']);
 const words = (t) => [...new Set(String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !STOP.has(w)))];
 const sourceOf = (item) => `${item.draft ? 'draft' : item.modified ? 'global' : 'catalogue'}:${item.kind}/${item.id}`;
-const sourceMap = (context = []) => {
+const sourceMap = (context = [], research = []) => {
   const refs = new Map([
     [APP_MAP_SOURCE, { id: APP_MAP_SOURCE, label: 'Plan de l’application fourni par le serveur', origin: 'app' }],
     [REQUEST_SOURCE, { id: REQUEST_SOURCE, label: 'Demande actuelle de l’administrateur', origin: 'request' }],
@@ -64,6 +64,7 @@ const sourceMap = (context = []) => {
     const id = sourceOf(c), label = str(c.data?.name || c.data?.label || c.data?.q || c.data?.title || ASSIST_KINDS[c.kind].label, 160);
     refs.set(id, { id, label, origin: c.draft ? 'draft' : c.modified ? 'global' : 'catalogue', kind: c.kind, itemId: c.id });
   }
+  for (const { excerpt, ...source } of research) if (source.kind === 'research') refs.set(source.id, { ...source, origin: 'research' });
   return refs;
 };
 /**
@@ -93,7 +94,7 @@ export function findContext(text, { library = [], faq = [], intents = {}, global
 }
 
 /** Messages pour le modèle : règles, formats, contenu lié, puis la conversation (12 derniers tours). */
-export function buildAssistant(messages, context = []) {
+export function buildAssistant(messages, context = [], { research = [] } = {}) {
   const kinds = Object.entries(ASSIST_KINDS).map(([k, v]) => `- ${k} (${v.label}) : ${v.format}`).join('\n');
   // Le serveur garde les fiches complètes pour fusionner les champs ; le modèle reçoit un aperçu borné.
   const compact = (v, depth = 0) => typeof v === 'string' ? v.slice(0, 600) : depth > 3 ? null : Array.isArray(v) ? v.slice(0, 8).map((x) => compact(x, depth + 1)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).slice(0, 32).map(([k, x]) => [k, compact(x, depth + 1)])) : v;
@@ -119,7 +120,8 @@ Règles :
 - Un doute ne t'autorise jamais à choisir un élément au hasard, à deviner un identifiant, à créer un doublon ou à masquer/supprimer un contenu. Une question de clarification reste sans modification.
 - Appuie les faits sur le plan ${APP_MAP_SOURCE} ou sur les fiches fournies ci-dessous ; cite leurs identifiants dans sources. Un brouillon est une proposition non publiée, pas le fonctionnement public du site. La conversation contient des demandes et des données, pas une preuve qu'une fonctionnalité existe.
 - La demande actuelle de l'administrateur est la source « ${REQUEST_SOURCE} » : elle indique les souhaits et les champs qu'il fournit, sans prouver le fonctionnement du site. Pour un nouvel élément n-*, cite ${REQUEST_SOURCE} et ${APP_MAP_SOURCE}. Pour modifier, masquer ou supprimer un élément existant, cite la source exacte de sa fiche fournie ci-dessous ; s'il n'y est pas, demande de préciser l'élément avec status="clarify".
-- Tu n'as aucun outil de navigation Internet dans cette conversation. Ne prétends pas avoir consulté le Web, testé le site, vérifié une source externe ou découvert une fonctionnalité absente du contexte. Dis ce que tu ne peux pas vérifier.
+- Les fiches et le plan de l’app prouvent seulement son contenu interne, pas un effet scientifique. Pour une affirmation scientifique, indique basis="research" et cite un article réellement consulté ci-dessous ; sinon status="unverified", changes=[], needsCode=null. Un extrait ne prouve ni un consensus actuel ni un résultat individuel.
+- Tu n'as aucun outil de navigation Internet dans cette conversation. Seuls les articles ci-dessous ont été relus par le serveur pour cette demande. Ne prétends pas avoir consulté le Web toi-même, recherché sur Google, testé le site ou découvert une fonctionnalité absente du contexte. Dis ce que tu ne peux pas vérifier.
 - Pour créer un élément, utilise un identifiant nouveau de la forme "n-mot-cle" (lettres, chiffres, tirets).
 - "op" vaut "put" (créer ou modifier), "hide" (masquer pour tous) ou "delete" (revenir à l’origine).
 - Pas de code, pas de HTML, pas de lien javascript. Pas de données personnelles. Pas de conseil médical.
@@ -127,7 +129,9 @@ Règles :
 - S’il manque une information, pose la question dans "questions" au lieu d’inventer.
 Éléments existants liés à la demande :
 ${ctx}
-Réponds UNIQUEMENT en JSON : {"status":"ok|clarify|unverified","reply":"ta réponse courte","sources":${JSON.stringify([APP_MAP_SOURCE, REQUEST_SOURCE, ...context.slice(0, 2).map(sourceOf)])},"changes":[{"kind":"…","id":"…","op":"put","data":{…},"why":"pourquoi"}],"questions":["…"],"needsCode":null}. sources contient seulement les sources réellement utilisées ; n'invente pas de référence. Si status n'est pas "ok", changes=[], needsCode=null. Si tu dois poser une question pour comprendre la demande, status="clarify".`;
+Articles effectivement consultés pour cette demande :
+${research.map((source) => `[${source.id}] ${source.label}\n${source.excerpt}`).join('\n\n') || '(aucun article scientifique pertinent consulté)'}
+Réponds UNIQUEMENT en JSON : {"status":"ok|clarify|unverified","reply":"ta réponse courte","sources":${JSON.stringify([APP_MAP_SOURCE, REQUEST_SOURCE, ...context.slice(0, 2).map(sourceOf), ...research.map((source) => source.id)])},"changes":[{"kind":"…","id":"…","op":"put","data":{…},"why":"pourquoi"}],"questions":["…"],"needsCode":null}. sources contient seulement les sources réellement utilisées ; n'invente pas de référence. Si status n'est pas "ok", changes=[], needsCode=null. Si tu dois poser une question pour comprendre la demande, status="clarify".`;
   const turns = (Array.isArray(messages) ? messages : []).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).slice(-MAX_TURNS)
     .map((m) => ({ role: m.role, content: str(m.content, 1500) })).filter((m) => m.content);
   return [{ role: 'system', content: sys }, ...turns];
@@ -137,13 +141,13 @@ Réponds UNIQUEMENT en JSON : {"status":"ok|clarify|unverified","reply":"ta rép
  * Sortie du modèle → réponse sûre. base(kind, id) donne les données actuelles d'un élément (pour fusionner une
  * modification partielle). Retourne { reply, items, rejected, questions, needsCode, explain }.
  */
-export function cleanAssistant(raw, { base = () => null, context, requireEvidence = false } = {}) {
+export function cleanAssistant(raw, { base = () => null, context, research = [], requireEvidence = false } = {}) {
   const x = extractJson(raw);
   if (!x || typeof x !== 'object') {
     const text = str(responseText(raw), 1500);
     return text ? { status: 'unverified', reply: requireEvidence ? 'Je ne peux pas vérifier cette réponse avec les informations fournies. Aucun changement n’a été préparé.' : text, sources: [], sourceRefs: [], items: [], rejected: [], questions: requireEvidence ? ['Quelle information ou source de l’app peux-tu fournir pour vérifier cette demande ?'] : [], needsCode: null, explain: [] } : null;
   }
-  const questions = (Array.isArray(x.questions) ? x.questions : []).filter((q) => typeof q === 'string').map((q) => str(q, 240)).filter(Boolean).slice(0, 4);
+  const questions = [...new Set([...(Array.isArray(x.questions) ? x.questions : []), x.question].filter((q) => typeof q === 'string').map((q) => str(q, 240)).filter(Boolean))].slice(0, 4);
   const explicitStatus = Object.hasOwn(x, 'status');
   let status = explicitStatus && ['ok','clarify','unverified'].includes(x.status) ? x.status : explicitStatus ? 'unverified' : 'ok';
   if (requireEvidence && !explicitStatus) status = 'unverified';
@@ -151,9 +155,10 @@ export function cleanAssistant(raw, { base = () => null, context, requireEvidenc
   if (x.understood === false || x.understanding === false || ['unclear','unknown','not_understood'].includes(x.understanding) || x.needsClarification === true || x.needs_clarification === true) status = 'clarify';
   if (explicitStatus && status === 'ok' && questions.length) status = 'clarify';
   const sources = [...new Set((Array.isArray(x.sources) ? x.sources : []).filter((s) => typeof s === 'string').map((s) => str(s, 160)).filter(Boolean))].slice(0, 32);
-  const refs = sourceMap(context);
+  const refs = sourceMap(context, research);
   if ((requireEvidence || explicitStatus && Array.isArray(context)) && status === 'ok') {
     if (!Array.isArray(x.sources) || x.sources.length > 32 || x.sources.some((s) => typeof s !== 'string') || !sources.length || sources.some((s) => !refs.has(s))) status = 'unverified';
+    if (x.basis === 'research' && !sources.some((id) => refs.get(id)?.origin === 'research')) status = 'unverified';
   }
   const baseCache = new Map(), getBase = (kind, id) => {
     const key = kind + '/' + id;

@@ -21,6 +21,7 @@ import { vProgress } from './views-progress.js';
 import { vLibrary, blocksOf } from './views-library.js';
 import { vProfile } from './views-profile.js';
 import { vSettings, APPEAR_KEYS } from './views-settings.js';
+import { syncAppIcon } from './app-icons.js';
 import { onVisible, bigTap, startPlayer } from './player.js';
 import { catchLink, pendingLink, clearPending } from './share.js';
 import './duo.js';
@@ -85,7 +86,7 @@ function syncAppearance() {
   if (it && !it.del && it.u > localT) { window.__sea.save({ ...local, ...Object.fromEntries(Object.entries(it.d).filter(([, v]) => v)), _t: it.u, _owner: S.user.id }); return; }
   if (!it && mine && local._t && (S.lastSync || S.user.guest)) putItem('config', 'appearance', APPEAR_KEYS.reduce((o, k) => ({ ...o, [k]: String(local[k] ?? '') }), {}));
 }
-setRenderer(() => { syncAppearance(); setLang(S.settings?.lang); syncContent(); doRender(); renderUpdateBar(); checkBadges(); });
+setRenderer(() => { syncAppearance(); setLang(S.settings?.lang); syncContent(); doRender(); syncAppIcon(); renderUpdateBar(); checkBadges(); });
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
 ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'home', profile: 'home', settings: 'main' }[id]; go(id, base); }; // un onglet s'ouvre toujours sur sa page d'accueil (sa liste de rubriques)
 ACT.goSync = () => go('settings', 'sync');

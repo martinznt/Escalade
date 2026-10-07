@@ -193,6 +193,13 @@ export const NEWS = [
   { v:'8.32.4', date:'2026-10-05', title:'Des boutons stables pendant le chargement', why:'Dans l’administration, le chargement des modifications attend la fin d’un appui avant de changer la liste. Les raccourcis restent utilisables.', steps:[
     ['settings','main','','Administration','Les raccourcis du Studio restent à leur place pendant ton appui, même si la liste finit de charger.'],
   ] },
+  { v:'8.33.0', date:'2026-10-06', title:'Des séances mieux organisées, une app à ton image', why:'Un objectif peut être travaillé dans plusieurs phases, et une phase peut servir plusieurs objectifs. Choisis ou dessine les icônes de ton compte.', steps:[
+    ['library','climbplan','','Objectifs et phases','Un objectif décrit ce que tu veux améliorer. Une phase organise une partie de la séance. Vérifie leurs associations avant de générer.'],
+    ['settings','display','#app-icons','Ton icône','Choisis parmi plusieurs styles ou crée ton dessin avec une base, des sports et des couleurs. Le lien d’installation prépare ce choix pour ton appareil.'],
+    ['settings','notifs','#notification-icons','Les notifications aussi','Garde l’icône de l’app ou choisis une icône de notification distincte. Certains systèmes utilisent leur propre apparence.'],
+    ['settings','integrations','','Tes applications sportives','Retrouve les imports de fichiers et la connexion Strava, disponible après configuration du site. Tu vérifies chaque activité avant de l’ajouter.'],
+    ['settings','main','','Des réponses plus explicites','L’assistant montre ses références ou demande une précision. Les outils manuels restent disponibles lorsqu’une réponse ne peut pas être vérifiée.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';
