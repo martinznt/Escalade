@@ -1170,10 +1170,17 @@ await step('admin sans code : réécrire un texte et envoyer une annonce ; l’a
   for (let k = 0; k < 2; k++) { await C.locator('[data-act=glReset]').first().click(); await c.confirm(); await C.waitForTimeout(400); }
   cur = B; await B.reload(); await B.waitForSelector('nav.tabs'); await b.tab('home'); await B.waitForSelector('#main :text-is("Séance du jour")', { timeout: 10000 });
 });
+// Réouverture hors ligne : l'app doit afficher sa navigation. Au-delà de 5 s (0,4 s en local), le journal décrit l'état
+// de la page (écran, données locales chargées, connexion, Service Worker) pour comprendre une lenteur de la CI.
+const offlineNav = async (P, label) => {
+  const t0 = Date.now(), state = () => P.evaluate(async () => { let app = {}; try { const m = await import('/state.js'); app = { loaded: m.S.loaded, user: !!m.S.user, sync: m.S.sync }; } catch (e) { app = { stateError: String(e) }; } return { ...app, online: navigator.onLine, sw: !!navigator.serviceWorker?.controller, text: (document.body?.innerText || '').replace(/\s+/g, ' ').slice(0, 300) }; }).catch((e) => ({ evalError: String(e) }));
+  try { await P.waitForSelector('nav.tabs', { timeout: 20000 }); } catch (e) { e.message += ` — ${label}, état de la page : ${JSON.stringify(await state())}`; throw e; }
+  if (Date.now() - t0 > 5000) console.log(`  ⚠️ ${label} : navigation affichée après ${Date.now() - t0} ms`, JSON.stringify(await state()));
+};
 await step('Service Worker actif, puis passage hors ligne : l’application s’ouvre avec les données', async () => {
   cur = A;
   await A.evaluate(() => navigator.serviceWorker.ready); await A.reload(); await A.waitForSelector('nav.tabs'); await A.waitForTimeout(600);
-  await ctxA.setOffline(true); await A.reload(); await A.waitForSelector('nav.tabs', { timeout: 10000 });
+  await ctxA.setOffline(true); await A.reload(); await offlineNav(A, 'première réouverture hors ligne');
   await a.tab('library'); await a.sub('libSub', 'seances'); assert.ok(await a.count('text=Tirage maison') > 0);
 });
 await step('modifications hors ligne (séance, performance, note), fermeture puis réouverture', async () => {
@@ -1186,14 +1193,14 @@ await step('modifications hors ligne (séance, performance, note), fermeture pui
   await cpFresh(); await cpTo(3); await A.waitForSelector('.cpart'); const nPh = await a.count('.cpart');
   await a.click('[data-act=cpAdd][data-id=pause]'); await A.waitForSelector('#sheet'); await A.keyboard.press('Escape'); await A.waitForTimeout(200);
   assert.equal(await a.count('.cpart'), nPh + 1);
-  await A.reload(); await A.waitForSelector('nav.tabs', { timeout: 10000 }); await a.tab('library'); await a.sub('libSub', 'climbplan'); await A.waitForSelector('.steps');
+  await A.reload(); await offlineNav(A, 'réouverture hors ligne après modifications'); await a.tab('library'); await a.sub('libSub', 'climbplan'); await A.waitForSelector('.steps');
   assert.match(await a.text('.steps b'), /Étape 3/); assert.equal(await a.count('.cpart'), nPh + 1, 'phases gardées hors ligne'); assert.match(await a.text('#main'), /Pause/);
   await A.close(); // fermeture de l'onglet avant toute synchronisation
 });
 let A2;
 await step('retour en ligne : tout est synchronisé, sans doublon', async () => {
   A2 = await ctxA.newPage(); watch(A2, 'A2'); cur = A2; const a2 = H(A2);
-  await A2.goto(BASE).catch(() => {}); await A2.waitForSelector('nav.tabs', { timeout: 10000 });
+  await A2.goto(BASE).catch(() => {}); await offlineNav(A2, 'nouvel onglet hors ligne');
   await ctxA.setOffline(false); await A2.evaluate(() => window.dispatchEvent(new Event('online')));
   await a2.waitSynced();
   const items = (await a2.api('GET', '/api/items?since=0')).data.items;
@@ -1274,7 +1281,11 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   await Promise.all([G.waitForNavigation({ timeout: 20000 }), g.click('#updbar [data-act=updNow]')]);
   await G.waitForSelector('nav.tabs');
   // Un cache est créé dès install ; attendre le BUILD du contrôleur réel, y compris un second rechargement.
-  await poll(async () => (await controllerBuild(G).catch(() => '')) === 'deploy-e2e-2', 20000, 'nouveau contrôleur activé');
+  try { await poll(async () => (await controllerBuild(G).catch(() => '')) === 'deploy-e2e-2', 20000, 'nouveau contrôleur activé'); }
+  catch (e) { // l'état exact du Service Worker dans le journal de la CI (les captures n'y sont pas toujours accessibles)
+    const sw = await G.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return { active: r?.active?.state || '', installing: r?.installing?.state || '', waiting: r?.waiting?.state || '', controlled: !!navigator.serviceWorker.controller, demande: sessionStorage.getItem('sea:user-update') }; }).catch((x) => ({ evalError: String(x) }));
+    e.message += ` — Service Worker : ${JSON.stringify({ ...sw, build: await controllerBuild(G).catch(() => '') })}`; throw e;
+  }
   await poll(async () => G.evaluate(async () => { const reg = await navigator.serviceWorker.getRegistration(); return reg?.active?.state === 'activated' && !reg.installing && !reg.waiting && !sessionStorage.getItem('sea:user-update'); }).catch(() => false), 10000, 'activation terminée sans nouvelle attente');
   await G.waitForSelector('#updbar.fresh [data-act=updWhat]', { timeout: 20000 }); // « L'app a été mise à jour »
   await g.click('#updbar [data-act=updWhat]'); await G.waitForSelector('#sheet.open .newslist li');

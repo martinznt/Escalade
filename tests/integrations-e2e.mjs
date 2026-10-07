@@ -6,7 +6,10 @@ import { makeEnv } from './server.mjs';
 import { Client } from './helpers.mjs';
 
 const SITE = 'https://site.test', ROOT = '/api/integrations/strava';
-const env = makeEnv(), clients = {}, apiCalls = [], vendorCalls = [], errors = [];
+const env = makeEnv(), clients = {}, apiCalls = [], vendorCalls = [], errors = [], navRedirects = [];
+// Chromium « headless shell » (celui de la CI) ne suit pas une redirection 3xx fournie par route.fulfill pour une
+// navigation : le test la rejoue comme le ferait le navigateur, après avoir noté le statut et l'adresse du Worker.
+const navigateTo = (href) => `<!doctype html><meta charset="utf-8"><title>Redirection</title><script>location.replace(${JSON.stringify(href)})</script>`;
 const config = { STRAVA_CLIENT_ID: '12345', STRAVA_CLIENT_SECRET: 'test-client-secret-12345', STRAVA_TOKEN_KEY: Buffer.alloc(32, 7).toString('base64url'), STRAVA_REDIRECT_URI: SITE + ROOT + '/callback' };
 let activitiesError = false, revokeError = false, holdPreview = false, releasePreview;
 const activity = (id, name, sportType = 'Run') => ({ id, name, athlete: { id: 123 }, sport_type: sportType, start_date: '2026-10-01T07:00:00Z', elapsed_time: 1800, moving_time: 1600, distance: 5000, total_elevation_gain: 35, private: true, map: { summary_polyline: 'GPS_NON_STOCKE' }, description: 'TEXTE_PRIVE_NON_IMPORTE' });
@@ -43,14 +46,20 @@ await context.route(/^https:\/\/site\.test\//, async (route) => {
   const response = routeOverride ? await routeOverride(input) || await worker.fetch(input, env) : await worker.fetch(input, env);
   const output = {}; for (const [key, value] of response.headers) if (key !== 'set-cookie') output[key] = value;
   const cookies = response.headers.getSetCookie?.() || []; if (cookies.length) output['set-cookie'] = cookies.join('\n');
+  const location = response.headers.get('Location');
+  if (request.isNavigationRequest() && response.status >= 300 && response.status < 400 && location) {
+    navRedirects.push({ path, status: response.status, location });
+    const html = {}; if (cookies.length) html['set-cookie'] = output['set-cookie'];
+    await route.fulfill({ status: 200, headers: html, contentType: 'text/html', body: navigateTo(new URL(location, request.url()).href) }); return;
+  }
   await route.fulfill({ status: response.status, headers: output, body: Buffer.from(await response.arrayBuffer()) });
 });
-// Simule l'approbation sur Strava puis son retour OAuth ; aucune page fournisseur réelle visitée.
+// Simule la page d'approbation Strava puis son retour OAuth ; aucune page fournisseur réelle visitée.
 await context.route(/^https:\/\/www\.strava\.com\/oauth\/authorize\?/, async (route) => {
   const authorize = new URL(route.request().url()), callback = new URL(config.STRAVA_REDIRECT_URI);
   assert.equal(authorize.searchParams.get('scope'), 'read,activity:read_all');
   callback.searchParams.set('state', authorize.searchParams.get('state')); callback.searchParams.set('scope', 'read,activity:read_all'); callback.searchParams.set('code', 'fixture-authorized-code');
-  await route.fulfill({ status: 303, headers: { Location: callback.href }, body: '' });
+  await route.fulfill({ status: 200, contentType: 'text/html', body: navigateTo(callback.href) });
 });
 const page = await context.newPage(); page.on('pageerror', (error) => errors.push(error.message));
 let count = 0;
@@ -126,6 +135,7 @@ try {
     assert.equal(apiCalls.filter((call) => call.path === ROOT + '/start').length, 0);
     await page.check('[data-change=stravaConsent]'); await page.click('[data-act=stravaConnect]'); await page.waitForSelector('[data-act=stravaPreview]');
     assert.match(await page.locator('main').innerText(), /Compte connecté/); assert.deepEqual(apiCalls.find((call) => call.path === ROOT + '/start').body, { confirm: true });
+    assert.deepEqual(navRedirects.find((r) => r.path === ROOT + '/callback'), { path: ROOT + '/callback', status: 303, location: '/#/settings/integrations' }, 'le Worker renvoie vers les intégrations par une redirection 303');
     const storage = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } })); assert.doesNotMatch(storage, /access-token-test|refresh-token-test|test-client-secret/);
   });
   await step('aperçu Strava : rien ajouté automatiquement, sélection puis confirmation explicite', async () => {
