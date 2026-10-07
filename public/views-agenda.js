@@ -1,10 +1,11 @@
 // Planning et bilan courts, sur les API calendrier/historique et l'outbox existantes.
 import { h, openSheet, closeSheet, toast, ymd, ask, fmtDay } from './ui.js';
-import { S, ACT, SUBMIT, CHG, api, ctx, saveEvent, addHistory, updateHistory, deleteHistory, getSeance, render, go, putItem } from './state.js';
+import { S, accountToken, accountMatches, ACT, SUBMIT, CHG, api, ctx, saveEvent, addHistory, updateHistory, deleteHistory, getSeance, render, go, putItem } from './state.js';
 import { uid } from './shared.js';
 import { ACTIVITIES } from './model.js';
 import { agendaEvents, occurrenceChange, splitSeries, exceptionId, validDay, dayInZone, journalEntries, parseAgendaText } from './agenda.js';
 import { parseQuickActivities } from './experience.js';
+import { aiEvidence, aiProposalReady } from './srcui.js';
 const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris';
 const DAYS = [[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],[6,'Samedi'],[0,'Dimanche']];
 const today = () => dayInZone(Date.now(), zone());
@@ -58,7 +59,7 @@ SUBMIT.agendaSave = (form) => {
     meta:{ kind:'activity',activityId:d.activityId,place:String(d.place).trim(),reminderMin,...(env ? {envId:env.id}:{}),...(d.minutes ? {minutes:Number(d.minutes)}:{}) } };
   saveEvent(ev); closeSheet(); render(); toast('Planning enregistré'); go('home','cal');
 };
-export function openQuickLog(date = today(), event, parsed = []) {
+export function openQuickLog(date = today(), event, parsed = [], evidence = null) {
   if (date > today()) { toast('Cette activité est dans le futur : planifie-la.'); return; }
   const linked = event ? S.history.filter((x) => x.data?.agenda?.eventId === event.sourceId && x.data.agenda.occurrenceDate === event.occurrenceDate) : [];
   const prior = linked.filter(editableQuickLog).sort((a,b) => (a.data.quickLog.order === 'main' ? -1 : 1) - (b.data.quickLog.order === 'main' ? -1 : 1) || a.id.localeCompare(b.id));
@@ -73,6 +74,7 @@ export function openQuickLog(date = today(), event, parsed = []) {
     ${linked.length > prior.length ? h`<p class="tiny muted">Les séances détaillées déjà enregistrées sont conservées séparément.</p>` : ''}
     ${rows.length < prior.length ? h`<p class="tiny warn" role="status">${prior.length - rows.length} activité(s) précédemment enregistrée(s) seront retirées de ce bilan à l’enregistrement. Relis les activités ci-dessous.</p>` : ''}
     <form data-submit="quickParse" class="row"><label class="grow">Ce que j’ai fait<input name="text" maxlength="600" placeholder="1 h 30 de voie, 6c max, puis 20 min de bloc"></label><button class="btn" type="submit">Préparer le bilan</button></form><button class="btn sm ghost" data-act="quickAi">Essayer avec l’assistant IA</button>
+    ${evidence ? aiEvidence(evidence) : ''}<p class="tiny warn" id="quick-ai-status" role="status"></p>
     <form data-submit="quickSave" class="stack">${rows.map((x,i) => row(x,i))}${rows.length < 8 ? h`<details class="how"><summary>＋ Ajouter autre chose avant / après</summary>${row({activityId:'climbing_boulder',order:'before'},rows.length,false)}<p class="tiny muted">Laisse la durée, la performance et la note vides pour ne pas ajouter cette activité.</p></details>`:''}
       <button class="btn pri big" type="submit">✓ Enregistrer ce que j’ai fait</button><p class="tiny muted">Aucune cotation, répétition ou charge ne sera inventée. Les repères libres restent des déclarations.</p></form>`);
 }
@@ -136,4 +138,21 @@ SUBMIT.agendaEditSave = (form) => {
 ACT.agendaStop = async() => {const e=S.agendaEdit,base=S.events.find((x) => x.id===e.sourceId);if(!(await ask('Arrêter les occurrences à partir de cette date ? Les bilans passés sont conservés.')))return; const [old]=splitSeries(base,e.occurrenceDate,uid());saveEvent(old);closeSheet();render();};
 ACT.agendaCancel = () => {const e=S.agendaEdit,base=S.events.find((x) => x.id===e.sourceId);saveEvent(occurrenceChange(base,e.occurrenceDate,{date:e.on,completed:false,meta:{...e.meta,status:'cancelled'}}));closeSheet();render();};
 
-ACT.quickAi = async () => { const q=S.quickDraft, input=document.querySelector('[data-submit=quickParse] input');if(!q || !input?.value.trim()) {toast('Écris d’abord ce que tu as fait.');return;}const message=input.value;try {const r=await api('POST','/api/ai/agenda',{text:message,kind:'journal',today:today()});if(S.quickDraft!==q)return;openQuickLog(q.date,q.event,r.draft.activities);toast('Proposition '+({high:'à relire',medium:'incertaine',low:'très incertaine'}[r.draft.confidence])+'. Vérifie chaque activité avant d’enregistrer.',6000);}catch(e){toast(e.message,5000,'bad');} };
+ACT.quickAi = async (el) => {
+  const q = S.quickDraft, token = accountToken(), input = document.querySelector('[data-submit=quickParse] input');
+  if (!q || !input?.value.trim()) { toast('Écris d’abord ce que tu as fait.'); return; }
+  const message = input.value, current = () => accountMatches(token) && S.quickDraft === q && input.isConnected && input.value === message;
+  if (el?.disabled) return; if (el) el.disabled = true;
+  const notice = document.querySelector('#quick-ai-status'); if (notice) notice.textContent = '';
+  try {
+    const r = await api('POST', '/api/ai/agenda', { text: message, kind: 'journal', today: today() });
+    if (!current()) return;
+    if (!aiProposalReady(r.draft)) throw Object.assign(new Error('L’assistant n’a pas fourni une proposition vérifiable. Précise ton bilan ou utilise le formulaire.'), { status: 422 });
+    openQuickLog(q.date, q.event, r.draft.activities, r.draft);
+    toast('Proposition à relire : vérifie chaque activité avant d’enregistrer.', 6000);
+  } catch (e) {
+    if (!current()) return;
+    if (notice?.isConnected) notice.textContent = `${e.message || 'Assistant indisponible.'} Aucun bilan n’a été enregistré.`;
+    else toast(e.message, 5000, 'bad');
+  } finally { if (accountMatches(token) && el?.isConnected) el.disabled = false; }
+};

@@ -39,7 +39,7 @@ await ok('réponse mal formée → rien d’enregistré (le client passe à la f
   assert.equal(cleanGoal('pas un objet', 'x'), null); assert.equal(cleanGoal({ label: 'x', caps: 'nope' }, 'x'), null); assert.equal(extractJson('{cassé'), null);
 });
 
-const draftText = JSON.stringify({ type: 'capacity', label: 'Clipage', summary: 'Mousquetonner la corde.', howTo: ['Au sol'], linkedCaps: [{ id: 'technique_escalade', w: 0.8 }], exercises: [] });
+const draftText = JSON.stringify({ status: 'ok', basis: 'request', sources: ['request','app/model'], type: 'capacity', label: 'Clipage', summary: 'Mousquetonner la corde.', howTo: ['Au sol'], linkedCaps: [{ id: 'technique_escalade', w: 0.8 }], exercises: [] });
 const envAI = makeEnv({ AI: { calls: 0, run: async function () { this.calls++; return { response: 'Voici la fiche : ' + draftText }; } } });
 await ok('route : compte requis', async () => { const c = new Client(envAI); assert.equal((await c.post('/api/ai/draft', { text: 'clipage' })).status, 401); });
 await ok('route : proposition validée renvoyée', async () => {

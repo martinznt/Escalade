@@ -1,5 +1,20 @@
 # CHANGELOG — Séances entraînement
 
+## 8.33.0 — Objectifs et phases, icônes par compte, IA plus vérifiable, applications sportives
+
+Détails et limites : [DELIVERY_8_33.md](DELIVERY_8_33.md) ; réglages à faire soi-même : [CLOUDFLARE_GUIDE.md](CLOUDFLARE_GUIDE.md).
+
+- Objectifs distincts des phases : plusieurs objectifs peuvent partager une phase, un objectif peut contribuer à plusieurs phases ; associations visibles et modifiables dans le créateur. « Générer » revérifie le temps sur la structure actuelle.
+- Séances courtes : le temps demandé est tenu (Express « 20 min gainage », séance guidée de 12 min…). L'objectif garde 10 min puis ce qui reste, le retour au calme séparé saute en dessous de 20 min, et c'est dit.
+- Icônes de l'app et des notifications choisies ou créées par chaque compte (PNG validés côté serveur, migration D1 12).
+- Réponses IA : statut et provenance contrôlés aux douze points d'appel ; une demande ambiguë produit une question ou un refus, jamais un brouillon applicable.
+- Administration : recherche transversale par rôle, sans données privées des membres ; formulaire de bug avec titre facultatif.
+- Paramètres › Applications connectées : Strava (OAuth, aperçu avant import, déconnexion qui retire les imports, migration D1 13), GPX/TCX et CSV avec provenance. Strava et Gemini restent à activer dans Cloudflare.
+
+## 8.32.0 à 8.32.4 — Interface simple, calendrier récurrent, fiabilité
+
+Voir [DELIVERY_8_32.md](DELIVERY_8_32.md), [8.32.1](DELIVERY_8_32_1.md), [8.32.2](DELIVERY_8_32_2.md), [8.32.3](DELIVERY_8_32_3.md) et [8.32.4](DELIVERY_8_32_4.md).
+
 ## 8.31.0 — Carnet de 487 séances, Ma salle de sport, Mes moments, objectifs et sports sans limite, jusqu'à 5 h
 
 ### Carnet de séances

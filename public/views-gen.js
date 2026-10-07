@@ -3,12 +3,12 @@
 // On peut ajouter une intention / une force / une faiblesse en l'écrivant : l'assistant la relie aux bonnes capacités,
 // et on peut la proposer à tout le monde (les administrateurs reçoivent la proposition).
 import { h, raw, chip, openSheet, closeSheet, toast, skeleton } from './ui.js';
-import { S, ACT, SUBMIT, CHG, ctx, render, putItem, api, ls, item } from './state.js';
+import { S, accountToken, accountMatches, ACT, SUBMIT, CHG, ctx, render, putItem, api, ls, item } from './state.js';
 import { uid } from './shared.js';
 import { CAPACITIES, EQUIPMENT, ACTIVITIES } from './model.js';
 import { activeGoals, goalLabel, profileCapacities, STATUS_WORD } from './brain.js';
 import { PART_TYPES, PRESETS, MAX_TOTAL, cleanParts, presetParts, scaleParts, totalMinutes, partLabel, formatName, formatAdvice, parseFormats } from './format.js';
-import { sourcesLine } from './srcui.js';
+import { sourcesLine, aiEvidence, aiProposalReady } from './srcui.js';
 import { chooseScope, saveFormatGlobal, shareButton } from './content.js';
 import { intentsFor, MUSCLE_GROUPS, AVOID_ZONES, FORMES, FEELS, resolveFeel, keywordCaps } from './intentions.js';
 
@@ -157,29 +157,47 @@ export function genOptions() {
 const KIND = { intent: ['🧭', 'Une intention', 'Ex. « travailler les talons crochets », « gagner en explosivité sur les jetés »'], strength: ['💪', 'Un point fort', 'Ex. « je suis à l’aise en dévers »'], weakness: ['🌱', 'Un point faible', 'Ex. « je glisse des pieds sur les petites prises »'] };
 ACT.gWrite = (el) => {
   const k = el.dataset.k, [ic, t, ex] = KIND[k];
+  S.gDraft = null;
   openSheet(h`<form data-submit="gWriteGo" class="stack"><input type="hidden" name="kind" value="${k}"><h2 style="margin:0">${ic} ${t}, avec tes mots</h2>
-    <textarea name="text" rows="2" maxlength="200" required placeholder="${ex}"></textarea>
+    <textarea name="text" rows="2" maxlength="200" required placeholder="${ex}">${el.dataset.text || ''}</textarea>
     <p class="tiny muted">L’assistant le relie aux capacités à entraîner pour ${ACTIVITIES[S.gen.activityId]?.label?.toLowerCase() || 'ce sport'}. Tu relis avant d’ajouter.</p>
     <button class="btn pri" type="submit">Analyser</button></form>`);
 };
 SUBMIT.gWriteGo = async (f) => {
   const d = Object.fromEntries(new FormData(f)), text = String(d.text || '').trim(); if (text.length < 2) return;
-  openSheet(h`<div class="stack"><h2 style="margin:0">${KIND[d.kind][0]} ${text}</h2>${skeleton(1)}</div>`);
-  let r = null, why = '';
-  try { r = (await api('POST', '/api/ai/intent', { text, activityId: S.gen.activityId, kind: d.kind }, { timeout: 45000 })).intent; }
-  catch (e) { why = e.guest ? '' : e.status === 503 ? 'Assistant indisponible : proposition faite à partir de tes mots.' : e.message; }
-  if (!r) { const caps = keywordCaps(text); r = Object.keys(caps).length ? { label: text.slice(0, 40), emoji: '✍️', summary: '', caps } : null; }
-  if (!r) { openSheet(h`<div class="stack"><h2 style="margin:0">Pas compris</h2><p class="small">${why || 'Je n’ai pas su relier ça à un entraînement.'} Essaie avec d’autres mots.</p><button class="btn" data-act="gWrite" data-k="${d.kind}">Réessayer</button></div>`); return; }
-  S.gDraft = { ...r, kind: d.kind };
-  openSheet(h`<div class="stack"><h2 style="margin:0">${r.emoji} ${r.label}</h2>${why ? h`<p class="tiny warn-t">${why}</p>` : ''}${r.summary ? h`<p class="small">${r.summary}</p>` : ''}
+  const token = accountToken(), gen = G(), pending = { pending: true };
+  S.gDraft = pending;
+  const current = () => accountMatches(token) && G() === gen && S.gDraft === pending;
+  openSheet(h`<div class="stack intent-loading"><h2 style="margin:0">${KIND[d.kind][0]} ${text}</h2>${skeleton(1)}</div>`);
+  try {
+    const r = (await api('POST', '/api/ai/intent', { text, activityId: gen.activityId, kind: d.kind }, { timeout: 45000 })).intent;
+    if (!current() || !document.querySelector('#sheet.open .intent-loading')) return;
+    if (!aiProposalReady(r)) throw Object.assign(new Error('Cette proposition ne peut pas être vérifiée. Précise ce que tu veux travailler.'), { status: 422 });
+    showIntentDraft({ ...r, kind: d.kind, source: 'ia' });
+  } catch (e) {
+    if (!current() || !document.querySelector('#sheet.open .intent-loading')) return;
+    S.gDraft = null;
+    const localAvailable = e.guest || e.offline || [503, 429].includes(e.status);
+    openSheet(h`<div class="stack"><h2 style="margin:0">${e.status === 422 ? 'À préciser' : 'Analyse indisponible'}</h2><p class="small" role="status">${e.guest ? 'Crée un compte pour utiliser l’assistant.' : e.message || 'L’assistant n’a pas fourni de proposition vérifiable.'}</p><p class="tiny muted">Aucune intention n’a été préparée ni enregistrée.</p><button class="btn" data-act="gWrite" data-k="${d.kind}" data-text="${text}">Reformuler</button>${localAvailable ? h`<button class="btn ghost" data-act="gWriteLocal" data-k="${d.kind}" data-text="${text}">Préparer avec les mots-clés, sans IA</button>` : ''}</div>`);
+  }
+};
+ACT.gWriteLocal = (el) => {
+  const text = String(el.dataset.text || '').trim(), kind = el.dataset.k, caps = keywordCaps(text);
+  if (!KIND[kind]) return;
+  if (!Object.keys(caps).length) { toast('Aucun mot-clé reconnu. Précise la capacité que tu veux travailler.', 5000); return; }
+  showIntentDraft({ label: text.slice(0, 40), emoji: '✍️', summary: '', caps, kind, source: 'local' });
+};
+function showIntentDraft(r) {
+  S.gDraft = r;
+  openSheet(h`<div class="stack"><h2 style="margin:0">${r.emoji} ${r.label}</h2>${r.source === 'local' ? h`<p class="tiny muted">Préparation locale à partir de mots-clés, sans IA. Ces liens sont des estimations à relire.</p>` : h`<p class="tiny muted">Proposition de l’assistant à relire.</p>${aiEvidence(r)}`}${r.summary ? h`<p class="small">${r.summary}</p>` : ''}
     <b class="small">Ça travaille</b><div class="chips">${Object.keys(r.caps).map((id) => h`<span class="chip static">${capLabel(id)}</span>`)}</div>
     <button class="btn pri" data-act="gDraftSave">Ajouter et sélectionner</button>
-    ${d.kind === 'intent' && !S.user?.guest ? h`<button class="btn" data-act="gDraftPropose">👥 Proposer à tout le monde</button><p class="tiny muted">Un administrateur la verra et pourra l’ajouter pour tous les utilisateurs.</p>` : ''}</div>`);
-};
+    ${r.kind === 'intent' && !S.user?.guest ? h`<button class="btn" data-act="gDraftPropose">👥 Proposer à tout le monde</button><p class="tiny muted">Un administrateur la verra et pourra l’ajouter pour tous les utilisateurs.</p>` : ''}</div>`);
+}
 ACT.gDraftSave = () => {
-  const r = S.gDraft; if (!r) return;
+  const r = S.gDraft; if (!r || r.pending) return;
   const id = 'cat-' + uid().slice(0, 12), caps = Object.entries(r.caps).map(([cid, w]) => ({ id: cid, w }));
-  putItem('category', id, { activityId: S.gen.activityId, label: r.label, description: r.summary || '', caps, emoji: r.emoji || '✍️', source: 'ia', kind: r.kind === 'intent' ? 'intent' : 'focus', side: r.kind === 'intent' ? '' : r.kind });
+  putItem('category', id, { activityId: S.gen.activityId, label: r.label, description: r.summary || '', caps, emoji: r.emoji || '✍️', source: r.source === 'ia' ? 'ia' : 'local', kind: r.kind === 'intent' ? 'intent' : 'focus', side: r.kind === 'intent' ? '' : r.kind });
   if (r.kind === 'intent') arr('intentIds').push(id);
   else if (r.kind === 'strength') arr('strengthCaps').push(...caps.map((c) => c.id).filter((c) => !arr('strengthCaps').includes(c)));
   else arr('weakCaps').push(...caps.map((c) => c.id).filter((c) => !arr('weakCaps').includes(c)));
@@ -187,7 +205,8 @@ ACT.gDraftSave = () => {
   S.gDraft = null; S.gen.plan = null; closeSheet(); render(); toast('Ajouté');
 };
 ACT.gDraftPropose = async () => {
-  const r = S.gDraft; if (!r) return;
-  try { await api('POST', '/api/proposals', { kind: 'intent', label: r.label, emoji: r.emoji, caps: r.caps, activityId: S.gen.activityId, detail: r.summary || '' }); toast('Merci ! Proposition envoyée aux administrateurs.', 4000); ACT.gDraftSave(); }
-  catch (e) { toast(e.message, 4000, 'bad'); }
+  const r = S.gDraft, token = accountToken(), gen = G(); if (!r || r.pending) return;
+  const current = () => accountMatches(token) && S.gDraft === r && G() === gen;
+  try { await api('POST', '/api/proposals', { kind: 'intent', label: r.label, emoji: r.emoji, caps: r.caps, activityId: gen.activityId, detail: r.summary || '' }); if (!current()) return; toast('Merci ! Proposition envoyée aux administrateurs.', 4000); ACT.gDraftSave(); }
+  catch (e) { if (current()) toast(e.message, 4000, 'bad'); }
 };

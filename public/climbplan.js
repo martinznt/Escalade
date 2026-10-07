@@ -12,6 +12,7 @@ import { partOptions, buildPicked, GUIDE_PARTS } from './guide.js';
 import { availableEquipment } from './brain.js';
 import { buildWorkPart, workTitle, SPORT_STRUCTS, sportFamily } from './sportplan.js';
 import { byId } from './library.js';
+import { normalizeAimLinks, linkedAimCaps } from './objectivelinks.js';
 
 export const INTENSITY = { easy: ['🌿', 'Tranquille'], mod: ['🙂', 'Modéré'], hard: ['🔥', 'Intense'], max: ['🚀', 'Max'] };
 /** Types de parties : grimpe (bloc ou voie) ou parties du corps (échauffement, renfo, étirements…) construites par le générateur. */
@@ -180,7 +181,8 @@ function bodyPart(p, ctx, act, label, seed, o = {}) {
   try {
     // Le lieu choisi décide du matériel ; les objectifs, intentions et zones à ménager orientent le choix des exercices.
     // Le but, les priorités et l'intensité de la phase orientent aussi le choix (sans créer d'objectif).
-    const caps = Object.fromEntries((p.priorities || []).map((c) => [c, 1]));
+    const caps = linkedAimCaps(p, o.aims || []);
+    for (const c of p.priorities || []) caps[c] = Math.max(caps[c] || 0, 1);
     // Sous-objectifs structurés de la phase (priorités 1–4, règles appliquées) : ajoutés aux capacités visées.
     if (p.subIntents?.length) for (const [c, w] of Object.entries(intentCaps(p.subIntents, p.rules || []).caps)) caps[c] = Math.max(caps[c] || 0, Math.min(1, w / 4));
     const intents = [...(o.intents || []), ...(Object.keys(caps).length ? [{ label: p.goal || 'Priorités de la phase', caps }] : [])];
@@ -213,7 +215,8 @@ export function buildFromParts(parts, ctx, opts = {}) {
     if (p.travelBefore > 0) out.push(normalizeEx({ id: uid(), name: `Déplacement${p.envName ? ' vers ' + p.envName : ''}`, emoji: '🚗', mode: 'time', sets: 1, secMin: p.travelBefore * 60, secMax: p.travelBefore * 60, rest: 0, block: 'main', part: label, intensity: 'low', note: 'Changement de lieu entre deux phases.', phase: p.id || '' }));
     const n0 = out.length;
     // Lieu propre à la phase : son matériel décide des exercices possibles.
-    opts = p.envId ? { ...base, envId: p.envId, envName: p.envName || base.envName } : base;
+    const links = normalizeAimLinks(p, base.aims || []), linked = Array.isArray(p.aimLinks) || p.aimKey || p.prepFor;
+    opts = { ...base, ...(p.envId ? { envId: p.envId, envName: p.envName || base.envName } : {}), ...(linked ? { goalIds: links.map((x) => x.goalId).filter(Boolean) } : {}) };
     buildOne(p, i, label);
     for (const e of out.slice(n0)) e.phase = p.id || ''; // chaque exercice sait de quelle phase il vient
   });
@@ -262,7 +265,7 @@ export function buildFromParts(parts, ctx, opts = {}) {
   const now = Date.now();
   return normalizeSession({
     id: uid(), name: opts.name || 'Ma séance', emoji: opts.emoji || (acts[0]?.startsWith('climbing') ? '🧗' : '🏋️'), source: 'generated', activity: acts[0] || opts.sport || 'climbing_boulder', sports: acts.slice(1),
-    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: opts.envId || '', envName: opts.envName || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0), intent: opts.intent || null, phases: parts.map((p) => ({ id: p.id, type: p.type, activity: p.activity || (p.type === 'climb' ? (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder') : ''), role: p.role, goal: p.goal, minutes: p.minutes, intensity: p.intensity, priorities: p.priorities, envId: p.envId || '', travelMin: p.travelBefore || 0, subIntents: (p.subIntents || []).map((x) => x.id), objective: !!p.objective })) },
+    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: base.envId || '', envName: base.envName || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0), intent: base.intent || null, aims: base.aims || [], phases: parts.map((p) => ({ id: p.id, type: p.type, activity: p.activity || (p.type === 'climb' ? (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder') : ''), role: p.role, goal: p.goal, minutes: p.minutes, intensity: p.intensity, priorities: p.priorities, envId: p.envId || '', travelMin: p.travelBefore || 0, subIntents: (p.subIntents || []).map((x) => x.id), objective: !!p.objective, aimLinks: normalizeAimLinks(p, base.aims || []), locks: p.locks, window: p.window })) },
     objectives: opts.goal ? [opts.goal] : [],
     notes: [{ title: 'Pourquoi cette séance', text: [opts.goal || 'Séance structurée par toi, partie par partie.', ...why].join('\n') }],
     createdAt: now, updatedAt: now,

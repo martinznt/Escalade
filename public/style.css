@@ -558,6 +558,7 @@ html[data-motion=off] .scene *{animation:none!important}
 .findbox:focus-within{border-color:var(--accent)}
 #setfindres{display:grid;gap:8px}#setfindres:empty{display:none}.setmenu.hidden{display:none}
 .setmain{display:grid;gap:var(--gap)}
+.set-account-name{min-width:0;overflow-wrap:anywhere}
 .found{outline:2px solid var(--accent);outline-offset:4px;border-radius:12px;animation:foundpulse 1.2s ease 2}
 @keyframes foundpulse{50%{outline-color:transparent}}
 /* Visite longue : une barre de progression au lieu d'une rangée de points */

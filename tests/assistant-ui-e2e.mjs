@@ -14,7 +14,7 @@ globalThis.fetch=async(input,options)=>{
 };
 const env=makeEnv({GEMINI_API_KEY:'mock-gemini-key-only-for-isolated-tests',AI:{run:async(_model,input)=>{
   const sys=input.messages[0].content,last=input.messages.at(-1).content;
-  if(sys.includes('Vérifie')||sys.includes('L’IA est disponible.')){if(heldTest)return new Promise(resolve=>{releaseTest=()=>resolve(qwen({reply:'REPONSE-TARDIVE-A-EXCLUE'}));});return qwen({reply:'IA disponible, vérification réussie.'});}
+  if(sys.includes('Vérifie')||sys.includes('L’IA est disponible.')){if(heldTest)return new Promise(resolve=>{releaseTest=()=>resolve(qwen({reply:'REPONSE-TARDIVE-A-EXCLUE'}));});return qwen({reply:'L’IA est disponible.'});}
   if(sys.includes('Tu es le coach'))return qwen({status:'ok',basis:'request',sources:['request','app/map'],reply:'COACH-A : une séance courte peut convenir.',actions:[{command:'Fais une séance de 20 minutes pour les jambes',label:'Préparer les jambes'},{to:'settings/notifs',label:'Ouvrir mes rappels'},{to:'settings/admin',label:'Interdit'}]});
   adminCalls++;
   return qwen(/raccourcis/i.test(last)?{status:'ok',sources:['draft:faq/n-ui-faq'],reply:'Réponse FAQ raccourcie.',changes:[{kind:'faq',id:'n-ui-faq',data:{a:'Depuis le calendrier.'}}]}:{status:'ok',sources:['app/map','request'],reply:'FAQ-A-PRIVEE préparée.',changes:[{kind:'faq',id:'n-ui-faq',data:{q:'Comment noter ma séance ?',a:'Depuis le calendrier, choisis ton sport et ton ressenti.'}}]});
@@ -45,7 +45,7 @@ const logout=async()=>{await go('#/settings/main','[data-act=logout]');await p.c
 try{
   await p.goto(srv.base);await login('AssistantA');
   await step('assistant accessible, modèle et test concret de réponse',async()=>{
-    await assistant();await panel();assert.ok(await p.locator('[data-submit=asAIConfig]').isVisible());await p.click('[data-act=asAITest]');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('IA disponible, vérification réussie.'));await panel();assert.match(await p.locator('main').innerText(),/Réponse en \d[,.]\d s/);
+    await assistant();await panel();assert.ok(await p.locator('[data-submit=asAIConfig]').isVisible());await p.click('[data-act=asAITest]');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('L’IA est disponible.'));await panel();assert.match(await p.locator('main').innerText(),/Réponse en \d[,.]\d s/);
     await p.fill('[data-submit=asAIConfig] input[name=budget]','6000');await p.click('[data-submit=asAIConfig] button');await p.waitForFunction(async()=>((await import('/state.js')).S.admin.ai?.budget)===6000);assert.equal((await api('GET','/api/admin/ai')).data.budget,6000);
   });
   await step('style des réponses enregistré, règles de clarté et de sources toujours actives',async()=>{
@@ -81,7 +81,7 @@ try{
     assert.equal(await p.locator('[data-submit=asSend],[data-act=asCodeNow],[data-act=studioOpen],#aslog').count(),0);assert.match(await p.locator('main').innerText(),/Le rôle Contenu est nécessaire/);
     const form=p.locator('[data-submit=asAIConfig]');assert.ok(await form.isVisible());await p.getByText('Style des réponses',{exact:true}).click();await form.locator('[name=answerStyle]').selectOption('direct');await form.locator('[name=budget]').fill('6100');
     const savedResponse=p.waitForResponse(r=>new URL(r.url()).pathname==='/api/admin/ai'&&r.request().method()==='POST');await form.locator('button').click();assert.equal((await savedResponse).status(),200);await p.waitForFunction(async()=>((await import('/state.js')).S.admin.ai?.budget)===6100);
-    await p.click('[data-act=asAITest]');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('IA disponible, vérification réussie.'));await p.reload();await panel();assert.equal(await p.locator('[data-submit=asAIConfig] [name=budget]').inputValue(),'6100');assert.equal((await api('GET','/api/admin/ai')).data.preferences.answerStyle,'direct');
+    await p.click('[data-act=asAITest]');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('L’IA est disponible.'));await p.reload();await panel();assert.equal(await p.locator('[data-submit=asAIConfig] [name=budget]').inputValue(),'6100');assert.equal((await api('GET','/api/admin/ai')).data.preferences.answerStyle,'direct');
     assert.equal((await api('POST','/api/admin/assistant',{messages:[{role:'user',content:'Ajoute une question fréquente.'}]})).status,403);assert.equal((await api('POST','/api/admin/studio',{title:'Modification interdite',items:[]})).status,403);assert.equal((await api('POST','/api/admin/assistant/code',{text:'Modifie le titre.'})).status,403);
     await go('#/settings/content','main');await p.waitForFunction(()=>document.querySelector('main')?.textContent.includes('Rôle « Contenu » nécessaire'));assert.equal(await p.locator('[data-submit=asSend],[data-act=contentNew],[data-act=studioNew]').count(),0);
   });

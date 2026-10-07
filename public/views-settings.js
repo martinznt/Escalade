@@ -1,8 +1,12 @@
+import { cleanExternal, externalOf } from './external.js';
+import { vIntegrations } from './views-integrations.js';
 import { advancedUI, interfaceChoice } from './views-experience.js';
+import { appIconsCard, notificationIconsCard } from './app-icons.js';
+import { adminSearchCard } from './admin-search.js';
 // views-settings.js — Paramètres : séance, apparence, compte, données (export / import JSON, import CSV),
 // synchronisation et diagnostic, administration (EDIT_PASSWORD vérifié par le serveur), signalement de bug.
 import { h, raw, icon, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead, menuList } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, ctx, go, render, api, queue, saveSettings, syncAll, retryFailed, discardFailed, restoreConflict, pendingCount, persistNow, clearLocal, DEFAULT_SETTINGS, putItem, itemsOf, addHistory, saveEvent, ls, writePending, persist, bump, syncSoon } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, ctx, go, render, api, queue, saveSettings, syncAll, retryFailed, discardFailed, restoreConflict, pendingCount, persistNow, clearLocal, DEFAULT_SETTINGS, putItem, itemsOf, addHistory, saveEvent, ls, writePending, persist, bump, syncSoon, accountToken, accountMatches } from './state.js';
 import { uid, mergeSeances, readStored, normalizeSession } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
 import { parseCSV, proposeMapping, checkMapping, proposeMetricMap, buildImport, TARGETS, MAX_CSV_BYTES } from './csv.js';
@@ -23,12 +27,13 @@ import { CAPACITIES, ACTIVITIES } from './model.js';
 export const APPEAR_KEYS = ['mode', 'palette', 'accent', 'shape', 'radius', 'size', 'density', 'motion', 'vibe', 'easy', 'cb', 'big', 'contrast'];
 export const VIBES = [['classique', 'Classique', 'Sobre et lisible'], ['chaleureux', 'Chaleureux', 'Tons chauds, tout en douceur'], ['muscu', 'Salle de muscu', 'Noir, rouge, énergique'], ['nature', 'Grand air', 'Vert forêt, esprit falaise'], ['minimal', 'Minimal', 'Épuré, sans effets'], ['neon', 'Néon', 'Sombre et lumineux']];
 const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['foret', '#5cb87a', 'Vert'], ['corail', '#ef6f5e', 'Rouge'], ['encre', '#a78bfa', 'Violet'], ['rose', '#f472b6', 'Rose'], ['contraste', '#ffd60a', 'Contraste élevé (jaune)']];
-const SUBS = [['main', 'Paramètres'], ['display', 'Affichage et accessibilité'], ['session', 'Pendant la séance'], ['notifs', 'Notifications et rappels'], ['help', 'Aide'], ['data', 'Mes données'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Administration'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition'], ['assistant', 'Assistant du site'], ['content', 'Contenu de l’app'], ['look', 'Textes et apparence'], ['changes', 'Tout ce qui a été modifié'], ['members', 'Propositions des membres'], ['bugs', 'Signalements'], ['users', 'Comptes et rôles'], ['push', 'Notifications de mise à jour']];
+const SUBS = [['main', 'Paramètres'], ['display', 'Affichage et accessibilité'], ['session', 'Pendant la séance'], ['notifs', 'Notifications et rappels'], ['help', 'Aide'], ['data', 'Mes données'], ['integrations', 'Applications connectées'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Administration'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition'], ['assistant', 'Assistant du site'], ['content', 'Contenu de l’app'], ['look', 'Textes et apparence'], ['changes', 'Tout ce qui a été modifié'], ['members', 'Propositions des membres'], ['bugs', 'Signalements'], ['users', 'Comptes et rôles'], ['push', 'Notifications de mise à jour']];
 /** Rubriques des paramètres : une ligne claire par rubrique, comme les réglages d'un téléphone. */
 const MENU = [
-  ['display', '🎨', 'Affichage et accessibilité', 'Thème, texte, couleurs et langue'],
+  ['display', '🎨', 'Affichage et accessibilité', 'Thème, icône, texte, couleurs et langue'],
   ['session', '▶️', 'Pendant la séance', 'Voix, sons, vibration, repos et durée'],
   ['notifs', '🔔', 'Notifications et rappels', 'Choisir ce qui m’avertit et quand'],
+  ['integrations', '🔗', 'Applications connectées', 'Strava, montres et imports sportifs'],
   ['data', '💾', 'Mes données', 'Exporter, importer un historique'],
   ['sync', '🔄', 'Synchronisation', 'État de l’envoi de tes données'],
   ['shareapp', '📲', 'Partager l’app', 'Un QR code à scanner pour ouvrir le site sur un autre téléphone', 'shareApp'],
@@ -65,7 +70,7 @@ const adminOnly = (fn, role) => () => (!S.user?.isAdmin ? h`<p class="small mute
 export function vSettings() {
   const subs = S.user.guest ? SUBS.filter(([k]) => k !== 'sync' && !ADMIN_PARENT[k] && k !== 'admin') : SUBS;
   const sub = subs.some(([k]) => k === S.sub.settings) ? S.sub.settings : 'main';
-  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant), content: adminOnly(vAdminContent, 'content'), look: adminOnly(vAdminLook, 'content'), changes: adminOnly(vAdminChanges, 'content'), members: adminOnly(vAdminProposals, 'content'), bugs: adminOnly(vAdminBugs, 'technical'), users: adminOnly(vAdminUsers, 'users'), push: adminOnly(vAdminPush, 'technical'), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
+  const views = { main: vMain, display: vDisplay, session: vSession, updates: vUpdates, notifs: vNotifs, help: vHelp, data: vData, integrations: vIntegrations, sync: vSync, admin: vAdmin, studio: vStudio, studioSet: vStudioSet, audit: vAudit, lab: vLab, health: vHealth, maint: vMaint, code: vCode, codeItem: vCodeItem, assistant: adminOnly(vAssistant), content: adminOnly(vAdminContent, 'content'), look: adminOnly(vAdminLook, 'content'), changes: adminOnly(vAdminChanges, 'content'), members: adminOnly(vAdminProposals, 'content'), bugs: adminOnly(vAdminBugs, 'technical'), users: adminOnly(vAdminUsers, 'users'), push: adminOnly(vAdminPush, 'technical'), bug: () => (S.user.guest ? guestNeed('Envoyer un signalement') : vBug()) };
   if (sub === 'main') return h`<h1>Paramètres</h1><p class="tiny muted pagehelp">Choisis ton interface, puis le réglage à modifier.</p>${views.main()}`;
   if (ADMIN_PARENT[sub]) { const [pk, pl] = ADMIN_PARENT[sub]; return h`${subHead('setSub', pk, pl, ADMIN_TITLE[sub] || sub)}${views[sub]()}`; }
   return h`${subHead('setSub', 'main', 'Paramètres', subs.find(([k]) => k === sub)[1])}${views[sub]()}`;
@@ -78,10 +83,10 @@ function vMain() {
     ? h`<div class="card acc-b"><h3>👀 Mode invité</h3><p class="small">Tes données restent <b>uniquement sur cet appareil</b> : si tu effaces le navigateur ou changes de téléphone, elles sont perdues. Crée un compte gratuit pour les garder et les retrouver partout.</p>
         <button class="btn pri big" data-act="guestUpgrade">Créer mon compte (je garde mes données)</button>
         <div class="row wrapf"><button class="btn" data-act="guestLogin">J’ai déjà un compte</button><button class="btn danger" data-act="guestQuit">Quitter le mode invité</button></div></div>`
-    : h`<div class="card"><div class="row between"><h3>👤 ${S.user.username} ${S.user.isAdmin ? tag('administrateur', 'acc') : ''}</h3><button class="btn sm" data-act="logout">Se déconnecter</button></div>
+    : h`<div class="card"><div class="row between wrapf"><h3 class="set-account-name">👤 ${S.user.username} ${S.user.isAdmin ? tag('administrateur', 'acc') : ''}</h3><button class="btn sm" data-act="logout">Se déconnecter</button></div>
         <details class="how mini"><summary>Gérer mon compte</summary><div class="row wrapf"><button class="btn" data-act="chpass">Changer le mot de passe</button><button class="btn danger" data-act="delAccount">Supprimer mon compte</button></div></details></div>`;
   const entries = MENU.filter(([k]) => !(S.user.guest && ['sync', 'admin', 'idea', 'votes'].includes(k)));
-  const common = new Set(['display', 'session', 'notifs', 'data', 'help', ...(S.user.isAdmin ? ['admin'] : [])]);
+  const common = new Set(['display', 'session', 'notifs', 'integrations', 'data', 'help', ...(S.user.isAdmin ? ['admin'] : [])]);
   const rows = (list) => h`<div class="setmenu">${list.map(([k, ic, t, d, a]) => h`<button class="setrow" data-act="${a || 'setSub'}" data-id="${k}"><span class="sic" aria-hidden="true">${icon(k, ic)}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev" aria-hidden="true">›</span></button>`)}</div>`;
   return h`<label class="findbox"><span aria-hidden="true">🔍</span><input type="search" data-input="setFind" placeholder="Ex. texte, rappel, mot de passe…" aria-label="Rechercher un paramètre" autocomplete="off"></label>
     <div id="setfindres" aria-live="polite"></div>
@@ -118,6 +123,7 @@ function vDisplay() {
   return h`<div class="card"><h3>Thème et langue</h3>
       <label>Thème</label>${segA('mode', [['dark', 'Sombre'], ['light', 'Clair'], ['auto', 'Automatique']])}
       <label>Langue<select data-change="pref" name="lang"><option value="fr" ${st.lang !== 'en' ? 'selected' : ''}>Français</option><option value="en" ${st.lang === 'en' ? 'selected' : ''}>English (beta)</option></select></label></div>
+    ${appIconsCard()}
     ${a11yCard(a)}
     <details class="card" ${advancedUI() ? 'open' : ''}><summary>Couleurs, ambiance et animations</summary>
       <label>Ambiance</label><div class="vibes">${VIBES.map(([id, n, d]) => h`<button type="button" class="vibe ${(a.vibe || 'classique') === id ? 'on' : ''}" data-act="appear" data-k="vibe" data-v="${id}" data-vibe-preview="${id}"><span class="vprev"><i></i><i></i><i></i></span><b>${n}</b><small>${d}</small></button>`)}</div>
@@ -179,6 +185,7 @@ CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked :
 function vNotifs() {
   const st = S.settings;
   return h`${remindersCard()}
+    ${notificationIconsCard()}
     <div class="card"><h3>🎵 Son dans l’app</h3><p class="small muted">Joué quand de nouvelles notifications arrivent pendant que l’app est ouverte. Le son des notifications du téléphone, lui, se règle dans les réglages du téléphone.</p>
       <div class="row"><select data-change="pref" name="notifSound" class="grow">${[['aucun', 'Aucun'], ...SOUND_STYLES].map(([v, l]) => h`<option value="${v}" ${(st.notifSound || 'doux') === v ? 'selected' : ''}>${l}</option>`)}</select><button class="btn sm" data-act="notifSoundTest">Écouter</button></div></div>
     <button class="btn" data-act="notifOpen">🔔 Ouvrir mes notifications</button>`;
@@ -212,8 +219,8 @@ ACT.logout = async () => {
   try { await api('POST', '/api/auth/logout', {}); } catch { /* hors ligne : on se déconnecte localement */ }
   ls.del('sea:user'); S.user = null; S.authMode = 'login'; S.authError = ''; location.hash = ''; render();
 };
-ACT.delAccount = async () => { if (!(await ask('Supprimer définitivement ton compte et toutes tes données ?', { ok: 'Continuer', danger: true, detail: 'Tes contributions à la bibliothèque commune resteront, sans ton nom.' }))) return; openSheet(h`<h2 style="margin:0">Confirmer la suppression</h2><form data-submit="delacct" class="stack"><input type="text" name="username" value="${S.user.username}" autocomplete="username" class="hidden" aria-hidden="true"><label>Mot de passe<input type="password" name="password" autocomplete="current-password" required></label><button class="btn danger" type="submit">Supprimer définitivement</button></form>`); };
-SUBMIT.delacct = async (f) => { try { const id = S.user.id; await api('POST', '/api/auth/delete', { password: new FormData(f).get('password') }); await clearLocal(id); ls.del('sea:user'); closeSheet(); S.user = null; S.authMode = 'register'; location.hash = ''; render(); toast('Compte supprimé'); } catch (e) { toast(e.offline ? 'Connexion requise.' : e.message, 4000, 'bad'); } };
+ACT.delAccount = async () => { const token = accountToken(); if (!(await ask('Supprimer définitivement ton compte et toutes tes données ?', { ok: 'Continuer', danger: true, detail: 'Tes contributions à la bibliothèque commune resteront, sans ton nom.' }))) return; if (!accountMatches(token)) return; openSheet(h`<h2 style="margin:0">Confirmer la suppression</h2><form data-submit="delacct" class="stack"><input type="text" name="username" value="${S.user.username}" autocomplete="username" class="hidden" aria-hidden="true"><label>Mot de passe<input type="password" name="password" autocomplete="current-password" required></label><button class="btn danger" type="submit">Supprimer définitivement</button></form>`); };
+SUBMIT.delacct = async (f) => { const token = accountToken(); try { const id = S.user.id, result = await api('POST', '/api/auth/delete', { password: new FormData(f).get('password') }); await clearLocal(id); if (!accountMatches(token)) return; ls.del('sea:user'); closeSheet(); S.user = null; S.authMode = 'register'; location.hash = ''; render(); toast(result.notice ? 'Compte supprimé. '+result.notice : 'Compte supprimé', result.notice ? 15000 : 3000); } catch (e) { if (accountMatches(token)) toast(e.offline ? 'Connexion requise.' : e.message, 4000, 'bad'); } };
 
 /* ═════════ Données : export / import JSON, import CSV ═════════ */
 function vData() {
@@ -243,10 +250,10 @@ export function importData(d) {
   const haveH = new Set(S.history.map((x) => x.id));
   for (const x of (Array.isArray(d.history) ? d.history : []).slice(0, 3000)) {
     if (!x?.id || !/^[\w-]{1,64}$/.test(x.id) || !(x.startedAt > 0) || x.startedAt > now + 600000) { res.skipped++; continue; }
-    if (!haveH.has(x.id)) { addHistory({ id: x.id, sessionId: x.sessionId || null, sessionName: String(x.sessionName || 'Séance').slice(0, 100), startedAt: x.startedAt, durationSeconds: x.durationSeconds || 0, data: x.data || {} }); res.history++; }
+    if (!haveH.has(x.id)) { addHistory({ id: x.id, sessionId: x.sessionId || null, sessionName: String(x.sessionName || 'Séance').slice(0, 100), startedAt: x.startedAt, durationSeconds: x.durationSeconds || 0, data: { ...x.data, ...(cleanExternal(externalOf(x)) ? { external: { ...cleanExternal(externalOf(x)), channel: 'file' } } : {}) } }); haveH.add(x.id); res.history++; }
   }
   const haveE = new Set(S.events.map((x) => x.id));
-  for (const x of (Array.isArray(d.events) ? d.events : []).slice(0, 3000)) { if (x?.id && /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') && !haveE.has(x.id)) { saveEvent(x); res.events++; } }
+  for (const x of (Array.isArray(d.events) ? d.events : []).slice(0, 3000)) { if (x?.id && /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') && !haveE.has(x.id)) { saveEvent(x); haveE.add(x.id); res.events++; } }
   for (const it of (Array.isArray(d.items) ? d.items : []).slice(0, 20000)) {
     const c = cleanItem({ ...it, u: now }); if (!c || c.del) { res.skipped++; continue; }
     const k = itemKey(c.c, c.id), cur = S.items.get(k);
@@ -258,24 +265,31 @@ export function importData(d) {
   if (d.appearance && typeof d.appearance === 'object' && window.__sea?.save) window.__sea.save({ ...window.__sea.DEFAULTS, ...d.appearance });
   return res;
 }
+let jsonRead = 0;
 CHG.importJson = async (el) => {
   const file = el.files?.[0]; el.value = ''; if (!file) return;
   if (file.size > 8_000_000) { toast('Fichier trop volumineux (8 Mo maximum).', 4000, 'bad'); return; }
-  let d; try { d = JSON.parse(await file.text()); } catch { toast('Fichier illisible : ce n’est pas un JSON valide.', 4000, 'bad'); return; }
+  const token = accountToken(), request = ++jsonRead;
+  let d; try { d = JSON.parse(await file.text()); } catch { if (accountMatches(token) && request === jsonRead) toast('Fichier illisible : ce n’est pas un JSON valide.', 4000, 'bad'); return; }
+  if (!accountMatches(token) || request !== jsonRead) return;
   if (!(await ask('Importer cette sauvegarde ?', { ok: 'Importer', detail: 'Les éléments sont fusionnés avec tes données actuelles, sans rien supprimer. Le serveur valide chaque élément.' }))) return;
+  if (!accountMatches(token) || request !== jsonRead) return;
   try { const r = importData(d); writePending(); persist(); bump(); syncSoon(200); buzzOk(); toast(`Importé : ${r.seances} séance(s), ${r.history} historique(s), ${r.events} événement(s), ${r.items} donnée(s) de profil, ${r.personal} exercice(s)${r.skipped ? ` · ${r.skipped} élément(s) invalide(s) ignoré(s)` : ''}.`, 6000); render(); }
   catch (e) { toast(e.message, 5000, 'bad'); }
 };
-ACT.csvKind = (el) => { S.csv = { kind: el.dataset.id }; render(); };
+let csvRead = 0;
+ACT.csvKind = (el) => { csvRead++; S.csv = { kind: el.dataset.id }; render(); };
 CHG.csvFile = async (el) => {
   const file = el.files?.[0]; el.value = ''; if (!file) return;
   if (file.size > MAX_CSV_BYTES) { toast('Fichier trop volumineux.', 4000, 'bad'); return; }
+  const token = accountToken(), request = ++csvRead, kind = S.csv?.kind || 'history';
   try {
-    const parsed = parseCSV(await file.text()), kind = S.csv?.kind || 'history';
+    const text = await file.text(); if (!accountMatches(token) || request !== csvRead) return;
+    const parsed = parseCSV(text);
     const { mapping, notes } = proposeMapping(parsed.headers, kind);
-    S.csv = { kind, parsed, mapping, notes, metricMap: {}, name: file.name };
+    S.csv = { kind, parsed, mapping, notes, metricMap: {}, name: file.name, token };
     refreshMetricMap(); render();
-  } catch (e) { toast(e.message, 5000, 'bad'); }
+  } catch (e) { if (accountMatches(token) && request === csvRead) toast(e.message, 5000, 'bad'); }
 };
 function refreshMetricMap() {
   const c = S.csv; if (c.kind !== 'perf') return;
@@ -294,17 +308,19 @@ function vCsvWizard(c) {
     ${chk.errors.map((e) => h`<p class="small err">⚠ ${e}</p>`)}
     ${c.kind === 'perf' && Object.keys(c.metricMap).length ? h`<h3>2. Correspondance des métriques</h3>${Object.entries(c.metricMap).map(([v, mid]) => h`<div class="item"><div class="grow"><b>${v}</b>${!mid ? h`<div class="tiny warn-t">non mappée : ces lignes seront ignorées</div>` : ''}</div><select data-change="csvMetric" data-v="${v}" aria-label="Métrique pour ${v}"><option value="">Non mappée</option>${metrics.map(([id, m]) => h`<option value="${id}" ${mid === id ? 'selected' : ''}>${m.label}</option>`)}</select></div>`)}` : ''}
     ${pre ? h`<h3>${c.kind === 'perf' ? '3' : '2'}. Aperçu</h3><p class="small">${pre.records.length} ${c.kind === 'perf' ? 'performance(s)' : 'séance(s)'} prête(s)${c.parsed.rows.length > 200 ? ' (aperçu des 200 premières lignes)' : ''} · ${pre.skipped} ligne(s) ignorée(s)</p>
-      ${pre.records.slice(0, 8).map((r) => c.kind === 'perf' ? h`<p class="tiny">${fmtDay(r.d.date)} · ${ctx().metrics[r.d.metricId]?.label} : ${r.d.value} ${r.d.unit}</p>` : h`<p class="tiny">${fmtDay(r.startedAt)} · ${r.sessionName} · ${r.data.exercises.length} exercice(s)${r.durationSeconds ? ' · ' + Math.round(r.durationSeconds / 60) + ' min' : ''}</p>`)}
+      ${pre.records.slice(0, 8).map((r) => c.kind === 'perf' ? h`<p class="tiny">${fmtDay(r.d.date)} · ${ctx().metrics[r.d.metricId]?.label} : ${r.d.value} ${r.d.unit}</p>` : h`<p class="tiny">${fmtDay(r.startedAt)} · ${r.sessionName} · ${r.data.exercises.length} exercice(s)${r.data.context?.envName ? ' · '+r.data.context.envName : ''}${r.data.quickLog?.performance ? ' · '+r.data.quickLog.performance : ''}${r.durationSeconds ? ' · ' + Math.round(r.durationSeconds / 60) + ' min' : ''}</p>`)}
       ${pre.errors.slice(0, 8).map((e) => h`<p class="tiny err">Ligne ${e.row} : ${e.error}</p>`)}
       <button class="btn pri" data-act="csvImport" ${pre.records.length ? '' : 'disabled'}>Importer après vérification</button>` : ''}
     <button class="btn" data-act="csvCancel">Annuler</button></div>`;
 }
 CHG.csvMap = (el) => { S.csv.mapping[el.dataset.i] = el.value; S.csv.notes[el.dataset.i] = el.value ? 'Choisi par toi.' : 'Non importée.'; refreshMetricMap(); render(); };
 CHG.csvMetric = (el) => { S.csv.metricMap[el.dataset.v] = el.value; render(); };
-ACT.csvCancel = () => { S.csv = null; render(); };
+ACT.csvCancel = () => { csvRead++; S.csv = null; render(); };
 ACT.csvImport = async () => {
-  const c = S.csv, r = buildImport(c.parsed, c.mapping, c.kind, { metricMap: c.metricMap });
+  const c = S.csv, token = accountToken(); if (!c?.parsed) return;
+  const r = buildImport(c.parsed, c.mapping, c.kind, { metricMap: c.metricMap });
   if (!(await ask(`Importer ${r.records.length} ${c.kind === 'perf' ? 'performance(s)' : 'séance(s)'} ?`, { ok: 'Importer', detail: r.skipped ? `${r.skipped} ligne(s) seront ignorées (voir l’aperçu).` : '' }))) return;
+  if (!accountMatches(token) || S.csv !== c) return;
   let n = 0;
   if (c.kind === 'perf') { for (const it of r.records) { if (!S.items.has(itemKey('perf', it.id))) { putItem('perf', it.id, it.d); n++; } } }
   else { const have = new Set(S.history.map((x) => x.id)); for (const e of r.records) if (!have.has(e.id)) { addHistory(e); n++; } }
@@ -400,6 +416,7 @@ function vAdmin() {
     ];
   return h`<div class="card"><h3>Tu es administrateur</h3><p class="small muted">Choisis ce que tu veux modifier ou gérer.</p>
       <details class="how mini"><summary>Mes droits d’administration</summary><p class="tiny muted">Tes rôles : ${(S.user.roles || ['super']).map((r) => ROLE_L[r] || r).join(', ')}. Les actions sont vérifiées par le serveur et conservées dans le Journal.</p><button class="btn sm ghost" data-act="adminOff">Quitter ce rôle</button></details></div>
+    ${adminSearchCard([...edit, ...members, ...follow, ...advanced])}
     ${section('Modifier le site', 'Prépare une modification, vérifie-la, puis publie-la pour les membres.', edit)}
     ${section('Gérer les membres', 'Comptes, demandes et problèmes signalés.', members)}
     ${section('Suivre le site', 'Notifications, modifications publiées et historique des actions.', follow)}
@@ -428,22 +445,25 @@ function vAdminPush() {
     ${S.admin.push ? pushStatusCard(true) : S.admin.pushError ? '' : skeleton(1)}`;
 }
 async function loadAdminPush() {
-  try { S.admin.push = await api('GET', '/api/admin/push-status'); S.admin.pushError = ''; }
-  catch (e) { S.admin.pushError = e.offline ? 'Connexion requise pour vérifier les envois.' : e.message; }
-  render();
+  const token = accountToken(), admin = S.admin;
+  try { const r = await api('GET', '/api/admin/push-status'); if (!accountMatches(token) || S.admin !== admin) return; admin.push = r; admin.pushError = ''; }
+  catch (e) { if (!accountMatches(token) || S.admin !== admin) return; admin.pushError = e.offline ? 'Connexion requise pour vérifier les envois.' : e.message; }
+  if (S.tab === 'settings' && S.sub.settings === 'push') render();
 }
 ACT.adminPushReload = () => { S.admin.push = null; S.admin.pushError = ''; loadAdminPush(); };
 INPUT.pushBroadcastField = (el) => { S.admin.broadcast = { ...(S.admin.broadcast || {}), [el.name]: el.value }; };
 SUBMIT.pushBroadcast = async (form) => {
   if (S.admin.broadcastSending || S.admin.broadcastPreparing) return;
+  const token = accountToken(), admin = S.admin, current = () => accountMatches(token) && S.admin === admin;
   const d = Object.fromEntries(new FormData(form)), title = String(d.title || '').trim(), body = String(d.body || '').trim();
   if (!title || !body) { toast('Ajoute un titre et un message.', 4000, 'bad'); return; }
   S.admin.broadcastPreparing = true;
   const button = form.querySelector('button[type=submit]'); if (button) button.disabled = true;
   let p;
-  try { p = await api('GET', '/api/admin/push-status'); S.admin.push = p; }
-  catch (e) { S.admin.broadcastPreparing = false; if (button) button.disabled = false; toast(e.offline ? 'Connexion requise pour préparer l’envoi.' : e.message, 4000, 'bad'); return; }
+  try { p = await api('GET', '/api/admin/push-status'); if (!current()) return; admin.push = p; }
+  catch (e) { if (!current()) return; admin.broadcastPreparing = false; if (button) button.disabled = false; toast(e.offline ? 'Connexion requise pour préparer l’envoi.' : e.message, 4000, 'bad'); return; }
   const confirmed = await ask('Envoyer cette annonce à tous ?', { ok: 'Envoyer à tous', detail: `Version ${p.version || APP_VERSION}. Dans le site : tous les utilisateurs. Sur téléphone : ${p.devices} appareil(s) ayant autorisé les notifications, même si les mises à jour automatiques sont désactivées.\n\n${title}\n${body}` });
+  if (!current()) return;
   S.admin.broadcastPreparing = false; if (button) button.disabled = false;
   if (!confirmed) return;
   const old = S.admin.broadcast || {}, version = p.version || APP_VERSION, build = p.build;
@@ -451,10 +471,11 @@ SUBMIT.pushBroadcast = async (form) => {
   S.admin.broadcast = { id, title, body, version, build }; S.admin.broadcastSending = true; render();
   try {
     const r = await api('POST', '/api/admin/push-broadcast', { id, title, body, version, build, confirmed: true });
+    if (!current()) return;
     toast(`Annonce publiée pour tous · ${r.sent} appareil(s) joint(s)${r.pending ? ` · ${r.pending} en attente de reprise` : ''}.`, 6000);
     S.admin.broadcast = {}; await Promise.all([loadAdminPush(), loadGlobal()]);
-  } catch (e) { toast(e.offline ? 'Connexion interrompue : réessaie, cet envoi ne sera pas doublé.' : e.message, 6000, 'bad'); }
-  finally { S.admin.broadcastSending = false; render(); }
+  } catch (e) { if (current()) toast(e.offline ? 'Connexion interrompue : réessaie, cet envoi ne sera pas doublé.' : e.message, 6000, 'bad'); }
+  finally { if (current()) { admin.broadcastSending = false; render(); } }
 };
 function bugList() {
   const list = filterBugs(S.admin.bugs, S.admin.filter || 'open', S.admin.bugQ || '');
@@ -498,7 +519,12 @@ ACT.propDo = async (el) => {
 ACT.cintentDel = async (el) => { if (!(await ask('Retirer cette intention pour tout le monde ?', { danger: true, ok: 'Retirer' }))) return; try { await api('DELETE', '/api/admin/intents/' + el.dataset.id); } catch (e) { toast(e.message, 4000, 'bad'); } ACT.propsReload(); };
 
 /* Comptes existants (admin) : identité et activité uniquement, jamais les données d'entraînement. */
-async function loadUsers() { try { const r = await api('GET', '/api/admin/users'); if (!Array.isArray(r?.users)) throw new Error('Liste des comptes indisponible, réessaie.'); S.admin.users = r; S.admin.usersErr = ''; } catch (e) { S.admin.usersErr = e.offline ? 'Connexion requise.' : e.message; } render(); }
+async function loadUsers() {
+  const token = accountToken(), admin = S.admin;
+  try { const r = await api('GET', '/api/admin/users'); if (!accountMatches(token) || S.admin !== admin) return; if (!Array.isArray(r?.users)) throw new Error('Liste des comptes indisponible, réessaie.'); admin.users = r; admin.usersErr = ''; }
+  catch (e) { if (!accountMatches(token) || S.admin !== admin) return; admin.usersErr = e.offline ? 'Connexion requise.' : e.message; }
+  if (S.tab === 'settings' && S.sub.settings === 'users') render();
+}
 function vAdminUsers() {
   const u = S.admin.users, q = (S.admin.userQ || '').toLowerCase();
   if (!u && !S.admin.usersErr) setTimeout(loadUsers, 0);
@@ -525,9 +551,10 @@ ACT.usersReload = () => { S.admin.users = null; loadUsers(); };
 ACT.userSort = (el) => { S.admin.userSort = el.dataset.id; render(); };
 INPUT.userQ = (el) => { S.admin.userQ = el.value; clearTimeout(INPUT.userQ.t); INPUT.userQ.t = setTimeout(() => { render(); const i = document.querySelector('input[data-input=userQ]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); };
 SUBMIT.adminOn = async (f) => {
+  const token = accountToken();
   const pw = new FormData(f).get('password'); f.reset(); // la valeur saisie est effacée du formulaire immédiatement
-  try { await api('POST', '/api/admin/activate', { password: pw }); const me = await api('GET', '/api/auth/me'); S.user = me.user; ls.set('sea:user', { id: me.user.id, username: me.user.username, isAdmin: me.user.isAdmin, roles: me.user.roles || [] }); buzzOk(); toast('Droits administrateur activés'); loadBugs(); render(); }
-  catch (e) { toast(e.offline ? 'Connexion requise.' : e.message, 4000, 'bad'); }
+  try { await api('POST', '/api/admin/activate', { password: pw }); if (!accountMatches(token)) return; const me = await api('GET', '/api/auth/me'); if (!accountMatches(token)) return; S.user = me.user; ls.set('sea:user', { id: me.user.id, username: me.user.username, isAdmin: me.user.isAdmin, roles: me.user.roles || [] }); buzzOk(); toast('Droits administrateur activés'); loadBugs(); render(); }
+  catch (e) { if (accountMatches(token)) toast(e.offline ? 'Connexion requise.' : e.message, 4000, 'bad'); }
 };
 ACT.adminOff = async () => { if (!(await ask('Quitter le rôle administrateur ?', { detail: 'Il faudra de nouveau le mot de passe administrateur pour le réactiver.' }))) return; try { await api('POST', '/api/admin/deactivate', {}); S.user = { ...S.user, isAdmin: false, roles: [] }; ls.set('sea:user', { id: S.user.id, username: S.user.username, isAdmin: false, roles: [] }); render(); } catch (e) { toast(e.message); } };
 ACT.bugsReload = () => { S.admin.bugs = null; S.admin.error = ''; loadBugs(); };
@@ -535,13 +562,21 @@ ACT.bugFilter = (el) => { S.admin.filter = el.dataset.id; render(); };
 ACT.bugStatus = async (el) => { try { await api('POST', `/api/admin/bugs/${encodeURIComponent(el.dataset.id)}`, { status: el.dataset.v }); const b = S.admin.bugs.find((x) => x.id === el.dataset.id); if (b) b.status = el.dataset.v; render(); } catch (e) { toast(e.message); } };
 
 /* ═════════ Signaler un bug ═════════ */
-async function loadMyBugs() { try { S.myBugs = (await api('GET', '/api/bugs/mine')).reports; } catch { /* hors ligne : liste indisponible */ } render(); }
+async function loadMyBugs() {
+  const token = accountToken();
+  try { const r = await api('GET', '/api/bugs/mine'); if (!accountMatches(token)) return; S.myBugs = r.reports; }
+  catch { if (!accountMatches(token)) return; /* hors ligne : liste indisponible */ }
+  if (S.tab === 'settings' && S.sub.settings === 'bug') render();
+}
 function vBug() {
   const pages = [['', '—'], ['accueil', 'Accueil'], ['progres', 'Progrès'], ['bibliotheque', 'Bibliothèque'], ['generateur', 'Générateur'], ['seance', 'Mode séance'], ['profil', 'Profil'], ['parametres', 'Paramètres'], ['synchronisation', 'Synchronisation / hors ligne']];
+  const previous = (window.__seaRoutes || []).filter((r) => !r.startsWith('#/settings/bug')).at(-1);
+  const page = S.bugFrom?.owner === S.user?.id ? S.bugFrom.page : previous?.split('/').slice(1, 3).join('/') || 'settings/main';
+  pages.unshift([page, `Page d’origine : ${page}`]);
   return h`<form data-submit="bugSend" class="card"><h3>🐞 Signaler un bug</h3>
-      <label>Titre court<input name="title" required minlength="3" maxlength="120" placeholder="Ex. Le chrono ne s’arrête pas"></label>
+      <label>Titre court (facultatif)<input name="title" maxlength="120" placeholder="Créé à partir de ta description si tu le laisses vide"></label>
       <label>Description détaillée<textarea name="description" required minlength="5" maxlength="5000" placeholder="Ce que tu faisais, ce qui s’est passé, ce que tu attendais…"></textarea></label>
-      <label>Page concernée<select name="page">${pages.map(([k, l]) => h`<option value="${k}">${l}</option>`)}</select></label>
+      <label>Page concernée<select name="page">${pages.map(([k, l], i) => h`<option value="${k}" ${i === 0 ? 'selected' : ''}>${l}</option>`)}</select></label>
       <label class="chk"><input type="checkbox" name="device" checked> Joindre les informations techniques de l’appareil (navigateur, version de l’application)</label>
       <label class="chk"><input type="checkbox" name="state" checked> Joindre l’état de la page (pages visitées juste avant, taille d’écran, connexion, dernières erreurs techniques ; aucune de tes données d’entraînement)</label>
       <p class="tiny muted">Ne mets jamais de mot de passe dans un signalement. Envoyé hors ligne, il part dès le retour de la connexion.</p>

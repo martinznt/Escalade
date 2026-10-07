@@ -1,7 +1,7 @@
 // tests/phase.test.mjs — modèle de phase : anciennes parties compatibles, multi-activités, pause, verrous,
 // somme exacte des durées, modification d'une phase sans casser les autres, intention ponctuelle ≠ objectif.
 import assert from 'node:assert/strict';
-import { normalizePhase, normalizePhases, fitDurations, updatePhase, newPhase, sessionActivities, totalMinutes, sessionIntent, ROLES } from '../public/phase.js';
+import { normalizePhase, normalizePhases, fitDurations, fitShort, updatePhase, newPhase, sessionActivities, totalMinutes, sessionIntent, ROLES } from '../public/phase.js';
 let n = 0; const ok = (name, fn) => { fn(); n++; console.log('  ✓', name); };
 
 ok('ancienne partie sans nouveaux champs : défauts déterministes, champs du constructeur gardés', () => {
@@ -47,5 +47,11 @@ ok('rôles structurés ; rôle personnalisé nommé ; valeurs dangereuses nettoy
 ok('intention ponctuelle de séance : structurée, et pas un objectif du compte', () => {
   const i = sessionIntent({ text: 'Aujourd’hui je veux performer en voie', priorities: ['endurance_doigts', 'x'] });
   assert.deepEqual(i, { text: 'Aujourd’hui je veux performer en voie', priorities: ['endurance_doigts'], savedAsGoal: '' });
+});
+ok('séance courte : proposition par défaut ajustée (retour au calme puis partie secondaire retirés), verrous respectés', () => {
+  const ph = normalizePhases([{ type: 'warmup', minutes: 5 }, { type: 'work', activity: 'conditioning', minutes: 5 }, { type: 'main', activity: 'conditioning', minutes: 5 }, { type: 'cool', minutes: 5 }], 'conditioning');
+  const r = fitShort(ph, 12); assert.equal(r.ok, true); assert.deepEqual(r.phases.map((p) => `${p.type}:${p.minutes}`), ['warmup:5', 'work:7']); assert.deepEqual(r.dropped.map((p) => p.type), ['cool', 'main']);
+  const same = fitShort(ph, 20); assert.equal(same.dropped.length, 0); assert.equal(totalMinutes(same.phases), 20);
+  const locked = ph.map((p) => ({ ...p, locks: { ...p.locks, minutes: 'user' } })); const l = fitShort(locked, 12); assert.equal(l.ok, false); assert.equal(l.dropped.length, 0, 'une durée verrouillée n’est jamais retirée');
 });
 console.log(`${n} tests du modèle de phase OK`);

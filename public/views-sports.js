@@ -4,9 +4,9 @@
 //  · Records et mesures : charges max estimées (1RM), disques sur la barre, allures et prévisions de course,
 //    compteur de longueurs, import d'une activité GPX / TCX.
 import { h, raw, openSheet, closeSheet, toast, chip, menuList, fmtDay, buzzOk } from './ui.js';
-import { S, ACT, CHG, ctx, render, putItem, item, itemsOf, addHistory, api, go } from './state.js';
+import { S, ACT, CHG, ctx, render, putItem, item, itemsOf, addHistory, api, go, accountToken, accountMatches } from './state.js';
 import { uid } from './shared.js';
-import { styleStats, compScore, boardProblem, BOARD_LEVELS, FALL_WHY, fallTraining, cragConditions, plates, percentTable, strengthBoard, racePredictions, vmaPaces, fmtTime, laps, parseTrack, trackActivity, TINDEQ, parseTindeq, pullSummary, RESULT_FR } from './sports.js';
+import { styleStats, compScore, boardProblem, BOARD_LEVELS, FALL_WHY, fallTraining, cragConditions, plates, percentTable, strengthBoard, racePredictions, vmaPaces, fmtTime, laps, parseTrack, trackActivity, trackImportId, trackFingerprint, TINDEQ, parseTindeq, pullSummary, RESULT_FR } from './sports.js';
 import { compressPhoto } from './views-climb.js';
 import { openWizard } from './views-climbplan.js';
 import { startTimer } from './timer.js';
@@ -225,20 +225,46 @@ ACT.lpSave = () => {
   S.lp = { pool: q.pool, start: 0, taps: [] }; closeSheet(); buzzOk(); toast('Séance de natation enregistrée'); render();
 };
 /* ───────── Import GPX / TCX ───────── */
-ACT.importOpen = () => openSheet(h`<div class="stack"><h2 style="margin:0">📥 Importer une activité</h2>
-  <p class="small">Fichier GPX ou TCX exporté de ta montre ou de ton appli (dans l’appli : « Exporter » ou « Télécharger le fichier »). L’app en tire la durée, la distance, le dénivelé et le cardio.</p>
-  <label class="btn pri filebtn">📂 Choisir un fichier<input type="file" accept=".gpx,.tcx,application/gpx+xml,application/vnd.garmin.tcx+xml,text/xml,application/xml" data-change="importFile" class="hidden"></label>
-  ${S.imp ? h`<div class="card flat stack tight"><b>${S.imp.name || 'Activité'} · ${new Date(S.imp.start).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}</b><span class="small">${fmtTime(S.imp.durationSec)} · ${fr(S.imp.distanceKm)} km${S.imp.pace ? ` · ${S.imp.pace}` : ''}${S.imp.gain ? ` · D+ ${S.imp.gain} m` : ''}${S.imp.hrAvg ? ` · FC moy. ${S.imp.hrAvg}` : ''}</span></div><button class="btn pri" data-act="importSave">💾 Ajouter à mon historique</button>` : ''}
-  <p class="tiny muted">Le fichier est lu sur ton appareil ; seul le résumé est gardé.</p></div>`);
+let trackRead = 0, trackState;
+function importState() {
+  if (!trackState || !accountMatches(trackState.token)) trackState = { token: accountToken(), source: 'file', reading: false, error: '' };
+  return trackState;
+}
+const importedTrack = (id) => S.history.some((x) => x.id === id) || [...S.outbox, ...S.failed].some((x) => x.path === '/api/history' && x.body?.id === id);
+ACT.importOpen = (el) => {
+  const st = importState(); if (['file', 'strava'].includes(el?.dataset?.source)) st.source = el.dataset.source;
+  const t = S.imp && accountMatches(S.imp.owner) ? S.imp : null, duplicate = t && importedTrack(t.id);
+  openSheet(h`<div class="stack"><h2 style="margin:0">Importer une activité</h2>
+  <p class="small">Choisis un fichier GPX ou TCX exporté de ta montre ou de ton appli. Vérifie le résumé avant de l’ajouter.</p>
+  <label class="small">Origine du fichier<select data-change="importSource"><option value="file" ${st.source === 'file' ? 'selected' : ''}>Autre fichier</option><option value="strava" ${st.source === 'strava' ? 'selected' : ''}>Strava</option></select></label>
+  <label class="btn pri filebtn">Choisir un fichier<input type="file" accept=".gpx,.tcx,application/gpx+xml,application/vnd.garmin.tcx+xml,text/xml,application/xml" data-change="importFile" class="hidden" ${st.reading ? 'disabled' : ''}></label>
+  <p id="track-import-status" class="tiny ${st.error ? 'bad-t' : 'muted'}" role="status">${st.reading ? 'Lecture du fichier…' : st.error}</p>
+  ${t ? h`<div class="card flat stack tight"><b>${t.name || 'Activité'} · ${new Date(t.start).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}</b><span class="small">${fmtTime(t.durationSec)} · ${t.distanceKm == null ? 'Distance non renseignée' : `${fr(t.distanceKm)} km`}${t.pace ? ` · ${t.pace}` : ''} · ${t.gain == null ? 'Dénivelé non renseigné' : `D+ ${t.gain} m`}${t.hrAvg ? ` · FC moy. ${t.hrAvg}` : ''}</span>${duplicate ? h`<p class="small muted">Ce fichier est déjà dans ton historique.</p>` : ''}</div>${duplicate ? '' : h`<button class="btn pri" data-act="importSave">Ajouter à mon historique</button>`}` : ''}
+  <p class="tiny muted">Le fichier est lu sur ton appareil ; seul son résumé est gardé. Cet import reste privé et n’est pas transmis à l’IA.</p></div>`);
+};
+CHG.importSource = (el) => { const st = importState(); st.source = el.value === 'strava' ? 'strava' : 'file'; if (S.imp && accountMatches(S.imp.owner)) S.imp.source = st.source; };
 CHG.importFile = async (el) => {
-  const f = el.files?.[0]; if (!f) return; if (f.size > 25e6) return toast('Fichier trop gros (25 Mo au plus).', 4000, 'bad');
-  const t = parseTrack(await f.text()); if (!t || t.durationSec <= 0) { S.imp = null; return toast('Fichier non reconnu : il faut un GPX ou un TCX avec des points horodatés.', 4500, 'bad'); }
-  if (S.history.some((x) => Math.abs(x.startedAt - t.start) < 60000)) toast('Une séance existe déjà à cette heure-là : vérifie que ce n’est pas un doublon.', 4500);
-  S.imp = t; ACT.importOpen();
+  const f = el.files?.[0]; if (!f) return;
+  const st = importState(), token = st.token, read = ++trackRead;
+  S.imp = null; st.error = ''; st.reading = true;
+  const current = () => accountMatches(token) && trackState === st && trackRead === read && el.isConnected;
+  const status = document.querySelector('#track-import-status'); if (status) status.textContent = 'Lecture du fichier…';
+  document.querySelector('[data-act="importSave"]')?.remove();
+  try {
+    if (f.size > 25e6) throw new Error('Fichier trop gros (25 Mo au plus).');
+    const text = await f.text(); if (!current()) return;
+    const t = parseTrack(text); if (!t || t.durationSec <= 0) throw new Error('Fichier non reconnu ou trop détaillé : il faut un GPX ou un TCX horodaté avec au plus 200 000 points.');
+    if (t.start > Date.now() + 600000 || t.start < Date.now() - 5 * 365 * 86400000) throw new Error('La date du fichier doit être passée et dater de moins de cinq ans.');
+    const [id, fingerprint] = await Promise.all([trackImportId(text, token.owner), trackFingerprint(text)]); if (!current()) return;
+    if (!importedTrack(id) && S.history.some((x) => Math.abs(x.startedAt - t.start) < 60000)) toast('Une séance existe déjà à cette heure-là : vérifie le résumé avant de l’ajouter.', 4500);
+    S.imp = { ...t, id, fingerprint, owner: token, source: st.source }; st.reading = false; ACT.importOpen();
+  } catch (e) { if (!current()) return; st.reading = false; st.error = e.message || 'Impossible de lire ce fichier.'; ACT.importOpen(); }
+  finally { if (trackState === st && trackRead === read) st.reading = false; }
 };
 ACT.importSave = () => {
-  const t = S.imp; if (!t) return;
-  const act = trackActivity(t), label = { running: 'Course', swimming: 'Natation', conditioning: 'Activité' }[act];
-  addHistory({ id: uid(), sessionId: '', sessionName: `${label} : ${fr(t.distanceKm)} km (importée)`, startedAt: t.start, durationSeconds: t.durationSec, data: { rpe: 0, activity: act, note: [t.name, t.pace, t.gain ? `D+ ${t.gain} m` : '', t.hrAvg ? `FC moy. ${t.hrAvg}, max ${t.hrMax}` : ''].filter(Boolean).join(' · ').slice(0, 600), ...(t.hrAvg ? { hr: { avg: t.hrAvg, max: t.hrMax } } : {}), exercises: [{ name: label, group: 'cardio', sets: [{ seconds: t.durationSec, done: true }] }] } });
+  const t = S.imp; if (!t || !accountMatches(t.owner)) return;
+  if (importedTrack(t.id)) { toast('Ce fichier est déjà dans ton historique.'); return ACT.importOpen(); }
+  const st = importState(), act = trackActivity(t), label = { running: 'Course', swimming: 'Natation', conditioning: 'Activité', climbing_route: 'Escalade', climbing_boulder: 'Bloc' }[act] || 'Activité';
+  addHistory({ id: t.id, sessionId: '', sessionName: `${label}${t.distanceKm != null ? ` : ${fr(t.distanceKm)} km` : ''} (importée)`, startedAt: t.start, durationSeconds: t.durationSec, data: { rpe: 0, activity: act, external: { provider: st.source, id: t.fingerprint, channel: 'file', private: true, excludeAI: true }, note: [t.name, t.pace, t.gain != null ? `D+ ${t.gain} m` : '', t.hrAvg ? `FC moy. ${t.hrAvg}${t.hrMax ? `, max ${t.hrMax}` : ''}` : ''].filter(Boolean).join(' · ').slice(0, 600), ...(t.hrAvg ? { hr: { avg: t.hrAvg, max: t.hrMax } } : {}), exercises: [{ name: label, group: act.startsWith('climbing') ? 'skill' : 'cardio', sets: [{ seconds: t.durationSec, done: true }] }] } });
   S.imp = null; closeSheet(); buzzOk(); toast('Activité ajoutée à ton historique'); render();
 };

@@ -2,10 +2,11 @@
 // Le modèle choisi propose une fiche complète (description, exercices, muscles, matériel), que tu
 // relis et modifies AVANT de l'enregistrer. Sans IA disponible (hors ligne, serveur sans IA), un modèle vide est proposé.
 import { h, openSheet, closeSheet, toast, buzzOk, chip } from './ui.js';
-import { S, ACT, SUBMIT, ctx, render, queue, putItem } from './state.js';
+import { S, accountToken, accountMatches, ACT, SUBMIT, ctx, render, queue, putItem } from './state.js';
 import { uid, normalizeEx } from './shared.js';
 import { ACTIVITIES, CAPACITIES, MUSCLES, EQUIPMENT } from './model.js';
 import { api } from './state.js';
+import { aiEvidence, aiProposalReady } from './srcui.js';
 
 const EXAMPLES = ['clipage en escalade', 'gainage pour le dévers', 'pompes diamant', 'résistance des avant-bras', 'respiration en natation'];
 const acts = () => { const c = ctx(); const list = Object.values(c.activities).map((a) => [a.id, `${a.emoji} ${a.label}`]); return list.length ? list : Object.entries(ACTIVITIES).map(([id, a]) => [id, `${a.emoji} ${a.label}`]); };
@@ -32,13 +33,15 @@ ACT.aiOpen = (el) => openAssistant(el.dataset.id || 'auto');
 ACT.aiKind = (el) => { const f = document.querySelector('#sheet form[data-submit=aiAsk]'); if (f) S.ai.text = f.text.value; S.ai.kind = el.dataset.id; showAssistant(); };
 ACT.aiExample = (el) => { const i = document.querySelector('#sheet input[name=text]'); if (i) { i.value = el.dataset.v; i.focus(); } };
 SUBMIT.aiAsk = async (f) => {
-  const owner = S.user?.id, a = S.ai; if (!a || a.loading) return;
-  const current = () => S.user?.id === owner && S.ai === a;
+  const token = accountToken(), a = S.ai; if (!a || a.loading) return;
+  const current = () => accountMatches(token) && S.ai === a;
   const d = Object.fromEntries(new FormData(f));
   Object.assign(a, { text: d.text, activityId: d.activityId, loading: true, error: '' }); showAssistant();
   try {
     const r = await api('POST', '/api/ai/draft', { text: d.text, kind: a.kind, activityId: d.activityId }, { timeout: 45000 });
-    if (!current()) return; a.draft = r.draft;
+    if (!current()) return;
+    if (!aiProposalReady(r.draft)) throw Object.assign(new Error('Cette fiche ne peut pas être vérifiée. Précise ce que tu veux créer.'), { status: 422 });
+    a.draft = r.draft;
   } catch (e) {
     if (!current()) return;
     a.error = e.guest ? 'L’assistant IA demande un compte gratuit (en haut des Paramètres : « Créer mon compte »). En attendant, tu peux remplir la fiche toi-même.'
@@ -63,7 +66,7 @@ function exBlock(e, editable) {
 }
 function showDraft() {
   const d = S.ai.draft, ia = !d.manual;
-  const badge = ia ? h`<span class="tag acc">🤖 proposé par l’assistant · confiance ${d.confidence}</span>` : h`<span class="tag">modèle à compléter</span>`;
+  const badge = ia ? h`<span class="tag acc">Proposition de l’assistant à relire</span>${aiEvidence(d)}` : h`<span class="tag">Modèle à compléter sans IA</span>`;
   const body = d.type === 'exercise'
     ? h`<form data-submit="aiSaveEx" class="stack">${badge}${exBlock(d, true)}
         ${d.safety ? h`<p class="tiny warn-t">⚠️ ${d.safety}</p>` : ''}

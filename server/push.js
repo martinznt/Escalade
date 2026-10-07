@@ -271,6 +271,14 @@ export async function broadcastNotice(env, { id, title, body, version, build, ac
 }
 /** Texte à afficher pour une notification reçue par un appareil (selon ce qui l'a déclenchée). */
 export async function messageFor(env, endpoint, userId, tz, now = Date.now()) {
+  const message = await notificationMessage(env, endpoint, userId, tz, now);
+  const sub = endpoint ? await q(env, 'SELECT user_id FROM push_subs WHERE endpoint=?', endpoint).first() : null;
+  const recipient = sub && (!userId || sub.user_id === userId) ? sub.user_id : userId;
+  const { resolveAppIconSelection } = await import('./app-icons.js');
+  const appearance = await resolveAppIconSelection(env, recipient, { kind: 'notification' });
+  return { ...message, icon: appearance.icon, badge: appearance.badge };
+}
+async function notificationMessage(env, endpoint, userId, tz, now = Date.now()) {
   const sub = endpoint ? await q(env, 'SELECT user_id,pending,silent FROM push_subs WHERE endpoint=?', endpoint).first() : null;
   const mine = sub && (!userId || sub.user_id === userId);
   let pending = mine ? sub.pending : '';

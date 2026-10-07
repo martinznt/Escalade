@@ -11,6 +11,7 @@ import { ROLES, normalizePhase, totalMinutes } from './phase.js';
 import { intentCaps, labelOf } from './intents.js';
 import { effectiveFilters, failing, intersect, FILTER_DEFS } from './filters.js';
 import { exerciseLevel, levelFor } from './generator.js';
+import { normalizeAimLinks, linkedAimCaps } from './objectivelinks.js';
 const LV_WORD = ['débutant', 'intermédiaire', 'avancé'];
 
 export const REASON = { fact: ['📊', 'Donnée connue'], rule: ['📐', 'Règle du modèle'], inference: ['🤔', 'Déduction'], missing: ['❔', 'Information manquante'] };
@@ -31,13 +32,15 @@ export const ROLE_CAPS = {
 const nextPerf = (phases, i) => phases.slice(i + 1).find((p) => p.role === 'perf');
 
 /** Ce que la phase doit travailler, et d'où ça vient. */
-export function phaseTargets(phase, { intent = null, goals = [] } = {}) {
+export function phaseTargets(phase, { intent = null, goals = [], aims = [] } = {}) {
   const t = {}, src = [];
   const add = (caps, w, why) => { const got = []; for (const [c, v] of Object.entries(caps)) if (CAPACITIES[c]) { t[c] = Math.max(t[c] || 0, v * w); got.push(c); } if (got.length) src.push({ ...why, caps: got }); };
   if (phase.subIntents?.length) { const ic = intentCaps(phase.subIntents, phase.rules || []); add(ic.caps, 0.6, R('fact', `Tes sous-objectifs : ${phase.subIntents.map((x) => labelOf(x.id)).join(', ')}`)); }
   if (phase.priorities?.length) add(Object.fromEntries(phase.priorities.map((c) => [c, 1])), 2, R('fact', `Tes priorités pour cette phase : ${phase.priorities.map(capName).join(', ')}`));
   if (intent?.priorities?.length) add(Object.fromEntries(intent.priorities.map((c) => [c, 1])), 1, R('fact', `Ton intention d’aujourd’hui : ${intent.priorities.map(capName).join(', ')}`));
-  for (const g of goals) if (g.caps?.length) add(Object.fromEntries(g.caps.map((c) => [c.id, c.w || 0.6])), 0.8, R('fact', `Ton objectif « ${g.label} »`));
+  const linked = Array.isArray(phase.aimLinks) || phase.aimKey || phase.prepFor, links = normalizeAimLinks(phase, aims);
+  if (links.length) add(linkedAimCaps(phase, aims), 1, R('fact', `Objectifs associés à cette phase : ${links.map((x) => x.label).join(', ')}`));
+  for (const g of goals) if ((!linked || links.some((x) => x.goalId === g.id)) && g.caps?.length) add(Object.fromEntries(g.caps.map((c) => [c.id, c.w || 0.6])), 0.8, R('fact', `Ton objectif « ${g.label} »`));
   if (ROLE_CAPS[phase.role]) add(ROLE_CAPS[phase.role], 0.7, R('rule', `Rôle « ${ROLES[phase.role][1]} » de la phase`));
   return { targets: t, sources: src };
 }
@@ -229,17 +232,34 @@ export const phaseName = (p) => (p.goal ? p.goal.slice(0, 40) : p.label ? String
 /** Applique une suggestion (nouvelle liste de phases). Refuse si elle touche un réglage verrouillé. */
 export function applySuggestion(phases, s) {
   if (!s?.patch || s.blocked) return { phases, applied: false };
+  const refuse = () => ({ phases, applied: false });
+  const windowKey = (p) => p?.window ? `${p.window.envId || ''}:${p.window.from}:${p.window.to}` : '';
+  const windowTotals = (list) => { const totals = new Map(); for (const p of list) if (windowKey(p)) totals.set(windowKey(p), (totals.get(windowKey(p)) || 0) + p.minutes); return totals; };
+  const before = windowTotals(phases);
   let list = phases.map((p) => ({ ...p }));
   for (const op of s.patch) {
-    if (op.op === 'set') list = list.map((p) => (p.id === op.id ? normalizePhase({ ...p, [op.field]: op.value }, 0, p.activity) : p));
-    if (op.op === 'give') list = list.map((p) => (p.id === op.to && !locked(p, 'minutes') ? { ...p, minutes: p.minutes + op.minutes } : p));
+    if (op.op === 'set') {
+      const p = list.find((p) => p.id === op.id);
+      if (!p || locked(p, op.field)) return refuse();
+      list = list.map((p) => p.id === op.id ? normalizePhase({ ...p, [op.field]: op.value }, 0, p.activity) : p);
+    }
+    if (op.op === 'give') {
+      const p = list.find((p) => p.id === op.to);
+      if (!p || locked(p, 'minutes') || !Number.isFinite(op.minutes) || op.minutes <= 0) return refuse();
+      p.minutes += op.minutes;
+    }
     if (op.op === 'insert') {
       // Le temps de la nouvelle phase est pris sur la plus longue phase non verrouillée (le total ne change pas).
-      const np = normalizePhase({ ...op.phase, id: `ph-s${list.length + 1}-${op.phase.type}` }, 0, list[0]?.activity || '');
-      const donor = list.filter((p) => !locked(p, 'minutes') && p.type !== 'pause').sort((a, b) => b.minutes - a.minutes)[0];
-      if (donor && donor.minutes - np.minutes >= 10) donor.minutes -= np.minutes;
-      list.splice(Math.min(op.at, list.length), 0, np);
+      const at = Math.max(0, Math.min(op.at, list.length)), neighbour = list[at] || list.at(-1);
+      const np = normalizePhase({ ...op.phase, id: `ph-s${list.length + 1}-${op.phase.type}`, ...(neighbour?.window ? { window: { ...neighbour.window } } : {}) }, 0, neighbour?.activity || '');
+      const donor = list.filter((p) => !locked(p, 'minutes') && p.type !== 'pause' && windowKey(p) === windowKey(np) && p.minutes - np.minutes >= 10).sort((a, b) => b.minutes - a.minutes)[0];
+      if (!donor) return refuse();
+      donor.minutes -= np.minutes;
+      if(list[at]?.place?.mode==='other'){np.place={...list[at].place};list[at].place={mode:'same'};}
+      list.splice(at, 0, np);
     }
   }
+  const after = windowTotals(list);
+  if ([...new Set([...before.keys(), ...after.keys()])].some((key) => before.get(key) !== after.get(key))) return refuse();
   return { phases: list, applied: true };
 }

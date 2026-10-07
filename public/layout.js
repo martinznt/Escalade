@@ -184,7 +184,7 @@ ACT.layReset = async (el) => {
 
 /* ───────── Toutes les fonctions, triées ───────── */
 const ALL = [
-  ['S’entraîner', [['✨', 'Créer une séance (ou séance du jour)', 'cpNew'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['📖', 'Carnet de séances', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Assistant (questions, exercices avec tes mots)', 'coachOpen']]],
+  ['S’entraîner', [['✨', 'Créer une séance', 'cpResume'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['📖', 'Carnet de séances', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Assistant (questions, exercices avec tes mots)', 'coachOpen']]],
   ['Escalade', [['🧗', 'Carnet (blocs, voies)', 'goCarnet'], ['📌', 'Projets (dans Objectifs)', 'goProjects'], ['✋', 'Test de doigts (Records et mesures)', 'allGo', 'profile/perfs']]],
   ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📝', 'Journal (séances, blocs, notes)', 'allGo', 'progress/journal'], ['🏆', 'Records et mesures', 'allGo', 'profile/perfs'], ['🔎', 'Mon analyse', 'allGo', 'profile/analyse']]],
   ['Planifier', [['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], ['🔔', 'Notifications', 'notifOpen']]],

@@ -104,6 +104,13 @@ ok('objectifs nettoyés : clés uniques, sport inconnu ramené au sport principa
   const l = A.cleanAims([x, x, { ...x, key: 'k2', sport: 'inconnu', when: 'jamais', label: '<b>Hack</b>' }, ...Array.from({ length: 9 }, (_, k) => ({ ...x, key: 'z' + k }))], ['climbing_boulder']);
   assert.equal(l.length, 11); assert.equal(A.cleanAims(Array.from({ length: 40 }, (_, k) => ({ ...x, key: 'y' + k })), ['climbing_boulder']).length, 30); assert.equal(l[1].sport, 'climbing_boulder'); assert.equal(l[1].when, 'auto'); assert.doesNotMatch(l[1].label, /[<>]/);
 });
+ok('séance courte : 20 min tenues pile (objectif à 10 min) ; 12 et 10 min sans retour au calme séparé ; jamais au-delà du temps', () => {
+  const plan = (M, f = 'force', sp = 'conditioning') => { const r = A.planFromAims({ aims: [A.familyAim(f, sp)], sports: [sp], minutes: M }); return { r, ph: normalizePhases(r.phases, sp) }; };
+  const a = plan(20); assert.equal(sum(a.ph), 20); assert.deepEqual(a.ph.map((p) => p.type), ['warmup', 'work', 'cool']); assert.match(a.r.notes.join('\n'), /Séance courte \(20 min\)/);
+  const b = plan(12); assert.equal(sum(b.ph), 12); assert.ok(!b.ph.some((p) => p.type === 'cool')); assert.match(b.r.notes.join('\n'), /pas de retour au calme séparé/); assert.doesNotMatch(b.r.notes.join('\n'), /garde 10 min/);
+  const c = plan(10, 'technique', 'climbing_boulder'); assert.equal(sum(c.ph), 10); assert.ok(c.ph.every((p) => p.minutes >= 5));
+  for (const M of [10, 12, 15, 20, 25, 30, 45, 60]) for (const f of ['force', 'performance', 'technique', 'endurance', 'mobilite']) assert.ok(sum(plan(M, f, 'climbing_boulder').ph) <= M, `${f} ${M}`);
+});
 ok('beaucoup d’objectifs en 60 min : tous gardés, part plus courte (dit), aucun sous 10 min', () => {
   const aims = ['performance', 'force', 'technique', 'endurance'].map((f) => A.familyAim(f, 'climbing_boulder'));
   const r = A.planFromAims({ aims, sports: ['climbing_boulder'], minutes: 75 });
@@ -173,5 +180,66 @@ ok('classés avec ex æquo : A et B n°1 à égalité, C n°2 ; même part pour 
   assert.ok(w.filter((p) => p.objective).length === 2, 'les deux n°1 sont des objectifs principaux');
   const tie2 = [aims[0], { ...aims[2], tie: false }, { ...A.familyAim('mobilite', 'climbing_boulder'), tie: true }];
   assert.match(A.planFromAims({ aims: tie2, sports: ['climbing_boulder', 'climbing_route'], minutes: 120 }).notes.join('\n'), /Même importance \(n°2\)/);
+});
+ok('plusieurs objectifs compatibles : un bloc commun, leurs rangs et origines restent indépendants', () => {
+  const a = { ...A.familyAim('technique', 'climbing_boulder'), key: 'pieds', label: 'Précision des pieds', caps: { technique_pieds: 1 }, source: 'words' };
+  const b = { ...a, key: 'placement', label: 'Placement du bassin', caps: { technique_escalade: 0.8 }, source: 'goal', goalId: 'g1' };
+  const r = A.planFromAims({ aims: [a,b], sports: ['climbing_boulder'], minutes: 60 });
+  const main = work(r.phases).filter((p) => p.aimLinks?.some((x) => x.contribution === 'primary'));
+  assert.equal(main.length, 1); assert.equal(r.dropped.length, 0); assert.equal(sum(r.phases), 60);
+  assert.deepEqual(main[0].aimLinks.map((x) => [x.key,x.rank,x.source,x.goalId]), [['pieds',0,'words',''],['placement',1,'goal','g1']]);
+  assert.deepEqual(main[0].priorities.sort(), ['technique_escalade','technique_pieds']);
+  assert.match(r.notes.join('\n'), /temps est partagé/);
+});
+ok('trente objectifs compatibles : regroupés avant de réserver le temps, sans objectif abandonné', () => {
+  const aims = Array.from({ length:30 }, (_,i) => ({ ...A.familyAim('technique','climbing_boulder'), key:'tech-'+i, label:'Résultat '+i }));
+  const r = A.planFromAims({ aims, sports:['climbing_boulder'], minutes:60 });
+  assert.equal(r.dropped.length,0); assert.equal(sum(r.phases),60);
+  assert.equal(work(r.phases).length,1); assert.equal(work(r.phases)[0].aimLinks.length,30);
+  assert.equal(r.order.length,30); assert.equal(new Set(r.order).size,30);
+});
+ok('un objectif peut guider préparation, travail principal et volume complémentaire sans inventer un objectif', () => {
+  const aim = A.familyAim('performance','climbing_route');
+  const r = A.planFromAims({ aims:[aim], sports:['climbing_route'], minutes:150 });
+  const links = r.phases.flatMap((p) => p.aimLinks || []);
+  assert.deepEqual(new Set(links.map((x) => x.key)), new Set([aim.key]));
+  assert.deepEqual(new Set(links.map((x) => x.contribution)), new Set(['primary','preparation','support']));
+});
+ok('les moments choisis, sports et cibles incompatibles gardent des blocs distincts', () => {
+  const tech = A.familyAim('technique','climbing_boulder');
+  const aims = [{...tech,key:'a',when:'start'}, {...tech,key:'b',when:'end'}, {...tech,key:'c',sport:'climbing_route'}];
+  const r = A.planFromAims({ aims, sports:['climbing_boulder','climbing_route'], minutes:120 });
+  const main = work(r.phases).filter((p) => p.aimLinks?.some((x) => x.contribution==='primary'));
+  assert.equal(main.length,3); assert.equal(main[0].aimKey,'a'); assert.equal(main.at(-1).aimKey,'b');
+  const targets = [50,55].map((v,i) => A.goalAim({id:'g'+i,label:'10 km '+v},[{id:'endurance_aerobie',w:1}],'running',{}, {metricId:'course_10k',value:v}));
+  const timed = A.planFromAims({ aims:targets, sports:['running'], minutes:90 });
+  assert.equal(work(timed.phases).filter((p) => p.target).length,2);
+});
+ok('deux créneaux du même lieu : un objectif travaillé dans deux blocs, horaires respectés', () => {
+  const aim = A.familyAim('technique','climbing_boulder');
+  const r = A.planFromAims({ aims:[aim], sports:['climbing_boulder'], envId:'mur', envEquip:{mur:['wall']}, windows:[{envId:'mur',name:'Mur',from:'18:00',to:'19:00'},{envId:'mur',name:'Mur',from:'19:30',to:'20:30'}] });
+  const main = work(r.phases).filter((p) => p.aimLinks?.some((x) => x.contribution==='primary'));
+  assert.equal(main.length,2); assert.ok(main.every((p) => p.aimLinks[0].key===aim.key));
+  for(const from of [1080,1170]) assert.equal(sum(r.phases.filter((p) => p.window?.from===from)),60);
+  assert.equal(sum(r.phases),150); assert.equal(r.errors.length,0);
+});
+ok('les objectifs flexibles respectent le moment choisi même si un créneau tardif a davantage de matériel', () => {
+  const mobility={...A.familyAim('mobilite','conditioning'),when:'start'}, run={...A.familyAim('endurance','running'),when:'end'};
+  const r=A.planFromAims({aims:[mobility,run],sports:['conditioning','running'],windows:W2,envEquip:EQ2});
+  assert.equal(r.phases.find(p=>p.aimKey===mobility.key).window.from,1080);
+  assert.equal(r.phases.find(p=>p.aimKey===run.key).window.from,1200);
+});
+ok('performance dans plusieurs créneaux : limite de travail exigeant commune, complément lié et forme basse respectée', () => {
+  const aim=A.familyAim('performance','climbing_boulder'), opts={aims:[aim],sports:['climbing_boulder'],envId:'mur',envEquip:{mur:['wall']},windows:[{envId:'mur',name:'Mur',from:'18:00',to:'19:30'},{envId:'mur',name:'Mur',from:'20:00',to:'21:00'}]};
+  const r=A.planFromAims(opts);
+  assert.ok(sum(r.phases.filter(p=>['hard','max'].includes(p.intensity)&&p.aimLinks?.some(a=>a.key===aim.key&&a.contribution==='primary')))<=60);
+  assert.ok(r.phases.some(p=>p.aimLinks?.some(a=>a.key===aim.key&&a.contribution==='support')));
+  for(const [from,minutes] of [[1080,90],[1200,60]])assert.equal(sum(r.phases.filter(p=>p.window?.from===from)),minutes);
+  const low=A.planFromAims({...opts,forme:'low'});
+  assert.ok(low.phases.every(p=>p.intensity!=='max'));assert.equal(sum(low.phases),sum(r.phases));assert.match(low.notes.join('\n'),/Forme du jour basse/);
+});
+ok('créneau exigeant de quinze minutes : refus explicite au lieu de dépasser l’heure de départ', () => {
+  const r = A.planFromAims({ aims:[A.familyAim('performance','climbing_boulder')], sports:['climbing_boulder'], envId:'mur', envEquip:{mur:['wall']}, windows:[{envId:'mur',name:'Mur',from:'18:00',to:'18:15'}] });
+  assert.equal(r.phases.length,0); assert.match(r.errors[0],/Créneau trop court/);
 });
 console.log(`\n${n} tests objectifs classés OK`);

@@ -9,6 +9,8 @@ import { legacyItems } from './server/migrate.js';
 import { interpretAgenda } from './server/agenda.js';
 import { aiDraft, aiChat, aiGoal, aiIntent, cleanCaps, extractJson } from './server/ai.js';
 import { runAI, aiError, aiStatus, saveAIConfig, hasAI } from './server/ai-runtime.js';
+import { contextSources, proposalSources, proposalInstructions, requireProposalEvidence } from './server/ai-proposal-evidence.js';
+import { researchSources } from './server/ai-evidence.js';
 import { cleanOps } from './public/sessionedit.js';
 import { estimateLevel } from './public/estimate.js';
 import { sessionMeta } from './public/sessionmeta.js';
@@ -16,10 +18,11 @@ import { METRICS, ACTIVITIES, CAPACITIES, SKILLS } from './public/model.js';
 import { sanitizeForPublication } from './server/publish.js';
 import { KINDS as GLOBAL_KINDS, ID_OK as GLOBAL_ID, cleanGlobal } from './server/global.js';
 import { cleanChange, diffState, diffChange, afterOf, runChecks, buildAdminDraft, cleanAdminDraft, buildLab, cleanLab, AI_KINDS } from './server/studio.js';
-import { dataHealth, groupBugs, buildMaintenance, cleanMaintenance, analyzeDiff } from './server/health.js';
+import { dataHealth, groupBugs, buildMaintenance, cleanMaintenance, maintenanceSources, analyzeDiff } from './server/health.js';
 import { CODE_FILES, searchCode, buildCodeEdit, cleanEdits, openPullRequest, REPO_OK } from './server/codeedit.js';
 import { findContext, buildAssistant, cleanAssistant, mergeItems, ASSIST_KINDS, APP_MAP } from './server/assistant.js';
 import { LIBRARY } from './public/library.js';
+import { CATALOG } from './public/catalog.js';
 import { FAQ } from './public/help.js';
 import { SPORT_INTENTS } from './public/intentions.js';
 import { duoCode, normCode, cleanDuoState, DUO_TTL, DUO_MAX, cleanGroupState, GROUP_TTL } from './server/duo.js';
@@ -27,8 +30,12 @@ import { cleanConfig as cleanGroupConfig, GROUP_MAX } from './public/group.js';
 import { changesRoute } from './server/changes.js';
 import { vapid, sendPush, runReminders, messageFor, notifyType, updateNotice, broadcastNotice, TYPES as PUSH_TYPES, b64u } from './server/push.js';
 import { buildIcs } from './public/ics.js';
+import { APP_ICON_LIMITS, listCustomAppIcons, startAppIconUpload, uploadAppIconPart, completeAppIconUpload, abortAppIconUpload, deleteCustomAppIcon, customAppIconsRoute, existingCustomAppIconUrls, appIconApiError } from './server/app-icons.js';
+import { searchAdmin } from './server/admin-search.js';
+import { cleanExternal, externalOf } from './public/external.js';
+import { stravaRoute } from './server/strava.js';
 
-const APP_VERSION = '8.32.4';
+const APP_VERSION = '8.33.0';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
@@ -37,9 +44,11 @@ const MAX_ITEMS_PER_USER = 20000;
 
 // Seuls ces fichiers sont servis publiquement (worker.js, wrangler.json, README, tests… restent privés).
 // tests/assets.test.mjs vérifie que chaque module importé par le navigateur figure ici ET dans le précache du Service Worker.
-const PUBLIC_FILES = new Set(['/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/agenda.js', '/experience.js', '/views-agenda.js', '/views-experience.js', '/planning.js', '/views-planning.js', '/live.js', '/sports.js', '/views-sports.js', '/story.js', '/views-story.js', '/views-community.js', '/demo.js', '/catgen.js', '/gym.js', '/routines.js', '/views-routines.js', '/views-gym.js', '/library-more.js', '/player.js',
-  '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
-  '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/badge-96.png', '/robots.txt']);
+const PUBLIC_FILES = new Set(['/external.js', '/integrations.js', '/views-integrations.js', '/', '/index.html', '/style.css', '/boot.js', '/app.js', '/ui.js', '/state.js', '/views-home.js', '/views-progress.js', '/views-library.js', '/views-profile.js', '/views-settings.js', '/views-setup.js', '/install.js', '/questions.js', '/views-ai.js', '/tour.js', '/move.js', '/news.js', '/hr.js', '/fx.js', '/anim.js', '/timer.js', '/sound.js', '/climb.js', '/views-climb.js', '/motivation.js', '/views-motiv.js', '/program.js', '/views-program.js', '/views-coach.js', '/reminders.js', '/ics.js', '/layout.js', '/body.js', '/body-rules.js', '/intentions.js', '/views-gen.js', '/inbox.js', '/sources.js', '/srcui.js', '/catalog.js', '/views-catalog.js', '/qr.js', '/share.js', '/duo.js', '/scene.js', '/i18n.js', '/format.js', '/finder.js', '/find-ui.js', '/global.js', '/content.js', '/help.js', '/merge.js', '/sfilter.js', '/explain.js', '/climbplan.js', '/views-climbplan.js', '/surprise.js', '/guide.js', '/goaldone.js', '/nav.js', '/places.js', '/picker.js', '/hints.js', '/sportplan.js', '/catchup.js', '/phase.js', '/phaseplan.js', '/adminlist.js', '/sessionmeta.js', '/views-studio.js', '/intents.js', '/filters.js', '/budget.js', '/sessionchain.js', '/whatif.js', '/dna.js', '/strategy.js', '/knowledge.js', '/sessionedit.js', '/assess.js', '/views-assistant.js', '/loop.js', '/fit.js', '/aimplan.js', '/physique.js', '/pagetour.js', '/adapt.js', '/views-adapt.js', '/group.js', '/views-group.js', '/bodycomp.js', '/coachbrain.js', '/views-forme.js', '/agenda.js', '/experience.js', '/views-agenda.js', '/views-experience.js', '/planning.js', '/views-planning.js', '/live.js', '/sports.js', '/views-sports.js', '/story.js', '/views-story.js', '/views-community.js', '/demo.js', '/catgen.js', '/gym.js', '/routines.js', '/views-routines.js', '/views-gym.js', '/library-more.js', '/player.js',
+  '/objectivelinks.js', '/engine.js', '/library.js', '/shared.js', '/items.js', '/model.js', '/grading.js', '/brain.js', '/estimate.js', '/generator.js', '/csv.js', '/search.js', '/anatomy.js', '/commands.js', '/outbox.js',
+  '/sw.js', '/manifest.json', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/badge-96.png', '/robots.txt',
+  '/app-icon-seances-v1-badge-96.png', '/app-icon-gold-v1-badge-96.png', '/app-icon-slate-v1-badge-96.png', '/app-icon-white-v1-badge-96.png', '/app-icon-forest-v1-badge-96.png', '/app-icon-ocean-v1-badge-96.png', '/app-icon-climb-v1-badge-96.png', '/app-icon-route-v1-badge-96.png', '/app-icon-rope-v1-badge-96.png', '/app-icon-mono-v1-badge-96.png', '/app-icon-terra-v1-badge-96.png', '/app-icons.js', '/app-icons.css', '/icon-art.js', '/admin-search.js', '/app-icon-seances-v1-180.png', '/app-icon-seances-v1-192.png', '/app-icon-seances-v1-512.png', '/app-icon-seances-v1-maskable-512.png', '/manifest-icons-seances-v1.json', '/app-icon-gold-v1-180.png', '/app-icon-gold-v1-192.png', '/app-icon-gold-v1-512.png', '/app-icon-gold-v1-maskable-512.png', '/manifest-icons-gold-v1.json', '/app-icon-slate-v1-180.png', '/app-icon-slate-v1-192.png', '/app-icon-slate-v1-512.png', '/app-icon-slate-v1-maskable-512.png', '/manifest-icons-slate-v1.json', '/app-icon-white-v1-180.png', '/app-icon-white-v1-192.png', '/app-icon-white-v1-512.png', '/app-icon-white-v1-maskable-512.png', '/manifest-icons-white-v1.json', '/app-icon-forest-v1-180.png', '/app-icon-forest-v1-192.png', '/app-icon-forest-v1-512.png', '/app-icon-forest-v1-maskable-512.png', '/manifest-icons-forest-v1.json', '/app-icon-ocean-v1-180.png', '/app-icon-ocean-v1-192.png', '/app-icon-ocean-v1-512.png', '/app-icon-ocean-v1-maskable-512.png', '/manifest-icons-ocean-v1.json', '/app-icon-climb-v1-180.png', '/app-icon-climb-v1-192.png', '/app-icon-climb-v1-512.png', '/app-icon-climb-v1-maskable-512.png', '/manifest-icons-climb-v1.json', '/app-icon-route-v1-180.png', '/app-icon-route-v1-192.png', '/app-icon-route-v1-512.png', '/app-icon-route-v1-maskable-512.png', '/manifest-icons-route-v1.json', '/app-icon-rope-v1-180.png', '/app-icon-rope-v1-192.png', '/app-icon-rope-v1-512.png', '/app-icon-rope-v1-maskable-512.png', '/manifest-icons-rope-v1.json', '/app-icon-mono-v1-180.png', '/app-icon-mono-v1-192.png', '/app-icon-mono-v1-512.png', '/app-icon-mono-v1-maskable-512.png', '/manifest-icons-mono-v1.json', '/app-icon-terra-v1-180.png', '/app-icon-terra-v1-192.png', '/app-icon-terra-v1-512.png', '/app-icon-terra-v1-maskable-512.png', '/manifest-icons-terra-v1.json']);
+const INSTALL_ICON_IDS = new Set(['seances','gold','slate','white','forest','ocean','climb','route','rope','mono','terra']);
 
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
@@ -65,7 +74,7 @@ export default {
     const url = new URL(request.url);
     if (!(url.pathname === '/api/version' && url.searchParams.has('expected'))) announceSoon(env, ctx);
     try {
-      const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : url.pathname.startsWith('/ical/') ? await icalFeed(request, env, url) : await serveAsset(request, env, url);
+      const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : url.pathname.startsWith('/app-icons-custom/') ? await serveCustomAppIcon(request,env) : url.pathname.startsWith('/ical/') ? await icalFeed(request, env, url) : await serveAsset(request, env, url);
       if (url.protocol === 'https:') { const h = new Headers(res.headers); h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h }); }
       return res;
     } catch (err) {
@@ -105,10 +114,32 @@ async function codeFiles(env) {
 /* ═════════════ Fichiers statiques ═════════════ */
 /** Identifiant du déploiement : fourni par Cloudflare (binding version_metadata), sinon la version de l'application. */
 const buildId = (env) => String(env.CF_VERSION_METADATA?.id || APP_VERSION).replace(/[^\w.-]/g, '').slice(0, 40) || APP_VERSION;
+async function serveCustomAppIcon(request,env) {
+  if(!env.DB)return new Response('Introuvable',{status:404,headers:{'Cache-Control':'no-store'}});
+  await ensureSchema(env);
+  return customAppIconsRoute(request,env);
+}
 async function serveAsset(request, env, url) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Méthode non autorisée', { status: 405, headers: SECURITY_HEADERS });
   if (!PUBLIC_FILES.has(url.pathname)) return new Response('Introuvable', { status: 404, headers: SECURITY_HEADERS });
   let res = await env.ASSETS.fetch(request);
+  // Un jeton personnalisé prépare seulement l'installation ; il ne choisit rien dans le compte.
+  if (['/', '/index.html'].includes(url.pathname) && res.ok && request.method === 'GET' && url.searchParams.get('appIcon') === 'custom' && env.DB) {
+    await ensureSchema(env);
+    const custom = await existingCustomAppIconUrls(env,url.searchParams.get('appIconToken'));
+    if(custom){
+      const text=(await res.text()).replace(/(<link rel="manifest" href=")[^"]+("[^>]*>)/,'$1'+custom.manifest+'$2').replace(/(<link rel="apple-touch-icon" href=")[^"]+("[^>]*>)/,'$1'+custom.apple+'$2');
+      const headers=new Headers(res.headers);headers.delete('Content-Length');headers.delete('Content-Encoding');res=new Response(text,{status:200,headers});
+    }
+  }
+  // La page d'installation fournit le bon manifest à l'OS dès le HTML initial ; aucune préférence de compte n'est modifiée.
+  const installIcon = url.searchParams.get('appIcon');
+  if (['/', '/index.html'].includes(url.pathname) && res.ok && request.method === 'GET' && INSTALL_ICON_IDS.has(installIcon)) {
+    const text = (await res.text()).replace(/(<link rel="manifest" href=")[^"]+("[^>]*>)/, '$1/manifest-icons-' + installIcon + '-v1.json$2')
+      .replace(/(<link rel="apple-touch-icon" href=")[^"]+("[^>]*>)/, '$1/app-icon-' + installIcon + '-v1-180.png$2');
+    const headers = new Headers(res.headers); headers.delete('Content-Length'); headers.delete('Content-Encoding');
+    res = new Response(text, { status: 200, headers });
+  }
   // Service Worker : on y injecte l'identifiant du déploiement Cloudflare. Chaque déploiement (même sans changer
   // APP_VERSION) modifie donc sw.js : le navigateur détecte la nouvelle version et l'app propose la mise à jour.
   if (url.pathname === '/sw.js' && res.ok && request.method === 'GET') {
@@ -431,7 +462,8 @@ const OP_RE = /^op-[\w-]{8,80}$/;
 const NATURALLY_IDEMPOTENT = new Set(['/api/sync', '/api/items', '/api/settings']);
 async function withOpLog(request, env, auth, run) {
   const opId = request.headers.get('X-Op-Id'), path = new URL(request.url).pathname;
-  if (request.method === 'GET' || !opId || !OP_RE.test(opId) || NATURALLY_IDEMPOTENT.has(path)) return run();
+  // OAuth et prévisualisations : jamais de state, de jeton temporaire ni d'historique Strava dans ce cache.
+  if (request.method === 'GET' || !opId || !OP_RE.test(opId) || NATURALLY_IDEMPOTENT.has(path) || path === '/api/integrations/strava' || path.startsWith('/api/integrations/strava/')) return run();
   const uidv = auth.user.id;
   const prev = await db(env, 'SELECT status,response_json FROM op_log WHERE user_id=? AND op_id=?', uidv, opId).first();
   if (prev) {
@@ -458,6 +490,35 @@ async function routeAuthed(request, env, url, auth, secure) {
   if (p === '/api/auth/me' && m === 'GET') return json({ ok: true, user: u, version: APP_VERSION });
   if (p === '/api/auth/password' && m === 'POST') return changePassword(request, env, auth);
   if (p === '/api/auth/delete' && m === 'POST') return deleteAccount(request, env, auth, secure);
+
+  if (p === '/api/integrations/strava' || p.startsWith('/api/integrations/strava/')) {
+    if (m === 'POST' && await limited(env, 'strava:' + u.id, 30, 600000)) return fail('Trop de demandes Strava. Réessaie plus tard.', 429);
+    try {
+      const result = await stravaRoute(env, auth, url, m, m === 'POST' ? await readJson(request, 5000) : null);
+      if (result.redirect) return new Response(null, { status: 303, headers: { ...SECURITY_HEADERS, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', Location: result.redirect } });
+      return json({ ok: true, ...result });
+    } catch (e) { return fail(e?.status ? e.message : 'La demande Strava n’a pas pu être vérifiée.', e?.status || 500); }
+  }
+
+  if(p==='/api/app-icons' && m==='GET')return json({ok:true,...await listCustomAppIcons(env,u.id)});
+  if(p==='/api/app-icons/start' && m==='POST'){
+    if(await limited(env,'app-icons:'+u.id,15,600000)||await limited(env,'app-icons-day:'+u.id,120,DAY))return fail('Trop d’icônes demandées. Réessaie plus tard.',429);
+    try{await readJson(request,2000);return json({ok:true,...await startAppIconUpload(env,u.id)});}catch(e){return appIconApiError(e);}
+  }
+  if((x=p.match(/^\/api\/app-icons\/([A-Za-z0-9_-]{43})\/(icon192|icon512|apple180|maskable512|badge96)$/)) && m==='PUT'){
+    if(await limited(env,'app-icon-parts:'+u.id,150,600000))return fail('Trop d’images envoyées. Réessaie plus tard.',429);
+    try{return json(await uploadAppIconPart(env,u.id,x[1],x[2],await readJson(request,APP_ICON_LIMITS.partBodyBytes)));}catch(e){return appIconApiError(e);}
+  }
+  if((x=p.match(/^\/api\/app-icons\/([A-Za-z0-9_-]{43})\/complete$/)) && m==='POST'){
+    if(await limited(env,'app-icon-complete:'+u.id,150,600000))return fail('Trop de créations demandées. Réessaie plus tard.',429);
+    try{await readJson(request,2000);return json({ok:true,...await completeAppIconUpload(env,u.id,x[1])});}catch(e){return appIconApiError(e);}
+  }
+  if((x=p.match(/^\/api\/app-icons\/uploads\/([A-Za-z0-9_-]{43})$/)) && m==='DELETE'){
+    try{return json(await abortAppIconUpload(env,u.id,x[1]));}catch(e){return appIconApiError(e);}
+  }
+  if((x=p.match(/^\/api\/app-icons\/([A-Za-z0-9_-]{43})$/)) && m==='DELETE'){
+    try{return json(await deleteCustomAppIcon(env,u.id,x[1]));}catch(e){return appIconApiError(e);}
+  }
 
   if (p === '/api/sync' && m === 'GET') return syncGet(env, u);
   if (p === '/api/sync' && m === 'POST') return syncPost(request, env, u);
@@ -523,11 +584,14 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-e:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
     try {
-      const out = await runAI(env, { max_tokens: 400, temperature: 0.1, messages: [
-        { role: 'system', content: 'Tu traduis une demande de modification de séance en opérations JSON strictes : {"ops":[{"op":"total|keep|only|remove|add|intensity|shorten","idx":[indices des phases],"minutes":n,"role":"technique|endurance|force|puissance|mobilite|perf|pause","dir":-1|1}]}. Uniquement du JSON. N’invente aucune phase : utilise les indices fournis.' },
-        { role: 'user', content: `Phases : ${JSON.stringify(phases)}\nDemande : ${text}` }] });
-      const x = extractJson(out);
-      return json({ ok: true, ops: cleanOps(x?.ops, phases.length) });
+      const sources = contextSources({ text, model: 'Opérations autorisées : total, keep, only, remove, add, intensity, shorten ; indices bornés aux phases fournies. Les opérations traduisent uniquement la demande ; elles ne justifient pas un conseil scientifique et ne sont pas appliquées.', additional: [{ id: 'session/phases', label: 'Phases de séance partagées pour cette demande', kind: 'request', excerpt: 'Données fournies par l’utilisateur, pas des mesures vérifiées : ' + JSON.stringify(phases) }] });
+      const out = await runAI(env, { max_tokens: 650, temperature: 0.1, messages: [
+        { role: 'system', content: `Tu traduis une demande de modification de séance en opérations JSON strictes : {"ops":[{"op":"total|keep|only|remove|add|intensity|shorten","idx":[indices des phases],"minutes":n,"role":"technique|endurance|force|puissance|mobilite|perf|pause","dir":-1|1}]}. Uniquement du JSON. N’invente aucune phase : utilise les indices fournis. Cite aussi session/phases dans sources pour toute réponse ok.\n${proposalInstructions(sources)}` },
+        { role: 'user', content: `Phases : ${JSON.stringify(phases)}\nDemande : ${text}` }] }, { allowClarification: true });
+      const x = extractJson(out), evidence = requireProposalEvidence(x, sources, { required: ['request','app/model','session/phases'] });
+      const ops = cleanOps(x?.ops, phases.length);
+      if (!ops.length) return fail('Aucune opération exploitable. Précise la modification souhaitée ; rien n’a été appliqué.', 422);
+      return json({ ok: true, ops, ...evidence });
     } catch (e) { console.error('ai-edit', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
   }
   if (p === '/api/ai/goal' && m === 'POST') {
@@ -582,6 +646,10 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (!u.isAdmin) return fail('Droit administrateur requis.', 403);
     const need = roleFor(p, m);
     if (need && !can(u, need)) return fail(`Rôle « ${ADMIN_ROLES[need]} » requis.`, 403);
+    if (p === '/api/admin/search' && m === 'GET') {
+      if (await limited(env, 'admin-search:' + u.id, 120, 60000)) return fail('Recherche trop fréquente. Réessaie dans un instant.', 429);
+      return json({ ok: true, results: await searchAdmin(env, u, str(url.searchParams.get('q'), 80), { library: LIBRARY, catalog: CATALOG, faq: FAQ }) });
+    }
     if (p === '/api/admin/ai' && m === 'GET') return json({ ok: true, ...await aiStatus(env) });
     if (p === '/api/admin/ai' && m === 'POST') {
       const b = await readJson(request, 2000);
@@ -593,9 +661,9 @@ async function routeAuthed(request, env, url, auth, secure) {
       const started = Date.now();
       try {
         const raw = await runAI(env, { max_tokens: 100, temperature: 0, messages: [{ role: 'system', content: 'Réponds uniquement avec un objet JSON {"reply":"L’IA est disponible."}.' }, { role: 'user', content: 'Vérifie que tu peux répondre en français.' }] }, { timeoutMs: 15000 });
-        const value = extractJson(raw)?.reply, reply = typeof value === 'string' ? str(value, 180) : '';
-        if (!reply) return fail('Le modèle n’a pas renvoyé une réponse exploitable. Choisis l’autre modèle ou réessaie.', 502);
-        return json({ ok: true, reply, elapsedMs: Date.now() - started, ...await aiStatus(env) });
+        const value = extractJson(raw)?.reply;
+        if (value !== 'L’IA est disponible.') return fail('Le modèle n’a pas renvoyé la réponse de test attendue. Choisis l’autre modèle ou réessaie.', 502);
+        return json({ ok: true, status: 'ok', reply: 'L’IA est disponible.', testScope: 'connection_only', sources: [{ id: 'server/connection-test', label: 'Réponse reçue au test de connexion ; exactitude des conseils non testée', kind: 'app' }], elapsedMs: Date.now() - started, ...await aiStatus(env) });
       } catch (e) { return aiFailure(e); }
     }
     if (p === '/api/admin/push-broadcast' && m === 'POST') {
@@ -621,12 +689,16 @@ async function routeAuthed(request, env, url, auth, secure) {
     if (p === '/api/admin/maintenance' && m === 'POST') {
       // Analyse des signalements ouverts : regroupement déterministe toujours ; propositions de l'IA si disponible. Rien n'est appliqué.
       const bugs = ((await db(env, "SELECT title,description,page,app_version,created_at FROM bug_reports WHERE status='open' ORDER BY created_at DESC LIMIT 60").all()).results || []).map((b) => ({ title: b.title, description: b.description, page: b.page, appVersion: b.app_version, createdAt: b.created_at }));
-      const groups = groupBugs(bugs); let findings = null, ai = 'indisponible';
+      const groups = groupBugs(bugs); let findings = null, ai = 'indisponible', evidence = null, clarification = '';
       if (hasAI(env) && bugs.length && !(await limited(env, 'ai-mt:' + u.id, 6, 600000))) {
-        try { findings = cleanMaintenance(extractJson(await runAI(env, { messages: buildMaintenance(bugs), max_tokens: 1200, temperature: 0.2 }))); ai = findings ? 'ok' : 'inutilisable'; } catch (e) { console.error('ai-maint', e?.message); ai = 'erreur'; }
+        try {
+          const sources = maintenanceSources(bugs), value = extractJson(await runAI(env, { messages: buildMaintenance(bugs, { sources }), max_tokens: 1400, temperature: 0.2 }, { allowClarification: true }));
+          evidence = requireProposalEvidence(value, sources); findings = cleanMaintenance(value, { sources, requireEvidence: true }); ai = findings ? 'ok' : 'unverified';
+          if (!findings) evidence = null;
+        } catch (e) { console.error('ai-maint', e?.message); ai = e?.status === 422 ? 'unverified' : 'erreur'; if (e?.aiSafe && e.status === 422) clarification = str(e.message, 240); }
       }
       await auditStmt(env, u, 'maintenance', { type: 'bugs', id: String(bugs.length), after: { groups: groups.length, findings: findings?.length || 0 } }).run();
-      return json({ ok: true, open: bugs.length, groups, findings: findings || [], ai });
+      return json({ ok: true, open: bugs.length, groups, findings: findings || [], ai, ...(clarification ? { clarification } : {}), ...(evidence || { status: 'unverified', sources: [] }) });
     }
     if (p === '/api/admin/code' && m === 'GET') {
       const r = (await db(env, 'SELECT c.id,c.title,c.summary,c.status,c.impact_json,c.pr_url,c.created_at,c.updated_at,c.reviewed_at,a.username AS author,v.username AS reviewer FROM code_proposals c LEFT JOIN users a ON a.id=c.author_id LEFT JOIN users v ON v.id=c.reviewer_id ORDER BY c.updated_at DESC LIMIT 100').all()).results || [];
@@ -695,7 +767,7 @@ async function routeAuthed(request, env, url, auth, secure) {
       const files = await codeFiles(env), convo = msgs.filter((y) => y?.role === 'user').slice(-3).map((y) => str(y.content, 600)).join(' ');
       const snippets = searchCode(files, convo);
       let out;
-      try { out = cleanEdits(await runAI(env, { messages: buildCodeEdit(msgs, snippets), max_tokens: 1600, temperature: 0.2 }), files); }
+      try { out = cleanEdits(await runAI(env, { messages: buildCodeEdit(msgs, snippets), max_tokens: 1600, temperature: 0.2 }, { allowClarification: true }), files, { snippets, requireEvidence: true }); }
       catch (e) { console.error('ai-code', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
       return json({ ok: true, ...out, impact: out.diff ? analyzeDiff(out.diff) : null, snippets: snippets.map(({ path, start, end }) => ({ path, start, end })), github: githubReady(env) });
     }
@@ -808,6 +880,16 @@ async function deleteAccount(request, env, auth, secure) {
   const row = await db(env, 'SELECT password_hash,password_salt FROM users WHERE id=?', auth.user.id).first();
   if (!b || !row || !safeEq(await passHash(String(b.password ?? ''), row.password_salt), row.password_hash)) return fail('Mot de passe incorrect.', 403);
   const id = auth.user.id;
+  // Révocation distante tentée seulement pour une connexion présente. Une panne Strava ne bloque jamais
+  // la suppression du compte ; les clés étrangères supprimeront aussi tous les secrets locaux.
+  let stravaRemoval = null;
+  if (await db(env, 'SELECT 1 connected FROM strava_connections WHERE user_id=?', id).first()) {
+    try {
+      const endpoint = new URL(request.url); endpoint.pathname = '/api/integrations/strava'; endpoint.search = '';
+      const result = await stravaRoute(env, auth, endpoint, 'DELETE', null);
+      stravaRemoval = { stravaRevoked: result.revoked, ...(result.notice ? { notice: result.notice } : {}) };
+    } catch { stravaRemoval = { stravaRevoked: false, notice: 'La révocation sur Strava n’a pas été confirmée : retire aussi cette application dans les réglages Strava.' }; }
+  }
   // Données privées supprimées ; contributions à la bibliothèque commune conservées de façon anonyme (auteur : compte supprimé).
   await env.DB.batch(['sessions', 'user_data', 'calendar_events', 'history', 'user_exercises', 'profiles', 'user_items', 'op_log', 'bug_reports', 'push_subs', 'proposals', 'ical_feeds'].map((t) => db(env, `DELETE FROM ${t} WHERE user_id=?`, id))
     .concat([
@@ -826,7 +908,7 @@ async function deleteAccount(request, env, auth, secure) {
       db(env, "UPDATE shared_sessions SET owner_id=NULL WHERE owner_id=? AND scope='common'", id),
       db(env, 'DELETE FROM users WHERE id=?', id),
     ]));
-  return json({ ok: true }, 200, { 'Set-Cookie': cookie('session', '', 0, secure) });
+  return json({ ok: true, ...stravaRemoval }, 200, { 'Set-Cookie': cookie('session', '', 0, secure) });
 }
 
 /** Le tout premier compte créé récupère les séances PERSONNELLES de l'ancienne version (KV). Jamais la bibliothèque commune. */
@@ -1058,6 +1140,7 @@ function cleanHistoryData(d) {
   const caps = (o) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).slice(0, 10).map(([k, v]) => [k, clamp(v, 0, 1, 0)]).filter(([k, v]) => /^[\w:.-]{1,80}$/.test(k) && v > 0));
   return {
     rpe: clamp(d.rpe, 1, 5, 0), focus: str(d.focus, 20), note: str(d.note, 600), activity: /^[\w:.-]{1,80}$/.test(String(d.activity || '')) ? String(d.activity) : '',
+    ...(cleanExternal(d.external) ? { external: cleanExternal(d.external) } : {}),
     aborted: !!d.aborted, activeSeconds: clamp(d.activeSeconds, 0, 86400, 0), pausedSeconds: clamp(d.pausedSeconds, 0, 86400, 0), plannedMin: clamp(d.plannedMin, 0, 600, 0),
     context: normalizeContext(d.context),
     ...(d.quickLog && typeof d.quickLog === 'object' ? { quickLog: { durationKnown: d.quickLog.durationKnown === true, performance: str(d.quickLog.performance, 100), order: ['before', 'after'].includes(d.quickLog.order) ? d.quickLog.order : 'main' } } : {}),
@@ -1095,13 +1178,21 @@ async function historyPost(request, env, u) {
   // Une séance future n'est pas un historique : refus explicite (10 min de tolérance pour les horloges décalées).
   if (started > now + 10 * 60000) return fail('Date dans le futur : planifie plutôt cette séance dans le calendrier.', 400);
   const id = ID_RE.test(b.id || '') ? b.id : uid();
-  const data = JSON.stringify(cleanHistoryData(b.data));
+  const previous = await db(env, 'SELECT data_json FROM history WHERE id=? AND user_id=?', id, u.id).first();
+  const priorExternal = previous ? cleanExternal(externalOf({ id, data: safeParse(previous.data_json) })) : null, submittedExternal = cleanExternal(b.data?.external);
+  if (b.data?.external && !submittedExternal) return fail('Origine de l’import invalide.', 400);
+  if (priorExternal?.channel !== 'api' && submittedExternal?.channel === 'api') return fail('Importe cette activité depuis Applications connectées.', 403);
+  const data = JSON.stringify(cleanHistoryData({ ...b.data, ...(priorExternal ? { external: priorExternal } : {}) }));
   if (data.length > 100000) return fail('Séance trop volumineuse.', 413);
   const count = await db(env, 'SELECT COUNT(*) c FROM history WHERE user_id=?', u.id).first();
   if (Number(count?.c) > 20000) return fail('Historique plein.', 413);
+  if (priorExternal) {
+    const changed = await db(env, 'UPDATE history SET data_json=? WHERE id=? AND user_id=?', data, id, u.id).run();
+    return changed.meta?.changes ? json({ ok: true, id }) : fail('Cette activité importée a été retirée. Actualise ton historique.', 409);
+  }
   const r = await db(env, `INSERT INTO history(id,user_id,session_id,session_name,started_at,duration_seconds,data_json) VALUES(?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET session_id=excluded.session_id,session_name=excluded.session_name,started_at=excluded.started_at,duration_seconds=excluded.duration_seconds,data_json=excluded.data_json
-    WHERE history.user_id=excluded.user_id`,
+    WHERE history.user_id=excluded.user_id AND json_extract(history.data_json,'$.external') IS NULL`,
     id, u.id, b.sessionId && ID_RE.test(b.sessionId) ? b.sessionId : null, str(b.sessionName, 100) || 'Séance', Math.round(started), clamp(b.durationSeconds, 0, 86400, 0), data).run();
   if (!r.meta || r.meta.changes === 0) return fail('Identifiant déjà utilisé.', 409);
   return json({ ok: true, id });
@@ -1547,13 +1638,17 @@ async function studioRoute(request, env, u, url, p, m) {
     if (text.length < 5) return fail('Décris ce que tu veux en quelques mots.');
     if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-s:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
-    let data;
-    try { data = cleanAdminDraft(await runAI(env, { messages: buildAdminDraft(kind, text), max_tokens: 900, temperature: 0.3 }), kind); }
+    let data, evidence;
+    try {
+      const sources = await proposalSources({ text, model: APP_MAP + '\nTypes de contenu modifiables et formats : ' + JSON.stringify(ASSIST_KINDS) });
+      const value = extractJson(await runAI(env, { messages: buildAdminDraft(kind, text, { sources }), max_tokens: 1100, temperature: 0.3 }, { allowClarification: true }));
+      evidence = requireProposalEvidence(value, sources); data = cleanAdminDraft(value, kind);
+    }
     catch (e) { console.error('ai-studio', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
     if (!data) return fail('La proposition de l’assistant est inutilisable : rien n’a été créé.', 422);
     const itemId = GLOBAL_ID.test(String(b?.target || '')) ? b.target : 'g-' + uid().slice(0, 12);
     const id = await csCreate(env, u, { title: 'IA : ' + text.slice(0, 80), note: 'Brouillon rédigé par l’assistant à partir de : « ' + text.slice(0, 400) + ' ». À relire avant toute publication.', source: 'ai', items: [{ kind, id: itemId, op: 'put', data }] });
-    return json({ ok: true, id, data });
+    return json({ ok: true, id, data, ...evidence });
   }
   // Discuter avec l'assistant du site : réponse + propositions validées, rangées dans UN brouillon (jamais publiées).
   if (p === '/api/admin/assistant' && m === 'POST') {
@@ -1581,7 +1676,10 @@ async function studioRoute(request, env, u, url, p, m) {
       return null;
     };
     let out;
-    try { out = cleanAssistant(await runAI(env, { messages: buildAssistant(msgs, context), max_tokens: 2200, temperature: 0.2 }, { allowClarification: true }), { base, context, requireEvidence: true }); }
+    try {
+      const { sources: research } = await researchSources(str(last.content, 1500));
+      out = cleanAssistant(await runAI(env, { messages: buildAssistant(msgs, context, { research }), max_tokens: 2200, temperature: 0.2 }, { allowClarification: true }), { base, context, research, requireEvidence: true });
+    }
     catch (e) { console.error('ai-assistant', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
     if (!out) return fail('Réponse de l’assistant inutilisable : reformule ta demande.', 422);
     let added = 0;
@@ -1607,7 +1705,12 @@ async function studioRoute(request, env, u, url, p, m) {
     if (!hasAI(env)) return json({ error: 'Assistant non activé sur ce serveur.', unavailable: true }, 503);
     if (await limited(env, 'ai-l:' + u.id, 10, 600000)) return fail('Beaucoup de demandes : réessaie un peu plus tard.', 429);
     let lab;
-    try { lab = cleanLab(await runAI(env, { messages: buildLab(text), max_tokens: 1400, temperature: 0.3 })); }
+    try {
+      const sources = await proposalSources({ text, model: APP_MAP + '\nTypes de contenu modifiables et formats : ' + JSON.stringify(ASSIST_KINDS) });
+      const value = extractJson(await runAI(env, { messages: buildLab(text, { sources }), max_tokens: 1600, temperature: 0.3 }, { allowClarification: true }));
+      const evidence = requireProposalEvidence(value, sources), cleaned = cleanLab(value);
+      lab = cleaned ? { ...cleaned, ...evidence } : null;
+    }
     catch (e) { console.error('ai-lab', e?.message); const err = aiError(e); return json({ error: err.error, quota: err.quota }, err.status); }
     if (!lab) return fail('Réponse de l’assistant inutilisable. Reformule et réessaie.', 422);
     return json({ ok: true, lab });
@@ -1719,8 +1822,7 @@ async function aiChatRoute(request, env, u) {
 async function bugCreate(request, env, u) {
   const b = await readJson(request, 30000);
   if (!b) return fail('Données invalides.');
-  const title = str(b.title, 120), description = str(b.description, 5000);
-  if (title.length < 3) return fail('Titre trop court.');
+  const description = str(b.description, 5000), title = str(b.title, 120) || description.slice(0, 120);
   if (description.length < 5) return fail('Décris le problème en quelques mots.');
   const id = ID_RE.test(b.id || '') ? b.id : uid();
   const existing = await db(env, 'SELECT user_id FROM bug_reports WHERE id=?', id).first();
@@ -1756,8 +1858,8 @@ async function adminActivate(request, env, u) {
 async function adminUsers(env) {
   const r = await db(env, `SELECT us.id,us.username,us.email,us.created_at,us.is_admin,us.admin_roles,us.last_seen,
       (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id=us.id) AS last_login,
-      (SELECT COUNT(*) FROM history h WHERE h.user_id=us.id) AS sessions_done,
-      (SELECT MAX(h.started_at) FROM history h WHERE h.user_id=us.id) AS last_session
+      (SELECT COUNT(*) FROM history h WHERE h.user_id=us.id AND json_extract(h.data_json,'$.external') IS NULL AND h.id NOT LIKE 'csv-%') AS sessions_done,
+      (SELECT MAX(h.started_at) FROM history h WHERE h.user_id=us.id AND json_extract(h.data_json,'$.external') IS NULL AND h.id NOT LIKE 'csv-%') AS last_session
     FROM users us ORDER BY us.created_at DESC LIMIT 2000`).all();
   const mask = (e) => { const [a, d] = String(e || '').split('@'); return d ? `${a.slice(0, 1)}•••@${d}` : ''; };
   const users = r.results.map((x) => ({ id: x.id, username: x.username, email: mask(x.email), createdAt: x.created_at, isAdmin: !!x.is_admin, roles: rolesOf(x), lastLogin: x.last_login || null, lastSeen: Math.max(x.last_seen || 0, x.last_login || 0) || null, sessionsDone: x.sessions_done || 0, lastSession: x.last_session || null }));
@@ -1926,13 +2028,13 @@ async function adminStats(env) {
   const now = Date.now(), d7 = now - 7 * DAY, d30 = now - 30 * DAY;
   const one = async (sql, ...a) => (await db(env, sql, ...a).first())?.n || 0;
   const users = await one('SELECT COUNT(*) AS n FROM users'), active7 = await one('SELECT COUNT(*) AS n FROM users WHERE last_seen>?', d7), active30 = await one('SELECT COUNT(*) AS n FROM users WHERE last_seen>?', d30);
-  const sessions7 = await one('SELECT COUNT(*) AS n FROM history WHERE started_at>?', d7), sessions30 = await one('SELECT COUNT(*) AS n FROM history WHERE started_at>?', d30);
-  const people30 = await one('SELECT COUNT(DISTINCT user_id) AS n FROM history WHERE started_at>?', d30);
-  const minutes30 = Math.round(((await db(env, 'SELECT COALESCE(SUM(duration_seconds),0) AS n FROM history WHERE started_at>?', d30).first())?.n || 0) / 60);
-  const acts = ((await db(env, "SELECT json_extract(data_json,'$.activity') AS a, COUNT(*) AS n, COUNT(DISTINCT user_id) AS p FROM history WHERE started_at>? GROUP BY a ORDER BY n DESC LIMIT 12", d30).all()).results || [])
+  const sessions7 = await one("SELECT COUNT(*) AS n FROM history WHERE json_extract(data_json,'$.external') IS NULL AND id NOT LIKE 'csv-%' AND started_at>?", d7), sessions30 = await one("SELECT COUNT(*) AS n FROM history WHERE json_extract(data_json,'$.external') IS NULL AND id NOT LIKE 'csv-%' AND started_at>?", d30);
+  const people30 = await one("SELECT COUNT(DISTINCT user_id) AS n FROM history WHERE json_extract(data_json,'$.external') IS NULL AND id NOT LIKE 'csv-%' AND started_at>?", d30);
+  const minutes30 = Math.round(((await db(env, "SELECT COALESCE(SUM(duration_seconds),0) AS n FROM history WHERE json_extract(data_json,'$.external') IS NULL AND id NOT LIKE 'csv-%' AND started_at>?", d30).first())?.n || 0) / 60);
+  const acts = ((await db(env, "SELECT json_extract(data_json,'$.activity') AS a, COUNT(*) AS n, COUNT(DISTINCT user_id) AS p FROM history WHERE json_extract(data_json,'$.external') IS NULL AND id NOT LIKE 'csv-%' AND started_at>? GROUP BY a ORDER BY n DESC LIMIT 12", d30).all()).results || [])
     .map((x) => ({ activity: x.a || 'autre', label: ACTIVITIES[x.a]?.label || (x.a ? 'Activité personnelle' : 'Sans activité'), sessions: x.p < SMALL ? null : x.n, people: hide(x.p) }));
   const weeks = [];
-  for (let k = 7; k >= 0; k--) { const to = now - k * 7 * DAY, from = to - 7 * DAY; weeks.push({ from, newUsers: hide(await one('SELECT COUNT(*) AS n FROM users WHERE created_at>? AND created_at<=?', from, to)), sessions: await one('SELECT COUNT(*) AS n FROM history WHERE started_at>? AND started_at<=?', from, to) }); }
+  for (let k = 7; k >= 0; k--) { const to = now - k * 7 * DAY, from = to - 7 * DAY; weeks.push({ from, newUsers: hide(await one('SELECT COUNT(*) AS n FROM users WHERE created_at>? AND created_at<=?', from, to)), sessions: await one("SELECT COUNT(*) AS n FROM history WHERE json_extract(data_json,'$.external') IS NULL AND id NOT LIKE 'csv-%' AND started_at>? AND started_at<=?", from, to) }); }
   return json({ ok: true, at: now, users: hide(users), active7: hide(active7), active30: hide(active30), sessions7, sessions30, people30: hide(people30), minutes30: people30 < SMALL ? null : minutes30, activities: acts, weeks, small: SMALL });
 }
 
@@ -1946,7 +2048,7 @@ async function cardFor(env, viewerId, targetId, username, tz) {
     if (!f) return null;
   }
   const wantData = prof.share_records;
-  const r = await db(env, `SELECT session_name,started_at,duration_seconds${wantData ? ',data_json' : ''} FROM history WHERE user_id=? ORDER BY started_at DESC LIMIT 300`, targetId).all();
+  const r = await db(env, `SELECT session_name,started_at,duration_seconds${wantData ? ',data_json' : ''} FROM history WHERE user_id=? AND json_extract(data_json,'$.external') IS NULL AND id NOT LIKE 'csv-%' ORDER BY started_at DESC LIMIT 300`, targetId).all();
   const rows = r.results.map((x) => normalizeHistory({ sessionName: x.session_name, startedAt: x.started_at, durationSeconds: x.duration_seconds, data: wantData ? safeParse(x.data_json) || {} : {} }));
   const s = summarizeHistory(rows, Date.now(), tz);
   const share = safeParse(prof.share_json) || {};

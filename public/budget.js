@@ -4,6 +4,8 @@
 // compare le temps nécessaire (phases + déplacements) au temps disponible. Si ça dépasse, on le dit avec le chiffre
 // exact et on propose ce qui pourrait être sacrifié — sans rien appliquer. Sans DOM, testé.
 import { ROLES } from './phase.js';
+import { ACTIVITIES, EQUIPMENT } from './model.js';
+import { normalizeAimLinks } from './objectivelinks.js';
 
 /** Matériel qu'on peut emporter d'un lieu à l'autre (le reste est lié au lieu). */
 export const PORTABLE = new Set(['band', 'rope', 'rings', 'mat']);
@@ -56,15 +58,47 @@ export function transitions(phases, envs = [], defaultEnvId = '') {
 
 /** Minimum raisonnable d'une phase selon son rôle (en dessous, la phase perd son sens). */
 const MIN_BY_ROLE = { warmup: 8, perf: 20, force: 15, endurance: 15, technique: 10, cool: 5, pause: 5 };
+/** Facteurs observables d'organisation et de consignes. Ils ne mesurent ni difficulté personnelle ni fatigue mentale. */
+export function organizationFactors(phases = [], { places = [], aims = [] } = {}) {
+  const active = phases.filter((p) => p.type !== 'pause' && p.activity !== 'pause');
+  const activities = [...new Set(active.map((p) => p.activity).filter(Boolean))];
+  let previousActivity='',activityChanges=0;
+  for(const p of active) if(p.activity){if(previousActivity&&previousActivity!==p.activity)activityChanges++;previousActivity=p.activity;}
+  const technical = active.filter((p) => p.role === 'technique' || p.focus === 'tech' || (p.subIntents || []).some((s) => String(s?.id || s).startsWith('technique.')));
+  const objectives = [...new Map(active.flatMap((p) => normalizeAimLinks(p,aims)).map((a)=>[a.key,a])).values()];
+  const observedPlaces=phases.map((p,i)=>places[i] || (p.window?.envId || p.envId || p.place?.envId ? {envId:p.window?.envId || p.envId || p.place.envId,name:p.envName || '',equipment:null}:null));
+  const knownPlaces=[...new Map(observedPlaces.filter((p)=>p?.envId).map((p)=>[p.envId,p])).values()];
+  let previousPlace='',placeChanges=0;
+  for(const p of observedPlaces)if(p?.envId){if(previousPlace&&previousPlace!==p.envId)placeChanges++;previousPlace=p.envId;}else previousPlace='';
+  const availableEquipment=[...new Set(observedPlaces.flatMap((p)=>p?.equipment?[...p.equipment]:[]))].sort();
+  const requiredEquipment=[...new Set(active.flatMap((p)=>[...phaseNeeds(p),...(Array.isArray(p.filters?.materiel?.value)?p.filters.materiel.value:Array.isArray(p.filters?.materiel)?p.filters.materiel:[])]).filter((id)=>id!=='none'&&Object.hasOwn(EQUIPMENT,id)))].sort();
+  const facts=[];
+  if(activities.length)facts.push(`${activities.length} activité${activities.length>1?'s':''} : ${activities.map((id)=>ACTIVITIES[id]?.label || id).join(', ')} ; ${activityChanges} changement${activityChanges>1?'s':''} d’activité hors pauses.`);
+  facts.push(`${technical.length} bloc${technical.length>1?'s':''} avec un rôle ou des consignes techniques explicites${technical.length?` (${technical.reduce((t,p)=>t+(Number(p.minutes)||0),0)} min)`:''}.`);
+  if(objectives.length)facts.push(`${objectives.length} objectif${objectives.length>1?'s':''} associé${objectives.length>1?'s':''} : ${objectives.map((a)=>a.label).join(' ; ')}. Les associations de préparation ne créent pas un objectif supplémentaire.`);
+  if(knownPlaces.length)facts.push(`${knownPlaces.length} lieu${knownPlaces.length>1?'x':''} renseigné${knownPlaces.length>1?'s':''} ; ${placeChanges} changement${placeChanges>1?'s':''} de lieu observé${placeChanges>1?'s':''}.`);
+  if(requiredEquipment.length)facts.push(`Matériel requis par les types de blocs ou tes filtres : ${requiredEquipment.map((id)=>EQUIPMENT[id]).join(', ')}.`);
+  if(availableEquipment.length)facts.push(`Matériel disponible déclaré dans les lieux : ${availableEquipment.map((id)=>EQUIPMENT[id] || id).join(', ')}.`);
+  const unknown=[];
+  if(active.some((p)=>!p.activity))unknown.push('Certaines activités ne sont pas renseignées.');
+  if(observedPlaces.some((p)=>!p?.envId || !p.equipment))unknown.push('Le lieu ou son matériel manque pour certains blocs.');
+  if(!objectives.length)unknown.push('Les associations avec les objectifs ne sont pas renseignées.');
+  unknown.push('La structure seule ne renseigne pas la nouveauté des exercices, ton aisance technique ni ton effort de concentration.');
+  const brief=[`${activities.length || 'Activité non précisée'}${activities.length?` activité${activities.length>1?'s':''}`:''}`,`${technical.length} bloc${technical.length>1?'s':''} technique${technical.length>1?'s':''}`];
+  if(objectives.length)brief.push(`${objectives.length} objectif${objectives.length>1?'s':''} associé${objectives.length>1?'s':''}`);
+  if(activityChanges)brief.push(`${activityChanges} changement${activityChanges>1?'s':''} d’activité`);
+  if(placeChanges)brief.push(`${placeChanges} changement${placeChanges>1?'s':''} de lieu`);
+  return {activities,activityChanges,technicalPhases:technical.length,objectives:objectives.map((a)=>a.key),places:knownPlaces.map((p)=>p.envId),placeChanges,requiredEquipment,availableEquipment,facts,unknown,summary:'Organisation : '+brief.join(' · ')+'.'};
+}
 /**
  * Budget : temps nécessaire (phases + déplacements) vs disponible. Si ça dépasse : message exact, et ce qui peut
  * être sacrifié, du moins coûteux au plus coûteux, en respectant les durées verrouillées.
  */
-export function budget(phases, available, trans = []) {
+export function budget(phases, available, trans = [], options = {}) {
   const phaseMin = phases.reduce((t, p) => t + (Number(p.minutes) || 0), 0);
   const travel = trans.reduce((t, x) => t + (x.travel || 0), 0);
   const needed = phaseMin + travel, avail = Math.round(Number(available) || 0);
-  const res = { phaseMin, travel, needed, available: avail, over: Math.max(0, needed - avail), spare: Math.max(0, avail - needed), sacrifice: [] };
+  const res = { phaseMin, travel, needed, available: avail, over: Math.max(0, needed - avail), spare: Math.max(0, avail - needed), sacrifice: [], organization: organizationFactors(phases,options) };
   if (!avail) return { ...res, text: 'Temps disponible non précisé.' };
   if (res.over <= 0) return { ...res, text: res.spare ? `${needed} min prévues sur ${avail} min disponibles (${res.spare} min de marge).` : `${needed} min prévues : pile le temps disponible.` };
   res.text = `Les contraintes actuelles nécessitent ${needed} min pour ${avail} min disponibles (${res.over} min de trop).`;

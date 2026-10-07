@@ -103,6 +103,38 @@ try{
     });
     assert.deepEqual(result.items,[]);assert.equal(result.syncing,false);assert.deepEqual(result.writes,[]);assert.equal(result.expired,0);
   });
+  await step('notifications, comptes admin et signalements tardifs : ni données ni affichage de l’ancienne connexion',async()=>{
+    const cases=await probe.evaluate(async()=>{
+      const m=await import('/state.js'),{vSettings}=await import('/views-settings.js'),native=window.fetch,results=[];
+      const paths=['/api/proposals/mine','/api/admin/proposals','/api/admin/users','/api/admin/push-status','/api/bugs/mine'];
+      try{
+        for(const [status,returnToA] of [[200,false],[503,false],[200,true]]){
+          const held=new Map(),pending=[];
+          window.fetch=(path,options)=>paths.includes(path)?new Promise(resolve=>held.set(path,resolve)):native(path,options);
+          m.S.user={id:'private-fetch-a',username:'A',isAdmin:true,roles:['super']};m.render();
+          m.S.tab='settings';m.S.sub.settings='users';vSettings();await new Promise(resolve=>setTimeout(resolve,0));
+          m.S.sub.settings='push';vSettings();
+          m.ACT.setSub({dataset:{id:'bug'}});
+          pending.push(m.ACT.notifOpen());
+          for(let i=0;i<30&&held.size<5;i++)await new Promise(resolve=>setTimeout(resolve,0));
+          if(held.size!==5)throw new Error('Les cinq lectures privées doivent être en attente.');
+          m.S.user={id:'private-fetch-b',username:'B'};m.render();
+          if(returnToA){m.S.user={id:'private-fetch-a',username:'A',isAdmin:true,roles:['super']};m.render();}
+          m.S.inbox={mine:[{id:'CURRENT-INBOX'}],adminList:[]};m.S.notifUnread=3;m.S.myBugs=[{id:'CURRENT-BUG'}];m.S.admin={bugs:null,marker:'CURRENT-ADMIN'};
+          const before=JSON.stringify({inbox:m.S.inbox,unread:m.S.notifUnread,myBugs:m.S.myBugs,admin:m.S.admin});
+          for(const [path,release] of held){
+            const data=path.includes('proposals')?{proposals:[{id:'OLD-PRIVATE',status:'done',label:'OLD-PRIVATE',reply:'OLD-PRIVATE'}]}:path.includes('users')?{users:[{id:'OLD-PRIVATE',username:'OLD-PRIVATE'}]}:path.includes('bugs')?{reports:[{id:'OLD-PRIVATE',title:'OLD-PRIVATE'}]}:{version:'OLD-PRIVATE',broadcast:{title:'OLD-PRIVATE'}};
+            release(Response.json(status===200?data:{error:'OLD-PRIVATE-ERROR'},{status}));
+          }
+          await Promise.all(pending);
+          for(let i=0;i<8;i++)await new Promise(resolve=>setTimeout(resolve,0));
+          results.push({status,returnToA,unchanged:before===JSON.stringify({inbox:m.S.inbox,unread:m.S.notifUnread,myBugs:m.S.myBugs,admin:m.S.admin}),sheet:document.querySelector('#sheet')?.textContent||''});
+        }
+      }finally{window.fetch=native;}
+      return results;
+    });
+    for(const result of cases){assert.equal(result.unchanged,true,'les lectures privées restent dans leur session : '+JSON.stringify(result));assert.doesNotMatch(result.sheet,/OLD-PRIVATE/);}
+  });
   await step('retours IA tardifs : création, objectif et modification de A ne changent aucun brouillon de B',async()=>{
     const cases=await probe.evaluate(async()=>{
       const m=await import('/state.js'),{openAssistant}=await import('/views-ai.js'),{vClimbPlan}=await import('/views-climbplan.js'),native=window.fetch,results=[];

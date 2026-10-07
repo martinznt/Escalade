@@ -78,12 +78,17 @@ await ok('clarification : propositions ambiguës ou non vérifiées bloquées av
     {status:'unverified',reply:'La source manque.',changes:[{kind:'faq'}]},
     {understood:false,reply:'Quel jour ?'},
     {needsClarification:true,reply:'Quelle activité ?'},
+    {status:'ok',grounded:false,reply:'La source manque.'},
+    {status:'ok',verified:false,reply:'La source manque.'},
+    {status:'ok',understanding:'unclear',reply:'Précise.'},
+    {status:'ok',questions:['Quel sport ?']},
+    {status:'clarify',reply:'FAUSSE_AFFIRMATION_APPLIQUEE'},
     {status:'clarify'}
   ];
   for(const [index,value] of cases.entries()){
     const json=JSON.stringify(value),raw=index%2 ? {choices:[{message:{content:'```json\n'+json+'\n```'}}]} : {response:value};
     env.AI.run=async()=>raw;
-    await assert.rejects(runAI(env,{...input,max_tokens:100}),e=>e.status===422&&e.code==='AI_CLARIFY'&&e.aiSafe===true&&e.message.length<=240&&!/[<>\n]/.test(e.message)&&(!index?e.message==='Quel lieu ?':true));
+    await assert.rejects(runAI(env,{...input,max_tokens:100}),e=>e.status===422&&e.code==='AI_CLARIFY'&&e.aiSafe===true&&e.message.length<=240&&!/[<>\n]/.test(e.message)&&!e.message.includes('FAUSSE_AFFIRMATION')&&(!index?e.message==='Quel lieu ?':true));
   }
   const raw={response:JSON.stringify({status:'clarify',reply:'Précise le lieu.',actions:[]})};env.AI.run=async()=>raw;
   assert.equal(await runAI(env,{...input,max_tokens:100},{allowClarification:true}),raw,'les parcours avec nettoyeur dédié reçoivent le statut');

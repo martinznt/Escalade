@@ -86,7 +86,8 @@ const WORD_INT = { easy: 'facile', mod: 'modérée', hard: 'intense', max: 'maxi
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // « short » : beaucoup d'objectifs pour peu de temps → chacun garde au moins 10 min au lieu d'être retiré.
-const minOf = (a) => (a.short ? MIN_AIM : MIN_ROLE[FAMILY_ROLE[a.family]] || MIN_AIM);
+// « tiny » : séance très courte (moins de 20 min) → l'objectif garde ce qui reste, 5 min au moins, plutôt que de dépasser le temps.
+const minOf = (a) => (a.tiny ? 5 : a.short ? MIN_AIM : MIN_ROLE[FAMILY_ROLE[a.family]] || MIN_AIM);
 /** Nom court d'une phase (≤ 40 caractères, rang compris) : « Performer · Voie (n°1) ». */
 const goalText = (a) => { const tail = a.equal ? '' : ` (n°${a.rank + 1}${a.tied ? '=' : ''})`, max = 40 - tail.length; return (a.label.length > max ? a.label.slice(0, max - 1).trim() + '…' : a.label) + tail; };
 const r5 = (x) => Math.round(x / 5) * 5;
@@ -155,7 +156,7 @@ export function cleanAims(list, sports = []) {
   return (Array.isArray(list) ? list : []).filter((a) => a && typeof a === 'object').map((a) => ({
     ...a, key: str(a.key, 80), family: INTENT_FAMILIES[a.family] || a.family === 'equilibre' ? a.family : '', sport: sports.includes(a.sport) ? a.sport : sp0,
     label: str(a.label, 60), emoji: str(a.emoji, 4), caps: capsOk(a.caps), subs: (Array.isArray(a.subs) ? a.subs : []).map(String).filter((x) => /^[\w.-]{1,60}$/.test(x)).slice(0, 6),
-    when: MOMENTS[a.when] ? a.when : 'auto', tie: !!a.tie, short: false,
+    when: MOMENTS[a.when] ? a.when : 'auto', tie: !!a.tie, short: false, tiny: false,
   })).filter((a) => a.key && a.family && a.sport && !seen.has(a.key) && seen.add(a.key)).slice(0, MAX_AIMS);
 }
 
@@ -167,11 +168,33 @@ export function aimCatalog(sport, acts = {}, extra = []) {
   };
 }
 
-/* ───────── Une phase par objectif ───────── */
+/* Objectifs indépendants ; blocs compatibles par activité, lieu, moment et effort. */
+const membersOf = (a) => a.members || [a];
+const linkFor = (a, contribution = 'primary') => ({ key: a.key, label: a.label, rank: a.rank || 0, equal: !!a.equal, source: a.source || '', goalId: a.goalId || '', caps: a.caps || {}, contribution });
+const weightOf = (a, equal) => membersOf(a).reduce((n, x) => n + (equal ? 1 : RANK_WEIGHT[x.rank] ?? 1), 0);
+/** Regrouper avant le budget évite de réserver dix minutes à chaque résultat compatible. */
+function groupAims(list, equipment, place = () => '') {
+  const groups = new Map();
+  for (const a of list) {
+    const p = phaseFor(a, 10, equipment(a.sport));
+    const signature = JSON.stringify([a.sport, place(a.sport), a.when || 'auto', p.type, p.role, p.intensity, p.structure || '', p.target || null, p.move || '']);
+    if (!groups.has(signature)) groups.set(signature, []);
+    groups.get(signature).push(a);
+  }
+  return [...groups.values()].map((group) => {
+    if (group.length === 1) return group[0];
+    const leader = [...group].sort((a, b) => a.rank - b.rank)[0], members = group.map((a) => ({ ...a }));
+    leader.members = members;
+    leader.caps = Object.fromEntries([...new Set(members.flatMap((a) => Object.keys(a.caps || {})))].map((k) => [k, Math.max(...members.map((a) => a.caps?.[k] || 0))]));
+    leader.subs = [...new Set(members.flatMap((a) => a.subs || []))];
+    return leader;
+  });
+}
 function phaseFor(a, minutes, eq) {
   const fam = a.family, sp = a.sport, prio = a.equal ? 3 : [4, 3, 2][a.rank] || 1;
   const base = { minutes, role: FAMILY_ROLE[fam] || 'main', goal: goalText(a), label: `${a.emoji} ${a.label}`.trim(), aimKey: a.key, aimRank: a.rank, aimLabel: a.label, ...(a.equal ? { aimEqual: true } : {}),
-    priorities: topCaps(a.caps, 4), subIntents: (a.subs || []).map((id) => ({ id, prio })), objective: a.rank === 0 && !a.equal };
+    aimLinks: membersOf(a).map((x) => linkFor(x)), priorities: topCaps(a.caps, 4), subIntents: (a.subs || []).map((id) => ({ id, prio })), objective: a.rank === 0 && !a.equal };
+  if (a.members?.length > 1) { base.goal = `${FAM_TITLE[fam] || 'Travail'} · ${sportShort(sp)}`; base.label = base.goal; }
   if (fam === 'mobilite') return { type: 'mobility', activity: sp, intensity: 'easy', ...base };
   if (isClimbSport(sp)) {
     const kind = sp === 'climbing_route' ? 'voie' : 'bloc';
@@ -180,7 +203,7 @@ function phaseFor(a, minutes, eq) {
     if (t) return { type: t, activity: sp, intensity: 'mod', ...base };
     if (a.intent === 'doigts' && eq?.has?.('hangboard')) return { type: 'fingers', activity: sp, intensity: 'hard', ...base };
     const [intensity, structure] = (kind === 'voie' && CLIMB_INTENT[a.intent]) || (CLIMB_PLAN[fam] || CLIMB_PLAN.equilibre)[kind];
-    return { type: 'climb', kind, activity: sp, intensity, structure, styles: [...(CLIMB_STYLE[a.intent] || [])], attemptType: ATTEMPT[fam] || 'work', focus: FOCUS[fam] || 'tech', ...base };
+    return { type: 'climb', kind, activity: sp, intensity, structure, styles: [...new Set(membersOf(a).flatMap((x) => CLIMB_STYLE[x.intent] || []))], attemptType: ATTEMPT[fam] || 'work', focus: FOCUS[fam] || 'tech', ...base };
   }
   const sf = sportFamily(sp);
   const st = (sf === 'run' || sf === 'swim') ? INTENT_WORK[sf][a.intent] || (!a.intent ? WORK_PLAN[sf][fam] : null)
@@ -191,7 +214,7 @@ function phaseFor(a, minutes, eq) {
 }
 /** Montée progressive juste avant le n°1, dans son sport. */
 function prepFor(a, minutes) {
-  const sp = a.sport, sf = sportFamily(sp), base = { minutes, role: 'prep', goal: 'Montée progressive', label: '📈 Montée progressive', prepFor: a.key, why: [`Juste avant ton n°1 (« ${a.label} ») : on monte en intensité sans se fatiguer.`] };
+  const sp = a.sport, sf = sportFamily(sp), base = { minutes, role: 'prep', goal: 'Montée progressive', label: '📈 Montée progressive', prepFor: a.key, aimLinks: membersOf(a).map((x) => linkFor(x, 'preparation')), why: [`Juste avant ton n°1 (« ${a.label} ») : on monte en intensité sans se fatiguer.`] };
   if (isClimbSport(sp)) return { type: 'climb', kind: sp === 'climbing_route' ? 'voie' : 'bloc', activity: sp, intensity: 'mod', structure: 'pyramid', styles: [], attemptType: 'work', focus: 'tech', ...base };
   const st = { run: ['mod', 'fartlek'], swim: ['mod', 'pyramide'], load: ['easy', 'technique'], body: ['easy', 'sousmax'] }[sf];
   if (st) return { type: 'work', activity: sp, intensity: st[0], structure: st[1], ...(a.target && (sf === 'load' || sf === 'body') ? { move: a.target.metricId } : {}), ...base };
@@ -221,7 +244,7 @@ const capMod = (ph) => ['hard', 'max'].includes(ph.intensity) && setIntensity(ph
  */
 export function planFromAims(o = {}) {
   if (Array.isArray(o.windows) && o.windows.length) return planWindows(o);
-  const sports = [...new Set((o.sports || []).filter(Boolean))], M = clamp(Math.round(Number(o.minutes) || 60), 20, 300), notes = [], dropped = [];
+  const sports = [...new Set((o.sports || []).filter(Boolean))], M = clamp(Math.round(Number(o.minutes) || 60), 10, 300), notes = [], dropped = [];
   const acts = o.acts || {}, travelEach = clamp(Math.round(Number(o.travel ?? 15) || 0), 0, 120);
   const aims = cleanAims(o.aims, sports);
   for (const sp of sports) if (!aims.some((a) => a.sport === sp)) { aims.push(balancedAim(sp, acts)); if (aims.length > 1) notes.push(`« ${sportShort(sp, acts)} » sans objectif : une partie équilibrée est ajoutée pour ce sport.`); }
@@ -247,6 +270,9 @@ export function planFromAims(o = {}) {
   }
   let seq = order(autoWork);
   for (const g of [start, mid, end]) if (g.length > 1) notes.push(`${g.length} objectifs « ${MOMENTS[g[0].when]} » : ${g.map((a) => `« ${a.label} »`).join(' puis ')} (le plus exigeant d’abord, puis par rang).`);
+  const blocks = groupAims(autoWork, eqOf, placeOf), half = Math.ceil(blocks.length / 2);
+  seq = [...groupAims(start, eqOf, placeOf), ...blocks.slice(0, half), ...groupAims(mid, eqOf, placeOf), ...blocks.slice(half), ...groupAims(end, eqOf, placeOf), ...groupAims(autoMob, eqOf, placeOf)];
+  for (const a of seq) if (a.members?.length > 1) notes.push(`${a.members.map((x) => `« ${x.label} »`).join(' et ')} partagent un bloc de ${sportShort(a.sport, acts).toLowerCase()} : même lieu, moment et effort. Le temps est partagé, pas répété pour chaque objectif.`);
 
   // 2 · Le temps : échauffement, montée progressive, trajets, retour au calme, puis les objectifs selon leur rang.
   // Sans hiérarchie : aucun objectif n'est « n°1 » ; l'échauffement reste complet si l'un d'eux est exigeant.
@@ -265,14 +291,19 @@ export function planFromAims(o = {}) {
     if (P.prep) { notes.push('Pas assez de temps pour une montée progressive séparée : elle se fait dans l’échauffement.'); P = { ...P, work: P.work + P.prep, prep: 0, noPrep: true }; continue; }
     if (seq.length > 1 && seq.some((a) => !a.short)) { for (const a of seq) a.short = true; notes.push(`Beaucoup d’objectifs pour ${M} min : chacun a une part plus courte (10 min au moins) pour en garder le plus possible.`); continue; }
     if (seq.length > 1) {
-      const last = [...seq].sort((a, b) => b.rank - a.rank)[0]; seq = seq.filter((a) => a !== last); dropped.push(last);
+      const last = [...seq].sort((a, b) => b.rank - a.rank)[0]; seq = seq.filter((a) => a !== last); dropped.push(...membersOf(last));
       notes.push(`Pas assez de temps pour « ${last.label} »${EQ ? ' (le dernier de ta liste)' : ` (n°${last.rank + 1})`} : retiré. Ajoute du temps ou garde moins d’objectifs.`);
       const keepNoPrep = P.noPrep; P = plan(); if (keepNoPrep) P = { ...P, work: P.work + P.prep, prep: 0, noPrep: true }; continue;
     }
     if (P.W > 5 || P.C > 5) { P = { ...P, work: P.work + (P.W - 5) + (P.C - 5), W: 5, C: 5 }; continue; }
+    // Séance courte : le temps demandé est tenu. L'objectif garde 10 min, puis le retour au calme se fait dans la
+    // dernière minute, puis l'objectif prend ce qui reste (5 min au moins). Chaque étape est dite.
+    if (seq.some((a) => !a.short)) { for (const a of seq) a.short = true; notes.push(`Séance courte (${M} min) : ${seq.length > 1 ? 'chaque objectif garde' : `« ${seq[0].label} » garde`} 10 min au moins pour tenir le temps.`); continue; }
+    if (P.C > 0) { P = { ...P, work: P.work + P.C, C: 0, noCool: true }; notes.push(`Séance très courte (${M} min) : pas de retour au calme séparé, finis simplement en douceur.`); continue; }
+    if (seq.some((a) => !a.tiny)) { for (const a of seq) a.tiny = true; const k = notes.findIndex((t) => t.startsWith(`Séance courte (${M} min)`)); if (k >= 0) notes.splice(k, 1); notes.push(`Séance très courte (${M} min) : ${seq.length > 1 ? 'les objectifs se partagent' : `« ${seq[0].label} » prend`} le temps qui reste après l’échauffement.`); continue; }
     break;
   }
-  const work = Math.max(MIN_AIM, P.work), weights = seq.map((a) => (EQ ? 1 : RANK_WEIGHT[a.rank] ?? 1)), sum = weights.reduce((t, w) => t + w, 0);
+  const work = Math.max(need(), P.work), weights = seq.map((a) => weightOf(a, EQ)), sum = weights.reduce((t, w) => t + w, 0);
   const mins = seq.map((a, k) => Math.max(minOf(a), r5((work * weights[k]) / sum)));
   // Total exact : le surplus va au n°1 ; un manque est pris d'abord aux moins importants (jamais sous leur minimum).
   let diff = work - mins.reduce((t, m) => t + m, 0);
@@ -286,6 +317,7 @@ export function planFromAims(o = {}) {
   const phs = seq.map((a, k) => ({ a, ph: { ...phaseFor(a, mins[k], eqOf(a.sport)), why: [] } }));
   const i1 = seq.indexOf(n1), lowForme = o.forme === 'low';
   for (const { a, ph } of phs) {
+    if (a.members?.length > 1) ph.why.push(`Ce bloc travaille ${a.members.length} objectifs compatibles ; leur importance oriente les capacités, sans ajouter une phase par objectif.`);
     ph.why.push(EQ ? 'Sans hiérarchie : la même part de temps que les autres objectifs.' : a.tied ? `Objectif n°${a.rank + 1} ex æquo : même part de temps que ceux de même importance.` : a === n1 ? 'Ton objectif n°1 : le plus de temps.' : `Objectif n°${a.rank + 1} : ${ph.minutes} min (${a.rank >= 2 ? 'moins important, moins de temps' : 'important'}).`);
     if (a.when === 'auto') ph.why.push(mob(a) ? 'Placé en fin de séance : la mobilité se fait mieux après l’effort.' : DEMANDING.has(a.family) ? 'Placé tôt : le plus exigeant se fait frais.' : a.family === 'endurance' ? 'Placé après le plus exigeant : l’endurance fatigue tout le reste.' : 'Placé automatiquement selon l’effort qu’il demande.');
     else ph.why.push(`Moment choisi par toi : ${MOMENTS[a.when].toLowerCase()}.`);
@@ -320,6 +352,8 @@ export function planFromAims(o = {}) {
     extra = { ...phaseFor({ ...n1, family: 'endurance', intent: '', key: n1.key + ':vol', label: `Volume facile · ${sportShort(n1.sport, acts)}`, emoji: '🌿', rank: Math.max(1, seq.length) }, rest, eqOf(n1.sport)), role: 'endurance', objective: false, why: ['Après ton n°1 : du volume facile plutôt que plus d’une heure à fond.'] };
     setIntensity(extra, 'easy'); if (extra.type === 'climb') extra.structure = 'volume';
     extra.goal = `Volume facile après « ${n1.label} »`;
+    extra.aimLinks = membersOf(n1).map((a) => linkFor(a, 'support'));
+    extra.aimKey = n1.key; extra.aimLabel = n1.label; extra.aimRank = n1.rank;
     notes.push(`Plus de 60 min à fond perd en qualité : les ${rest} min restantes deviennent du volume facile après ton n°1 (change-le à l’étape 3 si tu préfères).`);
   }
   if (demanding) notes.push(`Échauffement complet (${P.W} min) : ton n°1 demande d’être bien chaud.`);
@@ -337,7 +371,7 @@ export function planFromAims(o = {}) {
   // 4 · Lieux : chaque phase dans le lieu de son sport ; la mobilité reste où l'on est. Trajets comptés.
   const out = [], first = seq.find((a) => !mob(a)) || seq[0], lastWork = [...seq].reverse().find((a) => !mob(a)) || seq.at(-1);
   let cur = placeOf(first.sport), moves = 0;
-  out.push({ type: 'warmup', activity: first.sport, minutes: P.W, role: 'warmup', place: cur && cur !== (o.envId || '') ? { mode: 'other', envId: cur, travelMin: null } : { mode: 'same' }, why: [demanding ? `Échauffement complet${P.late ? ' et plus long' : ''} : ton n°1 demande d’être chaud.` : 'Échauffement général puis spécifique au premier sport.'] });
+  out.push({ type: 'warmup', activity: first.sport, minutes: P.W, role: 'warmup', aimLinks: membersOf(first).map((a) => linkFor(a, 'preparation')), place: cur && cur !== (o.envId || '') ? { mode: 'other', envId: cur, travelMin: null } : { mode: 'same' }, why: [demanding ? `Échauffement complet${P.late ? ' et plus long' : ''} : ton n°1 demande d’être chaud.` : 'Échauffement général puis spécifique au premier sport.'] });
   // Lieu de départ inconnu ('') : on ne compte pas de trajet qu'on ne connaît pas (le créateur signale le temps manquant).
   const moveTo = (ph, want, why) => {
     if (!want || want === cur) { ph.place = { mode: 'same' }; return; }
@@ -350,9 +384,9 @@ export function planFromAims(o = {}) {
     out.push(ph);
     if (k === i1 && extra) { extra.place = { mode: 'same' }; out.push(extra); }
   });
-  out.push({ type: 'cool', activity: lastWork.sport, minutes: P.C, role: 'cool', place: { mode: 'same' }, why: ['Retour au calme : redescendre doucement.'] });
+  if (P.C > 0) out.push({ type: 'cool', activity: lastWork.sport, minutes: P.C, role: 'cool', place: { mode: 'same' }, why: ['Retour au calme : redescendre doucement.'] });
   if (moves) notes.push(`🚗 ${moves} changement${moves > 1 ? 's' : ''} de lieu : ${moves * travelEach} min de trajet comptées dans tes ${M} min.`);
-  return { phases: out, notes, dropped, order: seq.map((a) => a.key), envId: placeOf(first.sport) || o.envId || '', travel: moves * travelEach };
+  return { phases: out, notes, dropped, order: seq.flatMap((a) => membersOf(a).map((x) => x.key)), envId: placeOf(first.sport) || o.envId || '', travel: moves * travelEach };
 }
 
 /* ───────── Créneaux horaires par lieu ───────── */
@@ -414,16 +448,25 @@ export function planWindows(o = {}) {
 
   // 1 · La grimpe dans le lieu de son sport (sinon le premier créneau qui a un mur).
   for (const a of ranked.filter((x) => !flex(x))) {
-    const p = placeOf(a.sport), w = win.find((x) => p && x.envId === p) || win.find((x) => x.eq.has('wall'));
-    if (!w) { dropped.push(a); notes.push(`« ${a.label} » : aucun de tes créneaux n’est dans un lieu avec un mur d’escalade. Ajoute ce lieu ou son matériel.`); continue; }
-    w.aims.push(a); a.why = [p && w.envId === p ? `À ${w.name} : c’est là que tu fais ${sportShort(a.sport, acts).toLowerCase()}.` : `À ${w.name} : le premier lieu de tes créneaux qui a un mur.`];
+    const p = placeOf(a.sport), matching = win.filter((x) => p && x.envId === p && x.eq.has('wall'));
+    let selected = matching.length ? matching : win.filter((x) => x.eq.has('wall')).slice(0, 1);
+    if (a.when === 'start') selected = selected.slice(0, 1);
+    if (a.when === 'end') selected = selected.slice(-1);
+    if (a.when === 'middle') selected = selected.slice(Math.floor(selected.length / 2), Math.floor(selected.length / 2) + 1);
+    if (!selected.length) { dropped.push(a); notes.push(`« ${a.label} » : aucun de tes créneaux n’est dans un lieu avec un mur d’escalade. Ajoute ce lieu ou son matériel.`); continue; }
+    selected.forEach((w, i) => { const objective = i ? { ...a } : a; objective.why = [p && w.envId === p ? `À ${w.name} : c’est là que tu fais ${sportShort(a.sport, acts).toLowerCase()}.` : `À ${w.name} : le premier lieu de tes créneaux qui a un mur.`]; w.aims.push(objective); });
+    if (selected.length > 1) notes.push(`« ${a.label} » est travaillé dans ${selected.length} créneaux de ${sportShort(a.sport, acts).toLowerCase()} ; un seul objectif, plusieurs blocs.`);
   }
   // 2 · Le reste là où il y a ce qu'il faut : matériel exigé, puis le plus de matériel utile, puis le plus de temps libre, puis le plus tard.
   for (const a of ranked.filter(flex)) {
-    if (a.family === 'mobilite') { const w = win.at(-1); w.aims.push(a); a.why = [`À ${w.name}, en fin de séance : la mobilité se fait mieux après l’effort.`]; continue; }
+    if (a.family === 'mobilite') { const w = a.when === 'start' ? win[0] : a.when === 'middle' ? win[Math.floor(win.length / 2)] : win.at(-1); w.aims.push(a); a.why = [a.when === 'auto' ? `À ${w.name}, en fin de séance : la mobilité se fait mieux après l’effort.` : `À ${w.name} : moment choisi par toi, ${MOMENTS[a.when].toLowerCase()}.`]; continue; }
     const need = needsOf(a), ok = win.filter((w) => !need.length || need.some((k) => w.eq.has(k)));
     const score = (w) => RENFO_EQ.filter((k) => w.eq.has(k)).length + (placeOf(a.sport) && placeOf(a.sport) === w.envId ? 2 : 0);
-    const pick = [...(ok.length ? ok : win)].sort((x, y) => (free(y) >= minOf(a)) - (free(x) >= minOf(a)) || score(y) - score(x) || free(y) - free(x) || y.k - x.k)[0];
+    let candidates = ok.length ? ok : win;
+    if (a.when === 'start') candidates = candidates.slice(0,1);
+    if (a.when === 'end') candidates = candidates.slice(-1);
+    if (a.when === 'middle') candidates = candidates.slice(Math.floor(candidates.length / 2),Math.floor(candidates.length / 2)+1);
+    const pick = [...candidates].sort((x, y) => (free(y) >= minOf(a)) - (free(x) >= minOf(a)) || score(y) - score(x) || free(y) - free(x) || y.k - x.k)[0];
     pick.aims.push(a);
     const has = eqLabelList(pick.eq, need.length ? need : RENFO_EQ).map(nm);
     a.why = [ok.length ? `À ${pick.name}${has.length ? ` : il y a ${has.join(', ').toLowerCase()}` : ''}${win.length > 1 ? ' et du temps dans ce créneau' : ''}.` : `Aucun de tes lieux n’a ${need.map(nm).join(' ou ').toLowerCase()} : version adaptée au matériel de ${pick.name}.`];
@@ -442,17 +485,18 @@ export function planWindows(o = {}) {
   for (const w of win) {
     const by = (m) => w.aims.filter((a) => (a.when || 'auto') === m);
     const autoW = by('auto').filter((a) => a.family !== 'mobilite').sort((x, y) => flex(x) - flex(y) || (AUTO_ORDER[x.family] ?? 3) - (AUTO_ORDER[y.family] ?? 3) || x.rank - y.rank);
-    const half = Math.ceil(autoW.length / 2);
-    let list = [...by('start'), ...autoW.slice(0, half), ...by('middle'), ...autoW.slice(half), ...by('end'), ...by('auto').filter((a) => a.family === 'mobilite')];
+    const grouped = (items) => groupAims(items, () => w.eq, () => w.envId), autoBlocks = grouped(autoW), half = Math.ceil(autoBlocks.length / 2);
+    let list = [...grouped(by('start')), ...autoBlocks.slice(0, half), ...grouped(by('middle')), ...autoBlocks.slice(half), ...grouped(by('end')), ...grouped(by('auto').filter((a) => a.family === 'mobilite'))];
+    for (const a of list) if (a.members?.length > 1) notes.push(`À ${w.name}, ${a.members.length} objectifs compatibles partagent un bloc : ${a.members.map((x) => x.label).join(' ; ')}.`);
     if (autoW.some(flex) && autoW.some((a) => !flex(a))) notes.push(`À ${w.name} : le renforcement vient après la grimpe (la grimpe se fait avec des bras frais).`);
     let work = w.mins - overhead(w);
     if (list.length > 1 && work < list.reduce((t, a) => t + minOf(a), 0)) { for (const a of list) a.short = true; notes.push(`À ${w.name} : beaucoup d’objectifs pour ce créneau, chacun a une part plus courte (10 min au moins).`); }
     while (list.length > 1 && work < list.reduce((t, a) => t + minOf(a), 0)) {
-      const last = [...list].sort((x, y) => y.rank - x.rank)[0]; list = list.filter((a) => a !== last); dropped.push(last);
+      const last = [...list].sort((x, y) => y.rank - x.rank)[0]; list = list.filter((a) => a !== last); dropped.push(...membersOf(last));
       notes.push(`Pas assez de temps à ${w.name} (${fromMin(w.from)}–${fromMin(w.to)}) pour « ${last.label} » : retiré.`);
     }
-    work = Math.max(5, work);
-    const wt = list.map((a) => (EQ ? 1 : RANK_WEIGHT[a.rank] ?? 1)), sum = wt.reduce((t, x) => t + x, 0) || 1;
+    if (work < Math.max(5, minOf(list[0]))) { const error = `Créneau trop court à ${w.name} (${fromMin(w.from)}–${fromMin(w.to)}) : échauffement, travail utile et retour au calme dépasseraient ton heure de départ. Allonge le créneau ou choisis un effort plus léger.`; return { phases: [], notes: [...notes, error], dropped, order: [], envId: win[0].envId, travel: 0, start: win[0].from, minutes: total, errors: [error] }; }
+    const wt = list.map((a) => weightOf(a, EQ)), sum = wt.reduce((t, x) => t + x, 0) || 1;
     const mins = list.map((a, k) => Math.max(Math.min(minOf(a), work), r5((work * wt[k]) / sum)));
     let diff = work - mins.reduce((t, m) => t + m, 0);
     const best = list.reduce((b, a, k) => (a.rank < list[b].rank ? k : b), 0);
@@ -468,26 +512,41 @@ export function planWindows(o = {}) {
     if (w.k > 0 && w.gap > 0 && (!w.envId || w.envId === prevEnv)) out.push({ type: 'pause', activity: list[0]?.sport || sports[0], minutes: w.gap, role: 'pause', goal: 'Pause entre deux créneaux', place: { mode: 'same' }, why: [`${w.gap} min sans activité entre tes deux créneaux.`] });
     const rw = reWarm(w);
     if (rw) {
-      const ph = { type: 'warmup', activity: list[0]?.sport || sports[0], minutes: rw, role: 'warmup', ...(w.k ? { goal: 'Remise en route', label: '🔁 Remise en route' } : {}), why: [w.k ? `Après ${w.gap} min d’arrêt, le corps a refroidi : ${rw} min pour se remettre en route avant de reprendre.` : `Échauffement à ${w.name}.`] };
+      const ph = { type: 'warmup', activity: list[0]?.sport || sports[0], minutes: rw, role: 'warmup', aimLinks: list.filter((a) => a.sport === list[0]?.sport).flatMap((a) => membersOf(a).map((x) => linkFor(x, 'preparation'))), window: { from: w.from, to: w.to, envId: w.envId }, ...(w.k ? { goal: 'Remise en route', label: '🔁 Remise en route' } : {}), why: [w.k ? `Après ${w.gap} min d’arrêt, le corps a refroidi : ${rw} min pour se remettre en route avant de reprendre.` : `Échauffement à ${w.name}.`] };
       arrive(ph); out.push(ph);
     }
     list.forEach((a, k) => {
-      const ph = { ...phaseFor(a, mins[k], w.eq), why: [...(a.why || [])] };
+      const ph = { ...phaseFor(a, mins[k], w.eq), window: { from: w.from, to: w.to, envId: w.envId }, why: [...(a.why || [])] };
       ph.why.push(EQ ? 'Sans hiérarchie : même part de temps que les autres objectifs du créneau.' : a.tied ? `Objectif n°${a.rank + 1} ex æquo : même part de temps que ceux de même importance.` : a === n1 ? 'Ton objectif n°1 : le plus de temps de son créneau.' : `Objectif n°${a.rank + 1} : ${ph.minutes} min.`);
       if (!rw && k === 0) arrive(ph); else ph.place = { mode: 'same' };
       if (!EQ && a !== n1 && DEMANDING.has(n1.family) && !seq.includes(n1) && a.family !== 'mobilite') hardBefore.push({ a, ph });
       out.push(ph); seq.push(a);
     });
-    if (w.k === win.length - 1) out.push({ type: 'cool', activity: list.at(-1)?.sport || sports[0], minutes: CD, role: 'cool', place: { mode: 'same' }, why: ['Retour au calme : redescendre doucement.'] });
+    if (w.k === win.length - 1) out.push({ type: 'cool', activity: list.at(-1)?.sport || sports[0], minutes: CD, role: 'cool', window: { from: w.from, to: w.to, envId: w.envId }, place: { mode: 'same' }, why: ['Retour au calme : redescendre doucement.'] });
   }
   // 5 · Un n°1 exigeant qui vient après d'autres objectifs : ceux d'avant restent modérés.
   if (seq.indexOf(n1) > 0 && hardBefore.length) {
     for (const { a, ph } of hardBefore) if (capMod(ph)) { ph.why.push(`Gardée modérée : garder de l’énergie pour « ${n1.label} ».`); notes.push(`« ${a.label} » reste modérée : ton n°1 « ${n1.label} » vient après.`); }
   }
+  // La limite du travail exigeant du n°1 vaut pour toute la séance, même si ce résultat traverse plusieurs lieux/créneaux.
+  if (!EQ && DEMANDING.has(n1.family)) {
+    let hardMinutes = 0;
+    for (let i=0;i<out.length;i++) {
+      const p=out[i];
+      if (!['hard','max'].includes(p.intensity) || !p.aimLinks?.some((a)=>a.key===n1.key && a.contribution==='primary')) continue;
+      const room=Math.max(0,60-hardMinutes);
+      if(p.minutes<=room){hardMinutes+=p.minutes;continue;}
+      const keep=room>=5?Math.min(room,p.minutes-5):0, support={...p,minutes:p.minutes-keep,role:'endurance',objective:false,goal:`Volume facile après « ${n1.label} »`,label:'🌿 Volume facile',aimLinks:p.aimLinks.map((a)=>({...a,contribution:'support'})),why:[...(p.why||[]),'Complément facile : le travail exigeant du même objectif reste limité sur l’ensemble des créneaux.']};
+      setIntensity(support,'easy');if(support.type==='climb')support.structure='volume';
+      if(keep){p.minutes=keep;hardMinutes+=keep;support.place={mode:'same'};out.splice(++i,0,support);}else out[i]=support;
+      notes.push(`À ${win.find((w)=>w.from===p.window?.from)?.name || 'ce lieu'}, ${support.minutes} min deviennent un complément facile du même objectif ; les horaires sont conservés.`);
+    }
+  }
+  if(o.forme==='low') { for(const p of out) if(setIntensity(p,DOWN[p.intensity]||p.intensity)) p.why=[...(p.why||[]),'Intensité baissée d’un cran : forme du jour basse.'];notes.push('Forme du jour basse : intensités baissées d’un cran dans chaque créneau.'); }
   for (const a of ranked) if (a.when !== 'auto' && win.filter((w) => w.aims.includes(a)).length && win.length > 1) notes.push(`« ${a.label} » : « ${MOMENTS[a.when]} » s’entend dans son créneau (${win.find((w) => w.aims.includes(a)).name}).`);
   notes.unshift(`🕒 ${win.map((w) => `${w.name} ${fromMin(w.from)}–${fromMin(w.to)}`).join(' → ')} : ${total} min au total, dont ${active} min d’entraînement${travel ? ` et ${travel} min de trajet` : ''}.`);
   if (EQ) notes.splice(1, 0, 'Sans hiérarchie : à l’intérieur de chaque créneau, le temps est partagé à parts égales.');
-  return { phases: out, notes, dropped, order: seq.map((a) => a.key), envId: win[0].envId || o.envId || '', travel, start: win[0].from, minutes: total, errors: [] };
+  return { phases: out, notes, dropped, order: seq.flatMap((a) => membersOf(a).map((x) => x.key)), envId: win[0].envId || o.envId || '', travel, start: win[0].from, minutes: total, errors: [] };
 }
 
 /* ───────── Chronologie de la structure finale ───────── */

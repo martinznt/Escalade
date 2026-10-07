@@ -1,0 +1,36 @@
+.app-icons-panel>summary{overflow-wrap:anywhere}
+.app-icon-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:10px;margin:14px 0}
+.app-icon-choice{appearance:none;display:grid;justify-items:center;gap:6px;min-width:0;border:2px solid var(--line);border-radius:14px;background:var(--card2);color:var(--text);padding:12px 6px;cursor:pointer;font:inherit;text-align:center}
+.app-icon-choice img{border-radius:14px;display:block}
+.app-icon-choice span{font-size:.85rem;font-weight:650;overflow-wrap:anywhere}
+.app-icon-choice small{font-size:.7rem;color:var(--muted)}
+.app-icon-choice.selected{border-color:var(--accent)}
+.app-icon-choice:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.app-icons-panel [data-app-icon-install]{max-width:100%;white-space:normal;text-align:center}
+.icon-creator-launch{margin:12px 0}
+.icon-creator{margin:14px 0;padding:14px;border:1px solid var(--line);border-radius:14px;min-width:0}
+.icon-creator h3{margin:0}
+.icon-creator-steps{display:flex;gap:8px;flex-wrap:wrap;list-style:none;padding:0;margin:16px 0;color:var(--muted);font-size:.75rem}
+.icon-creator-steps li{padding:6px 8px;border:1px solid var(--line);border-radius:8px}
+.icon-creator-steps .active{color:var(--text);border-color:var(--accent)}
+.icon-live-preview{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:16px 0}
+.icon-live-preview canvas{display:block;width:min(192px,100%);height:auto;border-radius:22px;box-shadow:0 4px 14px #0003}
+.icon-live-preview canvas.icon-badge-preview{width:72px;padding:10px;box-sizing:border-box;border-radius:12px}
+.icon-creator select{max-width:100%;width:100%}
+.icon-sports{margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:12px;min-width:0}
+.icon-sports label{display:flex;align-items:center;gap:10px;margin:8px 0}
+.icon-sports input[type=checkbox]{width:20px;height:20px;flex:none;padding:0;margin:0;accent-color:var(--accent)}
+.icon-preset-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin:12px 0}
+.icon-preset-options canvas{width:70px;height:70px;border-radius:14px}
+.icon-custom-colors{display:flex;gap:12px;flex-wrap:wrap}
+.icon-custom-colors label{flex:1;min-width:75px}
+.icon-custom-colors input[type=color]{height:44px;padding:3px;width:100%;max-width:100%}
+.icon-creator-nav{margin-top:14px}
+.icon-creator button{max-width:100%;white-space:normal}
+.icon-notification-preview{display:flex;align-items:center;justify-content:center;gap:16px;margin:16px 0}
+.icon-notification-preview>img{border-radius:14px}
+.icon-badge-preview{display:inline-flex;align-items:center;justify-content:center;background:#223341;border-radius:12px;padding:10px}
+.icon-saved-collection{margin:16px 0;overflow-wrap:anywhere}
+.icon-saved-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin:12px 0}
+.icon-saved-item{display:grid;justify-items:center;gap:8px;padding:10px 6px;border:1px solid var(--line);border-radius:12px;min-width:0}
+.icon-saved-item img{display:block;border-radius:14px}

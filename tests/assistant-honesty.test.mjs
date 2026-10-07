@@ -15,6 +15,7 @@ const uncertain = [
   { understood: false }, { understanding: false }, { understanding: 'unclear' },
   { understanding: 'unknown' }, { understanding: 'not_understood' },
   { needsClarification: true }, { needs_clarification: true }, { verified: false }, { grounded: false },
+  { question: 'Quel élément précisément ?' },
 ];
 const assertBlocked = result => {
   assert.ok(['clarify','unverified'].includes(result.status));
