@@ -1,8 +1,9 @@
 import { comparisonView, advancedUI } from './views-experience.js';
+import { proposable } from './sportprefs.js';
 import { sessionFromHistory } from './live.js';
 // views-climbplan.js — « Structurer ma séance d'escalade » : par objectif de fin de séance, ou partie par partie.
 import { h, raw, chip, openSheet, closeSheet, toast, ask, askText, seg } from './ui.js';
-import { S, accountToken, accountMatches, ACT, CHG, INPUT, ctx, render, go, saveSeance, ls, putItem, itemsOf, api } from './state.js';
+import { S, accountToken, accountMatches, ACT, CHG, INPUT, ctx, render, go, saveSeance, ls, putItem, delItem, itemsOf, api } from './state.js';
 import { aiEvidence, aiProposalReady } from './srcui.js';
 import { uid } from './shared.js';
 import { simulate } from './whatif.js';
@@ -19,6 +20,8 @@ import { byId } from './library.js';
 import { startPlayer } from './player.js';
 import { surprise, surpriseClimbParts, AIMS } from './surprise.js';
 import { intentsFor, AVOID_ZONES, FORMES } from './intentions.js';
+import { addField, onChoice, withMyMinutes } from './views-choices.js';
+import { isMine } from './choices.js';
 import { activePains, readiness, ZONE_LABEL } from './coachbrain.js';
 import { activeGoals, goalLabel } from './brain.js';
 import { presetParts } from './format.js';
@@ -30,6 +33,8 @@ import { sessionMinutes } from './engine.js';
 import { INTENT_FAMILIES, PRIO, subIntentsFor, labelOf } from './intents.js';
 import { FILTER_DEFS, filtersFor, effectiveFilters, filterText, MODES } from './filters.js';
 import { resolvePlaces, transitions, budget } from './budget.js';
+import { slotsOn, placeSuits, DAY_LONG, toMin as hmMin } from './planning.js';
+import { ymd as dayKey } from './program.js';
 import { LINKS, chainStatus, paramsFor } from './sessionchain.js';
 import { ROLES, LOCKABLE, LOCK_STATES, FATIGUE, ATTEMPT_TYPES, FOCUS, VOLUME, TRADEOFFS, PLACE_MODES, normalizePhases, normalizePhase, fitDurations, fitShort, newPhase, totalMinutes as phTotal, sessionActivities, sessionIntent, activityLabel as actLabel } from './phase.js';
 import { proposeForPhase, analyzeSession, applySuggestion, REASON, phaseName } from './phaseplan.js';
@@ -123,9 +128,25 @@ function syncAims(c = CP()) {
 /** Lieu cohérent avec le sport : pour l'escalade, un lieu qui a un mur (sinon on garde le lieu et on le dit). */
 function placeFor(c) {
   if (c.envPicked) return;
-  const x = ctx();
+  const x = ctx(), here = slotHere(c.sport);
+  // 8.34 : le lieu noté dans ton créneau d'aujourd'hui (« le mardi, je suis à ma salle »), s'il convient au sport.
+  c.slotHint = here ? { date: dayKey(Date.now()), day: here.slot.d, from: here.slot.from, to: here.slot.to, envId: here.env.id } : null;
+  if (here) { c.envId = here.env.id; return; }
   if (isClimb(c.sport)) { const e = x.envs.find((v) => availableEquipment(x, v.id).has('wall')); c.envId = e ? e.id : ''; }
   else if (c.envId && !x.envs.some((v) => v.id === c.envId)) c.envId = '';
+}
+/** Durée du créneau d'aujourd'hui retenu (10 min à 5 h), proposée comme temps disponible ; 0 s'il n'y en a pas. */
+const slotMinutes = (c) => { const sl = hintToday(c); if (!sl) return 0; const m = hmMin(sl.to) - hmMin(sl.from); return m >= 10 ? Math.min(300, m) : 0; };
+/** Le créneau retenu n'est valable que le jour même (un brouillon rouvert le lendemain ne le montre plus). */
+const hintToday = (c) => (c.slotHint && c.slotHint.date === dayKey(Date.now()) ? c.slotHint : null);
+/** Créneau d'aujourd'hui (en cours ou à venir, d'après « Mes disponibilités ») dont le lieu convient à ce sport. */
+function slotHere(sport) {
+  const x = ctx(), now = new Date(), m = now.getHours() * 60 + now.getMinutes(), it = x.activities[sport];
+  for (const s of slotsOn(x.config?.availability?.slots, dayKey(now.getTime()), m)) {
+    const e = s.envId && x.envs.find((v) => v.id === s.envId && !v.archived);
+    if (e && placeSuits(it?.native === false ? '' : sport, e, availableEquipment(x, e.id))) return { slot: s, env: e };
+  }
+  return null;
 }
 // Le brouillon est gardé sur l'appareil (fermeture accidentelle, hors ligne) : ossature, choix, changements appliqués.
 const keep = () => { const { result, reasons, aimDone, bopts, ...rest } = CP(); ls.set(key(), rest); };
@@ -210,7 +231,8 @@ function vBase() {
     ${aimsSummary()}
     ${bad.length ? h`<button class="btn pri big" disabled>⚡ Proposer ma séance</button><p class="tiny warn-t center">Choisis d’abord un lieu avec un mur d’escalade pour ${bad.map((sp) => sportLabel(sp)).join(', ')} (voir « Lieu » plus haut).</p>`
       : h`<button class="btn pri big" data-act="cpQuick">⚡ Proposer ma séance</button><p class="tiny muted center">L’app construit la structure et choisit les exercices pour ${fmtMin(c.minutes)}. Tu pourras tout ajuster ensuite, ou continuer étape par étape pour préciser.</p>`}
-    <details class="card fold" id="cp-controls" ${(c.controlsOpen ?? !!(c.level && c.level !== 'modere' || c.help && c.help !== 'auto')) ? 'open' : ''}><summary data-act="cpControls"><span>🎛️ Plus de contrôle</span></summary>${vHow()}</details>`;
+    <details class="card fold" id="cp-controls" ${(c.controlsOpen ?? !!(c.level && c.level !== 'modere' || c.help && c.help !== 'auto')) ? 'open' : ''}><summary data-act="cpControls"><span>🎛️ Plus de contrôle</span></summary>${vHow()}</details>
+    <button class="setrow" data-act="newSeance"><span class="sic">✍️</span><span class="grow"><b>Je préfère l’écrire moi-même</b><small>Page blanche : tes exercices, ton ordre, tes durées. Aucun choix imposé.</small></span><span class="chev">›</span></button>`;
 }
 const envOptions = (cur, x) => x.envs.map((e) => h`<option value="${e.id}" ${cur === e.id ? 'selected' : ''}>${e.name}</option>`);
 function wallWarn(sp) {
@@ -221,7 +243,7 @@ function wallWarn(sp) {
 }
 function vWhere() {
   const c = CP(), x = ctx(), env = envOf(), eq = [...availableEquipment(x, c.envId)], more = sportsOf(c).slice(1);
-  const sports = [...new Set([...Object.keys(x.activities), ...Object.keys(ACTIVITIES)])].filter((id) => x.activities[id] || ACTIVITIES[id]); // tous les sports, même pas encore dans le profil
+  const sports = [...new Set([...Object.keys(x.activities), ...Object.keys(ACTIVITIES)])].filter((id) => (x.activities[id] || ACTIVITIES[id]) && (proposable(id, c.sport) || more.includes(id))); // tous les sports, même pas encore dans le profil, sauf ceux que tu ne fais jamais
   const multi = more.some((sp) => (c.places?.[sp] || '') && c.places[sp] !== baseEnv(c));
   return h`<div class="card stack">
     <span class="kicker">Sport principal</span><div class="chips">${sports.map((id) => chip(c.sport === id, sportLabel(id), `data-act="cpSport" data-id="${id}"`))}<button type="button" class="chip add" data-act="allGo" data-to="profile/activities">＋ Ajouter un sport</button></div>
@@ -229,6 +251,7 @@ function vWhere() {
     <div class="chips">${sports.filter((id) => id !== c.sport).map((id) => chip(more.includes(id), sportLabel(id), `data-act="cpSport2" data-id="${id}"`))}</div>
     ${more.length ? h`<p class="tiny muted">Dans cette séance (${sportsOf(c).length} sports, autant que tu veux) : <b>${sportsOf(c).map((sp) => sportShort(sp, x.activities)).join(' → ')}</b>. L’app les place selon tes objectifs et les lieux ; tu peux tout déplacer à l’étape 3.</p>` : ''}
     <label>Lieu${more.length ? ` pour ${sportLabel(c.sport)}` : ''}<select data-change="cpEnv"><option value="">${x.defEnv ? 'Par défaut : ' + x.defEnv.name : 'Aucun lieu décrit'}</option>${envOptions(c.envId, x)}<option value="__new">＋ Ajouter un lieu…</option></select></label>
+    ${hintToday(c) && hintToday(c).envId === c.envId ? h`<p class="tiny muted">📍 Lieu de ton créneau du ${DAY_LONG[c.slotHint.day]} (${c.slotHint.from}–${c.slotHint.to}), d’après « Mes disponibilités ».</p>` : ''}
     <p class="tiny ${eq.length ? 'muted' : 'warn-t'}">🧰 ${env ? `Matériel de ${env.name}` : 'Matériel'} : ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun déclaré (séance sans matériel)'} · <button class="linkish acc-t" data-act="allGo" data-to="profile/equipment">modifier</button></p>
     ${more.map((sp) => h`<label>Lieu pour ${sportLabel(sp)}<select data-change="cpEnvFor" data-sp="${sp}"><option value="">Le même que la phase d’avant</option>${envOptions(c.places?.[sp] || '', x)}<option value="__new">＋ Ajouter un lieu…</option></select></label>`)}
     ${multi && !winOn(c) ? h`<label>Trajet entre deux lieux<span class="unitbox"><input type="number" min="0" max="120" step="5" value="${c.travel ?? 15}" data-change="cpTravel" aria-label="Minutes de trajet entre deux lieux"><em>min</em></span></label><p class="tiny muted">Compté dans ton temps disponible, à chaque changement de lieu.</p>` : ''}
@@ -237,7 +260,7 @@ function vWhere() {
     ${isClimb(c.sport) ? sysSelect(kindOf(c.sport)) : ''}
     <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>${c.formeFrom === 'checkin' ? h`<p class="tiny muted">Pré-rempli d’après ton check-in du matin : change-le si besoin.</p>` : ''}
     ${winOn(c) ? h`<p class="small">⏱ Temps disponible : <b>${fmtMin(c.minutes)}</b> <span class="tiny muted">(calculé d’après tes horaires)</span></p>` : h`<span class="kicker">Temps disponible${more.length ? ' (trajets compris)' : ''}</span>
-    <div class="chips">${[30, 45, 60, 90, 120, 150, 180, 240, 300].map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="300" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
+    <div class="chips">${slotMinutes(c) ? chip(c.minutes === slotMinutes(c), `🕒 Mon créneau (${fmtMin(slotMinutes(c))})`, `data-act="cpMin" data-id="${slotMinutes(c)}"`) : ''}${withMyMinutes([30, 45, 60, 90, 120, 150, 180, 240, 300]).filter((m) => m >= 10 && m !== slotMinutes(c)).map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="300" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
 }
 /** Horaires précis : une arrivée et un départ par lieu ; le temps entre deux lieux devient le trajet. */
 function winCard() {
@@ -297,9 +320,9 @@ function vWhy() {
     <span class="kicker">Ou une autre façon de construire la séance</span>
     <div class="setmenu">${OTHER.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : '›'}</span></button>`)}</div>
     <div class="card stack"><span class="kicker">🛡️ Zones à ménager <span class="tiny muted">(facultatif)</span></span>
-      <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div>
+      <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}${addField('zone', 'cpZone')}</div>
       ${(c.painZones || []).filter((z) => (c.zones || []).includes(z)).length ? h`<p class="tiny warn-t">🩹 Pré-coché d’après tes douleurs notées (${c.painZones.filter((z) => (c.zones || []).includes(z)).map((z) => ZONE_LABEL[z]).join(', ')}). Décoche si c’est passé.</p>` : ''}
-      <p class="tiny muted">Les exercices qui les chargent fort sont écartés de cette séance.</p></div>
+      <p class="tiny muted">Les exercices qui les chargent fort sont écartés de cette séance.${(c.zones || []).some(isMine) ? ' Tes zones ajoutées sont rappelées sur chaque exercice : l’app ne sait pas lesquels les chargent.' : ''}</p></div>
     ${aim === 'goals' ? '' : h`<div class="card stack">${wordsField(false)}</div>`}`;
 }
 function aimsCard() {
@@ -750,11 +773,9 @@ ACT.cpForme = (el) => { CP().forme = el.dataset.id; CP().formeFrom = ''; keep();
 ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id; c.result = null; c.built = null; keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };
-ACT.cpIntentWrite = () => { S.gen.activityId = CP().sport; ACT.gWrite?.({ dataset: { k: 'intent' } }); };
-ACT.cpFocusOff = () => { CP().focus = null; keep(); render(); };
-ACT.cpGoal = tog('goalIds'); ACT.cpIntent = tog('intents'); ACT.cpZone = tog('zones');
+ACT.cpZone = tog('zones');
+onChoice('cpZone', { apply: (key) => { const c = CP(); if (!(c.zones || []).includes(key)) c.zones = [...(c.zones || []), key]; keep(); render(); } });
 // Aller ajouter des objectifs, puis revenir à la séance (le brouillon est gardé).
-ACT.cpAddGoals = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'goals'); };
 const WORK_HINT = { run: 'fractionné, seuil…', swim: 'séries, pyramide…', load: 'force, 5×5…', body: 'EMOM, pyramide…' };
 function vPhases() {
   const c = CP(), sports = Object.keys(ctx().activities).filter((id) => !isClimb(id));
@@ -887,8 +908,9 @@ function forYou() {
   const eq = [...availableEquipment(x, c.envId)], other = sportsOf(c).slice(1).map((sp) => [sp, x.envs.find((e) => e.id === placeOfSport(sp, c))]).filter(([, e]) => e && e.id !== baseEnv(c));
   out.push(`📍 ${env ? env.name : 'Sans lieu décrit'}${other.length ? ` (${sportShort(c.sport, x.activities).toLowerCase()})` : ''} : seulement des exercices faisables avec ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun matériel'}.`);
   for (const [sp, e] of other) out.push(`📍 ${e.name} (${sportShort(sp, x.activities).toLowerCase()}) : avec ${[...availableEquipment(x, e.id)].map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() || 'aucun matériel'}.`);
-  const zones = (c.zones || []).map((z) => AVOID_ZONES.find(([k]) => k === z)?.[1]?.replace(/^\S+\s/, '').toLowerCase()).filter(Boolean);
+  const zl = (z) => AVOID_ZONES.find(([k]) => k === z)?.[1]?.replace(/^\S+\s/, '').toLowerCase(), zones = (c.zones || []).filter((z) => !isMine(z)).map(zl).filter(Boolean), own = (c.zones || []).filter(isMine).map(zl).filter(Boolean);
   if (zones.length) out.push(`🛡️ À ménager : ${zones.join(', ')} — les exercices qui les chargent fort sont écartés.`);
+  if (own.length) out.push(`🩹 Rappel sur chaque exercice : ${own.join(', ')} (ajouté par toi ; l’app ne sait pas quels exercices les chargent).`);
   out.push(`📊 Niveau : ${['débutant', 'intermédiaire', 'avancé'][lv.level] || 'débutant'} — ${lv.how}.`);
   if (c.forme && c.forme !== 'ok') out.push(`💡 Ta forme du jour (${FORMES.find(([k]) => k === c.forme)?.[2]?.toLowerCase() || c.forme}) est prise en compte.`);
   return h`<details class="card flat acc-b" open><summary><b class="small">✨ Faite pour toi</b></summary><ul class="clean tight small">${out.map((t) => h`<li>${t}</li>`)}</ul>
@@ -936,11 +958,12 @@ ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
  * une commande au coach… ouvrent toutes l'assistant, déjà rempli. auto : directement à la dernière validation (étape 7) :
  * un toucher sur « Générer », ou retour aux étapes d'avant pour modifier.
  */
-export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true, envId = '' } = {}) {
+export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true, envId = '', words = '' } = {}) {
   closeSheet();
   const help = CP().help || 'auto'; S.cp = null; ls.set(key(), {}); const c = CP(), x = ctx();
   c.help = help; c.sport = sport || c.sport || Object.keys(x.activities)[0] || 'conditioning'; placeFor(c); c.minutes = Math.max(10, Math.min(300, minutes || S.settings.defaultMinutes || 45));
   c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = 'goals'; if (forme) c.forme = forme;
+  if (words) c.intentText = String(words).slice(0, 240); // envie écrite avec ses mots : l'intention de cette séance
   if (envId && x.envs.some((v) => v.id === envId)) { c.envId = envId; c.envPicked = true; } else if (envId === 'none') { c.envId = ''; c.envPicked = true; }
   // Une demande précise (objectif, intention, capacité) remplace les objectifs tirés du profil ; sinon ceux-ci suivent le sport.
   if (c.goalIds.length || intents.length || c.focus) c.aims = [];
@@ -952,7 +975,6 @@ export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', 
 ACT.cpAgain = () => { const c = CP(); c.seed = (c.seed || 1) + 1; if (isClimb(c.sport)) { c.parts = proposeParts(); c.partsFor = partsKey(); } c.result = null; buildNow(); keep(); render(); };
 CHG.cpEnv = (el) => { if (el.value === '__new') { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); return; } CP().envId = el.value; CP().envPicked = true; CP().sys = {}; keep(); render(); };
 CHG.cpSys = (el) => { CP().sys = { ...CP().sys, [el.dataset.k]: el.value }; CP().target = null; keep(); render(); };
-ACT.cpKind = (el) => { CP().kind = el.dataset.id; CP().target = null; keep(); render(); };
 ACT.cpTarget = (el) => { CP().target = Number(el.dataset.id); keep(); render(); };
 CHG.cpTargetSel = (el) => { CP().target = el.value === '' ? null : Number(el.value); keep(); render(); };
 ACT.cpStyle = (el) => { const c = CP(), id = el.dataset.id; c.styles = c.styles.includes(id) ? c.styles.filter((x) => x !== id) : [...c.styles, id]; keep(); render(); };
@@ -979,11 +1001,6 @@ ACT.cpAdd = (el) => {
   c.parts.push(p); c.result = null; c.partsTouched = true; keep(); render(); editPart(c.parts.length - 1);
 };
 ACT.cpExample = () => { CP().parts = proposedPhases(); CP().partsTouched = false; CP().partsFor = partsKey(); CP().result = null; keep(); render(); };
-CHG.cpScale = (el) => {
-  const c = CP(), total = c.parts.reduce((t, p) => t + p.minutes, 0), want = Math.max(20, Math.min(300, Number(el.value) || total));
-  if (!total) return; let acc = 0; c.parts.forEach((p, i) => { p.minutes = i === c.parts.length - 1 ? Math.max(5, want - acc) : Math.max(5, Math.round((p.minutes * want) / total / 5) * 5); acc += p.minutes; });
-  c.result = null; c.partsTouched = true; keep(); render();
-};
 ACT.cpLock = (el) => upd(Number(el.dataset.i), (p) => { const k = el.dataset.k, order = ['free', 'user', 'app'], cur = p.locks?.[k] || 'free'; p.locks = { ...p.locks, [k]: order[(order.indexOf(cur) + 1) % 3] }; });
 ACT.cpPhRole = (el) => upd(Number(el.dataset.i), (p) => { p.role = el.dataset.id; });
 ACT.cpPhAim = (el) => upd(Number(el.dataset.i), (p) => {
@@ -1202,7 +1219,7 @@ ACT.cpDnaSave = async () => {
 ACT.cpDnaOpen = () => {
   const l = dnaList();
   openSheet(h`<div class="stack"><h2 style="margin:0">📂 Mes structures (ADN)</h2><p class="tiny muted">Une structure garde la répartition du temps et les réglages des phases, pas les exercices. Elle s’adapte à ${fmtMin(CP().minutes)}.</p>
-    ${l.length ? h`<div class="setmenu">${l.map((x) => h`<button class="setrow" data-act="cpDnaUse" data-id="${x.id}"><span class="sic">🧬</span><span class="grow"><b>${x.name}</b><small>${x.summary}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">Aucune structure enregistrée : « 💾 Enregistrer la structure » la garde pour la réutiliser.</p>`}
+    ${l.length ? h`<div class="setmenu">${l.map((x) => h`<div class="setrow"><span class="sic">🧬</span><button class="grow rowbtn" data-act="cpDnaUse" data-id="${x.id}"><b>${x.name}</b><small>${x.summary}</small></button><button class="btn sm ghost" data-act="cpDnaDel" data-id="${x.id}" aria-label="Supprimer la structure ${x.name}">🗑</button></div>`)}</div>` : h`<p class="small muted">Aucune structure enregistrée : « 💾 Enregistrer la structure » la garde pour la réutiliser.</p>`}
     <button class="btn" data-act="closeSheet">Fermer</button></div>`);
 };
 ACT.cpDnaUse = (el) => {
@@ -1219,11 +1236,14 @@ ACT.cpModOpen = () => {
   const l = modList(), c = CP();
   openSheet(h`<div class="stack"><h2 style="margin:0">🧩 Insérer un module</h2>
     ${l.length ? h`<label>Position<select data-change="cpModAt">${c.parts.map((p, k) => h`<option value="${k}" ${S.cpModAt === k ? 'selected' : ''}>Avant « ${phaseName(p)} »</option>`)}<option value="${c.parts.length}" ${S.cpModAt == null || S.cpModAt === c.parts.length ? 'selected' : ''}>À la fin</option></select></label>
-      <div class="setmenu">${l.map((x) => h`<button class="setrow" data-act="cpModUse" data-id="${x.id}"><span class="sic">🧩</span><span class="grow"><b>${x.name}</b><small>${fmtMin(x.minutes)}</small></span><span class="chev">›</span></button>`)}</div>`
+      <div class="setmenu">${l.map((x) => h`<div class="setrow"><span class="sic">🧩</span><button class="grow rowbtn" data-act="cpModUse" data-id="${x.id}"><b>${x.name}</b><small>${fmtMin(x.minutes)}</small></button><button class="btn sm ghost" data-act="cpModDel" data-id="${x.id}" aria-label="Supprimer le module ${x.name}">🗑</button></div>`)}</div>`
       : h`<p class="small muted">Aucun module : dans « Régler » d’une phase, « 💾 Enregistrer comme module ».</p>`}
     <button class="btn" data-act="closeSheet">Fermer</button></div>`);
 };
 CHG.cpModAt = (el) => { S.cpModAt = Number(el.value); };
+/** Structures et modules enregistrés : supprimables un par un (la séance en cours n'est pas modifiée). */
+ACT.cpDnaDel = async (el) => { const x = dnaList().find((d) => d.id === el.dataset.id); if (!x || !(await ask(`Supprimer la structure « ${x.name} » ?`, { ok: 'Supprimer', danger: true, detail: 'Ta séance en cours ne change pas.' }))) return ACT.cpDnaOpen(); delItem('sdna', x.id); toast('Structure supprimée'); ACT.cpDnaOpen(); };
+ACT.cpModDel = async (el) => { const x = modList().find((d) => d.id === el.dataset.id); if (!x || !(await ask(`Supprimer le module « ${x.name} » ?`, { ok: 'Supprimer', danger: true, detail: 'Ta séance en cours ne change pas.' }))) return ACT.cpModOpen(); delItem('smodule', x.id); toast('Module supprimé'); ACT.cpModOpen(); };
 ACT.cpModUse = async (el) => {
   const c = CP(), owner = S.user?.id, x = modList().find((d) => d.id === el.dataset.id), m = parseJson(x?.json); if (!m) return toast('Module illisible.');
   const r = insertModule(c.parts, m, S.cpModAt ?? c.parts.length);

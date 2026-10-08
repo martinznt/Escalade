@@ -84,5 +84,4 @@ ACT.notifOpen = () => {
 ACT.notifSeen = (el) => { setSeen([el.dataset.id], el.dataset.v === '1'); repaint(); };
 ACT.notifAllSeen = () => { setSeen(entries().map((e) => e.id), true); repaint(); };
 ACT.notifTour = (el) => { const n = NEWS.find((x) => x.v === el.dataset.v); closeSheet(); if (n) setTimeout(() => startTour({ steps: n.steps }), 150); };
-ACT.notifAdmin = () => { closeSheet(); go('settings', 'admin'); };
 ACT.notifSettings = () => { closeSheet(); go('settings', 'notifs'); };

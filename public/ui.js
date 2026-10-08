@@ -47,11 +47,13 @@ export function relDate(t, now = Date.now()) {
 }
 export const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 export const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-export const rng = (a, b) => (a === b ? `${a}` : `${a}–${b}`);
+const frNum = (v) => String(v).replace('.', ',');
+export const rng = (a, b) => (a === b ? frNum(a) : `${frNum(a)}–${frNum(b)}`);
 export const fmtDur = (s) => { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60), r = s % 60; return m ? (r ? `${m} min ${r}` : `${m} min`) : `${r} s`; };
 export const mmss = (s) => `${Math.floor(s / 60)}:${pad(Math.max(0, s) % 60)}`;
 const secTxt = (a, b) => (a >= 120 ? (a === b ? fmtDur(a) : `${fmtDur(a)} à ${fmtDur(b)}`) : rng(a, b) + ' s');
-export const exLine = (e) => `${e.mode !== 'time' && e.repsMax === 1 && e.repsMin === 1 && /s$/.test(e.unit || '') ? `${e.sets} ${e.sets > 1 ? e.unit : e.unit.replace(/s$/, '')}` : `${e.sets} × ${e.mode === 'time' ? secTxt(e.secMin, e.secMax) : rng(e.repsMin, e.repsMax) + (e.unit ? ' ' + e.unit : '')}${e.perSide ? ' / côté' : ''}`}${e.rest ? ' · repos ' + fmtDur(e.rest) : ''}${e.load ? ' · ' + e.load : ''}`;
+const oneEach = (e) => e.mode !== 'time' && e.repsMax === 1 && e.repsMin === 1;
+export const exLine = (e) => `${oneEach(e) && !e.unit && e.sets === 1 ? '1 fois' : oneEach(e) && /^\d/.test(e.unit || '') ? `${e.sets} × ${e.unit}${e.perSide ? ' / côté' : ''}` : oneEach(e) && /^\S+s(?=\s|$)/.test(e.unit || '') ? `${e.sets} ${e.sets > 1 ? e.unit : e.unit.replace(/^(\S+)s(?=\s|$)/, '$1')}` : `${e.sets === 1 && (e.mode === 'time' || e.unit) ? '' : e.sets + ' × '}${e.mode === 'time' ? secTxt(e.secMin, e.secMax) : rng(e.repsMin, e.repsMax) + (e.unit ? ' ' + e.unit : '')}${e.perSide ? ' / côté' : ''}`}${e.rest ? ' · repos ' + fmtDur(e.rest) : ''}${e.load ? ' · ' + e.load : ''}`;
 
 /* ───────── Messages et feuilles ───────── */
 export function toast(msg, ms = 2800, kind = '') {
@@ -61,14 +63,54 @@ export function toast(msg, ms = 2800, kind = '') {
 }
 export const buzzOk = () => { try { if (navigator.vibrate && document.documentElement.dataset.haptics !== 'off') navigator.vibrate(12); } catch { /* rien */ } };
 let sheetStack = 0;
+/* ═════════ Écran redessiné sans sauter : rubriques et position gardées ═════════ */
+// Un choix (une couleur, un sport, un créneau…) redessine l'écran. Les rubriques <details> que la personne a ouvertes
+// ou fermées ELLE-MÊME (toucher sur le titre) le restent, page par page ; celles que l'app ouvre (créateur, étape…)
+// suivent l'app. Rubriques à état propre : .setsec, [data-free], ou un titre avec data-act (l'app gère son état).
+// Une fenêtre (#sheet) garde ses rubriques tant qu'elle est ouverte ; rouverte plus tard, elle repart de zéro.
+const userOpen = new Map();
+const detailText = (d) => (d.querySelector(':scope > summary')?.textContent || '').replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 80);
+const scopeOf = (root) => (root.id === 'main' ? 'page:' + (location.hash || '#/').split('?')[0] : 'sheet:' + sheetTitle(root));
+function keyOf(root, target) {
+  const seen = new Map();
+  for (const d of root.querySelectorAll('details')) { const t = detailText(d), n = seen.get(t) || 0; seen.set(t, n + 1); if (d === target) return `${scopeOf(root)}|${t}|${n}`; }
+  return '';
+}
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('click', (e) => {
+  const sm = e.target.closest?.('summary'), d = sm?.parentElement;
+  if (!d || d.tagName !== 'DETAILS' || d.matches('.setsec,[data-free]') || sm.matches('[data-act]')) return;
+  const root = d.closest('#sheet > .panel') || d.closest('#main'); if (!root) return;
+  // Écran redessiné entre-temps : c'est l'app qui a répondu au toucher, rien à retenir.
+  setTimeout(() => { if (!d.isConnected) return; const k = keyOf(root, d); if (k) userOpen.set(k, d.open); }, 0);
+}, true);
+/** Réapplique les rubriques ouvertes ou fermées par la personne sur cet écran (après un rendu). */
+export function restoreUserDetails(root) {
+  if (!root || !userOpen.size) return;
+  const seen = new Map(), scope = scopeOf(root);
+  for (const d of root.querySelectorAll('details')) {
+    const t = detailText(d), n = seen.get(t) || 0; seen.set(t, n + 1);
+    if (d.matches('.setsec,[data-free]')) continue;
+    const k = `${scope}|${t}|${n}`; if (userOpen.has(k) && d.open !== userOpen.get(k)) d.open = userOpen.get(k);
+  }
+}
+const sheetTitle = (el) => (el?.querySelector('h2,h3')?.textContent || '').replace(/\d+/g, '#').trim();
+let sheetHook = null;
+/** Appelé après chaque ouverture de fenêtre (ex. liens des indications de chemin). */
+export const onSheetRender = (fn) => { sheetHook = fn; };
 export function openSheet(content, { wide = false } = {}) {
   const s = $('#sheet');
   const body = val(content), close = body.includes('data-act="closeSheet"') ? '' : '<button type="button" class="btn sm ghost" data-act="closeSheet" aria-label="Fermer la fenêtre">Fermer</button>';
+  // La même fenêtre redessinée (même titre) garde sa position et ses rubriques ouvertes.
+  const old = s.classList.contains('open') ? s.querySelector('.panel') : null, oldTitle = sheetTitle(old), keep = old ? { top: old.scrollTop } : null;
   s.innerHTML = `<div class="back" data-act="closeSheet"></div><div class="panel${wide ? ' wide' : ''}" role="dialog" aria-modal="true"><div class="sheet-tools"><div class="grab" aria-hidden="true"></div>${close}</div>${body}</div>`;
+  const panel = s.querySelector('.panel');
+  try { sheetHook?.(panel); } catch { /* un lien de moins, jamais une fenêtre cassée */ }
+  restoreUserDetails(panel);
+  if (keep && oldTitle && sheetTitle(panel) === oldTitle) panel.scrollTop = keep.top;
   s.classList.add('open'); sheetStack++;
   setTimeout(() => { const f = s.querySelector('[autofocus]'); if (f) f.focus(); }, 30);
 }
-export function closeSheet() { const s = $('#sheet'); s.classList.remove('open'); s.innerHTML = ''; sheetStack = 0; }
+export function closeSheet() { const s = $('#sheet'); s.classList.remove('open'); s.innerHTML = ''; sheetStack = 0; for (const k of [...userOpen.keys()]) if (k.startsWith('sheet:')) userOpen.delete(k); }
 export const sheetOpen = () => $('#sheet')?.classList.contains('open');
 
 /** Confirmation dans une feuille (testable, accessible). Résout true / false. */

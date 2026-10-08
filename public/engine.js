@@ -3,6 +3,7 @@
 
 import { normalizeEx, normalizeSession, uid, exKey, norm, parseKg } from './shared.js';
 import { LIBRARY, FOCUS, GROUP_TARGET, GROUP_LABEL, byId } from './library.js';
+import { zoneRisk } from './intentions.js';
 
 const DAY = 86400000, HOUR = 3600000;
 const avg = (a, b) => (a + b) / 2;
@@ -82,8 +83,10 @@ export function exMinutes(ex) {
   let work;
   if (ex.mode === 'time') work = avg(ex.secMin, ex.secMax);
   else {
-    const reps = avg(ex.repsMin, ex.repsMax);
-    const per = ex.repSec > 0 ? ex.repSec : /bloc|voie|essai|passage/i.test(ex.unit) ? 75 : /lancer|mouvement|tenue|lettre/i.test(ex.unit) ? 5 : 3.5;
+    const reps = avg(ex.repsMin, ex.repsMax), swim = (ex.acts || []).includes('swimming');
+    // Distance (« 6 × 400 m », « 5 km ») : environ 6 min par km à pied, 2 min par 100 m à la nage.
+    const dist = /^km$/i.test(ex.unit || '') ? (swim ? 1200 : 360) : /^(m|mètres?|metres?)$/i.test(ex.unit || '') ? (swim ? 1.2 : 0.36) : 0;
+    const per = ex.repSec > 0 ? ex.repSec : dist || (/bloc|voie|essai|passage/i.test(ex.unit) ? 75 : /lancer|mouvement|tenue|lettre/i.test(ex.unit) ? 5 : 3.5);
     work = reps * per;
   }
   const seconds = ex.sets * (work * side + 15) + Math.max(0, ex.sets - 1) * ex.rest;
@@ -275,6 +278,105 @@ function guessEmoji(name, muscles = []) {
   if (/etir|mobilite/.test(t)) return '🧘';
   if (/bloc|voie|grimp/.test(t)) return '🧗';
   return '💪';
+}
+
+/* ═════════════ Saisie libre : un exercice par ligne ═════════════
+ * « 4 × 8 tractions repos 2 min », « 5 min de corde à sauter », « 6 × 400 m repos 1:30 », « Gainage 3 × 30 s »,
+ * « 20 pompes », « Footing 5 km », « Squat 5 × 5 à 60 kg »… Une ligne qui finit par « : » (« Échauffement : »)
+ * ouvre une partie pour les lignes suivantes. Aucune ligne n'est perdue : ce qui n'est pas compris reste le nom de
+ * l'exercice. Un exercice reconnu du catalogue reprend ses explications (consignes, erreurs, muscles). */
+const Q_BULLET = /^\s*(?:[•·▪●○◦►➤→✔✓▸*]+|[-–—]+(?=\s)|\d{1,2}\s*[.)](?=\s|$))\s*/u;
+const Q_NOT = '(?![A-Za-zÀ-ÿ0-9])';
+const Q_REST = new RegExp(`(?:^|[\\s,;(—–-])(?:repos|r[ée]cup(?:[ée]ration)?|pause)\\s*:?\\s*(\\d+\\s*:\\s*\\d{1,2}|\\d+(?:[.,]\\d+)?\\s*(?:min(?:utes?)?|mn|s(?:ec(?:ondes?)?)?)(?:\\s*\\d{1,2}(?:\\s*s(?:ec)?)?)?|\\d+)${Q_NOT}\\)?`, 'i');
+const Q_SIDE = /\s*(?:\(?\s*(?:par|chaque|\/)\s*(?:jambe|c[oô]t[ée]|bras|main|pied)s?\s*\)?)/i;
+const Q_LOAD = new RegExp(`(?:^|\\s)(?:avec|à|a|@|lest[ée]?(?:\\s+de)?)?\\s*(\\+?\\s*\\d+(?:[.,]\\d+)?\\s*kg)${Q_NOT}|(?:^|\\s)(poids du corps|sans charge)${Q_NOT}`, 'i');
+const Q_SETS = new RegExp(`(\\d+)\\s*(?:[x×*]|s[ée]ries?\\s*(?:de|x|×)?)\\s*(\\d+(?:[.,]\\d+)?)(?:\\s*(?:-|–|à)\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(km|m(?:[eè]tres?)?|s(?:ec(?:ondes?)?)?|min(?:utes?)?|mn|r[ée]p(?:[ée]titions?|s)?\\.?|reps?|fois)${Q_NOT}(?:\\s*(\\d{1,2})\\s*(?:s(?:ec)?)?${Q_NOT})?)?`, 'i');
+const Q_HOURS = new RegExp(`(\\d+)\\s*h\\s*(\\d{1,2})?(?:\\s*min)?${Q_NOT}`, 'i');
+const Q_MIN = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(?:min(?:utes?)?|mn)${Q_NOT}(?:\\s*(\\d{1,2})\\s*(?:s(?:ec(?:ondes?)?)?)?${Q_NOT})?`, 'i');
+const Q_SEC = new RegExp(`(\\d+)\\s*(?:s|sec|secondes?)${Q_NOT}`, 'i');
+const Q_DIST = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(km|m(?:[eè]tres?)?)${Q_NOT}`, 'i');
+const qNum = (v) => Number(String(v).replace(',', '.'));
+/** Distance lisible : 1500 m → 1,5 km ; 0,4 km → 400 m. */
+function qDist(v, unit) {
+  let n = qNum(v), u = /^k/i.test(unit) ? 'km' : 'm';
+  if (u === 'm' && n >= 1000) { n /= 1000; u = 'km'; } else if (u === 'km' && n < 1) { n = Math.round(n * 1000); u = 'm'; }
+  return { n: Math.round(n * 100) / 100, u };
+}
+const qPart = (t) => {
+  const k = norm(t);
+  if (/^(echauffement|echauffe|mise en route|warm)/.test(k)) return { block: 'warmup', part: '' };
+  if (/^(retour au calme|etirements?|recuperation|cool)/.test(k)) return { block: 'cool', part: '' };
+  if (/^(corps de (la )?seance|partie principale|principal)/.test(k)) return { block: 'main', part: '' };
+  return { block: 'main', part: sentenceCase(t).slice(0, 40) };
+};
+/** Lit une ligne libre (pure, testée). Renvoie null pour une ligne vide ; { heading } pour un titre de partie. */
+export function parseExerciseLine(line) {
+  let t = String(line || '').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  t = t.replace(Q_BULLET, '').trim();
+  if (!t) return null;
+  if (/^#+\s*/.test(t) || (/:\s*$/.test(t) && !/\d/.test(t))) { const head = t.replace(/^#+\s*/, '').replace(/\s*:\s*$/, '').trim(); if (head) return { heading: head }; }
+  const raw = t, out = {};
+  let m;
+  if ((m = t.match(Q_REST))) { const r = parseRest(m[1]); if (r !== null) out.rest = Math.min(3600, r); t = t.replace(m[0], ' '); }
+  if (Q_SIDE.test(t)) { out.perSide = true; t = t.replace(Q_SIDE, ' '); }
+  if ((m = t.match(Q_LOAD))) { out.load = (m[1] || m[2]).replace(/\s+/g, ' ').replace(/^\+\s*/, '+').trim(); t = t.replace(m[0], ' '); }
+  if ((m = t.match(Q_SETS))) {
+    out.sets = Math.max(1, Math.min(30, Number(m[1])));
+    const u = norm(m[4] || ''), a = qNum(m[2]), b = m[3] ? qNum(m[3]) : a;
+    if (/^(s|sec|secondes?|min|minutes?|mn)$/.test(u)) {
+      const k = u.startsWith('m') ? 60 : 1, extra = u.startsWith('m') && m[5] ? Number(m[5]) : 0;
+      Object.assign(out, { mode: 'time', secMin: Math.round(Math.min(a, b) * k + extra), secMax: Math.round(Math.max(a, b) * k + extra) });
+    } else if (/^(km|m|metres?)$/.test(u)) {
+      const d1 = qDist(Math.min(a, b), u), d2 = qDist(Math.max(a, b), u);
+      Object.assign(out, { mode: 'reps', repsMin: d1.n, repsMax: d1.u === d2.u ? d2.n : d1.n, unit: d1.u });
+    } else Object.assign(out, { mode: 'reps', repsMin: Math.round(Math.min(a, b)), repsMax: Math.round(Math.max(a, b)) });
+    t = t.replace(m[0], ' ');
+  } else if ((m = t.match(Q_HOURS))) {
+    const s = Number(m[1]) * 3600 + (m[2] ? Number(m[2]) * 60 : 0); Object.assign(out, { sets: 1, mode: 'time', secMin: s, secMax: s }); t = t.replace(m[0], ' ');
+  } else if ((m = t.match(Q_MIN))) {
+    const s = Math.round(qNum(m[1]) * 60 + (m[2] ? Number(m[2]) : 0)); Object.assign(out, { sets: 1, mode: 'time', secMin: s, secMax: s }); t = t.replace(m[0], ' ');
+  } else if ((m = t.match(Q_SEC))) {
+    const s = Number(m[1]); Object.assign(out, { sets: 1, mode: 'time', secMin: s, secMax: s }); t = t.replace(m[0], ' ');
+  } else if ((m = t.match(Q_DIST))) {
+    const d = qDist(m[1], m[2]); Object.assign(out, { sets: 1, mode: 'reps', repsMin: d.n, repsMax: d.n, unit: d.u }); t = t.replace(m[0], ' ');
+  } else if ((m = t.match(/^(\d+)\s+(?=[A-Za-zÀ-ÿ])/)) || (m = t.match(/\s(\d+)\s*$/))) {
+    const n = Number(m[1]); Object.assign(out, { sets: 1, mode: 'reps', repsMin: n, repsMax: n }); t = t.replace(m[0], ' ');
+  }
+  let name = t.replace(/\s+/g, ' ').replace(/^[\s—–:,;.()-]+|[\s—–:,;(-]+$/g, '').replace(/^(?:de|d’|d'|du|des)\s+/i, '').replace(/\s+(?:à|a|avec|de|@)$/i, '').trim();
+  if (!/[A-Za-zÀ-ÿ]/.test(name)) name = '';
+  if (!name) name = out.unit ? `${String(out.repsMax).replace('.', ',')} ${out.unit}` : out.mode === 'time' ? 'Effort' : sentenceCase(raw).slice(0, 80);
+  return { name: sentenceCase(name).slice(0, 80), fields: out, understood: Object.keys(out).length > 0 };
+}
+// Reconnaissance stricte (même nom, au pluriel près) : « Fentes » ne devient pas « Fentes bulgares ». Quelques noms
+// courants sans précision ont un équivalent clair ; un squat avec une charge écrite reste tel quel.
+const qKey = (t) => exKey(t).replace(/\([^)]*\)/g, ' ').replace(/[«»"]/g, ' ').split(/\s+/).filter(Boolean).map((w) => (w.length > 3 ? w.replace(/[sx]$/, '') : w)).join(' ');
+const Q_SYN = { squat: 'squat-bw', gainage: 'plank', planche: 'plank', footing: 'run-easy', jogging: 'run-easy', 'course a pied': 'run-easy', mollet: 'calf-raise' };
+function quickLib(name, hasLoad) {
+  const k = qKey(name); if (!k) return null;
+  const hit = LIBRARY.find((x) => qKey(x.name) === k); if (hit) return hit;
+  const syn = Q_SYN[k]; return syn && !(hasLoad && syn === 'squat-bw') ? byId(syn) || null : null;
+}
+/** Plusieurs lignes → exercices prêts pour une séance (pure, testée). */
+export function parseQuickList(text) {
+  const exercises = [];
+  let place = { block: 'main', part: '' }, parts = 0;
+  for (const line of String(text || '').replace(/\r/g, '').split('\n').slice(0, 80)) {
+    const r = parseExerciseLine(line); if (!r) continue;
+    if (r.heading) { place = qPart(r.heading); parts++; continue; }
+    if (exercises.length >= 60) break;
+    const f = r.fields, lib = quickLib(r.name, !!f.load), useLib = lib && !f.sets;
+    const base = lib ? {
+      emoji: lib.emoji, libId: lib.id, ok: lib.cues, bad: lib.bad, muscles: lib.muscles, caps: lib.caps, prim: lib.prim, sec: lib.sec, acts: lib.acts, needs: lib.needs,
+      pattern: lib.pattern, group: lib.group, risk: lib.risk, intensity: lib.intensity, diff: lib.diff, repSec: f.unit ? 0 : lib.repSec, start: lib.start, loadHow: lib.loadHow,
+    } : { emoji: guessEmoji(r.name) };
+    const dose = useLib ? { mode: lib.mode, sets: lib.sets, repsMin: lib.repsMin, repsMax: lib.repsMax, secMin: lib.secMin, secMax: lib.secMax, unit: lib.unit, perSide: lib.perSide, rest: lib.rest }
+      : { sets: 1, mode: 'reps', repsMin: 1, repsMax: 1, unit: '', rest: 0 };
+    const ex = { ...base, ...dose, ...f, name: r.name, block: place.block, part: place.part };
+    if (f.rest == null) ex.rest = useLib ? lib.rest ?? 60 : (ex.sets || 1) > 1 ? lib?.rest ?? 60 : 0;
+    exercises.push(normalizeEx(ex));
+  }
+  return { exercises, parts };
 }
 
 const fmtRest = (s) => (s >= 60 ? `${Math.floor(s / 60)} min${s % 60 ? ' ' + (s % 60) : ''}` : `${s} s`);
@@ -490,7 +592,7 @@ export function generateSession(opts = {}, ctx = {}) {
   const A = analyze(history, now);
   const level = levelFrom(settings);
   const eq = equipmentOf(settings, opts.equipment);
-  const avoid = settings.avoid || {};
+  const avoid = settings.avoid || {}, moreZones = ['wrists', 'back', 'ankles'].filter((z) => avoid[z]);
   const levelSet = !!(settings.level && (settings.level.boulderMax || settings.level.routeMax || settings.level.years));
   const rng = mulberry32(Number.isFinite(opts.seed) ? opts.seed : now % 2147483647);
   const size = SIZES[opts.size] ? opts.size : 'moyenne';
@@ -531,6 +633,7 @@ export function generateSession(opts = {}, ctx = {}) {
     if (avoid.shoulders && SHOULDER_IDS.has(x.id)) return false;
     if (avoid.elbows && ELBOW_IDS.has(x.id)) return false;
     if (avoid.knees && KNEE_IDS.has(x.id)) return false;
+    if (moreZones.length && zoneRisk(x, moreZones).length) return false;
     return true;
   };
 
@@ -765,9 +868,9 @@ export function swapExercise(session, exId, ctx = {}) {
   const eq = equipmentOf(settings);
   const level = levelFrom(settings);
   const inUse = new Set(session.exercises.map((e) => e.libId));
-  const avoid = settings.avoid || {};
+  const avoid = settings.avoid || {}, moreZones = ['wrists', 'back', 'ankles'].filter((z) => avoid[z]);
   const cands = LIBRARY.filter((x) => x.role === lib.role && x.kind === lib.kind && (x.climb !== false) === (lib.climb !== false) && x.id !== lib.id && !inUse.has(x.id) && x.minLevel <= level && x.needs.every((n) => eq[n])
-    && !(x.risk === 'finger' && (avoid.fingers || (x.intensity === 'high' && level < 1))) && !(avoid.shoulders && (x.risk === 'shoulder' || SHOULDER_IDS.has(x.id))) && !(avoid.elbows && ELBOW_IDS.has(x.id)) && !(avoid.knees && KNEE_IDS.has(x.id)));
+    && !(x.risk === 'finger' && (avoid.fingers || (x.intensity === 'high' && level < 1))) && !(avoid.shoulders && (x.risk === 'shoulder' || SHOULDER_IDS.has(x.id))) && !(avoid.elbows && ELBOW_IDS.has(x.id)) && !(avoid.knees && KNEE_IDS.has(x.id)) && !(moreZones.length && zoneRisk(x, moreZones).length));
   if (!cands.length) return session;
   const pick = cands[Math.floor((ctx.rng ? ctx.rng() : Math.random()) * cands.length)];
   const ex = toEx(pick, cur.block);

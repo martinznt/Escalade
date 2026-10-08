@@ -4,8 +4,8 @@
 //  · Progrès › « Ce que l’app a appris sur toi » : forme et fatigue, plateaux et pistes, équilibre pousser / tirer,
 //    règles apprises, charge par zone, prévisions des objectifs, récupération.
 // Tout vient des données de la personne (coachbrain.js, testé) ; ce sont des repères, jamais un diagnostic.
-import { h, raw, openSheet, closeSheet, toast, menuList, lineChart, fmtDay, relDate, ymd, buzzOk } from './ui.js';
-import { S, ACT, SUBMIT, INPUT, ctx, render, putItem, item } from './state.js';
+import { h, raw, openSheet, closeSheet, toast, ask, menuList, lineChart, fmtDay, relDate, ymd, buzzOk } from './ui.js';
+import { S, ACT, SUBMIT, INPUT, ctx, render, putItem, delItem, item } from './state.js';
 import { uid } from './shared.js';
 import { readiness, plateaus, muscleBalance, learnedRules, zoneLoad, painTrend, activePains, painToUpdate, forecast, RETURN_STEPS, ZONE_LABEL, ZONE_EMOJI, HARD_DAY_CHECKLIST } from './coachbrain.js';
 import { painMapSvg, PAIN_ZONES } from './anatomy.js';
@@ -130,7 +130,12 @@ ACT.painZone = (el) => {
     <div class="setmenu">${RETURN_STEPS.map((s, i) => h`<div class="setrow ${i === t.step ? 'on' : ''}"><span class="sic">${i < t.step ? '✅' : i === t.step ? '👉' : '○'}</span><span class="grow"><b>${i + 1}. ${s.title}</b><small>${s.text}</small></span></div>`)}</div>
     <p class="tiny muted">L’étape est suggérée d’après tes notes (une note par jour ou deux suffit). Repère général, pas un avis médical.</p>
     <div class="grid2"><button class="btn pri" data-act="painNew" data-id="${z}">＋ Nouvelle note</button><button class="btn" data-act="painHealed" data-id="${z}">✓ C’est passé</button></div>
-    <details class="how mini"><summary>Historique (${list.length})</summary><ul class="clean tight tiny">${list.map((p) => h`<li>${fmtDay(p.date)} · ${p.healed ? 'passé ✓' : `${p.level}/10`}${p.side ? ` · ${p.side}` : ''}${p.when ? ` · ${WHEN.find(([v]) => v === p.when)?.[1] || ''}` : ''}${p.note ? ` · ${p.note}` : ''}</li>`)}</ul></details></div>`, { wide: true });
+    <details class="how mini"><summary>Historique (${list.length})</summary><ul class="clean tight tiny">${list.map((p) => h`<li class="row between">${fmtDay(p.date)} · ${p.healed ? 'passé ✓' : `${p.level}/10`}${p.side ? ` · ${p.side}` : ''}${p.when ? ` · ${WHEN.find(([v]) => v === p.when)?.[1] || ''}` : ''}${p.note ? ` · ${p.note}` : ''}<button class="btn sm ghost" data-act="painDel" data-id="${p.id}" data-z="${z}" aria-label="Supprimer cette note (erreur)">🗑</button></li>`)}</ul><p class="tiny muted">🗑 : une note faite par erreur (mauvaise zone, mauvais chiffre) ; elle ne compte plus pour ménager la zone.</p></details></div>`, { wide: true });
+};
+ACT.painDel = async (el) => {
+  const p = item('pain', el.dataset.id); if (!p || !(await ask('Supprimer cette note de douleur ?', { ok: 'Supprimer', danger: true, detail: 'À utiliser pour une erreur de saisie ; pour une douleur passée, préfère « ✓ C’est passé ».' }))) return;
+  delItem('pain', el.dataset.id); toast('Note supprimée'); render();
+  if (ctx().pains.some((x) => x.zone === el.dataset.z)) ACT.painZone({ dataset: { id: el.dataset.z } }); else closeSheet();
 };
 ACT.painHealed = (el) => { const z = el.dataset.id; if (!ZONES_ALL.includes(z)) return; putItem('pain', 'pn-' + uid().slice(0, 14), { zone: z, level: 0, side: '', when: '', date: Date.now(), note: '', healed: true }); closeSheet(); buzzOk(); toast(`${ZONE_LABEL[z]} : noté comme passé. La zone n’est plus ménagée.`); render(); };
 /** Carte « Douleurs » de Profil › Mon corps et mes préférences. */

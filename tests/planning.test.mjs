@@ -78,6 +78,30 @@ ok('pilote automatique : ce qui est déjà prévu ou fait compte, vacances = rie
   const env = { id: 'e1', name: 'Salle', hours: [{ d: 0, from: '12:00', to: '14:00' }, { d: 2, from: '12:00', to: '14:00' }, { d: 4, from: '12:00', to: '14:00' }] };
   const w2 = P.weekPlan(ctx0(), { from: MON, perWeek: 2, minutes: 60, envFor: () => env }); assert.ok(w2.sessions.every((s) => s.time === '12:00' || P.isOpen(env, s.date, s.time, s.minutes) !== false));
 });
+ok('créneau avec un lieu : gardé au nettoyage, sport faisable sur place d’abord, lieu inutilisable signalé', () => {
+  const gym = { id: 'abar', name: 'Nicole Abar', type: 'escalade', equipment: ['wall'] }, pool = { id: 'pool', name: 'Piscine', type: 'piscine', equipment: ['pool'] }, envs = { abar: gym, pool };
+  const slots = [{ d: 1, from: '18:00', to: '20:00', envId: 'abar' }, { d: 3, from: '12:00', to: '13:00', envId: 'pool' }, { d: 4, from: '18:00', to: '20:00', envId: 'abar' }];
+  assert.deepEqual(P.cleanSlots([...slots, { d: 2, from: '10:00', to: '11:00', envId: 'pas un id !' }]).map((x) => x.envId || ''), ['abar', '', 'pool', 'abar']);
+  assert.deepEqual(P.cleanSlots([{ d: 1, from: '18:00', to: '20:00', envId: 'abar' }, { d: 1, from: '18:00', to: '20:00', envId: 'pool' }]), [{ d: 1, from: '18:00', to: '20:00', envId: 'abar' }], 'même créneau : le premier gagne');
+  assert.deepEqual(P.slotsOn(slots, plus(MON, 1), 19 * 60).map((x) => x.envId), ['abar'], 'mardi 19 h : créneau en cours'); assert.deepEqual(P.slotsOn(slots, plus(MON, 1), 20 * 60), []);
+  assert.equal(P.placeSuits('climbing_route', gym), 2); assert.equal(P.placeSuits('running', gym), 0); assert.equal(P.placeSuits('strength', gym), 1);
+  assert.equal(P.placeSuits('swimming', pool), 2); assert.equal(P.placeSuits('strength', pool), 0); assert.equal(P.placeSuits('swimming', gym), 0);
+  assert.equal(P.placeSuits('climbing_boulder', { type: 'maison', equipment: ['spraywall'] }), 2, 'pan maison'); assert.equal(P.placeSuits('running', null), 1);
+  const w = P.weekPlan(ctx0(), { from: MON, slots, perWeek: 3, minutes: 90, envById: (id) => envs[id] || null, suits: P.placeSuits });
+  assert.deepEqual(w.sessions.map((s) => [s.date, s.activityId, s.envId, s.time]), [[plus(MON, 1), 'climbing_boulder', 'abar', '18:00'], [plus(MON, 4), 'climbing_boulder', 'abar', '18:00']]);
+  assert.match(w.sessions[0].why[0], /ton créneau du mardi \(18:00–20:00, à « Nicole Abar »\)/);
+  assert.match(w.notes.join(' '), /Le jeudi, aucun de tes sports ne se fait à « Piscine » \(ton créneau\)/);
+  const swim = P.weekPlan(ctx0({ activities: { swimming: {}, strength: {} } }), { from: MON, slots, perWeek: 3, envById: (id) => envs[id] || null, suits: P.placeSuits });
+  assert.equal(swim.sessions.find((s) => s.date === plus(MON, 3))?.activityId, 'swimming', 'jeudi à la piscine : natation');
+  const gone = P.weekPlan(ctx0(), { from: MON, slots, perWeek: 3, envById: () => null, suits: P.placeSuits });
+  assert.equal(gone.sessions.length, 3, 'lieu supprimé : le créneau reste utilisable, sans lieu');
+});
+ok('aujourd’hui : un créneau déjà passé est sauté, un créneau en cours commence au prochain quart d’heure', () => {
+  const two = [{ d: 0, from: '07:00', to: '08:00' }, { d: 0, from: '18:00', to: '20:00' }];
+  assert.deepEqual(P.weekPlan(ctx0(), { from: MON, slots: two, perWeek: 1, minutes: 45 }).sessions.map((s) => [s.date, s.time]), [[MON, '18:00']]);
+  const now = ctx0({ now: D(MON) + 6 * 3600000 + 20 * 60000 }), x = P.weekPlan(now, { from: MON, slots: two, perWeek: 1, minutes: 45 }).sessions[0];
+  assert.deepEqual([x.date, x.time, x.minutes], [MON, '18:30', 45]);
+});
 ok('conflits : veille d’un événement, même créneau, lieu fermé, 3 jours d’affilée, vacances — chacun avec sa correction', () => {
   const env = { id: 'gym', name: 'Salle', hours: [{ d: 2, from: '10:00', to: '20:00' }] };
   const events = [

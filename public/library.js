@@ -6,6 +6,7 @@
 // Ces fiches reprennent des principes d'entraînement courants en escalade — voir SOURCES.
 
 import { MORE } from './library-more.js';
+import { HOWTO } from './library-howto.js';
 
 export const EQUIPMENT = {
   wall: 'Mur / salle d’escalade',
@@ -442,7 +443,7 @@ X('run-intervals-long', 'Fractionné long (3 min)', '⏱️', { kind: 'run', gro
 X('run-hills', 'Côtes', '⛰️', { kind: 'run', group: 'jambes', needs: ['hill'], intensity: 'high', mode: 'time', sets: 6, secMin: 30, secMax: 60, rest: 90,
   caps: cp('force_jambes:.6 seuil:.5 explosivite:.3'), prim: ['quadriceps', 'grand_fessier', 'mollets'], sec: ['ischios'], acts: acts('R'), pattern: 'course', diff: 3,
   cues: ['Monte avec des foulées régulières, redescends en marchant ou trottinant.'], why: 'Force spécifique et puissance aérobie.', src: 'Entraînement course classique' });
-X('run-strides', 'Lignes droites (accélérations)', '💨', { kind: 'run', group: 'jambes', needs: [], intensity: 'mod', mode: 'reps', sets: 6, repsMin: 1, repsMax: 1, unit: 'accélération 80 m', repSec: 20, rest: 60,
+X('run-strides', 'Lignes droites (accélérations)', '💨', { kind: 'run', group: 'jambes', needs: [], intensity: 'mod', mode: 'reps', sets: 6, repsMin: 1, repsMax: 1, unit: 'accélérations de 80 m', repSec: 20, rest: 60,
   caps: cp('vitesse:.7 technique_course:.5'), prim: ['quadriceps', 'ischios'], sec: ['mollets', 'grand_fessier'], acts: acts('R'), pattern: 'course', diff: 2,
   cues: ['Accélère progressivement jusqu’à 90 % de ta vitesse, relâché.'], why: 'Vitesse et relâchement sans fatigue excessive.', src: 'Entraînement course classique' });
 X('run-drills', 'Éducatifs de course', '👟', { kind: 'run', group: 'jambes', needs: [], mode: 'time', sets: 4, secMin: 30, secMax: 30, rest: 30,
@@ -557,6 +558,9 @@ for (const x of L) {
 // élastique ou tapis ; les figures (front lever, drapeau, équilibre sur les mains…) en font partie.
 const BODY_EQ = new Set(['bar', 'dips', 'rings', 'mat', 'band', 'box', 'pole']);
 for (const x of L) if ((x.acts.includes('conditioning') || x.kind === 'skill') && !['run', 'swim'].includes(x.kind) && !/^(run-|shuttle)/.test(x.id) && (x.needs || []).every((n) => BODY_EQ.has(n)) && !x.acts.includes('calisthenics')) x.acts.push('calisthenics');
+
+// 8.34 : comment se placer, où mettre la charge, plus facile / plus dur (library-howto.js ou la fiche elle-même).
+for (const x of L) { const w = HOWTO[x.id] || {}; x.start ||= w.s || ''; x.loadHow ||= w.l || ''; x.easier ||= w.e || ''; x.harder ||= w.h || ''; }
 
 export const LIBRARY = L;
 export const LIB_BY_ID = new Map(L.map((x) => [x.id, x]));

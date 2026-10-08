@@ -18,7 +18,7 @@ export function returnBar() {
   if (here() === r.to || here().startsWith(r.to + '/')) { clearReturn(); return ''; }
   return h`<div class="retbar"><button class="btn sm pri" data-act="navBack">‹ ${r.label}</button><button class="btn sm ic ghost" data-act="navDrop" aria-label="Ne pas revenir">✕</button></div>`;
 }
-ACT.navBack = () => { const r = S.returnTo; clearReturn(); if (!r) return; const [t, sub, ...rest] = r.to.split('/'); go(t, sub, rest.join('/') || undefined); window.scrollTo(0, 0); };
+ACT.navBack = () => { const r = S.returnTo; clearReturn(); if (!r) return; const [t, sub, ...rest] = r.to.split('/'); go(t, sub, rest.join('/') || undefined); };
 ACT.navDrop = () => { clearReturn(); import('./state.js').then((m) => m.render()); };
 
 /* Raccourcis contextuels (hints.js) : en haut de la page, 2 au plus, seulement quand ils servent. */
@@ -34,7 +34,7 @@ export function hintsBar() {
 ACT.hintGo = (el) => {
   const x = shown[Number(el.dataset.i)]; if (!x) return;
   const cur = `${S.tab}/${S.sub?.[S.tab] || ''}${S.param ? '/' + S.param : ''}`;
-  if (x.go) { setReturn(x.back || 'Retour', cur); const [t, sub] = x.go.split('/'); go(t, sub); window.scrollTo(0, 0); }
+  if (x.go) { setReturn(x.back || 'Retour', cur); const [t, sub] = x.go.split('/'); go(t, sub); }
   else if (x.act) ACT[x.act]?.({ dataset: {} });
 };
 ACT.hintOff = (el) => { const off = new Set(ls.get(OFF, []) || []); off.add(el.dataset.id); ls.set(OFF, [...off]); render(); };

@@ -1,18 +1,24 @@
 // Planning et bilan courts, sur les API calendrier/historique et l'outbox existantes.
 import { h, openSheet, closeSheet, toast, ymd, ask, fmtDay } from './ui.js';
-import { S, accountToken, accountMatches, ACT, SUBMIT, CHG, api, ctx, saveEvent, addHistory, updateHistory, deleteHistory, getSeance, render, go, putItem } from './state.js';
+import { proposable } from './sportprefs.js';
+import { S, accountToken, accountMatches, ACT, SUBMIT, CHG, api, ctx, saveEvent, deleteEvent, addHistory, updateHistory, deleteHistory, getSeance, render, go, putItem } from './state.js';
 import { uid } from './shared.js';
 import { ACTIVITIES } from './model.js';
 import { agendaEvents, occurrenceChange, splitSeries, exceptionId, validDay, dayInZone, journalEntries, parseAgendaText } from './agenda.js';
 import { parseQuickActivities } from './experience.js';
 import { aiEvidence, aiProposalReady } from './srcui.js';
+import { slotsOn, toMin, DAY_LONG } from './planning.js';
 const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris';
 const DAYS = [[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],[6,'Samedi'],[0,'Dimanche']];
 const today = () => dayInZone(Date.now(), zone());
 const activities = () => ({ ...ACTIVITIES, ...ctx().activities });
 const label = (id) => activities()[id]?.label || id;
-const options = (current) => Object.entries(activities()).filter(([,a]) => !a.archived).map(([k,a]) => h`<option value="${k}" ${current === k ? 'selected' : ''}>${a.emoji || ''} ${a.label}</option>`);
+const options = (current) => Object.entries(activities()).filter(([id,a]) => !a.archived && proposable(id, current)).map(([k,a]) => h`<option value="${k}" ${current === k ? 'selected' : ''}>${a.emoji || ''} ${a.label}</option>`);
 const at = (id, date) => agendaEvents(S.events, date).find((e) => e.id === id || e.sourceId === id);
+/** Lieu écrit → lieu décrit du même nom (son matériel servira à préparer la séance) ; sinon le texte seul. */
+const placeMeta = (meta, place) => { const p = String(place || '').trim().slice(0, 80), env = p && ctx().envs.find((v) => !v.archived && v.name.toLocaleLowerCase() === p.toLocaleLowerCase()); const { envId, ...rest } = meta || {}; return { ...rest, place: p, ...(env ? { envId: env.id } : {}) }; };
+const placeOf = (e) => e.meta?.place || ctx().envs.find((v) => v.id === e.meta?.envId)?.name || '';
+const placesList = () => h`<datalist id="agenda-places">${ctx().envs.filter((v) => !v.archived).map((v) => h`<option value="${v.name}"></option>`)}</datalist>`;
 const editableQuickLog = (entry) => !!entry.data?.quickLog && Array.isArray(entry.data.exercises) && entry.data.exercises.length === 0;
 const reminderField = (current = 0, timeZone = zone()) => {
   const values=[0,10,30,60];if(Number.isInteger(Number(current)) && Number(current)>0 && !values.includes(Number(current)))values.push(Number(current));
@@ -36,14 +42,18 @@ export function agendaDayCards(date) {
 }
 export function openActivityPlan(date = today(), draft = {}) {
   S.agendaDraft = { date, activityId: Object.keys(ctx().activities)[0] || 'climbing_route', days: [], ...draft };
-  const d = S.agendaDraft;
+  const d = S.agendaDraft, c = ctx();
+  // 8.34 : premier affichage d'un jour où tu as un créneau (« Mes disponibilités ») → heure, durée et lieu pré-remplis.
+  const sl = !Object.keys(draft).length ? slotsOn(c.config?.availability?.slots, d.date)[0] : null, slEnv = sl?.envId && c.envs.find((e) => e.id === sl.envId && !e.archived);
+  if (sl) { d.time = sl.from; d.minutes = toMin(sl.to) - toMin(sl.from); if (slEnv) d.place = slEnv.name; d.slotNote = `${DAY_LONG[sl.d]} ${sl.from}–${sl.to}${slEnv ? ` à ${slEnv.name}` : ''}`; }
   openSheet(h`<h2>Planifier une activité</h2><p class="small muted">Un rendez-vous sportif suffit. Tu compléteras ce que tu as fait après.</p>
     <form data-submit="agendaParse" class="row"><label class="grow">Dis-le simplement<input name="text" maxlength="300" placeholder="Tous les mardis et vendredis, voie à ma salle"></label><button class="btn" type="submit">Préparer</button></form>
     <form data-submit="agendaSave" class="stack"><label>Activité<select name="activityId">${options(d.activityId)}</select></label>
-      <label>Lieu<input name="place" maxlength="80" value="${d.place || ''}" placeholder="Ma salle, maison…" list="agenda-places"></label><datalist id="agenda-places">${ctx().envs.map((e) => h`<option value="${e.name}"></option>`)}</datalist>
+      <label>Lieu<input name="place" maxlength="80" value="${d.place || ''}" placeholder="Ma salle, maison…" list="agenda-places"></label>${placesList()}
       <fieldset><legend>Répéter chaque semaine <span class="tiny muted">(facultatif)</span></legend><div class="chips">${DAYS.map(([v,l]) => h`<label class="chk"><input type="checkbox" name="days" value="${v}" ${d.days.includes(v) ? 'checked':''}>${l}</label>`)}</div></fieldset>
       <label>Début<input type="date" name="date" value="${d.date}" required></label>
-      <details class="how mini"><summary>Heure, durée, rappel et autres options</summary><label>Heure (facultative)<input type="time" name="time" value="${d.time || ''}"></label>${reminderField(d.reminderMin)}<label>Durée prévue en minutes (facultative)<input type="number" name="minutes" min="1" max="1440" value="${d.minutes || ''}"></label><label>Fin de la répétition (facultative)<input type="date" name="until" value="${d.until || ''}"></label><label>Associer une séance (facultatif)<select name="sessionId"><option value="">Activité libre</option>${S.seances.items.filter((s) => !s.archived).map((s) => h`<option value="${s.id}">${s.name}</option>`)}</select></label><p class="tiny muted">Tu peux aussi exporter ou abonner ton agenda.</p></details>
+      ${d.slotNote ? h`<p class="tiny muted">🕒 Pré-rempli d’après ton créneau du ${d.slotNote} (heure, durée${d.place ? ', lieu' : ''}) : change-le si besoin.</p>` : ''}
+      <details class="how mini" ${d.slotNote ? 'open' : ''}><summary>Heure, durée, rappel et autres options</summary><label>Heure (facultative)<input type="time" name="time" value="${d.time || ''}"></label>${reminderField(d.reminderMin)}<label>Durée prévue en minutes (facultative)<input type="number" name="minutes" min="1" max="1440" value="${d.minutes || ''}"></label><label>Fin de la répétition (facultative)<input type="date" name="until" value="${d.until || ''}"></label><label>Associer une séance (facultatif)<select name="sessionId"><option value="">Activité libre</option>${S.seances.items.filter((s) => !s.archived).map((s) => h`<option value="${s.id}">${s.name}</option>`)}</select></label><p class="tiny muted">Tu peux aussi exporter ou abonner ton agenda.</p></details>
       <p class="tiny muted">Fuseau : ${zone()}. Relis les jours et le lieu avant d’enregistrer.</p><button class="btn pri" type="submit">Enregistrer le planning</button></form>`);
 }
 ACT.agendaPlan = (el) => openActivityPlan(el.dataset.date || today());
@@ -53,10 +63,9 @@ SUBMIT.agendaSave = (form) => {
   const f = new FormData(form), d = Object.fromEntries(f), days = f.getAll('days').map(Number);
   if (!validDay(d.date) || (d.until && (!validDay(d.until) || d.until < d.date))) { toast('Vérifie les dates de début et de fin.', 4000, 'bad'); return; }
   const reminderMin=Number(d.reminderMin || 0);if(!Number.isInteger(reminderMin) || reminderMin<0 || reminderMin>1440 || (reminderMin>0 && !d.time)){toast('Renseigne une heure pour recevoir le rappel.',4000,'bad');return;}
-  const env = ctx().envs.find((e) => e.name.toLocaleLowerCase() === String(d.place).trim().toLocaleLowerCase());
   const ev = { id: uid(), date:d.date, time:d.time || '', title:label(d.activityId)+(d.place ? ' · '+String(d.place).trim():''), sessionId:d.sessionId || null, completed:false,
     recurrence:days.length ? { freq:'weekly', days, until:d.until || null, timeZone:zone() }:null,
-    meta:{ kind:'activity',activityId:d.activityId,place:String(d.place).trim(),reminderMin,...(env ? {envId:env.id}:{}),...(d.minutes ? {minutes:Number(d.minutes)}:{}) } };
+    meta:{ ...placeMeta({ kind:'activity',activityId:d.activityId }, d.place),reminderMin,...(d.minutes ? {minutes:Number(d.minutes)}:{}) } };
   saveEvent(ev); closeSheet(); render(); toast('Planning enregistré'); go('home','cal');
 };
 export function openQuickLog(date = today(), event, parsed = [], evidence = null) {
@@ -116,26 +125,32 @@ ACT.agendaMiss = async(el) => {
 };
 ACT.agendaEdit = (el) => {
   const e=at(el.dataset.id,el.dataset.date);if(!e)return;S.agendaEdit=e;
-  openSheet(h`<h2>Modifier / déplacer</h2><form data-submit="agendaEditSave" class="stack"><label>Nom<input name="title" value="${e.title}" maxlength="120" required></label><label>Date<input type="date" name="date" value="${e.on}" required></label><label>Heure<input type="time" name="time" value="${e.time||''}"></label>${reminderField(e.meta?.reminderMin,e.recurrence?.timeZone)}<label>Lieu<input name="place" value="${e.meta?.place||''}" maxlength="80"></label>
+  openSheet(h`<h2>Modifier / déplacer</h2><form data-submit="agendaEditSave" class="stack"><label>Nom<input name="title" value="${e.title}" maxlength="120" required></label><label>Date<input type="date" name="date" value="${e.on}" required></label><label>Heure<input type="time" name="time" value="${e.time||''}"></label>${reminderField(e.meta?.reminderMin,e.recurrence?.timeZone)}<label>Lieu<input name="place" value="${placeOf(e)}" maxlength="80" list="agenda-places"></label>${placesList()}
     <label>Séance associée (facultative)<select name="sessionId"><option value="">Activité libre</option>${S.seances.items.filter((s)=>!s.archived).map((s)=>h`<option value="${s.id}" ${e.sessionId===s.id?'selected':''}>${s.name}</option>`)}</select></label>
     <label>Appliquer à<select name="scope"><option value="one">Cette occurrence seulement</option>${e.recurrence ? h`<option value="future">Cette occurrence et les suivantes</option><option value="series">Toute la série à venir (historique conservé)</option>`:''}</select></label>${e.recurrence ? h`<fieldset><legend>Jours de la série</legend><div class="chips">${DAYS.map(([v,l]) => h`<label class="chk"><input name="days" type="checkbox" value="${v}" ${(e.recurrence.days || [new Date(e.planned.date+'T12:00:00').getDay()]).includes(v)?'checked':''}>${l}</label>`)}</div></fieldset>`:''}
-    <button class="btn pri" type="submit">Enregistrer les changements</button></form>${e.recurrence ? h`<button class="btn danger" data-act="agendaStop">Arrêter la répétition à partir de cette occurrence</button>`:''}<button class="btn danger" data-act="agendaCancel">Annuler cette occurrence</button>`);
+    <button class="btn pri" type="submit">Enregistrer les changements</button></form>${e.recurrence ? h`<button class="btn danger" data-act="agendaStop">Arrêter la répétition à partir de cette occurrence</button>`:''}<button class="btn danger" data-act="agendaCancel">Annuler cette occurrence</button><button class="btn ghost danger" data-act="agendaDelete">🗑 ${e.recurrence ? 'Supprimer toute la série du planning' : 'Supprimer du planning'}</button>`);
 };
 SUBMIT.agendaEditSave = (form) => {
   const data=new FormData(form),f=Object.fromEntries(data),e=S.agendaEdit,base=S.events.find((x) => x.id===e.sourceId);if(!validDay(f.date))return;
   const reminderMin=Number(f.reminderMin || 0);if(!Number.isInteger(reminderMin) || reminderMin<0 || reminderMin>1440 || (reminderMin>0 && !f.time)){toast('Renseigne une heure pour recevoir le rappel.',4000,'bad');return;}
-  const patch={title:f.title,time:f.time,date:f.date,sessionId:f.sessionId || null,completed:e.completed,meta:{...e.meta,place:f.place,reminderMin}};
+  const patch={title:f.title,time:f.time,date:f.date,sessionId:f.sessionId || null,completed:e.completed,meta:{...placeMeta(e.meta,f.place),reminderMin}};
   if(f.scope==='one')saveEvent(occurrenceChange(base,e.occurrenceDate,patch));
   else {
     const from=f.scope==='series' ? (today()>base.date?today():base.date):e.occurrenceDate;
     if(f.date<from){toast('Les changements de série doivent commencer à cette date ou après.');return;}
     const days=data.getAll('days').map(Number);if(!days.length){toast('Choisis au moins un jour.');return;}
-    const [old,next]=splitSeries(base,from,uid(),{...patch,date:f.date,meta:{...base.meta,place:f.place,reminderMin},recurrence:{...base.recurrence,days}});
+    const [old,next]=splitSeries(base,from,uid(),{...patch,date:f.date,meta:{...placeMeta(base.meta,f.place),reminderMin},recurrence:{...base.recurrence,days}});
     saveEvent(old);saveEvent(next);
   }
   closeSheet();render();toast('Planning mis à jour, bilans passés conservés');
 };
 ACT.agendaStop = async() => {const e=S.agendaEdit,base=S.events.find((x) => x.id===e.sourceId);if(!(await ask('Arrêter les occurrences à partir de cette date ? Les bilans passés sont conservés.')))return; const [old]=splitSeries(base,e.occurrenceDate,uid());saveEvent(old);closeSheet();render();};
+/** Supprimer vraiment (créé par erreur, plus d'actualité) : les bilans déjà enregistrés restent dans l'historique. */
+ACT.agendaDelete = async () => {
+  const e=S.agendaEdit,base=e && S.events.find((x) => x.id===e.sourceId);if(!base)return;
+  if(!(await ask(base.recurrence ? `Supprimer toute la série « ${base.title || 'Activité'} » du planning ?` : `Supprimer « ${base.title || 'Activité'} » du planning ?`,{ok:'Supprimer',danger:true,detail:'Les bilans déjà enregistrés restent dans ton historique.'})))return;
+  deleteEvent(base.id);closeSheet();render();toast('Supprimé du planning');
+};
 ACT.agendaCancel = () => {const e=S.agendaEdit,base=S.events.find((x) => x.id===e.sourceId);saveEvent(occurrenceChange(base,e.occurrenceDate,{date:e.on,completed:false,meta:{...e.meta,status:'cancelled'}}));closeSheet();render();};
 
 ACT.quickAi = async (el) => {

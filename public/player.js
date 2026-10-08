@@ -26,6 +26,8 @@ import { exWhat, exUse, exWhyHere } from './explain.js';
 import { FEELS, nextSetAdvice, restTip, toSupersets, mergeLog, snapshot, canResume, playerSnapshotKey } from './live.js';
 import { adaptSession } from './adapt.js';
 import { AVOID_ZONES } from './intentions.js';
+import { isMine } from './choices.js';
+import { addField, onChoice, myZonesOn, withMyMinutes } from './views-choices.js';
 
 
 let wakeLock = null, timer = null;
@@ -178,8 +180,14 @@ function stepper(k, value, unit, label) { return h`<div class="center"><div clas
 function cues(ex, sess) {
   const use = exUse(ex), here = sess ? exWhyHere(ex, sess) : '';
   const brief = h`<details class="how mini"><summary>🧐 C’est quoi ? À quoi ça sert ?</summary><p class="small"><b>C’est quoi ?</b> ${exWhat(ex)}</p>${use ? h`<p class="small"><b>À quoi ça sert ?</b> ${use}</p>` : ''}${here ? h`<p class="small"><b>Pourquoi ici ?</b> ${here}</p>` : ''}</details>`;
-  if (!ex.ok.length && !ex.bad.length) return h`<div class="card cues">${brief}</div>`;
-  return h`<div class="card cues">${ex.ok.length ? h`<b>📋 Consignes</b><ul>${ex.ok.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${ex.bad.length ? h`<b class="small">⚠️ À éviter</b><ul class="bad">${ex.bad.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${brief}</div>`;
+  // Séances plus anciennes : la position de départ et la charge viennent de la fiche du catalogue.
+  const lib = ex.libId ? byId(ex.libId) : null, start = ex.start || lib?.start || '', load = ex.loadHow || lib?.loadHow || '';
+  // Zones ajoutées par la personne (Profil › Mes ajouts, ou choisies pour cette séance) : l'app ne sait pas quels
+  // exercices les chargent, elle les rappelle donc sur chaque exercice.
+  const spare = [...new Set([...(sess?.context?.spare || []), ...myZonesOn().map((x) => x.label)])];
+  const setup = h`${spare.length ? h`<p class="small warn-t">🩹 À ménager : ${spare.join(', ').toLowerCase()}. Si cet exercice gêne, passe-le ou remplace-le.</p>` : ''}${start ? h`<p class="small"><b>🧍 Départ :</b> ${start}</p>` : ''}${load ? h`<p class="small"><b>🏋️ Charge :</b> ${load}</p>` : ''}`;
+  if (!ex.ok.length && !ex.bad.length) return h`<div class="card cues">${setup}${brief}</div>`;
+  return h`<div class="card cues">${setup}${ex.ok.length ? h`<b>📋 Consignes</b><ul>${ex.ok.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${ex.bad.length ? h`<b class="small">⚠️ À éviter</b><ul class="bad">${ex.bad.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${brief}</div>`;
 }
 function vSet(p) {
   const ex = cur(), t = ex.mode === 'time', working = p.phase === 'work';
@@ -323,18 +331,25 @@ Object.assign(ACT, {
   },
   pHurt: () => {
     openSheet(h`<div class="stack"><h2 style="margin:0">🩹 Où as-tu mal ?</h2><p class="tiny muted">La suite de la séance est adaptée pour ménager cette zone, pour cette fois. La douleur est aussi notée dans ton suivi (Profil › Mon corps et mes préférences).</p>
-      <div class="chips">${AVOID_ZONES.map(([k, l]) => chip(false, l, `data-act="pHurtZone" data-id="${k}"`))}</div>
+      <div class="chips">${AVOID_ZONES.map(([k, l]) => chip(false, l, `data-act="pHurtZone" data-id="${k}"`))}${addField('zone', 'pHurt')}</div>
       <p class="tiny warn-t">Douleur vive, craquement, gonflement ou fourmillements : arrête la séance.</p><button class="btn" data-act="pHurtStop">⏹ Arrêter la séance</button></div>`);
   },
-  pHurtZone: (el) => { if (!ownsPlayer()) return; const z = el.dataset.id; putItem('pain', 'pn-' + uid().slice(0, 14), { zone: z, level: 5, side: '', when: 'effort', date: Date.now(), note: `Pendant « ${S.player.s.name} »`, healed: false }); closeSheet(); adaptRest({ zones: [z] }); },
+  pHurtZone: (el) => {
+    if (!ownsPlayer()) return; const z = el.dataset.id;
+    // Zone ajoutée par la personne : notée (zone « autre » + son nom), sans adaptation inventée.
+    if (isMine(z)) { const label = AVOID_ZONES.find(([k]) => k === z)?.[1]?.replace(/^\S+\s/, '') || 'zone'; putItem('pain', 'pn-' + uid().slice(0, 14), { zone: 'other', level: 5, side: '', when: 'effort', date: Date.now(), note: `${label} · pendant « ${S.player.s.name} »`.slice(0, 300), healed: false }); closeSheet(); toast(`Noté : ${label.toLowerCase()}. L’app ne sait pas quels exercices la chargent : passe ou remplace ceux qui gênent, ou arrête la séance.`, 6000); return; }
+    putItem('pain', 'pn-' + uid().slice(0, 14), { zone: z, level: 5, side: '', when: 'effort', date: Date.now(), note: `Pendant « ${S.player.s.name} »`, healed: false }); closeSheet(); adaptRest({ zones: [z] });
+  },
   pHurtStop: () => { closeSheet(); finish(true); },
   pTime: () => {
-    openSheet(h`<div class="stack"><h2 style="margin:0">⏱ Il me reste…</h2><div class="chips">${[5, 10, 15, 20, 30, 45].map((m) => chip(false, `${m} min`, `data-act="pTimeGo" data-id="${m}"`))}</div>
+    openSheet(h`<div class="stack"><h2 style="margin:0">⏱ Il me reste…</h2><div class="chips">${withMyMinutes([5, 10, 15, 20, 30, 45]).map((m) => chip(false, `${m} min`, `data-act="pTimeGo" data-id="${m}"`))}${addField('minutes', 'pTime')}</div>
       <label class="chk"><input type="checkbox" id="pss"> ⚡ Enchaîner par deux (deux exercices de groupes différents en alternance, sans repos entre eux)</label>
       <p class="tiny muted">On garde ce qui compte le plus pour ta séance ; séries et repos raccourcis si besoin.</p></div>`);
   },
   pTimeGo: (el) => { const ss = !!document.getElementById('pss')?.checked; closeSheet(); adaptRest({ minutes: Number(el.dataset.id), supersets: ss }); },
 });
+onChoice('pHurt', { apply: (key) => ACT.pHurtZone({ dataset: { id: key } }) });
+onChoice('pTime', { builtins: () => [5, 10, 15, 20, 30, 45], apply: (key, el, r) => ACT.pTimeGo({ dataset: { id: String(r.n) } }) });
 /** Adapte la suite de la séance en cours (exercice en cours inclus s'il n'est pas commencé). La séance d'origine ne change pas. */
 function adaptRest({ minutes = 0, zones = [], supersets = false } = {}) {
   const p = S.player; if (!ownsPlayer(p) || p.phase === 'done') return;

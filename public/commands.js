@@ -9,7 +9,7 @@ const norm = (s) => String(s || '').toLocaleLowerCase('fr-FR').normalize('NFD').
 /** Suggestions du coach : routes existantes et commandes relues par le parseur, jamais exécutées automatiquement. */
 export const COACH_ROUTES = {
   'home/dash': 'Accueil', 'home/cal': 'Calendrier', 'library/home': 'Bibliothèque', 'library/seances': 'Mes séances', 'library/catalog': 'Séances prêtes',
-  'profile/home': 'Moi', 'profile/goals': 'Mes objectifs', 'profile/equipment': 'Mes lieux et matériel', 'profile/memory': 'Mémoire d’entraînement',
+  'profile/home': 'Profil', 'profile/goals': 'Mes objectifs', 'profile/equipment': 'Mes lieux et matériel', 'profile/memory': 'Mémoire d’entraînement',
   'progress/summary': 'Progrès', 'progress/journal': 'Journal', 'settings/main': 'Paramètres', 'settings/display': 'Affichage et accessibilité', 'settings/notifs': 'Notifications et rappels', 'settings/help': 'Aide',
 };
 const COACH_COMMANDS = new Set(['generate', 'adaptDuration', 'redo', 'today', 'showRecords', 'showProgress', 'search', 'blockers', 'whyNoProgress', 'plan']);

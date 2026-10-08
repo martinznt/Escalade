@@ -47,7 +47,7 @@ const CONTEXT = { env: ['id'], place: ['s', 80], kind: ['e', ['salle', 'falaise'
 
 // Modification « pour moi » d'un exercice ou d'une séance prête du catalogue (id = celui de l'élément modifié).
 const EX_EDIT = { name: ['s', 80], emoji: ['s', 8], sets: ['n', 1, 20, null], repsMin: ['n', 0, 500, null], repsMax: ['n', 0, 500, null], secMin: ['n', 0, 7200, null], secMax: ['n', 0, 7200, null], rest: ['n', 0, 3600, null],
-  cues: ['strs', 8, 200], bad: ['strs', 6, 200], why: ['s', 240], what: ['s', 240], hidden: ['b'] };
+  cues: ['strs', 8, 200], bad: ['strs', 6, 200], why: ['s', 240], what: ['s', 240], start: ['s', 300], loadHow: ['s', 300], easier: ['s', 300], harder: ['s', 300], hidden: ['b'] };
 const CAT_EDIT = { name: ['s', 80], emoji: ['s', 8], why: ['s', 400], minutes: ['n', 5, 300, null], tips: ['strs', 5, 200], exjson: ['s', 4000], hidden: ['b'] };
 export const SCHEMAS = {
   exedit: EX_EDIT, catedit: CAT_EDIT,
@@ -154,6 +154,12 @@ export const SCHEMAS = {
   // 8.30 — saison de 4 semaines autour d'un thème, et lettre à soi-même (scellée jusqu'à openAt).
   season: { theme: ['e', ['regularite', 'doigts', 'mobilite', 'endurance', 'recup', 'variete'], 'regularite'], start: ['n', 0, 9e15, 0], closed: ['b'], won: ['b'] },
   letter: { text: ['s', 3000], writtenAt: ['n', 0, 9e15, 0], openAt: ['n', 0, 9e15, 0], openedAt: ['n', 0, 9e15, 0], snap: ['s', 300] },
+  // 8.34 — « ＋ Ajouter le mien » : un choix ajouté par la personne à une liste de l'app (choices.js), identifiant « my-… ».
+  // n = durée (liste « minutes ») ; on = zone à ménager cochée en ce moment.
+  choice: { list: ['e', ['zone', 'equipment', 'envie', 'minutes', 'muscled', 'physique', 'fall', ''], ''], label: ['s', 40], n: ['n', 1, 300, null], on: ['b'] },
+  // 8.34 — « Mes chronos » : un chrono réglé, gardé pour le relancer en un toucher (relu par timerConfig, bornes comprises).
+  chrono: { name: ['s', 60], format: ['e', ['emom', 'amrap', 'fortime', 'intervals', 'countdown', 'stopwatch'], 'intervals'], every: ['n', 10, 600, null], minutes: ['n', 0, 300, null], cap: ['n', 0, 180, null],
+    secs: ['n', 0, 59, null], work: ['n', 1, 600, null], rest: ['n', 0, 600, null], reps: ['n', 1, 50, null], sets: ['n', 1, 20, null], setRest: ['n', 0, 900, null], text: ['s', 2400] },
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
   habit: { key: ['s', 120], decision: ['e', ['accepted', 'dismissed'], 'dismissed'] },
   // Configuration personnelle (tableau de bord, environnement par défaut…) : un item par clé.
@@ -182,10 +188,13 @@ export const SCHEMAS = {
     // Notifications cochées « vu » (item « inbox »).
     seenIds: ['strs', 200, 40],
     // 8.30 — disponibilités (item « availability ») et pause vacances / blessure (item « pause »).
-    slots: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 21],
+    // 8.34 — lieu facultatif de chaque créneau (« le mardi de 18 h à 20 h, je suis à ma salle »).
+    slots: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5], envId: ['id'] }, 21],
     pauseMode: ['e', ['', 'vacances', 'blesse'], ''], pauseFrom: ['day'], pauseTo: ['day'], pauseNote: ['s', 120],
     // 8.30 — séances du carnet mises en favori (item « catalog »).
     favs: ['strs', 300, 60],
+    // 8.34 — sports que je ne fais jamais (item « sports ») et ceux dont exercices et séances prêtes sont masqués.
+    never: ['strs', 20, 40], neverHide: ['strs', 20, 40],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);

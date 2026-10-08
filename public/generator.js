@@ -38,7 +38,7 @@ export const BODY_WORDS = {
 
 /* ───────── Budget de temps (échauffement / corps / retour au calme) ───────── */
 export function budget(minutes, light = false) {
-  const m = clamp(minutes, 5, 240, 30);
+  const m = clamp(minutes, 5, 300, 30);
   if (m <= 7) return { warm: 1, main: m - 1, cool: 0, maxN: 1 };
   if (m <= 12) return { warm: 2, main: m - 3, cool: 1, maxN: 2 };
   if (m <= 20) return { warm: 3, main: m - 5, cool: 2, maxN: 3 };
@@ -134,7 +134,7 @@ export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, 
     if (avoid.shoulders && (x.risk === 'shoulder' || SHOULDER.has(x.id))) why.push('épaules à ménager (ton réglage)');
     if (avoid.elbows && ELBOW.has(x.id)) why.push('coudes à ménager (ton réglage)');
     if (avoid.knees && KNEE.has(x.id)) why.push('genoux à ménager (ton réglage)');
-    why.push(...zoneRisk(x, zones));
+    why.push(...zoneRisk(x, [...new Set([...zones, ...['wrists', 'back', 'ankles'].filter((z) => avoid[z])])]));
     (why.length ? excluded : ok).push(why.length ? { x, why } : x);
   }
   return { ok, excluded };
@@ -154,7 +154,7 @@ function hypertrophyScheme(ex, lib, plan) {
 export function planSession(opts = {}, ctx) {
   const activityId = opts.activityId || Object.keys(ctx.activities)[0] || 'conditioning';
   const parts = cleanParts(opts.parts);
-  const minutes = parts.length ? Math.max(5, totalMinutes(parts)) : clamp(opts.minutes, 5, 240, 30), light = !!opts.light, mode = opts.mode || 'weaknesses';
+  const minutes = parts.length ? Math.max(5, totalMinutes(parts)) : clamp(opts.minutes, 5, 300, 30), light = !!opts.light, mode = opts.mode || 'weaknesses';
   const eq = availableEquipment(ctx, opts.envId);
   const env = ctx.envs.find((e) => e.id === opts.envId) || ctx.defEnv;
   let { level, how: levelHow } = levelFor(activityId, ctx);
@@ -250,7 +250,7 @@ function selectMain(plan, ctx, pool, o = {}) {
   const skip = o.exclude || new Set();
   const recent = new Set(); for (const h of ctx.history) if (ctx.now - h.startedAt < 3 * DAY) for (const e of h.data?.exercises || []) recent.add(exKey(e.name));
   const everDone = new Set(); for (const h of ctx.history) for (const e of h.data?.exercises || []) everDone.add(exKey(e.name));
-  const covered = {}, patterns = {}, items = [];
+  const covered = {}, patterns = {}, groups = {}, items = [];
   const score = (x) => {
     let s = 0;
     for (const [c, w] of Object.entries(targets)) s += w * (x.caps?.[c] || 0) / (1 + (covered[c] || 0));
@@ -259,6 +259,8 @@ function selectMain(plan, ctx, pool, o = {}) {
     if (pref === 'aime') s += 0.25; if (pref === 'evite') s -= 0.8;
     if (recent.has(exKey(x.name))) s -= 0.2; if (!everDone.has(exKey(x.name))) s += 0.08;
     if (x.pattern && patterns[x.pattern]) s -= 0.35 * patterns[x.pattern];
+    // Variété : un deuxième exercice de la même famille (gainage, tirer, pousser, jambes…) passe après les autres familles.
+    if (x.group && groups[x.group]) s -= 0.3 * groups[x.group];
     return s + rng() * 0.15;
   };
   let mins = 0;
@@ -273,6 +275,7 @@ function selectMain(plan, ctx, pool, o = {}) {
     items.push({ lib: best, ex, score: bs });
     for (const [c, w] of Object.entries(best.caps || {})) if (targets[c]) covered[c] = (covered[c] || 0) + w;
     if (best.pattern) patterns[best.pattern] = (patterns[best.pattern] || 0) + 1;
+    if (best.group) groups[best.group] = (groups[best.group] || 0) + 1;
     mins += exMinutes(ex);
   }
   return { items, targets };

@@ -5,13 +5,14 @@ import { S, ACT, INPUT, go } from './state.js';
 import { FEATURE_INDEX, SETTINGS_INDEX, findIn, norm } from './finder.js';
 import { CATALOG } from './catalog.js';
 import { LIBRARY } from './library.js';
+import { visibleEx, visibleSessions } from './sportprefs.js';
 
 const GROUPS = [['feature', 'Fonctions'], ['setting', 'Paramètres'], ['seance', 'Mes séances'], ['catalog', 'Carnet de séances'], ['exercise', 'Exercices']];
 /** Ce qui vient du compte ou du catalogue : mes séances, les séances prêtes, les exercices. */
 function dynamicIndex() {
   const mine = (S.seances?.items || []).filter((s) => !s.archived).map((s) => ({ kind: 'seance', icon: s.emoji || '📋', title: s.name, sub: 'Mes séances', keys: s.activity || '', act: 'openSeance', id: s.id }));
-  const cat = CATALOG.map((c) => ({ kind: 'catalog', icon: c.emoji, title: c.name, sub: `Séance prête · ${c.minutes} min`, keys: `${c.why} ${(c.goals || []).join(' ')}`, act: 'catOpen', id: c.id, to: 'library/catalog' }));
-  const ex = LIBRARY.filter((x) => x.role === 'main' && !x.hidden).map((x) => ({ kind: 'exercise', icon: x.emoji, title: x.name, sub: 'Exercice', keys: `${x.group || ''} ${(x.muscles || []).join(' ')}`, act: 'libInfo', id: x.id }));
+  const cat = visibleSessions(CATALOG).map((c) => ({ kind: 'catalog', icon: c.emoji, title: c.name, sub: `Séance prête · ${c.minutes} min`, keys: `${c.why} ${(c.goals || []).join(' ')}`, act: 'catOpen', id: c.id, to: 'library/catalog' }));
+  const ex = visibleEx(LIBRARY).filter((x) => x.role === 'main' && !x.hidden).map((x) => ({ kind: 'exercise', icon: x.emoji, title: x.name, sub: 'Exercice', keys: `${x.group || ''} ${(x.muscles || []).join(' ')}`, act: 'libInfo', id: x.id }));
   return [...mine, ...cat, ...ex];
 }
 function results(q, scope) {
@@ -21,8 +22,8 @@ function results(q, scope) {
   return S.findRes;
 }
 function resultsView(q, scope) {
-  if (!norm(q)) return scope === 'settings' ? '' : h`<p class="tiny muted">Par exemple : « minuteur », « langue », « rappel », « tractions », « étirements »…</p>
-    <div class="chips">${['Séance du jour', 'Minuteur', 'Rappels', 'Thème', 'Mes séances'].map((t) => h`<button type="button" class="chip" data-act="findTry" data-v="${t}">${t}</button>`)}</div>`;
+  if (!norm(q)) return scope === 'settings' ? '' : h`<p class="tiny muted">Par exemple : « chrono », « langue », « rappel », « tractions », « étirements »…</p>
+    <div class="chips">${['Séance du jour', 'Chrono', 'Rappels', 'Thème', 'Mes séances'].map((t) => h`<button type="button" class="chip" data-act="findTry" data-v="${t}">${t}</button>`)}</div>`;
   const list = results(q, scope);
   if (!list.length) return h`<p class="small muted">Rien trouvé pour « ${q} ». Essaie un autre mot.</p>`;
   const row = (r) => h`<button class="setrow" data-act="findGo" data-i="${S.findRes.indexOf(r)}"><span class="sic">${r.icon}</span><span class="grow"><b>${r.title}</b><small>${r.sub}</small></span><span class="chev">›</span></button>`;

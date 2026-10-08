@@ -356,7 +356,7 @@ canvas.confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:n
 /* ═════════ Programme ═════════ */
 .prog{display:grid;gap:8px}.prog .meter,.pview .meter{height:8px}.prog .nextrow,.prog .warnrow{gap:10px;align-items:center}
 .prog .warnrow{padding:8px 10px;border-radius:12px;background:color-mix(in srgb,var(--warn,#e0a030) 14%,transparent)}
-.cal .dots i.prog{background:transparent;border:1.5px dashed var(--accent);box-sizing:border-box}.legend .lg.prog{border:1.5px dashed var(--accent);background:transparent}
+.cal .dots i.done{background:var(--ok)}.cal .dots i.prog{background:transparent;border:1.5px dashed var(--accent);box-sizing:border-box}.legend .lg.prog{border:1.5px dashed var(--accent);background:transparent}
 .pwiz{display:grid;gap:10px}.pwiz h2{margin:0}.pwiz .chips.days .chip{min-width:52px;justify-content:center}.pwsum{display:grid;gap:4px}
 .pview{display:grid;gap:10px}.pview h2{margin:0}.pweek{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:8px}
 .pdots{display:flex;gap:6px;flex-wrap:wrap}.pd{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;background:var(--card2);color:var(--muted)}
@@ -599,6 +599,8 @@ body.picking #main *{cursor:crosshair}.pickfound{outline:3px solid var(--accent)
 #picker .pk-panel{width:100%;max-width:640px;max-height:86dvh;overflow:auto;background:var(--bg);border-radius:18px 18px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));display:grid;gap:10px;align-content:start}
 #picker .pk-q{position:sticky;top:0;z-index:1}
 .chipin{min-width:0;width:auto;flex:1 1 140px;max-width:220px;border-radius:999px;padding:8px 12px;min-height:38px;font-size:.9rem}
+.mine-row .grow{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;overflow-wrap:anywhere}.mine-row .grow .btn{margin-top:2px}
+.choicein{width:100%;min-width:0;border:2px dashed var(--line);border-radius:14px;padding:14px 16px;min-height:56px;font-size:1.02rem;background:transparent}
 .hints{display:grid;gap:6px;margin:0 0 12px}.hint{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:12px;background:var(--card);border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--line));font-size:.88rem}
 .hint .linkish{display:block;line-height:1.35}.hint{padding:6px 8px}
 .whereami{margin:6px 0 10px;align-items:center;grid-column:1/-1}.whereami .chip{max-width:100%;overflow-wrap:anywhere}
@@ -757,3 +759,22 @@ html[data-contrast=on] .btn,html[data-contrast=on] .chip,html[data-contrast=on] 
 .agenda-event input[type=time] { width:auto; max-width:100%; }
 [data-interface=simple] .stephelp { line-height:1.5; }
 @media (max-width:360px) { .quick-row .grid2 { grid-template-columns:1fr; } .agenda-event .btn { white-space:normal; } }
+/* 8.34 — heures d'un créneau : jamais coupées au milieu (« 15:00–18:00 »). */
+.hm{white-space:nowrap}
+/* 8.34 — ligne de liste avec une action principale et une petite action à droite (ex. 🗑). */
+.setrow .rowbtn,.item .rowbtn{appearance:none;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-width:0}
+.setrow .rowbtn b,.setrow .rowbtn small,.item .rowbtn b{overflow-wrap:anywhere}
+/* 8.34 — ligne .item entièrement cliquable (séance faite dans un lieu…). */
+button.item.rowpick{appearance:none;width:100%;text-align:left;font:inherit;color:inherit;background:none;border:0;border-bottom:1px solid var(--line);cursor:pointer}
+button.item.rowpick:last-child{border-bottom:0}
+/* 8.34 — indications « Paramètres › … » cliquables, liens vers un endroit précis et mise en lumière de l'arrivée. */
+.pathlink{appearance:none;background:none;border:0;padding:0;margin:0;font:inherit;color:var(--accent);text-decoration:underline;text-underline-offset:2px;cursor:pointer;display:inline;text-align:left}
+.pathlink:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.spotlink{appearance:none;display:flex;align-items:center;gap:12px;width:100%;text-align:left;font:inherit;color:var(--text);cursor:pointer;border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:color-mix(in srgb,var(--accent) 10%,var(--card))}
+.spotlink b{display:block;color:var(--accent)}.spotlink small{display:block;color:var(--muted);font-size:.82rem;line-height:1.35}.spotlink .sic{font-size:1.3rem}.spotlink .chev{color:var(--accent);font-size:1.4rem}
+.spotlight{animation:spotlight 2.2s ease-out}
+@keyframes spotlight{0%,40%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
+@media (prefers-reduced-motion:reduce){.spotlight{animation:none;box-shadow:0 0 0 3px var(--accent)}}
+/* 8.34 — chrono : circuit affiché (AMRAP, pour le temps), boutons d'action sur deux colonnes. */
+#itimer .it-list{margin:0;padding-left:1.4em;text-align:left;font-size:1.05rem;line-height:1.5;max-width:min(420px,86vw)}
+#itimer .it-bot{gap:10px}#itimer .it-bot .grid2 .btn{min-height:64px}

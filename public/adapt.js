@@ -8,7 +8,7 @@ import { byId } from './library.js';
 import { EQUIPMENT, CAPACITIES } from './model.js';
 import { adaptDuration, rebuildForEquipment, alternatives, replaceExercise, zoneReasons } from './generator.js';
 import { availableEquipment } from './brain.js';
-import { AVOID_ZONES } from './intentions.js';
+import { AVOID_ZONES, ZONE_WORDS } from './intentions.js';
 
 export const WARM_OPTS = [['keep', 'Comme prévu'], ['short', 'Plus court'], ['band', 'Juste avec un élastique'], ['none', 'Aucun (je suis déjà chaud)']];
 export const COOL_OPTS = [['keep', 'Comme prévu'], ['short', 'Plus court'], ['none', 'Aucun']];
@@ -37,8 +37,7 @@ export function parseAdapt(text) {
   const h = t.match(/(\d+(?:[.,]\d+)?)\s*h(?:eures?)?\s*(\d{1,2})?/), m = t.match(/(\d{1,3})\s*(?:min|mn|minutes?)\b/);
   if (h) o.minutes = Math.round(Number(h[1].replace(',', '.')) * 60 + Number(h[2] || 0)); else if (m) o.minutes = Number(m[1]);
   if (o.minutes) understood.push(`${o.minutes} min`);
-  const ZW = { fingers: /doigt|poulie/, shoulders: /epaule/, elbows: /coude/, wrists: /poignet/, back: /dos|lombaire|reins/, knees: /genou/, ankles: /cheville/ };
-  if (/mal|douleur|bless|gene|ménag|menag|fragile/.test(t)) for (const [z, re] of Object.entries(ZW)) if (re.test(t)) { (o.zones ||= []).push(z); understood.push(`zone à ménager : ${AVOID_ZONES.find((x) => x[0] === z)?.[1] || z}`); }
+  if (/mal|douleur|bless|gene|ménag|menag|fragile/.test(t)) for (const [z, re] of Object.entries(ZONE_WORDS)) if (re.test(t)) { (o.zones ||= []).push(z); understood.push(`zone à ménager : ${AVOID_ZONES.find((x) => x[0] === z)?.[1] || z}`); }
   const sans = [...t.matchAll(/(?:sans|pas de|pas d|plus de|j ai pas de|je n ai pas de)\s+(?:la |le |les |l |d |de |mon |ma |mes )?([a-z -]{3,30})/g)].map((x) => x[1].trim());
   for (const w of sans) for (const [k, l] of Object.entries(EQUIPMENT)) { const L = norm(l).replace(/\s*\(.*\)/, ''); if (L.split(/[ /,]+/).some((p) => p.length >= 4 && w.startsWith(p)) || w.startsWith(norm(k))) { (o.remove ||= []).includes(k) || o.remove.push(k); } }
   if (o.remove?.length) understood.push(`sans : ${o.remove.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase()}`);
@@ -67,6 +66,9 @@ export function adaptSession(original, o = {}, ctx) {
   }
   // 2 · Zone douloureuse : exercices qui la chargent remplacés (ou retirés s'il n'existe rien d'équivalent sans risque).
   const zones = (o.zones || []).filter((z) => AVOID_ZONES.some((x) => x[0] === z));
+  // Zones ajoutées par la personne : aucun exercice n'est réputé les charger ; on le dit, et la séance les rappelle.
+  const spare = zones.filter((z) => z.startsWith('my-')).map((z) => AVOID_ZONES.find((x) => x[0] === z)[1].replace(/^\S+\s/, ''));
+  if (spare.length) warnings.push(`${spare.join(', ')} : l’app ne sait pas quels exercices ${spare.length > 1 ? 'les' : 'la'} chargent. ${spare.length > 1 ? 'Elles sont rappelées' : 'Elle est rappelée'} sur chaque exercice : passe ou remplace ceux qui gênent.`);
   if (zones.length) {
     for (const e of [...s.exercises]) {
       const lib = byId(e.libId), why = zoneReasons(lib || e, zones); if (!why.length) continue;
@@ -101,7 +103,7 @@ export function adaptSession(original, o = {}, ctx) {
   s = normalizeSession({ ...s, exercises: [...w2, ...main, ...cool] });
   // 5 · Durée (en dernier : c'est elle qui décide de ce qui tient).
   if (Number(o.minutes) >= 5) { const r = adaptDuration(s, Math.round(Number(o.minutes)), ctx); s = r.session; changes.push(...r.changes.filter((c) => !changes.includes(c))); }
-  s = normalizeSession({ ...s, id: s.id, name: s.name, context: { ...(s.context || {}), adaptedFrom: src.id } });
+  s = normalizeSession({ ...s, id: s.id, name: s.name, context: { ...(s.context || {}), adaptedFrom: src.id, ...(spare.length ? { spare: [...(s.context?.spare || []), ...spare] } : {}) } });
   // Ce qui reste travaillé : les 4 capacités principales d'avant, et la part gardée.
   const before = workedCaps(src), after = workedCaps(s), top = Object.entries(before).sort((a, b) => b[1] - a[1]).slice(0, 4);
   const keeps = top.filter(([c]) => (after[c] || 0) > 0).map(([c, v]) => ({ capId: c, label: capLabel(c), pct: Math.round(Math.min(150, ((after[c] || 0) / v) * 100)) }));

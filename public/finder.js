@@ -47,7 +47,7 @@ export const SETTINGS_INDEX = [
   E('setting', '🔑', 'Changer le mot de passe', 'Compte', 'settings/main', 'mot de passe password securite', { sel: '[data-act=chpass]' }),
   E('setting', '🗑️', 'Supprimer mon compte', 'Compte', 'settings/main', 'supprimer effacer compte donnees', { sel: '[data-act=delAccount]' }),
   E('setting', '🧩', 'Mon profil sportif (questions)', 'Paramètres', 'settings/main', 'profil questionnaire niveau sports refaire', { sel: '[data-act=setupAgain]' }),
-  E('setting', '📲', 'Installer l’application', 'Paramètres', 'settings/main', 'installer application ecran accueil telephone', { sel: '[data-act=installNow]' }),
+  E('setting', '📲', 'Installer l’application', 'Paramètres', 'settings/main', 'installer application ecran accueil telephone iphone ipad android ordinateur safari chrome samsung raccourci icone', { sel: '[data-act=installNow]' }),
 ];
 /** Fonctions de l'app (onglets, rubriques, outils). act = action à lancer ; to = page/sous-page. */
 export const FEATURE_INDEX = [
@@ -66,7 +66,7 @@ export const FEATURE_INDEX = [
   E('feature', '🌍', 'Séances partagées', 'Bibliothèque', 'library/common', 'communaute partage publiees commune', {}),
   E('feature', '📋', 'Coller un texte de séance', 'Bibliothèque', '', 'importer texte coller', { act: 'openImport' }),
   E('feature', '👥', 'Séance à deux', 'Bibliothèque', '', 'ami partenaire duo ensemble synchronise code', { act: 'duoJoinAsk' }),
-  E('feature', '⏱', 'Minuteur', 'Outil', '', 'chrono tabata emom suspensions intervalles timer', { act: 'timerOpen' }),
+  E('feature', '⏱', 'Chrono', 'EMOM, AMRAP, Tabata, compte à rebours', '', 'minuteur chrono chronomètre tabata emom amrap for time pour le temps compte à rebours suspensions intervalles timer', { act: 'timerOpen' }),
   E('feature', '📆', 'Programme sur plusieurs semaines', 'Accueil', '', 'plan programme semaines calendrier', { act: 'topProgram' }),
   E('feature', '📅', 'Calendrier', 'Accueil', '', 'agenda planifier date prevoir', { act: 'topCal' }),
   E('feature', '💬', 'Coach (discussion)', 'Outil', '', 'coach question conseil discuter chat assistant', { act: 'coachOpen' }),
@@ -79,7 +79,7 @@ export const FEATURE_INDEX = [
   E('feature', '🧪', 'Lab (expériences)', 'Mon analyse', 'progress/lab', 'graphique courbe lab details', {}),
   E('feature', '📸', 'Bilan du mois', 'Progrès', '', 'bilan mois image partager recap', { act: 'recapOpen' }),
   E('feature', '🫀', 'Mon corps', 'Profil', 'profile/body', 'age poids taille silhouette forme corps pesee', {}),
-  E('feature', '📋', 'Mon bilan physique', 'Moi', 'profile/bilan', 'bilan physique condition tests reperes questionnaire forme', {}),
+  E('feature', '📋', 'Mon bilan physique', 'Profil', 'profile/bilan', 'bilan physique condition tests reperes questionnaire forme', {}),
   E('feature', '🏅', 'Mes sports', 'Profil', 'profile/activities', 'sport activites categories', {}),
   E('feature', '🎯', 'Objectifs', 'Profil', 'profile/goals', 'objectif but perte de poids figure front lever', {}),
   E('feature', '🧰', 'Matériel et lieux', 'Profil', 'profile/equipment', 'materiel salle maison lieu barre poutre', {}),

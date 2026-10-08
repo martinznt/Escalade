@@ -47,6 +47,8 @@ export function muscleCaps(groups = []) {
   return out;
 }
 export const AVOID_ZONES = [['fingers', '✋ Doigts'], ['shoulders', '🦾 Épaules'], ['elbows', '💪 Coudes'], ['wrists', '🤚 Poignets'], ['back', '🔙 Dos, lombaires'], ['knees', '🦵 Genoux'], ['ankles', '🦶 Chevilles']];
+/** Mots de chaque zone, sur un texte en minuscules sans accents (« j'ai mal au poignet » → poignets). */
+export const ZONE_WORDS = { fingers: /doigt|poulie/, shoulders: /epaule/, elbows: /coude/, wrists: /poignet/, back: /\bdos\b|lombaire|reins/, knees: /genou/, ankles: /cheville/ };
 /** Exercices à éviter pour les zones sans liste dédiée (poignets, dos, chevilles), d'après leur type et leur nom. */
 export function zoneRisk(x, zones) {
   const n = String(x.name || '').toLowerCase(), why = [];

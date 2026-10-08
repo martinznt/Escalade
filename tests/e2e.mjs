@@ -231,13 +231,13 @@ await step('notifications : boîte des mises à jour (utilité, visite), répons
 await step('recherche 🔍 dans toute l’app, et recherche limitée aux paramètres', async () => {
   await a.tab('home'); await a.click('.topicons [data-act=findOpen]'); await A.waitForSelector('#sheet input[data-input=findQ]');
   await A.fill('#sheet input[data-input=findQ]', 'minuteur'); await A.waitForSelector('#findres [data-act=findGo]');
-  assert.match(await a.text('#findres'), /Minuteur/);
+  assert.match(await a.text('#findres'), /Chrono/);
   await A.fill('#sheet input[data-input=findQ]', 'anglais'); await A.waitForFunction(() => /Langue/.test(document.querySelector('#findres')?.textContent || ''));
   await a.click('#findres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/display'));
   await A.waitForSelector('#main .found'); // l'élément trouvé est mis en lumière
   await a.tab('settings'); await A.fill('input[data-input=setFind]', 'vibration'); await A.waitForSelector('#setfindres [data-act=findGo]');
   assert.equal(await A.locator('.setmain').isVisible(), false, 'la liste des rubriques laisse place aux résultats');
-  assert.doesNotMatch(await a.text('#setfindres'), /Minuteur|Exercice/, 'seulement des paramètres');
+  assert.doesNotMatch(await a.text('#setfindres'), /Chrono|Minuteur|Exercice/, 'seulement des paramètres');
   await a.click('#setfindres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/session')); await A.waitForSelector('#main input[name=vibration]');
 });
 await step('séances prêtes : filtres, tri pour toi, sources consultables, lancer / garder ; top exercices', async () => {
@@ -534,7 +534,7 @@ await step('fusionner deux séances : conseil noté, ordre conseillé, nouvelle 
 await step('mes séances : plusieurs sports, catégories, filtres et tris (dont « selon ma forme »)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.waitForSelector('[data-act=sfOpen]');
   const n0 = await a.count('#main [data-act=openSeance]'); assert.ok(n0 >= 3, `${n0} séances`);
-  await A.locator('#main .card:has-text("Ma fusion") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sSport]');
+  await A.locator('#main .card:has-text("Ma fusion") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sSport]', { state: 'attached' }); // dans « ⚙️ Sport, lieu… » (replié)
   await a.click('[data-act=sSport][data-id=running]'); await a.click('[data-act=sTag][data-id=mobilite]');
   await a.tab('library'); await a.sub('libSub', 'seances'); await a.click('[data-act=sfOpen]');
   await a.click('#sheet [data-act=sfTog][data-k=sports][data-v=running]'); await A.waitForSelector('#sheet [data-act=sfDone]');
@@ -838,7 +838,7 @@ await step('V1 : séance structurée (bloc → pause → voie), but ponctuel, pr
   await a.tab('progress'); await a.sub('progSub', 'journal'); await a.click('[data-act=jFilter][data-id=session]'); await A.waitForSelector(`#main :text("${name}")`);
 });
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
-  await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
+  await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]', { state: 'attached' });
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');
   await a.click('#sheet [data-act=sPublishDo][data-scope=common]'); await A.waitForSelector('#toast.show:has-text("Publiée dans la bibliothèque commune")');
   const list = (await a.api('GET', '/api/shared?scope=common')).data.items; assert.equal(list.length, 1); assert.ok(list[0].level.level);
@@ -1280,8 +1280,11 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   await G.waitForSelector('#updbar [data-act=updNow]', { timeout: 20000 });
   await Promise.all([G.waitForNavigation({ timeout: 20000 }), g.click('#updbar [data-act=updNow]')]);
   await G.waitForSelector('nav.tabs');
-  // Un cache est créé dès install ; attendre le BUILD du contrôleur réel, y compris un second rechargement.
-  try { await poll(async () => (await controllerBuild(G).catch(() => '')) === 'deploy-e2e-2', 20000, 'nouveau contrôleur activé'); }
+  // Un cache est créé dès install : on attend que la nouvelle version soit active (son activation supprime l'ancien
+  // cache), sans envoyer de messages en boucle à l'ancien contrôleur (ils le réveillent et retardent l'activation),
+  // puis on lit une seule fois le BUILD du contrôleur réel.
+  const activeNew = () => G.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(), k = await caches.keys(); return r?.active?.state === 'activated' && !r.waiting && k.length === 1 && k[0].endsWith('deploy-e2e-2') && !!navigator.serviceWorker.controller; }).catch(() => false);
+  try { await poll(activeNew, 20000, 'nouveau contrôleur activé'); await G.waitForSelector('nav.tabs'); await poll(async () => (await controllerBuild(G).catch(() => '')) === 'deploy-e2e-2', 6000, 'BUILD du nouveau contrôleur'); }
   catch (e) { // l'état exact du Service Worker dans le journal de la CI (les captures n'y sont pas toujours accessibles)
     const sw = await G.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return { active: r?.active?.state || '', installing: r?.installing?.state || '', waiting: r?.waiting?.state || '', controlled: !!navigator.serviceWorker.controller, demande: sessionStorage.getItem('sea:user-update') }; }).catch((x) => ({ evalError: String(x) }));
     e.message += ` — Service Worker : ${JSON.stringify({ ...sw, build: await controllerBuild(G).catch(() => '') })}`; throw e;
@@ -1311,8 +1314,9 @@ await step('après une mise à jour : visite des nouveautés, seulement ce qui a
   await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
   assert.equal(await g.count('#updbar'), 0, 'plus proposée une fois faite');
 });
-await step('minuteur d’intervalles : préréglage, préparation puis effort, pause, arrêt', async () => {
+await step('chrono, format intervalles : préréglage, préparation puis effort, pause, arrêt', async () => {
   await g.tab('home'); await g.click('[data-act=timerOpen]'); await G.waitForSelector('#tform');
+  await g.click('[data-act=timerFmt][data-id=intervals]'); await G.waitForSelector('#tform input[name=work]');
   await g.click('[data-act=timerPreset][data-id=tabata]'); assert.equal(await G.inputValue('#tform input[name=work]'), '20');
   await g.click('#tform button[type=submit]'); await G.waitForSelector('#itimer.ph-prep');
   await G.waitForSelector('#itimer.ph-work', { timeout: 8000 }); assert.match(await g.text('#itimer'), /Série 1 \/ 1 · 1 \/ 8/);

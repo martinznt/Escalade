@@ -22,8 +22,8 @@ export function normalizeEx(x = {}) {
   const legacy = clamp(x.amount, 1, 9999, null);
   let repsMin = clamp(x.repsMin ?? (mode === 'reps' ? legacy : null), 1, 999, 10);
   let repsMax = clamp(x.repsMax ?? x.repsMin ?? (mode === 'reps' ? legacy : null), 1, 999, repsMin);
-  let secMin = clamp(x.secMin ?? (mode === 'time' ? legacy : null), 1, 7200, 30);
-  let secMax = clamp(x.secMax ?? x.secMin ?? (mode === 'time' ? legacy : null), 1, 7200, secMin);
+  let secMin = clamp(x.secMin ?? (mode === 'time' ? legacy : null), 1, 18000, 30);
+  let secMax = clamp(x.secMax ?? x.secMin ?? (mode === 'time' ? legacy : null), 1, 18000, secMin);
   if (repsMax < repsMin) [repsMin, repsMax] = [repsMax, repsMin];
   if (secMax < secMin) [secMin, secMax] = [secMax, secMin];
 
@@ -43,13 +43,18 @@ export function normalizeEx(x = {}) {
     sets: clamp(x.sets, 1, 30, 3),
     repsMin, repsMax, secMin, secMax,
     perSide: !!x.perSide,
-    unit: str(x.unit, 12),
+    unit: str(x.unit, 30),
     load: str(x.load, 60),
     rest: clamp(x.rest, 0, 3600, 60),
     muscles,
     ok,
     bad: strList(x.bad, 30, 300),
     note: str(x.note, 400),
+    // 8.34 : position de départ, où mettre la charge, versions plus facile / plus dure.
+    start: str(x.start, 300),
+    loadHow: str(x.loadHow, 300),
+    easier: str(x.easier, 300),
+    harder: str(x.harder, 300),
     group: str(x.group, 20),
     intensity: ['low', 'mod', 'high'].includes(x.intensity) ? x.intensity : '',
     risk: ['finger', 'shoulder', 'elbow', 'knee'].includes(x.risk) ? x.risk : '',
@@ -151,6 +156,7 @@ export function normalizeContext(c) {
   });
   return {
     env: ID_RE.test(String(c.env || '')) ? String(c.env) : '', envName: str(c.envName, 60), equipment: idList(c.equipment, 30),
+    ...(Array.isArray(c.spare) && c.spare.length ? { spare: [...new Set(c.spare.map((x) => str(x, 40)).filter(Boolean))].slice(0, 8) } : {}),
     plannedMin: clamp(c.plannedMin, 0, 600, 0), goalId: ID_RE.test(String(c.goalId || '')) ? String(c.goalId) : '', place: str(c.place, 80), ...(/^[\w:.-]{1,80}$/.test(String(c.adaptedFrom || '')) ? { adaptedFrom: String(c.adaptedFrom) } : {}),
     // V1 : intention ponctuelle de la séance (jamais un objectif du compte) et ossature validée, phase par phase.
     ...(c.intent && typeof c.intent === 'object' && (c.intent.text || c.intent.priorities?.length) ? { intent: { text: str(c.intent.text, 240), priorities: idList(c.intent.priorities, 6) } } : {}),

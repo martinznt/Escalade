@@ -44,13 +44,16 @@ try {
     assert.equal(pending.installing,'installing');assert.equal(pending.waiting,false);assert.ok(pending.cache.some(key=>key.endsWith('activation-next')));
     assert.equal(await activeBuild(),'activation-base');
     await Promise.all([page.waitForNavigation(),page.click('#updbar [data-act=updNow]')]);await page.waitForSelector('nav.tabs');
-    assert.equal(await page.evaluate(()=>sessionStorage.getItem('sea:user-update')),'1');
+    const flag=()=>page.evaluate(()=>Number(sessionStorage.getItem('sea:user-update')));
+    assert.ok(Date.now()-await flag()<60000,'demande datée et conservée après le rechargement');
     assert.equal(await activeBuild(),'activation-base');
-    await page.waitForTimeout(250);assert.equal(await page.evaluate(()=>sessionStorage.getItem('sea:user-update')),'1');
+    await page.waitForTimeout(250);assert.ok(Date.now()-await flag()<60000,'demande toujours là pendant l’installation');
   });
   await step('fin du précache : activation demandée, vrai contrôleur nouveau, flag retiré et aucun bandeau de nouvelle installation',async()=>{
     releaseInstall();
-    await poll(async()=>{try{return await activeBuild()==='activation-next';}catch{return false;}},'nouveau contrôleur identifié',20000);
+    // Attente sans messages en boucle vers l'ancien contrôleur (ils retardent l'activation) ; une seule lecture du BUILD ensuite.
+    await poll(async()=>{try{return await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration(),k=await caches.keys();return r?.active?.state==='activated'&&!r.waiting&&k.length===1&&k[0].endsWith('activation-next')&&!!navigator.serviceWorker.controller;});}catch{return false;}},'nouvelle version active',20000);
+    await page.waitForSelector('nav.tabs');await poll(async()=>{try{return await activeBuild()==='activation-next';}catch{return false;}},'nouveau contrôleur identifié',6000);
     await page.waitForSelector('nav.tabs');
     await poll(async()=>await page.evaluate(()=>sessionStorage.getItem('sea:user-update'))===null,'demande retirée après activation');
     const state=await page.evaluate(async()=>{const registration=await navigator.serviceWorker.getRegistration();return {active:registration.active?.state,installing:!!registration.installing,waiting:!!registration.waiting};});

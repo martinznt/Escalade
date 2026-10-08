@@ -1,6 +1,8 @@
 // views-catalog.js — Bibliothèque › « Prêtes » (séances sourcées, filtres, tri pour toi), « Top exercices »
 // (classement par catégorie, adapté à ton profil) et la liste des sources scientifiques citées.
 import { h, raw, chip, openSheet, closeSheet, toast, fmtDur, subHead, seg, ask } from './ui.js';
+import { LIBRARY } from './library.js';
+import { visibleEx, visibleSessions } from './sportprefs.js';
 import { S, ACT, ctx, render, saveSeance, item, putItem, go } from './state.js';
 import { buildProgram, DAY_NAMES, defaultDays, ymd } from './program.js';
 import { activeProgram } from './views-program.js';
@@ -51,7 +53,7 @@ const RULES = {
 function catFiltered(f, p, skip = []) {
   const m = { favs: catFavs(), done: catDone() }, perso = f.perso !== false;
   // « Tout le carnet » : aucun tri d'après ton profil, aucun filtre de matériel ; le sport puis le niveau.
-  const ranked = perso ? rankCatalog({ ...p, equipment: p.equipment }) : rankCatalog({}).sort((a, b) => a.entry.activity.localeCompare(b.entry.activity) || a.entry.level - b.entry.level || !!a.entry.gen - !!b.entry.gen);
+  const ranked = perso ? rankCatalog({ ...p, equipment: p.equipment }, visibleSessions(CATALOG)) : rankCatalog({}, visibleSessions(CATALOG)).sort((a, b) => a.entry.activity.localeCompare(b.entry.activity) || a.entry.level - b.entry.level || !!a.entry.gen - !!b.entry.gen);
   return ranked.filter((r) => Object.keys(RULES).every((k) => skip.includes(k) || (k === 'onlyEq' && !perso) || RULES[k](r, f[k], m)));
 }
 /** Qualités qu'on peut cibler pour le sport choisi (celles que ce sport demande), avec le nombre de séances. */
@@ -204,7 +206,7 @@ ACT.catSave = (el) => { const e = CATALOG.find((x) => x.id === el.dataset.id); i
 
 /* ───────── Top exercices ───────── */
 export function vBest() {
-  const p = profileNeeds(), cat = (S.bestCat ||= 'tirer'), r = rankExercises({ need: p.need, level: p.level, equipment: p.equipment, acts: p.acts })[cat] || [];
+  const p = profileNeeds(), cat = (S.bestCat ||= 'tirer'), r = rankExercises({ need: p.need, level: p.level, equipment: p.equipment, acts: p.acts }, visibleEx(LIBRARY))[cat] || [];
   return h`${subHead('libSub', 'exercises', 'Exercices', '🏆 Top exercices pour toi')}<p class="tiny muted">Les exercices les plus utiles pour toi dans chaque catégorie : d’après ce que tu veux travailler, ton niveau et ton matériel.</p>
     <div class="chips">${EX_CATEGORIES.map(([k, l]) => chip(cat === k, l, `data-act="bestCat" data-v="${k}"`))}</div>
     ${r.length ? r.map((x, i) => h`<button class="card pick bestrow" data-act="libInfo" data-id="${x.lib.id}"><span class="rank">${i + 1}</span><div class="grow"><b>${x.lib.emoji} ${x.lib.name}</b>

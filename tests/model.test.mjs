@@ -49,7 +49,7 @@ await ok('styles d’escalade structurés (identifiants, activité)', () => { as
 
 console.log('Schéma des données (items)');
 const SAMPLES = {
-  exedit: { name: 'Pompes', emoji: '💪', sets: 4, repsMin: 8, repsMax: 10, secMin: 0, secMax: 0, rest: 90, cues: ['Dos droit'], bad: ['Creuser'], why: 'pourquoi', what: 'c’est quoi', hidden: false },
+  exedit: { name: 'Pompes', emoji: '💪', sets: 4, repsMin: 8, repsMax: 10, secMin: 0, secMax: 0, rest: 90, cues: ['Dos droit'], bad: ['Creuser'], why: 'pourquoi', what: 'c’est quoi', start: 'Mains au sol', loadHow: 'Sans charge', easier: 'Genoux au sol', harder: 'Pieds surélevés', hidden: false },
   catedit: { name: 'Ma version', emoji: '🗂', why: 'w', minutes: 40, tips: ['t'], exjson: '[]', hidden: false },
   activity: { label: 'Tennis', emoji: '🎾', preset: '', aliases: ['tennis'], archived: false },
   category: { activityId: 'custom-1', label: 'Service', description: 'd', caps: [{ id: 'explosivite', w: 0.5 }], archived: false, emoji: '🎾', guide: 'g', howTo: ['a'], source: 'ia' , kind: 'intent', side: ''},
@@ -73,13 +73,15 @@ const SAMPLES = {
   media: { kind: 'video', ref: 'h1', refType: 'history', url: 'https://example.org/v', note: 'Mon essai', activity: 'climbing_boulder', goalId: 'g1', styles: ['st-dalle'], date: 7, hasPhoto: false },
   swap: { from: 'Pompes', to: 'Dips', date: 1, where: 'player' },
   habit: { key: 'swap:pompes', decision: 'accepted' },
+  choice: { list: 'zone', label: 'Hanche gauche', n: 45, on: true },
+  chrono: { name: 'Jambes', format: 'emom', every: 60, minutes: 12, cap: 0, secs: 0, work: 7, rest: 3, reps: 6, sets: 4, setRest: 180, text: '10 squats\n8 fentes' },
   exsetup: { key: 'presse a cuisses', label: 'Presse à cuisses', setup: 'Siège 4, dossier 2' },
   routine: { label: 'No foot', emoji: '🙌', when: 'end', sports: ['climbing_boulder'], minutes: 15, libId: 'no-foot', needs: ['wall'], effort: 'hard', fingers: true, note: 'Sur le dévers', auto: true, off: false },
   season: { theme: 'mobilite', start: 1780000000000, closed: true, won: true },
   letter: { text: 'Salut moi', writtenAt: 1780000000000, openAt: 1787000000000, openedAt: 0, snap: '12 séances' },
   pain: { zone: 'shoulders', level: 5, side: 'droite', when: 'effort', date: 3, note: 'en tirant', healed: false },
   wellness: { day: '2026-10-02', at: 9, sleep: 7, energy: 4, soreness: 2, stress: 3, hr: 58, period: false, note: 'bien dormi' },
-  config: { blocks: ['today', 'records'], envId: 'e1', durations: ['20'], unavailable: ['bar'], perWeek: 3, climbPerWeek: 2, goal: 'force', intent: 'force', setupDone: true, asked: ['bloc'], mode: 'dark', palette: 'granit', accent: 'x', shape: 'squircle', radius: 'soft', size: 'm', density: 'normal', motion: 'on', setupLater: 5, setupHidden: false, tourDone: true , vibe: 'muscu', appIcon:'custom',appIconToken:'A'.repeat(43),appIconDesign:'{"base":"calendar"}',appIconDraft:'{}',notificationIcon:'custom',notificationToken:'B'.repeat(43),notificationDesign:'{"style":"mat"}',notificationDraft:'{}', lay: '{"home":[]}', formats: '[]', seenIds: ['v8.9.0'], goals: ['poids', 'climb'], age: 34, height: 178, weight: 72.5, sex: 'x', shape: 'athletique', muscled: ['dos', 'avantbras'], physique: ['v'], fitness: 4, breath: 'effort', daily: 'assis', cycle: false, slots: [{ d: 1, from: '18:30', to: '20:00' }], pauseMode: 'vacances', pauseFrom: '2026-08-01', pauseTo: '2026-08-15', pauseNote: 'Crète', favs: ['bl-1', 'run-2'], easy: 'on', cb: 'off', big: 'on', contrast: 'off' },
+  config: { blocks: ['today', 'records'], envId: 'e1', durations: ['20'], unavailable: ['bar'], perWeek: 3, climbPerWeek: 2, goal: 'force', intent: 'force', setupDone: true, asked: ['bloc'], mode: 'dark', palette: 'granit', accent: 'x', shape: 'squircle', radius: 'soft', size: 'm', density: 'normal', motion: 'on', setupLater: 5, setupHidden: false, tourDone: true , vibe: 'muscu', appIcon:'custom',appIconToken:'A'.repeat(43),appIconDesign:'{"base":"calendar"}',appIconDraft:'{}',notificationIcon:'custom',notificationToken:'B'.repeat(43),notificationDesign:'{"style":"mat"}',notificationDraft:'{}', lay: '{"home":[]}', formats: '[]', seenIds: ['v8.9.0'], goals: ['poids', 'climb'], age: 34, height: 178, weight: 72.5, sex: 'x', shape: 'athletique', muscled: ['dos', 'avantbras'], physique: ['v'], fitness: 4, breath: 'effort', daily: 'assis', cycle: false, slots: [{ d: 1, from: '18:30', to: '20:00', envId: 'e1' }], pauseMode: 'vacances', pauseFrom: '2026-08-01', pauseTo: '2026-08-15', pauseNote: 'Crète', favs: ['bl-1', 'run-2'], never: ['swimming'], neverHide: ['swimming'], easy: 'on', cb: 'off', big: 'on', contrast: 'off' },
 };
 await ok('chaque collection a un échantillon testé', () => assert.deepEqual(Object.keys(SAMPLES).sort(), [...COLLECTIONS].sort()));
 await ok('aller-retour exact de chaque collection (aucune clé utile supprimée par la liste blanche)', () => {

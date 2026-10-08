@@ -11,11 +11,11 @@ ok('accents, majuscules et ponctuation ignorés', () => {
   assert.equal(top('echauffement auto'), top('Échauffement automatique'));
 });
 ok('le bon résultat en premier pour les recherches courantes', () => {
-  assert.equal(top('minuteur'), 'Minuteur'); assert.equal(top('langue'), 'Langue'); assert.equal(top('mot de passe'), 'Changer le mot de passe');
+  assert.equal(top('minuteur'), 'Chrono'); assert.equal(top('emom'), 'Chrono'); assert.equal(top('langue'), 'Langue'); assert.equal(top('mot de passe'), 'Changer le mot de passe');
   assert.equal(top('rappel'), 'Rappels d’entraînement'); assert.equal(top('records'), 'Records et mesures');
 });
 ok('synonymes : « anglais » trouve la langue, « tabata » le minuteur, « poids » mon corps', () => {
-  assert.equal(top('anglais'), 'Langue'); assert.equal(top('tabata'), 'Minuteur'); assert.ok(findIn(ALL, 'poids').some((r) => r.title === 'Mon corps'));
+  assert.equal(top('anglais'), 'Langue'); assert.equal(top('tabata'), 'Chrono'); assert.ok(findIn(ALL, 'poids').some((r) => r.title === 'Mon corps'));
 });
 ok('tous les mots doivent correspondre ; rien pour une recherche vide ou absurde', () => {
   assert.deepEqual(findIn(ALL, ''), []); assert.deepEqual(findIn(ALL, 'zzzqqq'), []);

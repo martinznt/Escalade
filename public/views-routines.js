@@ -42,7 +42,7 @@ function sheet(r = {}) {
       <span class="kicker">Pour quels sports ? <span class="tiny muted">(rien coché = tous)</span></span>
       <div class="chkgrid">${sportsAll().map((id) => h`<label class="chk"><input type="checkbox" name="sports" value="${id}" ${(r.sports || []).includes(id) ? 'checked' : ''}> ${sportName(id)}</label>`)}</div>
       <span class="kicker">Matériel nécessaire <span class="tiny muted">(proposé seulement s’il est dans le lieu)</span></span>
-      <div class="chkgrid">${NEEDS.map((k) => h`<label class="chk"><input type="checkbox" name="needs" value="${k}" ${(r.needs || []).includes(k) ? 'checked' : ''}> ${EQUIPMENT[k]}</label>`)}</div>
+      <div class="chkgrid">${[...NEEDS, ...Object.keys(EQUIPMENT).filter((k) => k.startsWith('my-'))].map((k) => h`<label class="chk"><input type="checkbox" name="needs" value="${k}" ${(r.needs || []).includes(k) ? 'checked' : ''}> ${EQUIPMENT[k]}</label>`)}</div>
       <label class="chk"><input type="checkbox" name="fingers" ${r.fingers ? 'checked' : ''}> Ça charge les doigts <span class="tiny muted">(l’app l’allège après une phase dure)</span></label>
       <label class="chk"><input type="checkbox" name="auto" ${r.auto ? 'checked' : ''}> L’ajouter tout seul quand il convient</label>
       ${r.id ? h`<label class="chk"><input type="checkbox" name="off" ${r.off ? 'checked' : ''}> En pause (ne plus le proposer)</label>` : ''}

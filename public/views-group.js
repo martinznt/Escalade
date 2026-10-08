@@ -140,7 +140,6 @@ ACT.grpNext = () => { const g = G(), c = current(g), p = plan(g); if (!g?.host |
   g.state = i >= p.steps.length ? { ...g.state, phase: 'done' } : { ...g.state, step: i, paused: false, end: now() + p.steps[i].dur * 1000 }; pushState(); draw(); };
 ACT.grpStop = async () => { const g = G(); if (!g) return; if (!(await ask(g.host ? 'Terminer la séance pour tout le monde ?' : 'Quitter la séance ?', { ok: g.host ? 'Terminer' : 'Quitter', danger: true }))) return;
   try { await api('DELETE', `/api/group/${g.code}`); } catch { /* le salon expire seul */ } closeView(); };
-ACT.grpFinish = () => { const g = G(); if (!g) return; g.state = { ...g.state, phase: 'done' }; if (g.host) pushState(); draw(); };
 ACT.grpSave = () => {
   const g = G(), p = plan(g), mine = personSummary(p, g.me, g.session); if (!mine.exercises.length) return toast('Rien à enregistrer pour toi.');
   addHistory({ id: uid(), sessionId: g.session.id || '', sessionName: `${g.session.name} (à plusieurs)`, startedAt: Math.round((g.state.startedAt || Date.now()) - (g.offset || 0)), durationSeconds: mine.work + mine.rest,

@@ -88,15 +88,52 @@ export function recalcToEvent(prog, history = [], now = Date.now(), { days = nul
 }
 
 /* ───────── Créneaux et horaires ───────── */
-/** Créneaux nettoyés : [{ d: 0..6, from: 'HH:MM', to: 'HH:MM' }], début avant fin, triés, 21 au plus. */
+export const MAX_SLOTS = 21;
+const ENV_ID = /^[\w:.-]{1,80}$/;
+/**
+ * Créneaux nettoyés : [{ d: 0..6, from: 'HH:MM', to: 'HH:MM', envId? }], début avant fin, triés, 21 au plus.
+ * `envId` (facultatif) : le lieu où la personne se trouve pendant ce créneau (« le mardi, je suis à ma salle »).
+ * Deux créneaux identiques (même jour, mêmes heures) : le premier gagne.
+ */
 export function cleanSlots(slots) {
   const out = [], seen = new Set();
   for (const s of Array.isArray(slots) ? slots : []) {
-    const d = Number(s?.d), from = String(s?.from || ''), to = String(s?.to || '');
+    const d = Number(s?.d), from = String(s?.from || ''), to = String(s?.to || ''), envId = ENV_ID.test(String(s?.envId || '')) ? String(s.envId) : '';
     if (!Number.isInteger(d) || d < 0 || d > 6 || !HM.test(from) || !HM.test(to) || toMin(to) <= toMin(from)) continue;
-    const k = `${d}-${from}-${to}`; if (seen.has(k)) continue; seen.add(k); out.push({ d, from, to });
+    const k = `${d}-${from}-${to}`; if (seen.has(k)) continue; seen.add(k); out.push(envId ? { d, from, to, envId } : { d, from, to });
   }
-  return out.sort((a, b) => a.d - b.d || toMin(a.from) - toMin(b.from)).slice(0, 21);
+  return out.sort((a, b) => a.d - b.d || toMin(a.from) - toMin(b.from)).slice(0, MAX_SLOTS);
+}
+const DAY_SHORT = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+/**
+ * Horaires ou créneaux en une ligne courte : jours qui se suivent avec les mêmes heures regroupés
+ * (« lun–ven 10:00–22:30 · sam–dim 10:00–19:00 »). '' s'il n'y a rien.
+ */
+export function hoursText(list) {
+  const H = cleanSlots(list), byDay = DAY_SHORT.map((_, d) => H.filter((x) => x.d === d).map((x) => `${x.from}–${x.to}`).join(', ')), out = [];
+  for (let i = 0; i < 7; i++) { if (!byDay[i]) continue; let j = i; while (j + 1 < 7 && byDay[j + 1] === byDay[i]) j++; out.push(`${j > i ? `${DAY_SHORT[i]}–${DAY_SHORT[j]}` : DAY_SHORT[i]} ${byDay[i]}`); i = j; }
+  return out.join(' · ');
+}
+/** Créneaux d'un jour (« AAAA-MM-JJ »), dans l'ordre ; avec `after` (minutes depuis minuit), ceux qui ne sont pas finis. */
+export const slotsOn = (slots, date, after = -1) => cleanSlots(slots).filter((s) => s.d === weekday(date) && toMin(s.to) > after);
+const CLIMB_EQ = ['wall', 'leadwall', 'topwall', 'autobelay', 'boardwall', 'spraywall'];
+/**
+ * Un sport dans un lieu : 2 = ce qu'on y fait d'abord (le mur pour l'escalade, le bassin pour la natation…),
+ * 1 = possible, 0 = impossible (pas d'escalade sans mur, pas de natation sans bassin, rien d'autre qu'une nage à la
+ * piscine). Sans lieu, tout reste possible (1). `eq` : le matériel réellement disponible dans ce lieu.
+ */
+export function placeSuits(activityId, env, eq = null) {
+  if (!env) return 1;
+  const a = String(activityId || ''), t = env.type || 'autre', has = (k) => (eq instanceof Set ? eq.has(k) : (env.equipment || []).includes(k));
+  const wall = t === 'escalade' || t === 'falaise' || CLIMB_EQ.some(has);
+  if (/^climbing/.test(a)) return wall ? 2 : 0;
+  if (a === 'swimming') return t === 'piscine' || has('pool') ? 2 : 0;
+  if (t === 'piscine') return 0;
+  if (a === 'running') return t === 'piste' || t === 'exterieur' || has('track') ? 2 : has('treadmill') || t === 'maison' || t === 'autre' ? 1 : 0;
+  if (t === 'falaise') return 0;
+  if (a === 'strength') return t === 'salle' ? 2 : 1;
+  if (a === 'conditioning' || a === 'calisthenics') return t === 'maison' || t === 'salle' ? 2 : 1;
+  return 1;
 }
 /** Le lieu est-il ouvert ce jour-là à cette heure, pour cette durée ? null si ses horaires ne sont pas connus. */
 export function isOpen(env, date, time, minutes = 45) {
@@ -140,7 +177,7 @@ const activeSchedule = (e) => !['cancelled', 'missed'].includes(e.meta?.status);
  * séance est légère ; deux jours d'affilée → la seconde est légère. Les sports alternent (le moins pratiqué récemment
  * d'abord). Retourne { sessions: [{ date, time, minutes, activityId, light, title, why }], notes }.
  */
-export function weekPlan(ctx, { from = ymd(ctx.now || Date.now()), slots = [], perWeek = 3, minutes = 45, activities = [], pause = {}, defaultTime = '18:00', lowForm = false, envFor = null } = {}) {
+export function weekPlan(ctx, { from = ymd(ctx.now || Date.now()), slots = [], perWeek = 3, minutes = 45, activities = [], pause = {}, defaultTime = '18:00', lowForm = false, envFor = null, envById = null, suits = null } = {}) {
   const S = cleanSlots(slots), dates = Array.from({ length: 7 }, (_, k) => ymd(addDays(parseDay(from), k))), to = dates.at(-1), notes = [];
   const evs = eventsBetween(ctx.events || [], from, to).filter(activeSchedule), races = evs.filter(isRace);
   const planned = new Set(evs.filter(isSession).map((e) => e.on));
@@ -161,18 +198,35 @@ export function weekPlan(ctx, { from = ymd(ctx.now || Date.now()), slots = [], p
   const acts = activities.length ? activities : Object.keys(ctx.activities || {});
   const lastDone = (a) => Math.max(0, ...(ctx.history || []).filter((h) => h.data?.activity === a).map((h) => h.startedAt));
   const order = [...acts].sort((a, b) => lastDone(a) - lastDone(b));
-  /** Heure possible ce jour-là pour ce sport : créneau de la personne ∩ horaires du lieu (s'ils sont connus). */
-  const fit = (a, d) => {
-    const env = envFor && a ? envFor(a) : null, H = cleanSlots(env?.hours).filter((x) => x.d === weekday(d)), mine = slotOf(d);
-    const wins = mine.length ? mine.map((x) => [toMin(x.from), toMin(x.to)]) : [[toMin(defaultTime), toMin(defaultTime) + minutes]];
-    if (!env || !cleanSlots(env.hours).length) return { time: fromMin(wins[0][0]), max: wins[0][1] - wins[0][0], env, adjusted: false };
-    for (const [a0, b0] of wins) for (const h of H) { const st = Math.max(a0, toMin(h.from)), en = Math.min(mine.length ? b0 : toMin(h.to), toMin(h.to)); if (en - st >= Math.min(minutes, 30)) return { time: fromMin(st), max: en - st, env, adjusted: st !== a0 }; }
-    return null;
-  };
   // Aujourd'hui : seulement s'il reste le temps de faire la séance dans le créneau (ou avant 20 h sans créneau).
   const nowD = new Date(ctx.now || Date.now()), nowMin = nowD.getHours() * 60 + nowD.getMinutes(), today = ymd(nowD.getTime());
-  const stillToday = (d) => d !== today || (slotOf(d).length ? slotOf(d).some((x) => toMin(x.to) - Math.min(minutes, toMin(x.to) - toMin(x.from)) >= nowMin) : nowMin <= Math.max(toMin(defaultTime), 20 * 60));
-  const cands = dates.filter((d) => !blocked.has(d) && !planned.has(d) && stillToday(d) && (!S.length || slotOf(d).length) && (!order.length || order.some((a) => fit(a, d))));
+  const leftToday = (x) => toMin(x.to) - Math.min(minutes, toMin(x.to) - toMin(x.from)) >= nowMin;
+  /** Lieu noté dans un créneau (« le mardi, je suis à ma salle »), s'il existe encore. */
+  const placeOf = (x) => (x?.envId && envById ? envById(x.envId) || null : null);
+  const score = (a, env) => (env && suits ? Number(suits(a, env)) || 0 : 1);
+  /**
+   * Heure possible ce jour-là pour ce sport : créneau de la personne (et son lieu, s'il est noté : le sport doit pouvoir
+   * s'y faire) ∩ horaires du lieu (s'ils sont connus). Aujourd'hui, un créneau déjà passé est sauté.
+   */
+  const fit = (a, d) => {
+    const mine = slotOf(d), now = d === today;
+    const wins = mine.length ? mine.map((x) => ({ a0: toMin(x.from), b0: toMin(x.to), x })) : [{ a0: toMin(defaultTime), b0: toMin(defaultTime) + minutes, x: null }];
+    for (const w of wins) {
+      if (w.x && now && !leftToday(w.x)) continue;
+      const placed = placeOf(w.x); if (placed && a && !score(a, placed)) continue;
+      const a0 = w.x && now ? Math.max(w.a0, Math.ceil(nowMin / 15) * 15) : w.a0;
+      const env = placed || (envFor && a ? envFor(a) : null), H = cleanSlots(env?.hours).filter((x) => x.d === weekday(d));
+      if (!env || !cleanSlots(env.hours).length) return { time: fromMin(a0), max: w.b0 - a0, env, adjusted: false, slot: w.x, placed: !!placed };
+      for (const h of H) { const st = Math.max(a0, toMin(h.from)), en = Math.min(mine.length ? w.b0 : toMin(h.to), toMin(h.to)); if (en - st >= Math.min(minutes, 30)) return { time: fromMin(st), max: en - st, env, adjusted: st !== a0, slot: w.x, placed: !!placed }; }
+    }
+    return null;
+  };
+  const stillToday = (d) => d !== today || (slotOf(d).length ? slotOf(d).some(leftToday) : nowMin <= Math.max(toMin(defaultTime), 20 * 60));
+  const open = dates.filter((d) => !blocked.has(d) && !planned.has(d) && stillToday(d) && (!S.length || slotOf(d).length));
+  const cands = open.filter((d) => !order.length || order.some((a) => fit(a, d)));
+  // Un créneau dont le lieu ne convient à aucun de tes sports (ex. la piscine sans la natation) : on le dit.
+  const nowhere = open.filter((d) => !cands.includes(d) && order.length && slotOf(d).length && slotOf(d).every((x) => { const e = placeOf(x); return e && order.every((a) => !score(a, e)); }));
+  for (const d of nowhere) notes.push(`Le ${DAY_LONG[weekday(d)]}, aucun de tes sports ne se fait à « ${placeOf(slotOf(d)[0]).name} » (ton créneau) : change le lieu du créneau ou ajoute le sport.`);
   if (cands.length < want) notes.push(`Seulement ${cands.length} jour${cands.length > 1 ? 's' : ''} possible${cands.length > 1 ? 's' : ''} (créneaux, horaires des lieux, événements) : ajoute des disponibilités pour en prévoir plus.`);
   const chosen = [], taken = () => [...planned, ...doneDays, ...chosen].map(parseDay);
   while (chosen.length < want && cands.some((d) => !chosen.includes(d))) {
@@ -188,11 +242,14 @@ export function weekPlan(ctx, { from = ymd(ctx.now || Date.now()), slots = [], p
   let r = 0;
   const sessions = chosen.map((d, k) => {
     let activityId = '', f = null;
-    for (let j = 0; j < Math.max(1, order.length); j++) { const a = order[(r + j) % Math.max(1, order.length)] || ''; const x = fit(a, d); if (x) { activityId = a; f = x; r = (r + j + 1) % Math.max(1, order.length); break; } }
-    f ||= { time: defaultTime, max: minutes, env: null, adjusted: false };
-    const sl = slotOf(d)[0], prev = chosen[k - 1], afterDay = prev && Math.round((parseDay(d) - parseDay(prev)) / DAY) === 1;
+    // Sports à tour de rôle ; là où tu es ce jour-là (créneau avec un lieu), ce qu'on y fait d'abord passe devant.
+    const n = Math.max(1, order.length), rot = Array.from({ length: n }, (_, j) => order[(r + j) % n] || '');
+    const best = (a) => Math.max(...slotOf(d).map((x) => score(a, placeOf(x))), slotOf(d).length ? 0 : 1);
+    for (const a of [...rot].sort((a, b) => best(b) - best(a))) { const x = fit(a, d); if (x) { activityId = a; f = x; r = (Math.max(0, order.indexOf(a)) + 1) % n; break; } }
+    f ||= { time: defaultTime, max: minutes, env: null, adjusted: false, slot: null, placed: false };
+    const sl = f.slot || slotOf(d)[0], prev = chosen[k - 1], afterDay = prev && Math.round((parseDay(d) - parseDay(prev)) / DAY) === 1;
     let mins = Math.min(minutes, f.max);
-    const why = [sl ? `ton créneau du ${DAY_LONG[weekday(d)]} (${sl.from}–${sl.to})` : `jour libre (${DAY_LONG[weekday(d)]})`];
+    const why = [sl ? `ton créneau du ${DAY_LONG[weekday(d)]} (${sl.from}–${sl.to}${f.placed ? `, à « ${f.env.name} »` : ''})` : `jour libre (${DAY_LONG[weekday(d)]})`];
     if (f.adjusted) why.push(`heure calée sur l’ouverture de « ${f.env.name} »`);
     const light = (k === 0 && lowForm && d <= ymd(addDays(parseDay(from), 1))) || afterDay || (P.active && P.mode === 'blesse');
     if (k === 0 && lowForm && light) why.push('forme basse aujourd’hui : on commence en douceur');

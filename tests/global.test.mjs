@@ -21,7 +21,7 @@ await ok('exercice : champs bornés, champs inconnus ignorés, nom obligatoire',
 await ok('séance prête : au moins un exercice valide ; format : parties revalidées', () => {
   assert.equal(cleanGlobal('catalog', { name: 'S', ex: [] }), null);
   const c = cleanGlobal('catalog', { name: 'S', minutes: 999, ex: [{ libId: 'pompes', sets: 50, amount: 10, rest: 60 }, { libId: '../x' }] });
-  assert.equal(c.minutes, 240); assert.equal(c.ex.length, 1); assert.equal(c.ex[0].sets, 20);
+  assert.equal(c.minutes, 300, 'bornée à 5 h, comme les séances'); assert.equal(c.ex.length, 1); assert.equal(c.ex[0].sets, 20);
   assert.deepEqual(cleanGlobal('format', { name: 'F', parts: [{ type: 'warmup', minutes: 10 }, { type: 'zzz', minutes: 5 }] }).parts, [{ type: 'warmup', minutes: 10 }]);
 });
 

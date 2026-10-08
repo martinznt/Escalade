@@ -314,7 +314,8 @@ export function goalProgress(g, ctx) {
     return { pct: Math.round((done / m.steps.length) * 100), text: `${done} / ${m.steps.length} étapes maîtrisées · étape en cours : ${m.current?.label || 'toutes maîtrisées'}` };
   }
   const cur = Number(g.current ?? 0);
-  return { pct: g.target ? Math.max(0, Math.min(100, Math.round((cur / g.target) * 100))) : null, current: cur, text: `${cur} / ${g.target ?? '—'} ${g.unit || ''}` };
+  if (!g.target) return { pct: null, current: cur, text: cur ? `${cur} ${g.unit || ''}`.trim() + ' · sans cible chiffrée' : 'Sans cible chiffrée : marque-le comme réussi quand c’est fait.' };
+  return { pct: Math.max(0, Math.min(100, Math.round((cur / g.target) * 100))), current: cur, text: `${cur} / ${g.target} ${g.unit || ''}`.trim() };
 }
 
 /* ═════════════ Maîtrise et arbres de progression (figures) ═════════════ */
@@ -419,18 +420,23 @@ export function regularity(ctx, weeksN = 12) {
   const thisMon = monday(ctx.now);
   const weeks = Array(weeksN).fill(0);
   for (const h of ctx.history) { const w = Math.round((thisMon - monday(h.startedAt)) / 7); if (w >= 0 && w < weeksN) weeks[weeksN - 1 - w]++; }
-  const mean = weeks.reduce((a, b) => a + b, 0) / weeksN;
-  const sd = Math.sqrt(weeks.reduce((t, x) => t + (x - mean) ** 2, 0) / weeksN);
+  // 8.34 : suivi commencé récemment → moyenne et régularité depuis la première séance, pas sur des semaines d'avant l'app.
+  const firstT = ctx.history.length ? Math.min(...ctx.history.map((h) => h.startedAt)) : null;
+  const tracked = firstT == null ? weeksN : Math.max(1, Math.min(weeksN, Math.round((thisMon - monday(firstT)) / 7) + 1));
+  const win = weeks.slice(-tracked), mean = win.reduce((a, b) => a + b, 0) / tracked;
+  const sd = Math.sqrt(win.reduce((t, x) => t + (x - mean) ** 2, 0) / tracked);
   const cv = mean ? sd / mean : null;
-  const constancy = mean === 0 ? 'aucune séance' : cv < 0.35 ? 'très régulière' : cv < 0.7 ? 'assez régulière' : 'irrégulière';
+  const constancy = mean === 0 ? 'aucune séance' : tracked < 3 ? 'trop tôt pour juger la régularité' : cv < 0.35 ? 'très régulière' : cv < 0.7 ? 'assez régulière' : 'irrégulière';
   // Interruptions : écarts d'au moins 7 jours entre deux séances (sur les 180 derniers jours).
   const gaps = [];
   const sorted = ctx.history.filter((h) => ctx.now - h.startedAt < 180 * DAY).map((h) => h.startedAt).sort((a, b) => a - b);
   for (let i = 1; i < sorted.length; i++) { const d = (sorted[i] - sorted[i - 1]) / DAY; if (d >= 7) gaps.push({ from: sorted[i - 1], to: sorted[i], days: Math.round(d) }); }
   const sinceLast = sorted.length ? (ctx.now - sorted[sorted.length - 1]) / DAY : null;
   if (sinceLast != null && sinceLast >= 7) gaps.push({ from: sorted[sorted.length - 1], to: null, days: Math.round(sinceLast) });
-  const last4 = weeks.slice(-4).reduce((a, b) => a + b, 0) / 4, prev4 = weeks.slice(-8, -4).reduce((a, b) => a + b, 0) / 4;
-  const change = prev4 === 0 && last4 === 0 ? null : prev4 === 0 ? 'reprise' : last4 > prev4 * 1.3 ? 'hausse' : last4 < prev4 * 0.7 ? 'baisse' : 'stable';
+  // Les 4 semaines d'avant ne comptent que celles où le suivi avait commencé (sinon : début du suivi, pas une « reprise »).
+  const prevN = Math.max(0, Math.min(4, tracked - 4)), last4 = weeks.slice(-4).reduce((a, b) => a + b, 0) / 4, prev4 = prevN ? weeks.slice(-4 - prevN, -4).reduce((a, b) => a + b, 0) / prevN : 0;
+  const change = prev4 === 0 && last4 === 0 ? null : !prevN ? 'debut' : prev4 === 0 ? 'reprise' : last4 > prev4 * 1.3 ? 'hausse' : last4 < prev4 * 0.7 ? 'baisse' : 'stable';
+  const fr = (x) => String(round(x, 1)).replace('.', ','), wk = (n) => `${n} semaine${n > 1 ? 's' : ''}`;
   // Série : la semaine en cours ne la casse pas (elle n'est pas finie), une semaine de pause non plus (8.30).
   const P = ctx.config?.pause, day0 = (s) => dayNum(Date.parse(s + 'T12:00:00'), ctx.tz), okDay = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
   const pF = P?.pauseMode && okDay(P.pauseFrom) ? day0(P.pauseFrom) : null, pT = okDay(P?.pauseTo) ? day0(P.pauseTo) : dayNum(ctx.now, ctx.tz);
@@ -441,7 +447,8 @@ export function regularity(ctx, weeksN = 12) {
   for (let i = 0; i <= weeksN; i++) { if (i < weeksN && weeks[i] > 0) { if (startW == null) startW = i; } else if (startW != null) { periods.push({ fromWeek: startW, toWeek: i - 1, weeks: i - startW }); startW = null; } }
   return {
     weeks, mean: round(mean, 1), cv: cv == null ? null : round(cv, 2), constancy, gaps: gaps.slice(-5), change, last4: round(last4, 1), prev4: round(prev4, 1), streakWeeks, periods,
-    text: mean === 0 ? 'Aucune séance sur les 12 dernières semaines.' : `En moyenne ${round(mean, 1)} séance(s) par semaine sur ${weeksN} semaines (${constancy}). ${change === 'hausse' ? 'Rythme en hausse ces 4 dernières semaines.' : change === 'baisse' ? 'Rythme en baisse ces 4 dernières semaines.' : change === 'reprise' ? 'Reprise après une période sans séance.' : change === 'stable' ? 'Rythme stable.' : ''}`,
+    tracked,
+    text: mean === 0 ? `Aucune séance sur les ${wk(weeksN)} dernières.` : `En moyenne ${fr(mean)} séance${round(mean, 1) >= 2 ? 's' : ''} par semaine ${tracked < weeksN ? `depuis ta première séance (${wk(tracked)})` : `sur ${wk(weeksN)}`} (${constancy}). ${change === 'debut' ? 'Suivi commencé récemment : la tendance viendra avec quelques semaines de plus.' : change === 'hausse' ? 'Rythme en hausse ces 4 dernières semaines.' : change === 'baisse' ? 'Rythme en baisse ces 4 dernières semaines.' : change === 'reprise' ? 'Reprise après une période sans séance.' : change === 'stable' ? 'Rythme stable.' : ''}`,
   };
 }
 
@@ -708,13 +715,15 @@ export function journal(ctx, limit = 80) {
     if (quick?.performance) bits.push(`Repère déclaré : ${quick.performance}`);
     if (['before','after'].includes(quick?.order)) bits.push(quick.order === 'before' ? 'Avant la séance principale' : 'Après la séance principale');
     if (h.data?.rpe) bits.push(`😮‍💨 ${h.data.rpe}/5`);
+    const where = h.data?.context?.envName || h.data?.context?.place || ctx.envs.find((e) => e.id === h.data?.context?.env)?.name;
+    if (where) bits.push(`📍 ${where}`);
     if (h.data?.aborted) bits.push('interrompue');
     const more = [q.hardest ? `Plus difficile : ${q.hardest}` : '', q.felt?.length ? `Muscles sentis : ${q.felt.map((m) => MUSCLES[m]?.label || m).join(', ')}` : ''].filter(Boolean);
     out.push({ t: h.startedAt, kind: 'session', icon: '✅', title: h.sessionName, text: bits.join(' · '), more, note: [h.data?.note, q.comment].filter(Boolean).join(' — '), id: h.id });
   }
-  for (const p of ctx.perfs) out.push({ t: p.date, kind: 'perf', icon: p.unknown ? '❔' : '📏', title: ctx.metrics[p.metricId]?.label || 'Performance', text: perfText(p, ctx) + (p.styles?.length ? ' · ' + p.styles.map((s) => ctx.styles[s]?.label || s).join(', ') : ''), note: p.note || '' });
-  for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [RESULT_FR[a.result] || a.result, a.attempts > 1 ? a.attempts + ' essais' : a.result === 'flash' || a.result === 'onsight' ? '' : a.attempts ? '1 essai' : ''].filter(Boolean).join(' · '), note: a.note || '' });
-  for (const n of ctx.jnotes) out.push({ t: n.date, kind: 'note', icon: '📝', title: 'Note', text: n.text, note: '' });
+  for (const p of ctx.perfs) out.push({ t: p.date, kind: 'perf', icon: p.unknown ? '❔' : '📏', title: ctx.metrics[p.metricId]?.label || 'Performance', text: perfText(p, ctx) + (p.styles?.length ? ' · ' + p.styles.map((s) => ctx.styles[s]?.label || s).join(', ') : ''), note: p.note || '', perfId: p.id });
+  for (const a of ctx.ascents) out.push({ t: a.date, kind: 'ascent', icon: '🧗', title: `${a.kind === 'voie' ? 'Voie' : 'Bloc'} ${a.grade?.label || a.gradeText || ''}`.trim(), text: [RESULT_FR[a.result] || a.result, a.attempts > 1 ? a.attempts + ' essais' : a.result === 'flash' || a.result === 'onsight' ? '' : a.attempts ? '1 essai' : ''].filter(Boolean).join(' · '), note: a.note || '' , ascId: a.id });
+  for (const n of ctx.jnotes) out.push({ t: n.date, kind: 'note', icon: '📝', title: 'Note', text: n.text, note: '', noteId: n.id });
   return out.filter((x) => x.t && x.t <= ctx.now + 5 * 60000).sort((a, b) => b.t - a.t).slice(0, limit);
 }
 
@@ -741,7 +750,9 @@ export function neverTried(ctx, { activityId, goal, level = 0, envId } = {}) {
   const eq = availableEquipment(ctx, envId);
   const done = new Set(); for (const h of ctx.history) for (const e of h.data?.exercises || []) { const lib = libFor(e); if (lib) done.add(lib.id); }
   const wantCaps = goal ? goalCaps(goal, ctx).map((x) => x.id) : Object.keys(relevantCaps(ctx, activityId));
-  const cands = LIBRARY.filter((x) => x.role === 'main' && !done.has(x.id) && (x.minLevel || 0) <= level && x.needs.every((n) => eq.has(n)) && ctx.prefs[exKey(x.name)]?.value !== 'evite'
+  // Sports « jamais » avec contenu masqué (Profil › Mes sports) : leurs exercices ne sont pas suggérés.
+  const sp = ctx.config?.sports || {}, never = new Set(sp.never || []), hide = new Set((sp.neverHide || []).filter((x) => never.has(x)));
+  const cands = LIBRARY.filter((x) => x.role === 'main' && !(hide.size && x.acts?.length && x.acts.every((a) => hide.has(a))) && !done.has(x.id) && (x.minLevel || 0) <= level && x.needs.every((n) => eq.has(n)) && ctx.prefs[exKey(x.name)]?.value !== 'evite'
     && (!activityId || x.acts.includes(activityId)) && Object.keys(x.caps).some((c) => wantCaps.includes(c)) && x.intensity !== 'high');
   return cands.map((x) => {
     const c = Object.entries(x.caps).filter(([id]) => wantCaps.includes(id)).sort((a, b) => b[1] - a[1])[0];

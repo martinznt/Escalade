@@ -11,6 +11,9 @@ import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHist
 import { uid, summarizeHistory } from './shared.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, EQUIPMENT, CAPACITIES, SKILLS } from './model.js';
 import { openWizard } from './views-climbplan.js';
+import { mine, addField, onChoice, withMyMinutes } from './views-choices.js';
+import { isMine } from './choices.js';
+import { keywordCaps } from './intentions.js';
 import { sessionMinutes } from './engine.js';
 import { parseCommand } from './commands.js';
 import { todayOptions, regularity, benchmarks, activeGoals, goalLabel, goalProgress, records, profileCapacities, strengthsWeaknesses, STATUS_WORD, testReminders, forgottenGoals, undertrained, habits, neverTried, loadAnalysis, periodSummary, achievements, entryActivity, activityLabel, blockers, whyNoProgress } from './brain.js';
@@ -26,7 +29,7 @@ import { programStatus } from './program.js';
 import { buildIcs } from './ics.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard } from './views-setup.js';
 import { formeBlock } from './views-forme.js';
-import { planTools, planAlerts, weekReviewCard } from './views-planning.js';
+import { planTools, planAlerts, weekReviewCard, slotPlaceNow } from './views-planning.js';
 import { storyHome } from './views-story.js';
 
 export const DASH_BLOCKS = {
@@ -74,19 +77,6 @@ function hero() {
 ACT.homeSub = (el) => go('home', el.dataset.id);
 
 /* ═════════ Premier lancement : aucune séance générique imposée ═════════ */
-ACT.obAct = (el) => {
-  const id = el.dataset.id, c = ctx(), a = c.activities[id];
-  if (a) putItem('activity', a.itemId, { preset: id, label: ACTIVITIES[id].label, emoji: ACTIVITIES[id].emoji, archived: true });
-  else { const existing = itemsOf('activity').find((x) => x.preset === id); putItem('activity', existing?.id || 'act-' + id, { preset: id, label: ACTIVITIES[id].label, emoji: ACTIVITIES[id].emoji, archived: false }); }
-  render();
-};
-ACT.obEnv = (el) => {
-  const t = el.dataset.id, ex = ctx().envs.find((e) => e.type === t);
-  if (ex) return;
-  putItem('env', 'env-' + t, { name: ENV_TYPES[t], type: t, equipment: ENV_TEMPLATES[t], isDefault: !ctx().envs.length });
-  toast(`${ENV_TYPES[t]} ajouté avec un matériel type : vérifie-le dans Profil › Mes lieux.`); render();
-};
-ACT.obDone = () => { S.settings.onboarded = true; saveSettings(); render(); };
 ACT.goProfile = (el) => go('profile', el.dataset.id);
 
 /* ═════════ Tableau de bord ═════════ */
@@ -104,7 +94,7 @@ function vDash() {
       hero,
       gen: () => h`${tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true)}${whereAmI()}`,
       seances: () => tile('goLib', '📚', 'Mes séances', 'Lancer, créer, modifier'),
-      timer: () => tile('timerOpen', '⏱', 'Minuteur', 'Suspensions, Tabata…'),
+      timer: () => tile('timerOpen', '⏱', 'Chrono', 'EMOM, AMRAP, Tabata…'),
       carnet: () => tile('goCarnet', '🧗', 'Carnet', 'Blocs, voies et projets'),
       progress: () => tile('goProgress', '📈', 'Mes progrès', 'Historique et records', false, 'summary'),
       cal: safe('calendar'), coach: safe('command'), program: () => programCard() || '', finger: () => fingerCard() || '',
@@ -126,24 +116,33 @@ const ENVIE_CAPS = { force: { tirage_vertical: 0.8, poussee_horizontale: 0.8, fo
 function nothingSheet() {
   const q = S.np, c = ctx(), envs = c.envs.filter((e) => !e.archived);
   openSheet(h`<div class="stack"><h2 style="margin:0">⚡ Je n’ai rien prévu</h2>
-    <span class="small"><b>1 · Combien de temps ?</b></span><div class="chips">${[10, 20, 30, 45, 60].map((m) => chip(q.min === m, `${m} min`, `data-act="npSet" data-k="min" data-v="${m}"`))}</div>
+    <span class="small"><b>1 · Combien de temps ?</b></span><div class="chips">${withMyMinutes([10, 20, 30, 45, 60, q.min]).map((m) => chip(q.min === m, `${m} min`, `data-act="npSet" data-k="min" data-v="${m}"`))}${addField('minutes', 'npMin')}</div>
     <span class="small"><b>2 · Où ?</b></span><div class="chips">${envs.slice(0, 6).map((e) => chip(q.env === e.id, e.name, `data-act="npSet" data-k="env" data-v="${e.id}"`))}${chip(q.env === 'none', '🧍 Ici, sans matériel', 'data-act="npSet" data-k="env" data-v="none"')}</div>
-    <span class="small"><b>3 · Envie de quoi ?</b></span><div class="chips">${ENVIES.map(([k, l]) => chip(q.envie === k, l, `data-act="npSet" data-k="envie" data-v="${k}"`))}</div>
+    <span class="small"><b>3 · Envie de quoi ?</b></span><div class="chips">${[...ENVIES, ...mine('envie').map((x) => [x.id, `✨ ${x.label}`])].map(([k, l]) => chip(q.envie === k, l, `data-act="npSet" data-k="envie" data-v="${k}"`))}${addField('envie', 'npEnvie')}</div>
+    ${isMine(q.envie) ? h`<p class="tiny muted">${Object.keys(keywordCaps(item('choice', q.envie)?.label || '')).length ? `Ça oriente la séance vers : ${Object.keys(keywordCaps(item('choice', q.envie)?.label || '')).map((c) => CAPACITIES[c]?.label || c).join(', ').toLowerCase()}.` : 'Aucun mot reconnu : ton envie est gardée comme intention de la séance, à toi de choisir ce que tu fais.'}</p>` : ''}
     <button class="btn pri big" data-act="npGo">▶ Préparer ma séance</button></div>`);
 }
-ACT.nothingPlanned = () => { const c = ctx(); S.np = { min: Number(S.settings.defaultMinutes) || 30, env: c.defEnv?.id || 'none', envie: 'surprise' }; nothingSheet(); };
+ACT.nothingPlanned = () => { const c = ctx(), here = slotPlaceNow(); S.np = { min: Number(S.settings.defaultMinutes) || 30, env: here?.id || c.defEnv?.id || 'none', envie: 'surprise' }; nothingSheet(); };
+onChoice('npMin', { builtins: () => [10, 20, 30, 45, 60], apply: (key, el, r) => { S.np.min = r.n; nothingSheet(); } });
+onChoice('npEnvie', { builtins: () => ENVIES, apply: (key) => { S.np.envie = key; nothingSheet(); } });
 ACT.npSet = (el) => { S.np[el.dataset.k] = el.dataset.k === 'min' ? Number(el.dataset.v) : el.dataset.v; nothingSheet(); };
 ACT.npGo = () => {
   const q = S.np, c = ctx(), acts = Object.keys(c.activities), climb = acts.find((a) => /^climbing/.test(a));
-  const sport = q.envie === 'technique' && climb ? climb : q.envie === 'endurance' ? (acts.find((a) => ['running', 'conditioning', 'swimming'].includes(a)) || acts[0]) : q.envie === 'mobilite' ? (acts.find((a) => a === 'conditioning') || acts[0]) : (acts.find((a) => ['strength', 'calisthenics', 'conditioning'].includes(a)) || acts[0]);
+  // Envie écrite : le sport suit les capacités reconnues (cardio → endurance, doigts / technique → escalade, souplesse).
+  const oc = isMine(q.envie) ? keywordCaps(item('choice', q.envie)?.label || '') : null;
+  const kind = !oc ? q.envie : oc.endurance_aerobie ? 'endurance' : (oc.technique_escalade || oc.force_doigts || oc.technique_pieds) ? 'technique' : Object.keys(oc).some((k) => k.startsWith('mobilite')) ? 'mobilite' : 'force';
+  const sport = kind === 'technique' && climb ? climb : kind === 'endurance' ? (acts.find((a) => ['running', 'conditioning', 'swimming'].includes(a)) || acts[0]) : kind === 'mobilite' ? (acts.find((a) => a === 'conditioning') || acts[0]) : (acts.find((a) => ['strength', 'calisthenics', 'conditioning'].includes(a)) || acts[0]);
   closeSheet();
+  // Envie écrite par la personne : les mots reconnus deviennent des capacités visées, et le texte reste l'intention.
+  const own = isMine(q.envie) ? item('choice', q.envie) : null, ownCaps = own ? keywordCaps(own.label) : {};
+  if (own) return openWizard({ sport: sport || 'conditioning', minutes: q.min, envId: q.env, words: own.label, focus: Object.keys(ownCaps).length ? { label: own.label, caps: ownCaps } : null });
   openWizard({ sport: sport || 'conditioning', minutes: q.min, envId: q.env, focus: ENVIE_CAPS[q.envie] ? { label: ENVIES.find(([k]) => k === q.envie)[1].replace(/^\S+\s/, ''), caps: ENVIE_CAPS[q.envie] } : null });
 };
 ACT.impactHide = () => { S.impactHidden = ctx().history[0]?.id || ''; render(); };
 ACT.goLib = () => go('library', 'seances');
-ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
-ACT.topCal = () => { go('home', 'cal'); window.scrollTo(0, 0); };
-ACT.goProgressTop = () => { go('progress', 'summary'); window.scrollTo(0, 0); };
+ACT.goCarnet = () => go('profile', 'climbing');
+ACT.topCal = () => go('home', 'cal');
+ACT.goProgressTop = () => go('progress', 'summary');
 // Programme, calendrier et rappels : une seule page « Planning ».
 ACT.topProgram = () => ACT.topCal();
 /** « Je suis à : … » : changer de lieu d'un toucher (la séance du jour s'adapte à son matériel). */
@@ -151,11 +150,10 @@ function whereAmI() {
   const c = ctx(), envs = c.envs.filter((e) => !e.archived); if (envs.length < 2) return '';
   return h`<div class="chips whereami"><span class="tiny muted">📍 Je suis à :</span>${envs.slice(0, 6).map((e) => chip(c.defEnv?.id === e.id, e.name, `data-act="envDefault" data-id="${e.id}"`))}</div>`;
 }
-ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); closeSheet(); go(t, sub); window.scrollTo(0, 0); };
+ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); closeSheet(); go(t, sub); };
 ACT.layEditHome = () => { closeSheet(); go('home', 'dash'); setTimeout(() => ACT.layEdit(), 150); };
 ACT.loopClose = () => { S.lastLoop = null; render(); };
 ACT.genOpen = () => openWizard({});
-ACT.newSeanceHome = () => ACT.newSeance();
 const card = (title, body, extra = '') => h`<section class="card"><div class="row between"><h3>${title}</h3>${extra}</div>${body}</section>`;
 const BLOCK_VIEWS = {
   today() {
@@ -179,7 +177,7 @@ const BLOCK_VIEWS = {
     return card('📅 Prochaines séances', list.length ? list.map(({ d, e }) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${relDate(new Date(d + 'T12:00:00').getTime())}${e.time ? ' à ' + e.time : ''}${e.recurrence ? ' · chaque semaine' : ''}</div></div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.sourceId}" data-date="${d}">▶</button>` : h`<button class="btn sm" data-act="agendaEdit" data-id="${e.id}" data-date="${d}">Voir</button>`}</div>`; }) : h`<p class="muted small">Rien de planifié cette semaine. <button class="btn sm" data-act="homeSub" data-id="cal">Planifier</button></p>`);
   },
   progress() {
-    const b = benchmarks(ctx(), 7), d = (x) => (x == null ? '' : x > 0 ? ` (+${x} %)` : ` (${x} %)`);
+    const b = benchmarks(ctx(), 7), d = (x) => (x == null ? '' : x === 0 ? ' (stable)' : x > 0 ? ` (+${x} %)` : ` (${x} %)`);
     return card('📈 Progression — 7 jours', h`<div class="grid3"><div class="stat"><b>${b.cur.sessions}</b><span>séances${d(b.deltas.sessions)}</span></div><div class="stat"><b>${b.cur.minutes}</b><span>minutes${d(b.deltas.minutes)}</span></div><div class="stat"><b>${b.cur.sets}</b><span>séries${d(b.deltas.sets)}</span></div></div>
       ${b.trends.slice(0, 3).map((t) => h`<p class="small">${t.dir > 0 ? '📈' : t.dir < 0 ? '📉' : '➖'} ${t.text}</p>`)}<p class="tiny muted">${b.text}</p>`, h`<button class="btn sm" data-act="goProgress" data-id="summary">Détails</button>`);
   },
@@ -334,7 +332,6 @@ export async function runCommand(c, raw) {
 ACT.cmdPick = (el) => { const o = S.cmdOptions?.[Number(el.dataset.i)]; closeSheet(); if (o) runCommand(o, S.cmdRaw); };
 
 /* ═════════ Calendrier visuel ═════════ */
-const ACT_COLORS = { climbing_boulder: '#c8914d', climbing_route: '#d7a86e', strength: '#b0674a', conditioning: '#8c9a6b', calisthenics: '#9a7bb0', running: '#6f97a8', swimming: '#5c8fbf' };
 function miniMonth() { return monthGrid(true); }
 function monthGrid(mini = false) {
   if (!S.cal) { const d = new Date(); S.cal = { y: d.getFullYear(), m: d.getMonth() }; }
@@ -344,7 +341,7 @@ function monthGrid(mini = false) {
     <div class="cal">${JOURS.map((j) => h`<div class="h">${j}</div>`)}${cells.map((d) => {
       if (!d) return h`<div></div>`;
       const done = c.history.filter((x) => ymd(new Date(x.startedAt)) === d), planned = eventsOn(d);
-      return h`<button class="d ${d === today ? 'today' : ''} ${done.length ? 'has-done' : ''}" data-act="calDay" data-id="${d}" aria-label="${d}${done.length ? ', ' + done.length + ' séance(s) réalisée(s)' : ''}${planned.length ? ', ' + planned.length + ' prévue(s)' : ''}">${Number(d.slice(8))}<span class="dots">${done.slice(0, 3).map((x) => raw(`<i class="done" style="background:${ACT_COLORS[entryActivity(x, c)] || 'var(--ok)'}"></i>`))}${planned.slice(0, 2).map(() => raw('<i class="plan"></i>'))}${programOn(d).slice(0, 1).map(() => raw('<i class="prog"></i>'))}</span></button>`;
+      return h`<button class="d ${d === today ? 'today' : ''} ${done.length ? 'has-done' : ''}" data-act="calDay" data-id="${d}" aria-label="${d}${done.length ? ', ' + done.length + ' séance(s) réalisée(s)' : ''}${planned.length ? ', ' + planned.length + ' prévue(s)' : ''}">${Number(d.slice(8))}<span class="dots">${done.slice(0, 3).map(() => raw('<i class="done"></i>'))}${planned.slice(0, 2).map(() => raw('<i class="plan"></i>'))}${programOn(d).slice(0, 1).map(() => raw('<i class="prog"></i>'))}</span></button>`;
     })}</div>`;
 }
 function vCalendar() {
@@ -405,9 +402,7 @@ ACT.notDone = async (el) => {
   for (const e of eventsOn(day)) if (e.completed && e.sessionId === x.sessionId) saveEvent(occurrenceChange(S.events.find((x) => x.id === e.sourceId) || e, e.occurrenceDate || day, {date:day, completed:false, meta:{...e.meta,status:'missed'}}));
   toast('Retirée de l’historique'); openPlanSheet(S.selDay || day); render();
 };
-ACT.evUndone = (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; saveEvent({ ...e, completed: false }); toast('Remise « à faire »'); openPlanSheet(S.selDay); render(); };
 ACT.planSeance = (el) => openPlanSheet(ymd(new Date()), el.dataset.id);
-ACT.delEvent = async (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; if (!(await ask(e.recurrence ? 'Supprimer toute la série hebdomadaire ?' : 'Supprimer cet événement ?', { ok: 'Supprimer', danger: true }))) return; deleteEvent(e.id); openPlanSheet(S.selDay); render(); };
 SUBMIT.addRace = (form) => {
   const f = Object.fromEntries(new FormData(form)), title = String(f.title || '').trim().slice(0, 80); if (!title) return;
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || '') ? f.time : '';
