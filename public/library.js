@@ -442,7 +442,7 @@ X('run-intervals-long', 'Fractionné long (3 min)', '⏱️', { kind: 'run', gro
 X('run-hills', 'Côtes', '⛰️', { kind: 'run', group: 'jambes', needs: ['hill'], intensity: 'high', mode: 'time', sets: 6, secMin: 30, secMax: 60, rest: 90,
   caps: cp('force_jambes:.6 seuil:.5 explosivite:.3'), prim: ['quadriceps', 'grand_fessier', 'mollets'], sec: ['ischios'], acts: acts('R'), pattern: 'course', diff: 3,
   cues: ['Monte avec des foulées régulières, redescends en marchant ou trottinant.'], why: 'Force spécifique et puissance aérobie.', src: 'Entraînement course classique' });
-X('run-strides', 'Lignes droites (accélérations)', '💨', { kind: 'run', group: 'jambes', needs: [], intensity: 'mod', mode: 'reps', sets: 6, repsMin: 1, repsMax: 1, unit: 'accélération 80 m', repSec: 20, rest: 60,
+X('run-strides', 'Lignes droites (accélérations)', '💨', { kind: 'run', group: 'jambes', needs: [], intensity: 'mod', mode: 'reps', sets: 6, repsMin: 1, repsMax: 1, unit: 'accélérations de 80 m', repSec: 20, rest: 60,
   caps: cp('vitesse:.7 technique_course:.5'), prim: ['quadriceps', 'ischios'], sec: ['mollets', 'grand_fessier'], acts: acts('R'), pattern: 'course', diff: 2,
   cues: ['Accélère progressivement jusqu’à 90 % de ta vitesse, relâché.'], why: 'Vitesse et relâchement sans fatigue excessive.', src: 'Entraînement course classique' });
 X('run-drills', 'Éducatifs de course', '👟', { kind: 'run', group: 'jambes', needs: [], mode: 'time', sets: 4, secMin: 30, secMax: 30, rest: 30,

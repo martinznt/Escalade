@@ -229,7 +229,8 @@ function vBase() {
     ${aimsSummary()}
     ${bad.length ? h`<button class="btn pri big" disabled>⚡ Proposer ma séance</button><p class="tiny warn-t center">Choisis d’abord un lieu avec un mur d’escalade pour ${bad.map((sp) => sportLabel(sp)).join(', ')} (voir « Lieu » plus haut).</p>`
       : h`<button class="btn pri big" data-act="cpQuick">⚡ Proposer ma séance</button><p class="tiny muted center">L’app construit la structure et choisit les exercices pour ${fmtMin(c.minutes)}. Tu pourras tout ajuster ensuite, ou continuer étape par étape pour préciser.</p>`}
-    <details class="card fold" id="cp-controls" ${(c.controlsOpen ?? !!(c.level && c.level !== 'modere' || c.help && c.help !== 'auto')) ? 'open' : ''}><summary data-act="cpControls"><span>🎛️ Plus de contrôle</span></summary>${vHow()}</details>`;
+    <details class="card fold" id="cp-controls" ${(c.controlsOpen ?? !!(c.level && c.level !== 'modere' || c.help && c.help !== 'auto')) ? 'open' : ''}><summary data-act="cpControls"><span>🎛️ Plus de contrôle</span></summary>${vHow()}</details>
+    <button class="setrow" data-act="newSeance"><span class="sic">✍️</span><span class="grow"><b>Je préfère l’écrire moi-même</b><small>Page blanche : tes exercices, ton ordre, tes durées. Aucun choix imposé.</small></span><span class="chev">›</span></button>`;
 }
 const envOptions = (cur, x) => x.envs.map((e) => h`<option value="${e.id}" ${cur === e.id ? 'selected' : ''}>${e.name}</option>`);
 function wallWarn(sp) {

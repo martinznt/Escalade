@@ -24,7 +24,7 @@ import { CATS, SORTS, FORMS, GROUPS, groupSessions, filterSessions, activeFilter
 import { uid, normalizeEx, normalizeSession, exKey } from './shared.js';
 import { LIBRARY, byId, SOURCES } from './library.js';
 import { capOptionGroups, CAPACITIES, MUSCLES, ACTIVITIES, INTENTIONS, EQUIPMENT, SKILLS } from './model.js';
-import { parseSessionText, exportSessionText, sessionMinutes, exMinutes, parseRest } from './engine.js';
+import { parseSessionText, exportSessionText, sessionMinutes, exMinutes, parseRest, parseQuickList } from './engine.js';
 import { boostSession } from './program.js';
 import { vGenerateForm, genOptions } from './views-gen.js';
 import { vCatalog, vBest } from './views-catalog.js';
@@ -214,7 +214,7 @@ INPUT.sfQ = (el) => { sf().q = el.value; clearTimeout(sfT); sfT = setTimeout(() 
 /** Nouvelle séance : les façons de la créer, expliquées en une ligne. */
 ACT.exMore = () => { S.exMore = true; render(); };
 ACT.newChoose = () => openSheet(h`<div class="stack"><h2 style="margin:0">Nouvelle séance</h2>${draftBanner()}
-  ${[['cpNew', '', '✨', 'Créer une séance', 'Tous sports. L’app choisit tout, te guide, ou tu composes toi-même.'], ['newSeance', '', '📄', 'Page blanche', 'Une séance vide : tu ajoutes tes exercices un par un.'], ['libSub', 'seances', '📂', 'Reprendre une de mes séances', 'La relancer, la modifier ou la dupliquer.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
+  ${[['cpNew', '', '✨', 'Créer une séance', 'Tous sports. L’app choisit tout, te guide, ou tu composes toi-même.'], ['newSeance', '', '✍️', 'À ma façon (page blanche)', 'Tu écris tout toi-même : exercices, ordre, durées, notes. Rien n’est imposé.'], ['libSub', 'seances', '📂', 'Reprendre une de mes séances', 'La relancer, la modifier ou la dupliquer.'], ['libSub', 'catalog', '🗂', 'Séance prête', 'Des séances expliquées et sourcées, à lancer tout de suite.'],
     ['openImport', '', '📋', 'Coller un texte', 'Tu as déjà ta séance écrite quelque part ? Colle-la.'],
     ...(S.user?.guest ? [] : [['groupMenu', '', '👥', 'Séance à plusieurs', 'Rejoindre avec un code, chrono à plusieurs (ex. 7 s / 3 s), ou une séance pour un groupe.']])]
     .map(([act, id, ic, t, d]) => h`<button class="setrow" data-act="${act}" ${id ? raw(`data-id="${id}"`) : ''}><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></button>`)}</div>`);
@@ -260,7 +260,7 @@ ACT.mergeCoach = () => {
   closeSheet(); ACT.coachOpen?.(); const inp = $('.chat-in input'); if (inp) inp.value = `Parmi mes séances ${names}, lesquelles je peux fusionner en une seule, et dans quel ordre ?`.slice(0, 500);
 };
 ACT.seanceFilter = (el) => { S.filters.seances = el.dataset.id; S.sel = null; render(); };
-ACT.newSeance = () => { closeSheet(); const s = saveSeance({ id: uid(), name: 'Nouvelle séance', emoji: '🏋️', exercises: [], source: 'manual', activity: Object.keys(ctx().activities)[0] || '' }); go('library', 'seance', s.id); };
+ACT.newSeance = () => { closeSheet(); const s = saveSeance({ id: uid(), name: 'Nouvelle séance', emoji: '🏋️', exercises: [], source: 'manual', activity: '' }); go('library', 'seance', s.id); };
 ACT.openSeance = (el) => go('library', 'seance', el.dataset.id);
 ACT.play = (el) => {
   const s = el.dataset.gen ? S.gen.result?.session : el.dataset.shared ? S.shared.detail?.session : getSeance(el.dataset.id);
@@ -296,31 +296,38 @@ function editing() {
   if (S.sub.library === 'generate' && S.gen.result) return { s: S.gen.result.session, save: (n) => { S.gen.result.session = normalizeSession(n); S.gen.saved = false; render(); }, kind: 'gen' };
   const s = getSeance(S.param); return s ? { s, save: (n) => { saveSeance(n); render(); }, kind: 'local' } : null;
 }
+const MORE_KEY = 'sea:session-more';
 function vEditor(s, mode) {
-  const c = ctx(), lv = estimateLevel(s), shared = mode === 'shared';
+  const c = ctx(), lv = estimateLevel(s), shared = mode === 'shared', more = !!ls.get(MORE_KEY, false);
+  const meta = [s.activity ? sportName(s.activity) : '', s.context.envName ? `📍 ${s.context.envName}` : ''].filter(Boolean).join(' · ');
   const intents = new Map((s.intentions || []).map((x) => [x.id, x.p]));
-  return h`<h1 class="sr-only">${s.emoji || ''} ${s.name}</h1><div class="row wrapf"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : h`${adaptButton(s.id, 'seance', 'btn')}${groupButton(s.id, 'seance', 'btn')}<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
-    ${shared ? '' : h`<p class="tiny muted">🔁 « Adapter » fait une version pour cette fois (durée, matériel, douleur, échauffement, intensité) sans toucher à cette séance. Pour la changer pour de bon, modifie-la ci-dessous.</p>`}
+  const empty = !s.exercises.length;
+  return h`<h1 class="sr-only">${s.emoji || ''} ${s.name}</h1><div class="row wrapf"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : empty ? '' : h`${adaptButton(s.id, 'seance', 'btn')}${groupButton(s.id, 'seance', 'btn')}<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
+    ${shared || !s.exercises.length ? '' : h`<p class="tiny muted">🔁 « Adapter » fait une version pour cette fois (durée, matériel, douleur, échauffement, intensité) sans toucher à cette séance. Pour la changer pour de bon, modifie-la ci-dessous.</p>`}
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
     ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
-    ${sessionBrief(s, { edit: !shared })}
+    ${empty ? '' : sessionBrief(s, { edit: !shared })}
     <div class="card"><div class="row"><input type="text" data-change="sEmoji" value="${s.emoji}" maxlength="4" class="emoji-in" aria-label="Emoji"><input type="text" data-change="sName" value="${s.name}" maxlength="100" aria-label="Nom de la séance"></div>
-      <div class="grid2"><label>Sport principal<select data-change="sActivity" data-pick="yes" data-add="actNewAndBack" data-add-label="Ajouter un sport"><option value="">—</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
+      ${empty ? (meta ? h`<div class="muted small">${meta}</div>` : '') : h`<div class="muted small">~${sessionMinutes(s)} min · ${s.exercises.length} exercice${s.exercises.length > 1 ? 's' : ''} ${levelTag(lv)}${meta ? h` · ${meta}` : ''}</div>`}
+      <label>Notes <span class="tiny muted">(facultatif)</span><textarea data-change="sNotes" maxlength="1200" placeholder="Consignes générales, objectifs, remarques…">${s.notes.find((n) => n.title === 'Notes')?.text || ''}</textarea></label>
+      <details class="how" ${more ? 'open' : ''}><summary data-act="sMore">⚙️ Sport, lieu, catégories, intentions, durée <span class="tiny muted">(facultatif)</span></summary><div class="stack">
+      <div class="grid2"><label>Sport principal<select data-change="sActivity" data-pick="yes" data-add="actNewAndBack" data-add-label="Ajouter un sport"><option value="">— Aucun en particulier</option>${activityOptions().map(([id, e, l]) => h`<option value="${id}" ${s.activity === id ? 'selected' : ''}>${e} ${l}</option>`)}</select></label>
       <label>Lieu<select data-change="sEnv"><option value="">—</option>${c.envs.map((e) => h`<option value="${e.id}" ${s.context.env === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label></div>
       <b class="small">Autres sports dans cette séance</b><div class="chips">${activityOptions().filter(([id]) => id !== s.activity).map(([id, e, l]) => chip((s.sports || []).includes(id), `${e} ${l}`, `data-act="sSport" data-id="${id}"`))}</div>
       <b class="small">Catégories ${s.tags?.length ? '' : h`<span class="tiny muted">(reconnues automatiquement, touche pour choisir)</span>`}</b>
       <div class="chips">${[...new Set([...Object.keys(CATS), ...(s.tags || [])])].map((k) => chip((s.tags?.length ? s.tags : autoCategories(s)).includes(k), catName(k), `data-act="sTag" data-id="${k}"`))}<button type="button" class="chip" data-act="sTagNew">＋ Autre</button></div>
-      <div class="muted small">~${sessionMinutes(s)} min · ${s.exercises.length} exercice(s) ${levelTag(lv)}</div>
       <b class="small">Intentions</b><div class="chips">${Object.entries(INTENTIONS).map(([id, I]) => chip(intents.has(id), `${I.emoji} ${I.label}${intents.has(id) ? ' ×' + intents.get(id) : ''}`, `data-act="sIntent" data-id="${id}" title="Touche pour changer la priorité"`))}</div>
-      <form data-submit="sAdapt" class="row"><label class="grow">Adapter la durée à<span class="unitbox"><input type="number" inputmode="numeric" name="minutes" min="5" max="240" value="${s.context.plannedMin || sessionMinutes(s)}"><em>min</em></span></label><button class="btn" type="submit">⏱ Reconstruire</button></form>
-      <label>Notes<textarea data-change="sNotes" maxlength="1200" placeholder="Consignes générales, objectifs, remarques…">${s.notes.find((n) => n.title === 'Notes')?.text || ''}</textarea></label>
+      ${s.exercises.length ? h`<form data-submit="sAdapt" class="row"><label class="grow">Adapter la durée à<span class="unitbox"><input type="number" inputmode="numeric" name="minutes" min="5" max="300" value="${s.context.plannedMin || sessionMinutes(s)}"><em>min</em></span></label><button class="btn" type="submit">⏱ Reconstruire</button></form>` : ''}</div></details>
       ${s.notes.filter((n) => n.title !== 'Notes').map((n) => h`<details class="how"><summary>${n.title}</summary><pre class="txt">${n.text}</pre></details>`)}
-      ${howBox(s.explain)}${levelDetails(lv, s)}</div>
-    <div class="card">${s.exercises.length ? blocksOf(s, 'edit') : h`<p class="muted">Aucun exercice. Ajoute-en un.</p>`}
-      <div class="row wrapf"><button class="btn pri" data-act="exAdd">＋ Ajouter un exercice</button><button class="btn" data-act="sEquip">🧰 Matériel indisponible</button></div></div>
-    ${shared ? '' : h`<div class="row wrapf"><button class="btn" data-act="sDup" data-id="${s.id}">⧉ Dupliquer</button><button class="btn" data-act="sTemplate" data-id="${s.id}">${s.template ? '★ Retirer des modèles' : '☆ Enregistrer comme modèle'}</button><button class="btn" data-act="sArchive" data-id="${s.id}">${s.archived ? '↩ Désarchiver' : '🗄 Archiver'}</button>
-      <button class="btn" data-act="planSeance" data-id="${s.id}">📅 Planifier</button><button class="btn" data-act="sText" data-id="${s.id}">📤 Texte</button><button class="btn" data-act="sPublish" data-id="${s.id}">🌍 Partager</button><button class="btn danger" data-act="sDelete" data-id="${s.id}">🗑 Supprimer</button>${contentAdmin() ? h`<button class="btn" data-act="seanceToCatalog" data-id="${s.id}">🌍 En faire une séance prête</button>` : S.user && !S.user.guest ? h`<button class="btn" data-act="propose" data-k="catalog" data-id="${s.id}">💡 Proposer comme séance prête</button>` : ''}</div>`}`;
+      ${howBox(s.explain)}${s.exercises.length ? levelDetails(lv, s) : ''}</div>
+    <div class="card">${s.exercises.length ? blocksOf(s, 'edit') : h`<div class="stack"><b>Ta séance est vide : écris-la comme tu veux.</b><p class="small muted">Un exercice par ligne, comme dans un carnet (« 4 × 8 tractions repos 2 min », « 5 min de corde à sauter »…), ou cherche dans le catalogue. Rien n’est obligatoire : ni sport, ni objectif, ni ordre imposé.</p></div>`}
+      <div class="row wrapf"><button class="btn ${s.exercises.length ? '' : 'pri'}" data-act="exWrite">✍️ Écrire des exercices</button><button class="btn ${s.exercises.length ? 'pri' : ''}" data-act="exAdd">＋ Ajouter un exercice</button>${s.exercises.length ? h`<button class="btn" data-act="sEquip">🧰 Matériel indisponible</button>` : ''}</div></div>
+    ${shared ? '' : empty ? h`<div class="row wrapf"><button class="btn danger" data-act="sDelete" data-id="${s.id}">🗑 Supprimer cette séance vide</button></div>` : h`<div class="row wrapf"><button class="btn" data-act="planSeance" data-id="${s.id}">📅 Planifier</button><button class="btn" data-act="sDup" data-id="${s.id}">⧉ Dupliquer</button><button class="btn" data-act="sPublish" data-id="${s.id}">🌍 Partager</button></div>
+      <details class="how"><summary>Plus d’actions <span class="tiny muted">(modèle, archiver, texte, supprimer…)</span></summary><div class="row wrapf"><button class="btn" data-act="sTemplate" data-id="${s.id}">${s.template ? '★ Retirer des modèles' : '☆ Enregistrer comme modèle'}</button><button class="btn" data-act="sArchive" data-id="${s.id}">${s.archived ? '↩ Désarchiver' : '🗄 Archiver'}</button>
+      <button class="btn" data-act="sText" data-id="${s.id}">📤 Copier en texte</button>${contentAdmin() ? h`<button class="btn" data-act="seanceToCatalog" data-id="${s.id}">🌍 En faire une séance prête</button>` : S.user && !S.user.guest ? h`<button class="btn" data-act="propose" data-k="catalog" data-id="${s.id}">💡 Proposer comme séance prête</button>` : ''}<button class="btn danger" data-act="sDelete" data-id="${s.id}">🗑 Supprimer</button></div></details>`}`;
 }
+// Les réglages facultatifs restent ouverts ou fermés comme la personne les a laissés (sur cet appareil).
+ACT.sMore = (el) => { const d = el.closest('details'); if (!d) return; d.open = !d.open; ls.set(MORE_KEY, d.open); };
 ACT.actNewAndBack = (el) => { setReturn('Retour à ma séance', `library/seance/${S.param}`); go('profile', 'activities'); setTimeout(() => ACT.actNew?.(el), 200); };
 ACT.backSeances = () => go('library', 'seances');
 const edit = (fn) => { const e = editing(); if (!e) return; e.save(fn(e.s)); };
@@ -383,21 +390,31 @@ ACT.sDelete = async (el) => { const s = getSeance(el.dataset.id); if (s && (awai
 ACT.sText = async (el) => { const s = getSeance(el.dataset.id); if (!s) return; const t = exportSessionText(s); try { await navigator.clipboard.writeText(t); toast('Texte copié'); } catch { openSheet(h`<h2 style="margin:0">Texte de la séance</h2><textarea readonly style="min-height:260px">${t}</textarea><button class="btn" data-act="closeSheet">Fermer</button>`); } };
 
 /* Exercices : formulaire, ajout, remplacement intelligent */
+/** Partie d'un exercice dans la séance : les trois blocs habituels, les parties déjà créées, ou une nouvelle. */
+function partSelect(e) {
+  const s = editing()?.s, custom = [...new Set((s?.exercises || []).map((x) => x.part).filter(Boolean))], cur = e.part || e.block || 'main';
+  return h`<label>Partie<select name="part" data-change="exPart">${Object.entries(BLOCKS).map(([k, l]) => h`<option value="${k}" ${!e.part && cur === k ? 'selected' : ''}>${l}</option>`)}${custom.map((p) => h`<option value="${p}" ${e.part === p ? 'selected' : ''}>${p}</option>`)}<option value="__new">＋ Nouvelle partie…</option></select></label>`;
+}
+CHG.exPart = (el) => { const box = el.closest('form')?.querySelector('[data-newpart]'); if (box) { box.hidden = el.value !== '__new'; if (!box.hidden) box.querySelector('input')?.focus(); } };
 function exForm(e, ctxk) {
-  const t = e.mode === 'time';
+  const t = e.mode === 'time', inSession = ctxk.kind === 'session';
   return h`<h2 style="margin:0">${ctxk.eid === 'new' ? 'Nouvel exercice' : 'Modifier l’exercice'}</h2>
   <form data-submit="exSave" class="stack"><input type="hidden" name="ctx" value="${JSON.stringify(ctxk)}">
     <div class="row"><input type="text" name="emoji" value="${e.emoji}" maxlength="4" class="emoji-in" aria-label="Emoji"><input type="text" name="name" value="${e.name === 'Exercice' ? '' : e.name}" maxlength="80" required placeholder="Nom de l’exercice" aria-label="Nom"></div>
     <div class="grid2"><label>Type<select name="mode" data-change="exMode"><option value="reps" ${t ? '' : 'selected'}>Répétitions</option><option value="time" ${t ? 'selected' : ''}>Durée</option></select></label>
-      <label>Bloc<select name="block"><option value="warmup" ${e.block === 'warmup' ? 'selected' : ''}>Échauffement</option><option value="main" ${e.block === 'main' ? 'selected' : ''}>Corps de séance</option><option value="cool" ${e.block === 'cool' ? 'selected' : ''}>Retour au calme</option></select></label></div>
-    <div class="grid3">${numberField('sets', 'Séries', e.sets, { min: 1, max: 30, step: 1 })}<label>Repos<span class="unitbox"><input type="text" inputmode="numeric" name="rest" value="${e.rest}"><em>s ou 2:30</em></span></label><label class="chk"><input type="checkbox" name="perSide" ${e.perSide ? 'checked' : ''}> Par côté</label></div>
+      ${inSession ? partSelect(e) : h`<label>Bloc<select name="block"><option value="warmup" ${e.block === 'warmup' ? 'selected' : ''}>Échauffement</option><option value="main" ${e.block === 'main' ? 'selected' : ''}>Corps de séance</option><option value="cool" ${e.block === 'cool' ? 'selected' : ''}>Retour au calme</option></select></label>`}</div>
+    ${inSession ? h`<label data-newpart hidden>Nom de la nouvelle partie<input name="partNew" maxlength="40" placeholder="Ex. Circuit A, Technique, Bloc force…"></label>` : ''}
+    <div class="grid2">${numberField('sets', 'Séries', e.sets, { min: 1, max: 30, step: 1 })}<label>Repos <span class="tiny muted">(90 ou 1:30)</span><span class="unitbox"><input type="text" inputmode="numeric" name="rest" value="${e.rest}" aria-label="Repos entre les séries"><em>s</em></span></label></div>
+    <label class="chk"><input type="checkbox" name="perSide" ${e.perSide ? 'checked' : ''}> Par côté (chaque bras, chaque jambe)</label>
     <div class="grid2" data-m="reps" ${t ? 'hidden' : ''}>${numberField('repsMin', 'Reps min', e.repsMin, { min: 1, max: 999, step: 1 })}${numberField('repsMax', 'Reps max', e.repsMax, { min: 1, max: 999, step: 1 })}</div>
-    <div class="grid2" data-m="time" ${t ? '' : 'hidden'}>${numberField('secMin', 'Durée min', e.secMin, { min: 1, max: 7200, step: 1, unit: 's' })}${numberField('secMax', 'Durée max', e.secMax, { min: 1, max: 7200, step: 1, unit: 's' })}</div>
-    <div class="grid2"><label>Charge<input type="text" name="load" value="${e.load}" maxlength="60" placeholder="+10 kg, poids du corps…"></label><label>Unité<input type="text" name="unit" value="${e.unit}" maxlength="12" placeholder="blocs, voies…"></label></div>
+    <div class="grid2" data-m="time" ${t ? '' : 'hidden'}>${numberField('secMin', 'Durée min', e.secMin, { min: 1, max: 18000, step: 1, unit: 's' })}${numberField('secMax', 'Durée max', e.secMax, { min: 1, max: 18000, step: 1, unit: 's' })}</div>
+    <div class="grid2"><label>Charge<input type="text" name="load" value="${e.load}" maxlength="60" placeholder="+10 kg, poids du corps…"></label><label>Unité<input type="text" name="unit" value="${e.unit}" maxlength="30" placeholder="m, km, blocs, voies…"></label></div>
+    ${inSession ? h`<label>Note pour cet exercice <span class="tiny muted">(facultatif)</span><input name="note" value="${e.note}" maxlength="400" placeholder="Ex. élastique rouge, réglette de 20 mm, au ralenti…"></label>` : ''}
+    <details class="how"><summary>Consignes, muscles et capacités <span class="tiny muted">(facultatif)</span></summary><div class="stack">
     <label>Consignes (une par ligne)<textarea name="ok">${e.ok.join('\n')}</textarea></label>
     <label>Erreurs à éviter (une par ligne)<textarea name="bad" style="min-height:60px">${e.bad.join('\n')}</textarea></label>
     <label>Muscles principaux</label><div class="chips">${Object.entries(MUSCLES).map(([id, m]) => h`<label class="chip ${e.prim.includes(id) ? 'on' : ''}"><input type="checkbox" name="prim" value="${id}" ${e.prim.includes(id) ? 'checked' : ''} class="hidden" data-change="chipToggle">${m.label}</label>`)}</div>
-    <label>Capacités travaillées</label><div class="chips">${Object.entries(CAPACITIES).map(([id, c]) => h`<label class="chip ${e.caps[id] ? 'on' : ''}"><input type="checkbox" name="caps" value="${id}" ${e.caps[id] ? 'checked' : ''} class="hidden" data-change="chipToggle">${c.label}</label>`)}</div>
+    <label>Capacités travaillées</label><div class="chips">${Object.entries(CAPACITIES).map(([id, c]) => h`<label class="chip ${e.caps[id] ? 'on' : ''}"><input type="checkbox" name="caps" value="${id}" ${e.caps[id] ? 'checked' : ''} class="hidden" data-change="chipToggle">${c.label}</label>`)}</div></div></details>
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button><button class="btn" type="button" data-act="closeSheet">Annuler</button></div>
   </form>`;
 }
@@ -408,7 +425,10 @@ function formExercise(form, base = {}) {
   const fd = new FormData(form), f = Object.fromEntries(fd);
   const lines = (t) => String(t || '').split('\n').map((x) => x.trim()).filter(Boolean);
   const prim = fd.getAll('prim'), caps = Object.fromEntries(fd.getAll('caps').map((c) => [c, base.caps?.[c] || 1]));
-  return normalizeEx({ ...base, name: f.name, emoji: f.emoji, mode: f.mode, block: f.block || base.block || 'main', sets: f.sets, repsMin: f.repsMin, repsMax: f.repsMax, secMin: f.secMin, secMax: f.secMax, perSide: !!f.perSide, load: f.load, unit: f.unit, rest: parseDur(f.rest), ok: lines(f.ok), bad: lines(f.bad), prim, caps, muscles: prim.map((m) => MUSCLES[m]?.label.toLowerCase() || m) });
+  // Partie (fiche d'une séance) : un des trois blocs, une partie existante ou une nouvelle ; sinon le bloc choisi.
+  let block = f.block || base.block || 'main', part = base.part || '';
+  if (f.part != null) { if (BLOCKS[f.part]) { block = f.part; part = ''; } else if (f.part === '__new') { part = String(f.partNew || '').trim().slice(0, 40); if (!part) part = base.part || ''; } else { part = String(f.part).slice(0, 40); } }
+  return normalizeEx({ ...base, name: f.name, emoji: f.emoji, mode: f.mode, block, part, note: f.note != null ? f.note : base.note, sets: f.sets, repsMin: f.repsMin, repsMax: f.repsMax, secMin: f.secMin, secMax: f.secMax, perSide: !!f.perSide, load: f.load, unit: f.unit, rest: parseDur(f.rest), ok: lines(f.ok), bad: lines(f.bad), prim, caps, muscles: prim.map((m) => MUSCLES[m]?.label.toLowerCase() || m) });
 }
 ACT.exEdit = (el) => { const e = editing(); const ex = e?.s.exercises.find((x) => x.id === el.dataset.id); if (ex) openSheet(exForm(ex, { kind: 'session', eid: ex.id }), { wide: true }); };
 SUBMIT.exSave = async (form) => {
@@ -434,9 +454,32 @@ SUBMIT.exSave = async (form) => {
   } catch (err) { toast(err.offline ? 'Connexion requise pour cette action.' : err.message, 4000, 'bad'); }
 };
 ACT.exAdd = () => openSheet(h`<h2 style="margin:0">Ajouter un exercice</h2>
-  <input type="search" data-input="pickQ" placeholder="Rechercher dans le catalogue et tes exercices…" aria-label="Rechercher" autofocus>
+  <div class="row wrapf"><button class="btn" data-act="exWrite">✍️ L’écrire moi-même</button><button class="btn" data-act="exNew">✎ Fiche détaillée</button></div>
+  <input type="search" data-input="pickQ" placeholder="Ou cherche dans le catalogue et tes exercices…" aria-label="Rechercher" autofocus>
   <div id="pickList" class="list">${pickRows('')}</div>
-  <button class="btn" data-act="exNew">✎ Créer un exercice vide</button><button class="btn" data-act="closeSheet">Fermer</button>`, { wide: true });
+  <button class="btn" data-act="closeSheet">Fermer</button>`, { wide: true });
+/* ✍️ Écrire des exercices : une ligne par exercice, les nombres sont compris tout seuls (engine.parseQuickList). */
+const WRITE_EX = ['Échauffement :', '5 min de corde à sauter', 'Corps de séance :', '4 × 8 tractions repos 2 min', 'Gainage 3 × 30 s', '6 × 400 m repos 1:30', 'Retour au calme :', 'Étirements doux'];
+function writePreview(text) {
+  const { exercises } = parseQuickList(text);
+  if (!exercises.length) return h`<p class="tiny muted">L’aperçu de ce qui sera ajouté s’affiche ici.</p>`;
+  let last = null;
+  return h`<span class="kicker">${exercises.length} exercice${exercises.length > 1 ? 's' : ''} prêt${exercises.length > 1 ? 's' : ''} à ajouter</span>${exercises.map((e) => { const p = e.part || BLOCKS[e.block], head = p !== last ? h`<div class="tiny muted">${p}</div>` : ''; last = p; return h`${head}<div class="small">${e.emoji} <b>${e.name}</b> · ${exLine(e)}${e.libId ? h` <span title="Exercice du catalogue : ses explications sont reprises">📖</span>` : ''}</div>`; })}${exercises.some((e) => e.libId) ? h`<p class="tiny muted">📖 exercice reconnu dans le catalogue : ses explications (position, consignes, erreurs) sont reprises.</p>` : ''}`;
+}
+ACT.exWrite = () => openSheet(h`<div class="stack"><h2 style="margin:0">✍️ Écrire des exercices</h2>
+  <p class="small muted">Un exercice par ligne, comme dans un carnet. Les séries, répétitions, durées, distances, charges et repos sont compris tout seuls ; tout se modifie ensuite.</p>
+  <form data-submit="exWriteGo" class="stack"><textarea name="text" rows="8" maxlength="4000" data-input="exWriteQ" aria-label="Exercices, un par ligne" placeholder="${WRITE_EX.join('\n')}"></textarea>
+  <div id="exWritePrev" aria-live="polite">${writePreview('')}</div>
+  <details class="how"><summary>Exemples compris</summary><ul class="clean tight tiny">${['« 3 × 10 squats » ou « Squats 3x10 »', '« 4 x 8-10 tractions repos 2 min »', '« Gainage 3 × 30 s », « Planche 1 min 30 »', '« 5 min de corde à sauter », « Grimpe libre 1 h 30 »', '« 6 × 400 m repos 1:30 », « Footing 5 km »', '« Squat 5 × 5 à 60 kg », « Fentes 3 × 10 par jambe »', 'Une ligne qui finit par « : » ouvre une partie (« Circuit A : »)', 'Un nom seul (« Étirements doux ») est gardé tel quel'].map((t) => h`<li>${t}</li>`)}</ul></details>
+  <button class="btn pri big" type="submit">Ajouter à ma séance</button><button class="btn" type="button" data-act="closeSheet">Annuler</button></form></div>`);
+INPUT.exWriteQ = (el) => { clearTimeout(INPUT.exWriteQ.t); INPUT.exWriteQ.t = setTimeout(() => { const box = $('#exWritePrev'); if (box) box.innerHTML = writePreview(el.value).s; }, 200); };
+SUBMIT.exWriteGo = (f) => {
+  const { exercises } = parseQuickList(String(new FormData(f).get('text') || ''));
+  if (!exercises.length) { toast('Écris au moins un exercice (une ligne).'); return; }
+  const e = editing(); if (!e) return;
+  closeSheet(); e.save({ ...e.s, exercises: [...e.s.exercises, ...exercises.map((x) => ({ ...x, id: uid() }))].slice(0, 60) }); buzzOk();
+  toast(`${exercises.length} exercice${exercises.length > 1 ? 's' : ''} ajouté${exercises.length > 1 ? 's' : ''}`);
+};
 function pickRows(q) {
   const n = String(q || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const e = editing(), act = e?.s.activity;

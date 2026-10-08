@@ -534,7 +534,7 @@ await step('fusionner deux séances : conseil noté, ordre conseillé, nouvelle 
 await step('mes séances : plusieurs sports, catégories, filtres et tris (dont « selon ma forme »)', async () => {
   await a.tab('library'); await a.sub('libSub', 'seances'); await A.waitForSelector('[data-act=sfOpen]');
   const n0 = await a.count('#main [data-act=openSeance]'); assert.ok(n0 >= 3, `${n0} séances`);
-  await A.locator('#main .card:has-text("Ma fusion") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sSport]');
+  await A.locator('#main .card:has-text("Ma fusion") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sSport]', { state: 'attached' }); // dans « ⚙️ Sport, lieu… » (replié)
   await a.click('[data-act=sSport][data-id=running]'); await a.click('[data-act=sTag][data-id=mobilite]');
   await a.tab('library'); await a.sub('libSub', 'seances'); await a.click('[data-act=sfOpen]');
   await a.click('#sheet [data-act=sfTog][data-k=sports][data-v=running]'); await A.waitForSelector('#sheet [data-act=sfDone]');
@@ -838,7 +838,7 @@ await step('V1 : séance structurée (bloc → pause → voie), but ponctuel, pr
   await a.tab('progress'); await a.sub('progSub', 'journal'); await a.click('[data-act=jFilter][data-id=session]'); await A.waitForSelector(`#main :text("${name}")`);
 });
 await step('publication dans la bibliothèque commune (données personnelles retirées)', async () => {
-  await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]');
+  await a.tab('library'); await a.sub('libSub', 'seances'); await A.locator('.card:has-text("Tirage maison") [data-act=openSeance]').click(); await A.waitForSelector('[data-act=sPublish]', { state: 'attached' });
   await a.click('[data-act=sPublish]'); await A.waitForSelector('#sheet >> text=Retiré automatiquement');
   await a.click('#sheet [data-act=sPublishDo][data-scope=common]'); await A.waitForSelector('#toast.show:has-text("Publiée dans la bibliothèque commune")');
   const list = (await a.api('GET', '/api/shared?scope=common')).data.items; assert.equal(list.length, 1); assert.ok(list[0].level.level);

@@ -22,8 +22,8 @@ export function normalizeEx(x = {}) {
   const legacy = clamp(x.amount, 1, 9999, null);
   let repsMin = clamp(x.repsMin ?? (mode === 'reps' ? legacy : null), 1, 999, 10);
   let repsMax = clamp(x.repsMax ?? x.repsMin ?? (mode === 'reps' ? legacy : null), 1, 999, repsMin);
-  let secMin = clamp(x.secMin ?? (mode === 'time' ? legacy : null), 1, 7200, 30);
-  let secMax = clamp(x.secMax ?? x.secMin ?? (mode === 'time' ? legacy : null), 1, 7200, secMin);
+  let secMin = clamp(x.secMin ?? (mode === 'time' ? legacy : null), 1, 18000, 30);
+  let secMax = clamp(x.secMax ?? x.secMin ?? (mode === 'time' ? legacy : null), 1, 18000, secMin);
   if (repsMax < repsMin) [repsMin, repsMax] = [repsMax, repsMin];
   if (secMax < secMin) [secMin, secMax] = [secMax, secMin];
 
@@ -43,7 +43,7 @@ export function normalizeEx(x = {}) {
     sets: clamp(x.sets, 1, 30, 3),
     repsMin, repsMax, secMin, secMax,
     perSide: !!x.perSide,
-    unit: str(x.unit, 12),
+    unit: str(x.unit, 30),
     load: str(x.load, 60),
     rest: clamp(x.rest, 0, 3600, 60),
     muscles,

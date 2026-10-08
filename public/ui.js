@@ -47,11 +47,13 @@ export function relDate(t, now = Date.now()) {
 }
 export const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 export const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-export const rng = (a, b) => (a === b ? `${a}` : `${a}–${b}`);
+const frNum = (v) => String(v).replace('.', ',');
+export const rng = (a, b) => (a === b ? frNum(a) : `${frNum(a)}–${frNum(b)}`);
 export const fmtDur = (s) => { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60), r = s % 60; return m ? (r ? `${m} min ${r}` : `${m} min`) : `${r} s`; };
 export const mmss = (s) => `${Math.floor(s / 60)}:${pad(Math.max(0, s) % 60)}`;
 const secTxt = (a, b) => (a >= 120 ? (a === b ? fmtDur(a) : `${fmtDur(a)} à ${fmtDur(b)}`) : rng(a, b) + ' s');
-export const exLine = (e) => `${e.mode !== 'time' && e.repsMax === 1 && e.repsMin === 1 && /s$/.test(e.unit || '') ? `${e.sets} ${e.sets > 1 ? e.unit : e.unit.replace(/s$/, '')}` : `${e.sets} × ${e.mode === 'time' ? secTxt(e.secMin, e.secMax) : rng(e.repsMin, e.repsMax) + (e.unit ? ' ' + e.unit : '')}${e.perSide ? ' / côté' : ''}`}${e.rest ? ' · repos ' + fmtDur(e.rest) : ''}${e.load ? ' · ' + e.load : ''}`;
+const oneEach = (e) => e.mode !== 'time' && e.repsMax === 1 && e.repsMin === 1;
+export const exLine = (e) => `${oneEach(e) && !e.unit && e.sets === 1 ? '1 fois' : oneEach(e) && /^\d/.test(e.unit || '') ? `${e.sets} × ${e.unit}${e.perSide ? ' / côté' : ''}` : oneEach(e) && /^\S+s(?=\s|$)/.test(e.unit || '') ? `${e.sets} ${e.sets > 1 ? e.unit : e.unit.replace(/^(\S+)s(?=\s|$)/, '$1')}` : `${e.sets === 1 && (e.mode === 'time' || e.unit) ? '' : e.sets + ' × '}${e.mode === 'time' ? secTxt(e.secMin, e.secMax) : rng(e.repsMin, e.repsMax) + (e.unit ? ' ' + e.unit : '')}${e.perSide ? ' / côté' : ''}`}${e.rest ? ' · repos ' + fmtDur(e.rest) : ''}${e.load ? ' · ' + e.load : ''}`;
 
 /* ───────── Messages et feuilles ───────── */
 export function toast(msg, ms = 2800, kind = '') {
@@ -64,7 +66,8 @@ let sheetStack = 0;
 /* ═════════ Écran redessiné sans sauter : rubriques et position gardées ═════════ */
 // Un choix (une couleur, un sport, un créneau…) redessine l'écran. Les rubriques <details> que la personne a ouvertes
 // ou fermées ELLE-MÊME (toucher sur le titre) le restent, page par page ; celles que l'app ouvre (créateur, étape…)
-// suivent l'app. Rubriques à état propre : .setsec ou [data-free].
+// suivent l'app. Rubriques à état propre : .setsec, [data-free], ou un titre avec data-act (l'app gère son état).
+// Une fenêtre (#sheet) garde ses rubriques tant qu'elle est ouverte ; rouverte plus tard, elle repart de zéro.
 const userOpen = new Map();
 const detailText = (d) => (d.querySelector(':scope > summary')?.textContent || '').replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 80);
 const scopeOf = (root) => (root.id === 'main' ? 'page:' + (location.hash || '#/').split('?')[0] : 'sheet:' + sheetTitle(root));
@@ -75,9 +78,10 @@ function keyOf(root, target) {
 }
 if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('click', (e) => {
   const sm = e.target.closest?.('summary'), d = sm?.parentElement;
-  if (!d || d.tagName !== 'DETAILS' || d.matches('.setsec,[data-free]')) return;
+  if (!d || d.tagName !== 'DETAILS' || d.matches('.setsec,[data-free]') || sm.matches('[data-act]')) return;
   const root = d.closest('#sheet > .panel') || d.closest('#main'); if (!root) return;
-  setTimeout(() => { const k = keyOf(root, d); if (k) userOpen.set(k, d.open); }, 0);
+  // Écran redessiné entre-temps : c'est l'app qui a répondu au toucher, rien à retenir.
+  setTimeout(() => { if (!d.isConnected) return; const k = keyOf(root, d); if (k) userOpen.set(k, d.open); }, 0);
 }, true);
 /** Réapplique les rubriques ouvertes ou fermées par la personne sur cet écran (après un rendu). */
 export function restoreUserDetails(root) {
@@ -106,7 +110,7 @@ export function openSheet(content, { wide = false } = {}) {
   s.classList.add('open'); sheetStack++;
   setTimeout(() => { const f = s.querySelector('[autofocus]'); if (f) f.focus(); }, 30);
 }
-export function closeSheet() { const s = $('#sheet'); s.classList.remove('open'); s.innerHTML = ''; sheetStack = 0; }
+export function closeSheet() { const s = $('#sheet'); s.classList.remove('open'); s.innerHTML = ''; sheetStack = 0; for (const k of [...userOpen.keys()]) if (k.startsWith('sheet:')) userOpen.delete(k); }
 export const sheetOpen = () => $('#sheet')?.classList.contains('open');
 
 /** Confirmation dans une feuille (testable, accessible). Résout true / false. */

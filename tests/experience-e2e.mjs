@@ -65,8 +65,10 @@ try {
         await noOverflow('options repliées');assert.ok(await p.locator('[data-act=interfaceSet][data-v=simple]').isVisible());
         assert.equal(await p.locator('.set-account-name').innerText(),'👤 SimpleAgendaMobileCompte');
         const logout=await p.locator('[data-act=logout]').boundingBox();assert.ok(logout&&logout.x>=0&&logout.x+logout.width<=width,'bouton de déconnexion entièrement visible');
-        await p.click('details:has([data-act=chpass]) > summary');await noOverflow('compte ouvert');assert.ok(await p.locator('[data-act=chpass]').isVisible());
-        await p.click('#settings-more > summary');await noOverflow('compte et profil ouverts');assert.ok(await p.locator('#settings-more [data-act=setupAgain][data-id=quiz]').isVisible());
+        // Une rubrique ouverte par la personne reste ouverte quand elle revient sur la page : on ne l'ouvre que si besoin.
+        const openDetails=async sel=>{const d=p.locator(sel).first();if(!(await d.evaluate(x=>x.open)))await d.locator(':scope > summary').click();};
+        await openDetails('details:has([data-act=chpass])');await noOverflow('compte ouvert');assert.ok(await p.locator('[data-act=chpass]').isVisible());
+        await openDetails('#settings-more');await noOverflow('compte et profil ouverts');assert.ok(await p.locator('#settings-more [data-act=setupAgain][data-id=quiz]').isVisible());
         await p.screenshot({path:`/tmp/escalade-settings-${width}-${mode}.png`,fullPage:true});
       }
     }
