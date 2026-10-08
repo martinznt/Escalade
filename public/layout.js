@@ -147,7 +147,6 @@ ACT.layColor = (el) => { const e = findE(el.dataset.id); if (e) { e.color = el.d
 ACT.layPick = (el) => { S.lay.pick = S.lay.pick === el.dataset.id ? '' : el.dataset.id; render(); };
 ACT.layEditAt = (el) => { const [t, sub] = String(el.dataset.to).split('/'); go(t, sub); setTimeout(() => ACT.layEdit(), 150); };
 const leaveLayout = () => { const back = S.lay?.returnTo; S.lay = null; if (back) go(back.tab, back.sub, back.param); else render(); window.scrollTo(0, 0); };
-ACT.layCancel = () => { leaveLayout(); toast('Aucun changement enregistré.'); };
 const changed = () => S.lay && JSON.stringify(S.lay.list.map(({ id, as, color }) => [id, as, color || ''])) !== JSON.stringify(layout(S.lay.page).map(({ id, as, color }) => [id, as, color || '']));
 ACT.layQuit = async () => {
   if (changed() && !(await ask('Quitter sans enregistrer ?', { ok: 'Quitter', detail: 'Tes changements de mise en page seront perdus.' }))) return;

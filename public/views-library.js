@@ -588,11 +588,7 @@ function vGenerate() {
   return h`${vGenerateForm(activityOptions)}${g.plan ? vPlan(g.plan) : ''}${g.result ? vGenResult(g.result) : ''}`;
 }
 ACT.gSet = (el) => { S.gen[el.dataset.k] = el.dataset.k === 'minutes' ? Number(el.dataset.v) : el.dataset.v; S.gen.plan = null; S.gen.result = null; S.gen.priorities = {}; render(); };
-CHG.gGoal = (el) => { S.gen.goalId = el.value; S.gen.plan = null; S.gen.result = null; render(); };
-CHG.gMinutes = (el) => { S.gen.minutes = Math.max(5, Math.min(300, Number(el.value) || 30)); S.gen.plan = null; S.gen.result = null; render(); };
 CHG.gEnv = (el) => { S.gen.envId = el.value; S.gen.plan = null; S.gen.result = null; render(); };
-CHG.gLight = (el) => { S.gen.light = el.checked; S.gen.plan = null; S.gen.result = null; render(); };
-ACT.gIntent = (el) => { const list = [...(S.gen.intentions || [])], i = list.findIndex((x) => x.id === el.dataset.id); if (i < 0) list.push({ id: el.dataset.id, p: 1 }); else if (list[i].p < 3) list[i] = { ...list[i], p: list[i].p + 1 }; else list.splice(i, 1); S.gen.intentions = list; S.gen.plan = null; S.gen.result = null; render(); };
 ACT.genPlan = () => {
   const g = S.gen;
   if (g.mode === 'goal' && !g.goalId) { toast('Choisis un objectif (ou une autre orientation).'); return; }

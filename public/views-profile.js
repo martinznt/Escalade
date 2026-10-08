@@ -604,7 +604,6 @@ function vGoalDetail(g) {
     <div class="setmenu secs">${secs.map(([k, ic, t, d]) => h`<details class="setsec" data-id="${k}" ${tab === k ? 'open' : ''}><summary class="setrow"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">›</span></summary><div class="secbody">${tab === k ? ({ blockers: goalBlockers, tree: goalTree, paths: goalPathsV, strats: goalStrats, graph: goalGraph, whatif: goalWhatIf, why: goalWhy })[k](g) : ''}</div></details>`)}</div>`;
 }
 ACT.goalBack = () => { S.goalTab = 'overview'; go('profile', 'goals'); };
-ACT.goalTab = (el) => { S.goalTab = el.dataset.id; render(); };
 // Rubriques de l'objectif : une liste qui s'ouvre sur place (plus de barre d'onglets) ; le contenu est construit à l'ouverture.
 document.addEventListener('toggle', (e) => { const d = e.target; if (!d.matches?.('details.setsec')) return; if (!d.open) { if (S.goalTab === d.dataset.id) S.goalTab = ''; return; } if (S.goalTab !== d.dataset.id) { S.goalTab = d.dataset.id; render(); } }, true);
 ACT.goalOpen = (el) => { closeSheet(); S.goalTab = 'overview'; go('profile', 'goals', el.dataset.id); };

@@ -102,11 +102,6 @@ ACT.autoWeekSave = () => {
   closeSheet(); buzzOk(); toast(`${keep.length} séance${keep.length > 1 ? 's' : ''} ajoutée${keep.length > 1 ? 's' : ''} au calendrier`); render();
 };
 /** ▶ sur une séance proposée : préparée maintenant, d'après la forme du jour. */
-ACT.autoPlay = (el) => {
-  const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; closeSheet();
-  if (e.meta?.kind === 'test') { go('profile', 'bilan'); window.scrollTo(0, 0); setTimeout(() => ACT.bilanRun?.(), 200); return; }
-  openWizard({ sport: e.meta?.activityId || '', minutes: e.meta?.minutes || 45, forme: e.meta?.light ? 'tired' : '', envId: e.meta?.envId || '' });
-};
 /** Partager sa semaine (texte simple) pour caler des séances avec un partenaire. */
 ACT.shareWeek = async () => {
   const from = ymd(new Date()), to = ymd(new Date(Date.now() + 6 * 86400000)), lines = [];

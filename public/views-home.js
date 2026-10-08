@@ -74,19 +74,6 @@ function hero() {
 ACT.homeSub = (el) => go('home', el.dataset.id);
 
 /* ═════════ Premier lancement : aucune séance générique imposée ═════════ */
-ACT.obAct = (el) => {
-  const id = el.dataset.id, c = ctx(), a = c.activities[id];
-  if (a) putItem('activity', a.itemId, { preset: id, label: ACTIVITIES[id].label, emoji: ACTIVITIES[id].emoji, archived: true });
-  else { const existing = itemsOf('activity').find((x) => x.preset === id); putItem('activity', existing?.id || 'act-' + id, { preset: id, label: ACTIVITIES[id].label, emoji: ACTIVITIES[id].emoji, archived: false }); }
-  render();
-};
-ACT.obEnv = (el) => {
-  const t = el.dataset.id, ex = ctx().envs.find((e) => e.type === t);
-  if (ex) return;
-  putItem('env', 'env-' + t, { name: ENV_TYPES[t], type: t, equipment: ENV_TEMPLATES[t], isDefault: !ctx().envs.length });
-  toast(`${ENV_TYPES[t]} ajouté avec un matériel type : vérifie-le dans Profil › Mes lieux.`); render();
-};
-ACT.obDone = () => { S.settings.onboarded = true; saveSettings(); render(); };
 ACT.goProfile = (el) => go('profile', el.dataset.id);
 
 /* ═════════ Tableau de bord ═════════ */
@@ -155,7 +142,6 @@ ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); c
 ACT.layEditHome = () => { closeSheet(); go('home', 'dash'); setTimeout(() => ACT.layEdit(), 150); };
 ACT.loopClose = () => { S.lastLoop = null; render(); };
 ACT.genOpen = () => openWizard({});
-ACT.newSeanceHome = () => ACT.newSeance();
 const card = (title, body, extra = '') => h`<section class="card"><div class="row between"><h3>${title}</h3>${extra}</div>${body}</section>`;
 const BLOCK_VIEWS = {
   today() {
@@ -179,7 +165,7 @@ const BLOCK_VIEWS = {
     return card('📅 Prochaines séances', list.length ? list.map(({ d, e }) => { const s = e.sessionId && getSeance(e.sessionId); return h`<div class="item"><div class="ico">${s?.emoji || '📅'}</div><div class="grow"><b>${e.title || s?.name || 'Séance'}</b><div class="tiny muted">${relDate(new Date(d + 'T12:00:00').getTime())}${e.time ? ' à ' + e.time : ''}${e.recurrence ? ' · chaque semaine' : ''}</div></div>${s ? h`<button class="btn pri sm" data-act="play" data-id="${s.id}" data-event="${e.sourceId}" data-date="${d}">▶</button>` : h`<button class="btn sm" data-act="agendaEdit" data-id="${e.id}" data-date="${d}">Voir</button>`}</div>`; }) : h`<p class="muted small">Rien de planifié cette semaine. <button class="btn sm" data-act="homeSub" data-id="cal">Planifier</button></p>`);
   },
   progress() {
-    const b = benchmarks(ctx(), 7), d = (x) => (x == null ? '' : x > 0 ? ` (+${x} %)` : ` (${x} %)`);
+    const b = benchmarks(ctx(), 7), d = (x) => (x == null ? '' : x === 0 ? ' (stable)' : x > 0 ? ` (+${x} %)` : ` (${x} %)`);
     return card('📈 Progression — 7 jours', h`<div class="grid3"><div class="stat"><b>${b.cur.sessions}</b><span>séances${d(b.deltas.sessions)}</span></div><div class="stat"><b>${b.cur.minutes}</b><span>minutes${d(b.deltas.minutes)}</span></div><div class="stat"><b>${b.cur.sets}</b><span>séries${d(b.deltas.sets)}</span></div></div>
       ${b.trends.slice(0, 3).map((t) => h`<p class="small">${t.dir > 0 ? '📈' : t.dir < 0 ? '📉' : '➖'} ${t.text}</p>`)}<p class="tiny muted">${b.text}</p>`, h`<button class="btn sm" data-act="goProgress" data-id="summary">Détails</button>`);
   },
@@ -334,7 +320,6 @@ export async function runCommand(c, raw) {
 ACT.cmdPick = (el) => { const o = S.cmdOptions?.[Number(el.dataset.i)]; closeSheet(); if (o) runCommand(o, S.cmdRaw); };
 
 /* ═════════ Calendrier visuel ═════════ */
-const ACT_COLORS = { climbing_boulder: '#c8914d', climbing_route: '#d7a86e', strength: '#b0674a', conditioning: '#8c9a6b', calisthenics: '#9a7bb0', running: '#6f97a8', swimming: '#5c8fbf' };
 function miniMonth() { return monthGrid(true); }
 function monthGrid(mini = false) {
   if (!S.cal) { const d = new Date(); S.cal = { y: d.getFullYear(), m: d.getMonth() }; }
@@ -344,7 +329,7 @@ function monthGrid(mini = false) {
     <div class="cal">${JOURS.map((j) => h`<div class="h">${j}</div>`)}${cells.map((d) => {
       if (!d) return h`<div></div>`;
       const done = c.history.filter((x) => ymd(new Date(x.startedAt)) === d), planned = eventsOn(d);
-      return h`<button class="d ${d === today ? 'today' : ''} ${done.length ? 'has-done' : ''}" data-act="calDay" data-id="${d}" aria-label="${d}${done.length ? ', ' + done.length + ' séance(s) réalisée(s)' : ''}${planned.length ? ', ' + planned.length + ' prévue(s)' : ''}">${Number(d.slice(8))}<span class="dots">${done.slice(0, 3).map((x) => raw(`<i class="done" style="background:${ACT_COLORS[entryActivity(x, c)] || 'var(--ok)'}"></i>`))}${planned.slice(0, 2).map(() => raw('<i class="plan"></i>'))}${programOn(d).slice(0, 1).map(() => raw('<i class="prog"></i>'))}</span></button>`;
+      return h`<button class="d ${d === today ? 'today' : ''} ${done.length ? 'has-done' : ''}" data-act="calDay" data-id="${d}" aria-label="${d}${done.length ? ', ' + done.length + ' séance(s) réalisée(s)' : ''}${planned.length ? ', ' + planned.length + ' prévue(s)' : ''}">${Number(d.slice(8))}<span class="dots">${done.slice(0, 3).map(() => raw('<i class="done"></i>'))}${planned.slice(0, 2).map(() => raw('<i class="plan"></i>'))}${programOn(d).slice(0, 1).map(() => raw('<i class="prog"></i>'))}</span></button>`;
     })}</div>`;
 }
 function vCalendar() {
@@ -405,9 +390,7 @@ ACT.notDone = async (el) => {
   for (const e of eventsOn(day)) if (e.completed && e.sessionId === x.sessionId) saveEvent(occurrenceChange(S.events.find((x) => x.id === e.sourceId) || e, e.occurrenceDate || day, {date:day, completed:false, meta:{...e.meta,status:'missed'}}));
   toast('Retirée de l’historique'); openPlanSheet(S.selDay || day); render();
 };
-ACT.evUndone = (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; saveEvent({ ...e, completed: false }); toast('Remise « à faire »'); openPlanSheet(S.selDay); render(); };
 ACT.planSeance = (el) => openPlanSheet(ymd(new Date()), el.dataset.id);
-ACT.delEvent = async (el) => { const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; if (!(await ask(e.recurrence ? 'Supprimer toute la série hebdomadaire ?' : 'Supprimer cet événement ?', { ok: 'Supprimer', danger: true }))) return; deleteEvent(e.id); openPlanSheet(S.selDay); render(); };
 SUBMIT.addRace = (form) => {
   const f = Object.fromEntries(new FormData(form)), title = String(f.title || '').trim().slice(0, 80); if (!title) return;
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || '') ? f.time : '';

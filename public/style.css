@@ -356,7 +356,7 @@ canvas.confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:n
 /* ═════════ Programme ═════════ */
 .prog{display:grid;gap:8px}.prog .meter,.pview .meter{height:8px}.prog .nextrow,.prog .warnrow{gap:10px;align-items:center}
 .prog .warnrow{padding:8px 10px;border-radius:12px;background:color-mix(in srgb,var(--warn,#e0a030) 14%,transparent)}
-.cal .dots i.prog{background:transparent;border:1.5px dashed var(--accent);box-sizing:border-box}.legend .lg.prog{border:1.5px dashed var(--accent);background:transparent}
+.cal .dots i.done{background:var(--ok)}.cal .dots i.prog{background:transparent;border:1.5px dashed var(--accent);box-sizing:border-box}.legend .lg.prog{border:1.5px dashed var(--accent);background:transparent}
 .pwiz{display:grid;gap:10px}.pwiz h2{margin:0}.pwiz .chips.days .chip{min-width:52px;justify-content:center}.pwsum{display:grid;gap:4px}
 .pview{display:grid;gap:10px}.pview h2{margin:0}.pweek{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:8px}
 .pdots{display:flex;gap:6px;flex-wrap:wrap}.pd{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;background:var(--card2);color:var(--muted)}

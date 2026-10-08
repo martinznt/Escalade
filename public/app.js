@@ -261,7 +261,6 @@ ACT.linkAdapt = () => {
 };
 ACT.linkPlay = () => { const it = S.linkView?.item; if (!it) return; clearPending(); S.linkView = null; render(); startPlayer(it.session); };
 ACT.pubLogin = () => { location.hash = ''; S.authMode = 'login'; render(); };
-ACT.tourStart2 = () => maybeTour(true);
 ACT.pubView = async (el) => { try { const r = await api('GET', `/api/public/s/${encodeURIComponent(el.dataset.id)}`, undefined, { quiet401: true }); S.publicSession = r.item; render(); } catch (e) { toast(e.message); } };
 
 /* ═════════ Événements ═════════ */

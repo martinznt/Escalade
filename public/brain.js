@@ -314,7 +314,8 @@ export function goalProgress(g, ctx) {
     return { pct: Math.round((done / m.steps.length) * 100), text: `${done} / ${m.steps.length} étapes maîtrisées · étape en cours : ${m.current?.label || 'toutes maîtrisées'}` };
   }
   const cur = Number(g.current ?? 0);
-  return { pct: g.target ? Math.max(0, Math.min(100, Math.round((cur / g.target) * 100))) : null, current: cur, text: `${cur} / ${g.target ?? '—'} ${g.unit || ''}` };
+  if (!g.target) return { pct: null, current: cur, text: cur ? `${cur} ${g.unit || ''}`.trim() + ' · sans cible chiffrée' : 'Sans cible chiffrée : marque-le comme réussi quand c’est fait.' };
+  return { pct: Math.max(0, Math.min(100, Math.round((cur / g.target) * 100))), current: cur, text: `${cur} / ${g.target} ${g.unit || ''}`.trim() };
 }
 
 /* ═════════════ Maîtrise et arbres de progression (figures) ═════════════ */

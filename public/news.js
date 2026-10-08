@@ -196,9 +196,16 @@ export const NEWS = [
   { v:'8.33.0', date:'2026-10-06', title:'Des séances mieux organisées, une app à ton image', why:'Un objectif peut être travaillé dans plusieurs phases, et une phase peut servir plusieurs objectifs. Choisis ou dessine les icônes de ton compte.', steps:[
     ['library','climbplan','','Objectifs et phases','Un objectif décrit ce que tu veux améliorer. Une phase organise une partie de la séance. Vérifie leurs associations avant de générer.'],
     ['settings','display','#app-icons','Ton icône','Choisis parmi plusieurs styles ou crée ton dessin avec une base, des sports et des couleurs. Le lien d’installation prépare ce choix pour ton appareil.'],
-    ['settings','notifs','#notification-icons','Les notifications aussi','Garde l’icône de l’app ou choisis une icône de notification distincte. Certains systèmes utilisent leur propre apparence.'],
+    ['settings','display','#notification-icons','Les notifications aussi','Dans Affichage : garde l’icône de l’app ou choisis une icône de notification distincte. Certains systèmes utilisent leur propre apparence.'],
     ['settings','integrations','','Tes applications sportives','Retrouve les imports de fichiers et la connexion Strava, disponible après configuration du site. Tu vérifies chaque activité avant de l’ajouter.'],
     ['settings','main','','Des réponses plus explicites','L’assistant montre ses références ou demande une précision. Les outils manuels restent disponibles lorsqu’une réponse ne peut pas être vérifiée.'],
+  ] },
+  { v:'8.34.0', date:'2026-10-08', title:'Ta séance à ta façon, un vrai chrono, des exercices bien expliqués', why:'Écris ta séance comme dans un carnet, chronomètre-toi en EMOM ou AMRAP, et retrouve pour chaque exercice comment te placer et où mettre la charge.', steps:[
+    ['library','home','[data-act=newSeance]','À ta façon','« ✍️ À ma façon » : une page blanche. Écris tes exercices un par ligne (« 4 × 8 tractions repos 2 min ») : l’app comprend les nombres. Rien n’est imposé.'],
+    ['home','dash','[data-act=timerOpen]','Un chrono pour tout','Chaque minute (EMOM), le plus de tours (AMRAP), pour le temps, intervalles et Tabata, compte à rebours, chronomètre : le résultat va dans ton historique.'],
+    ['library','exercises','','Des exercices bien expliqués','Pour chaque exercice : la position de départ, le mouvement, où mettre la charge, et une version plus facile ou plus dure. Et 40 exercices de plus.'],
+    ['profile','activities','','Les sports que tu ne fais jamais','Marque-les « Jamais » : ils ne te sont plus proposés, et leurs exercices peuvent être masqués. Un toucher pour les remettre.'],
+    ['settings','main','[data-act=installNow]','Installer, sur tous les appareils','« 📲 Installer » montre les gestes exacts pour ton téléphone ou ton ordinateur, iPhone compris.'],
   ] },
 ];
 

@@ -771,11 +771,8 @@ ACT.cpForme = (el) => { CP().forme = el.dataset.id; CP().formeFrom = ''; keep();
 ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id; c.result = null; c.built = null; keep(); render(); };
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };
-ACT.cpIntentWrite = () => { S.gen.activityId = CP().sport; ACT.gWrite?.({ dataset: { k: 'intent' } }); };
-ACT.cpFocusOff = () => { CP().focus = null; keep(); render(); };
-ACT.cpGoal = tog('goalIds'); ACT.cpIntent = tog('intents'); ACT.cpZone = tog('zones');
+ACT.cpZone = tog('zones');
 // Aller ajouter des objectifs, puis revenir à la séance (le brouillon est gardé).
-ACT.cpAddGoals = () => { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'goals'); };
 const WORK_HINT = { run: 'fractionné, seuil…', swim: 'séries, pyramide…', load: 'force, 5×5…', body: 'EMOM, pyramide…' };
 function vPhases() {
   const c = CP(), sports = Object.keys(ctx().activities).filter((id) => !isClimb(id));
@@ -973,7 +970,6 @@ export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', 
 ACT.cpAgain = () => { const c = CP(); c.seed = (c.seed || 1) + 1; if (isClimb(c.sport)) { c.parts = proposeParts(); c.partsFor = partsKey(); } c.result = null; buildNow(); keep(); render(); };
 CHG.cpEnv = (el) => { if (el.value === '__new') { keep(); setReturn('Retour à ma séance', 'library/climbplan'); go('profile', 'equipment'); return; } CP().envId = el.value; CP().envPicked = true; CP().sys = {}; keep(); render(); };
 CHG.cpSys = (el) => { CP().sys = { ...CP().sys, [el.dataset.k]: el.value }; CP().target = null; keep(); render(); };
-ACT.cpKind = (el) => { CP().kind = el.dataset.id; CP().target = null; keep(); render(); };
 ACT.cpTarget = (el) => { CP().target = Number(el.dataset.id); keep(); render(); };
 CHG.cpTargetSel = (el) => { CP().target = el.value === '' ? null : Number(el.value); keep(); render(); };
 ACT.cpStyle = (el) => { const c = CP(), id = el.dataset.id; c.styles = c.styles.includes(id) ? c.styles.filter((x) => x !== id) : [...c.styles, id]; keep(); render(); };
@@ -1000,11 +996,6 @@ ACT.cpAdd = (el) => {
   c.parts.push(p); c.result = null; c.partsTouched = true; keep(); render(); editPart(c.parts.length - 1);
 };
 ACT.cpExample = () => { CP().parts = proposedPhases(); CP().partsTouched = false; CP().partsFor = partsKey(); CP().result = null; keep(); render(); };
-CHG.cpScale = (el) => {
-  const c = CP(), total = c.parts.reduce((t, p) => t + p.minutes, 0), want = Math.max(20, Math.min(300, Number(el.value) || total));
-  if (!total) return; let acc = 0; c.parts.forEach((p, i) => { p.minutes = i === c.parts.length - 1 ? Math.max(5, want - acc) : Math.max(5, Math.round((p.minutes * want) / total / 5) * 5); acc += p.minutes; });
-  c.result = null; c.partsTouched = true; keep(); render();
-};
 ACT.cpLock = (el) => upd(Number(el.dataset.i), (p) => { const k = el.dataset.k, order = ['free', 'user', 'app'], cur = p.locks?.[k] || 'free'; p.locks = { ...p.locks, [k]: order[(order.indexOf(cur) + 1) % 3] }; });
 ACT.cpPhRole = (el) => upd(Number(el.dataset.i), (p) => { p.role = el.dataset.id; });
 ACT.cpPhAim = (el) => upd(Number(el.dataset.i), (p) => {
