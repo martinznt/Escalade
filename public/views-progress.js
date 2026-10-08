@@ -1,4 +1,5 @@
 import { isExternal, externalLabel, externalOf } from './external.js';
+import { registerPaths } from './pathlinks.js';
 import { advancedUI } from './views-experience.js';
 // views-progress.js — Progrès : comparaisons personnelles, résumés, régularité, charge, historique, records,
 // timeline, journal, analyses descriptives et mode Lab. Toujours par rapport à soi-même, jamais aux autres.
@@ -22,6 +23,7 @@ const SUB_INFO = {
   journal: ['📝', 'Journal', (c) => (c.history.length ? `${c.history.length} séance${c.history.length > 1 ? 's' : ''}, blocs et voies, mesures, notes, étapes` : 'Séances, blocs et voies, mesures, notes, étapes')],
   records: ['🏆', 'Records et mesures', () => 'Records, tests, maxima (dans ton profil)'], analyse: ['🔎', 'Mon analyse', () => 'Capacités, tendances, pourquoi ces conseils, lab'],
 };
+registerPaths('Progrès', 'progress', Object.entries(SUB_INFO).filter(([id]) => !['records', 'analyse'].includes(id)).map(([id, [, label]]) => [label, id]));
 /** Progrès : le résumé d'abord (l'essentiel), puis la liste des rubriques ; chaque rubrique a sa page. */
 export function vProgress() {
   const sub = SUBS.some(([k]) => k === S.sub.progress) ? S.sub.progress : 'summary';

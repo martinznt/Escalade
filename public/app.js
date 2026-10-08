@@ -3,7 +3,8 @@
 // la délégation des événements et le démarrage. En cas d'erreur de démarrage, boot.js affiche un écran d'erreur.
 import { returnBar, hintsBar } from './nav.js';
 import './picker.js';
-import { h, raw, icon, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
+import { linkPaths } from './pathlinks.js';
+import { restoreUserDetails, onSheetRender, h, raw, icon, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
 import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession, uid } from './shared.js';
@@ -52,8 +53,16 @@ function syncBadge() {
   const label = { ok: 'Synchronisé', sync: 'Synchronisation…', pending: `${n} modification(s) en attente`, offline: `Hors ligne${n ? ` · ${n} en attente` : ''}`, error: 'Erreur de synchronisation', auth: 'Reconnexion nécessaire', idle: '' }[S.sync] || '';
   return h`<button class="syncbadge ${S.sync}" data-act="goSync" aria-label="${label}" title="${label}"><span class="dot"></span><span class="sw">${SYNC_WORD[S.sync]?.(n) || ''}</span></button>`;
 }
+onSheetRender(linkPaths);
+let lastRoute = '', backTo = null;
 function doRender() {
   const app = $('#app');
+  // Même page redessinée (un choix, une case cochée…) : rubriques ouvertes et position gardées, jamais de remontée.
+  // Autre page : on arrive en haut ; en revenant sur la page qu'on vient de quitter (liste → détail → liste), on retrouve
+  // l'endroit où l'on était.
+  const route = S.user && S.loaded ? `${S.tab}/${S.sub[S.tab] || ''}/${S.param || ''}` : '', same = !!route && route === lastRoute;
+  const keep = same ? { y: window.scrollY } : backTo && route && backTo.route === route && Date.now() - backTo.at < 120000 ? { y: backTo.y } : null;
+  if (route && !same && lastRoute) backTo = { route: lastRoute, y: window.scrollY, at: Date.now() };
   const pub = (location.hash || '').match(/^#\/profile\/public\/([^/]+)$/);
   const pl = pendingLink();
   if (!S.user) { app.innerHTML = (pub ? vPublicVisitor(decodeURIComponent(pub[1])) : pl && !S.authMode ? h`<main class="wrap">${vLanding(pl)}</main>` : vAuth()).s; return; }
@@ -70,7 +79,13 @@ function doRender() {
   }
   app.innerHTML = h`<header class="top"><div class="wrap row between"><span class="brand"><img src="/icon-192.png" alt="" width="26" height="26"><span class="bt"> Séances <em>entraînement</em></span></span><span class="grow"></span>${topIcons(S.tab)}${syncBadge()}</div></header>
     <main class="wrap" id="main">${demoBar()}<div id="site-banner">${bannerBar()}</div>${layoutEditing() ? '' : h`${returnBar()}${advancedUI() ? hintsBar() : ''}${S.tab === 'home' && S.sub.home === 'setup' ? '' : pageTourBar()}`}${layoutPreviewBar()}${body}</main>
-    <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${icon(id, ic)}</span><span class="lbl">${id === 'profile' && !advancedUI() ? 'Moi' : label}</span></button>`)}</nav>`.s;
+    <nav class="tabs" aria-label="Navigation principale">${TABS.map(([id, ic, label]) => h`<button data-act="tab" data-id="${id}" class="${S.tab === id ? 'on' : ''}" aria-current="${S.tab === id ? 'page' : 'false'}"><span class="ico">${icon(id, ic)}</span><span class="lbl">${label}</span></button>`)}</nav>`.s;
+  linkPaths($('#main'));
+  const moved = route && !same;
+  lastRoute = route;
+  restoreUserDetails($('#main'));
+  if (keep) { if (Math.abs(window.scrollY - keep.y) > 1) window.scrollTo(0, keep.y); }
+  else if (moved) window.scrollTo(0, 0);
 }
 /** Bandeau de l'équipe (ex. maintenance prévue) : affiché jusqu'à sa date de fin, ou jusqu'à « Compris ». */
 function bannerBar() {
@@ -89,6 +104,18 @@ function syncAppearance() {
 setRenderer(() => { syncAppearance(); setLang(S.settings?.lang); syncContent(); doRender(); syncAppIcon(); renderUpdateBar(); checkBadges(); });
 setSyncListener(() => { const b = $('.syncbadge'); if (b) b.outerHTML = syncBadge().s; });
 ACT.tab = (el) => { const id = el.dataset.id; closeSheet(); window.scrollTo(0, 0); const base = { home: 'dash', progress: 'summary', library: 'home', profile: 'home', settings: 'main' }[id]; go(id, base); }; // un onglet s'ouvre toujours sur sa page d'accueil (sa liste de rubriques)
+/** Lien d'une indication de chemin (section puis page) : la page s'ouvre, la fenêtre en cours se ferme. */
+ACT.goPath = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); if (!t) return; closeSheet(); go(t, sub); };
+/** Lien vers un endroit précis d'une page : la page s'ouvre, la rubrique se déplie et l'endroit est mis en lumière. */
+ACT.goSpot = (el) => {
+  const [t, sub] = String(el.dataset.to || '').split('/'), spot = el.dataset.spot; if (!t) return; closeSheet(); go(t, sub);
+  if (!spot) return; const t0 = Date.now();
+  const find = () => { const x = document.querySelector('#main ' + spot); if (!x) { if (Date.now() - t0 < 1500) requestAnimationFrame(find); return; }
+    for (let d = x.closest('details'); d; d = d.parentElement?.closest('details')) d.open = true;
+    if (x.tagName === 'DETAILS') x.open = true;
+    x.scrollIntoView({ block: 'start', behavior: 'smooth' }); x.classList.add('spotlight'); setTimeout(() => x.classList.remove('spotlight'), 2200); };
+  requestAnimationFrame(find);
+};
 ACT.goSync = () => go('settings', 'sync');
 ACT.goAccount = () => go('settings', 'main');
 ACT.closeSheet = () => closeSheet();
@@ -321,13 +348,21 @@ ACT.updWhat = async () => {
     <div class="row">${UPD.available ? h`<button class="btn pri" data-act="updNow">Mettre à jour maintenant</button>` : tour ? h`<button class="btn pri" data-act="newsTour">🧭 ${missed.length > 1 ? `Tout rattraper (${pendingNews().length} étapes)` : 'Visite des nouveautés'}</button>` : ''}<span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`;
   if (document.querySelector('#sheet.open .news')) openSheet(body);
 };
+/* Demande de mise à jour : gardée 2 minutes (même après un rechargement), retirée quand la nouvelle version est active. */
+const UPD_KEY = 'sea:user-update', UPD_TTL = 2 * 60000;
+const updRequested = () => { const t = Number(sessionStorage.getItem(UPD_KEY)); return t > 1e12 && Date.now() - t < UPD_TTL; };
 ACT.updNow = async () => {
   if (S.player) { toast('Termine ta séance, puis mets à jour.'); return; }
   writePending(); await persistNow();
-  sessionStorage.setItem('sea:user-update', '1');
-  const w = UPD.reg?.waiting;
-  if (w) { w.postMessage('SKIP_WAITING'); setTimeout(() => location.reload(), 4000); } // rechargement au changement de version (ou au plus tard 4 s)
-  else location.reload();
+  sessionStorage.setItem(UPD_KEY, String(Date.now()));
+  const reg = UPD.reg;
+  if (!reg) { location.reload(); return; }
+  // La nouvelle version est d'abord téléchargée, puis activée ; la page se recharge quand elle est prête
+  // (au plus tard 15 s : la demande reste valable après le rechargement et l'installation continue).
+  toast('Mise à jour en cours…', 15000);
+  setTimeout(() => location.reload(), 15000);
+  if (!reg.waiting && !reg.installing) { try { await reg.update(); } catch { /* hors ligne : le rechargement réessaiera */ } }
+  if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
 };
 ACT.updLater = () => { UPD.later = Date.now() + 3 * 3600000; renderUpdateBar(); };
 /** Vérifie s'il existe une version plus récente sur le serveur (sans compte, sans cache). */
@@ -351,41 +386,36 @@ function registerSW() {
   checkUpdate(); setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) checkUpdate(); }, 30000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
   if (!('serviceWorker' in navigator)) return;
+  // Une demande trop ancienne (ou d'un ancien format) est simplement oubliée.
+  if (sessionStorage.getItem(UPD_KEY) && !updRequested()) sessionStorage.removeItem(UPD_KEY);
   navigator.serviceWorker.register('/sw.js').then((reg) => {
     UPD.reg = reg;
-    const requested = () => !!sessionStorage.getItem('sea:user-update');
     const watched = new WeakSet();
+    // Version prête : activée tout de suite si l'utilisateur l'a demandée, sinon proposée (« Mettre à jour »).
+    const ready = (w) => { if (updRequested()) w.postMessage('SKIP_WAITING'); else if (navigator.serviceWorker.controller) showUpdate(); };
     const watch = (w) => {
       if (!w || watched.has(w)) return;
       watched.add(w);
-      const changed = () => {
-        if (w.state === 'installed') {
-          if (requested()) w.postMessage('SKIP_WAITING');
-          else if (navigator.serviceWorker.controller) showUpdate();
-        }
-        if (w.state === 'redundant' && requested() && ![reg.installing, reg.waiting].some((worker) => worker && worker.state !== 'redundant')) sessionStorage.removeItem('sea:user-update');
-      };
+      const changed = () => { if (w.state === 'installed') ready(w); };
       w.addEventListener('statechange', changed);
       changed();
     };
-    // Le rechargement demandé peut arriver avant waiting, pendant le précache.
-    // register peut alors retrouver un Worker déjà en installation, sans nouvel événement updatefound.
+    // Le rechargement demandé peut arriver pendant le précache : register retrouve alors un Worker en installation.
     watch(reg.installing);
-    if (reg.waiting) { if (requested()) reg.waiting.postMessage('SKIP_WAITING'); else if (navigator.serviceWorker.controller) showUpdate(); }
-    reg.addEventListener('updatefound', () => {
-      watch(reg.installing);
-    });
-    // Aucun nouveau Worker : attendre la vérification, puis enlever une ancienne demande sans issue.
-    if (requested() && !reg.installing && !reg.waiting) reg.update().catch(() => {}).finally(() => {
-      if (requested() && !reg.installing && !reg.waiting) sessionStorage.removeItem('sea:user-update');
-      else watch(reg.installing);
-    });
-  }).catch(() => { sessionStorage.removeItem('sea:user-update'); });
+    if (reg.waiting) ready(reg.waiting);
+    reg.addEventListener('updatefound', () => watch(reg.installing));
+    // Demande en cours sans nouvelle version visible : on vérifie ; la demande n'est retirée qu'après un vrai délai
+    // (les attributs installing / waiting peuvent arriver un peu après la fin de la vérification).
+    if (updRequested() && !reg.installing && !reg.waiting) reg.update().catch(() => {}).finally(() => setTimeout(() => {
+      watch(reg.installing); if (reg.waiting) ready(reg.waiting);
+      if (updRequested() && !reg.installing && !reg.waiting) sessionStorage.removeItem(UPD_KEY);
+    }, 8000));
+  }).catch(() => { sessionStorage.removeItem(UPD_KEY); });
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     // Nouvelle version activée : rechargement si l'utilisateur l'a demandée, jamais pendant une séance.
     if (reloading || S.player) return;
-    if (sessionStorage.getItem('sea:user-update')) { reloading = true; sessionStorage.removeItem('sea:user-update'); location.reload(); }
+    if (updRequested()) { reloading = true; sessionStorage.removeItem(UPD_KEY); location.reload(); }
   });
 }
 let publicationBusy = false;

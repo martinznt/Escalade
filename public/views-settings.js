@@ -2,6 +2,7 @@ import { cleanExternal, externalOf } from './external.js';
 import { vIntegrations } from './views-integrations.js';
 import { advancedUI, interfaceChoice } from './views-experience.js';
 import { appIconsCard, notificationIconsCard } from './app-icons.js';
+import { registerPaths } from './pathlinks.js';
 import { adminSearchCard } from './admin-search.js';
 // views-settings.js — Paramètres : séance, apparence, compte, données (export / import JSON, import CSV),
 // synchronisation et diagnostic, administration (EDIT_PASSWORD vérifié par le serveur), signalement de bug.
@@ -30,7 +31,7 @@ const PALETTES = [['gres', '#d4a056', 'Or'], ['granit', '#5fa8d3', 'Bleu'], ['fo
 const SUBS = [['main', 'Paramètres'], ['display', 'Affichage et accessibilité'], ['session', 'Pendant la séance'], ['notifs', 'Notifications et rappels'], ['help', 'Aide'], ['data', 'Mes données'], ['integrations', 'Applications connectées'], ['sync', 'Synchronisation'], ['updates', 'Toutes les mises à jour'], ['bug', 'Signaler un bug'], ['admin', 'Administration'], ['studio', 'Studio'], ['studioSet', 'Lot'], ['audit', 'Journal'], ['lab', 'Laboratoire'], ['health', 'Santé des données'], ['maint', 'Maintenance'], ['code', 'Propositions de code'], ['codeItem', 'Proposition'], ['assistant', 'Assistant du site'], ['content', 'Contenu de l’app'], ['look', 'Textes et apparence'], ['changes', 'Tout ce qui a été modifié'], ['members', 'Propositions des membres'], ['bugs', 'Signalements'], ['users', 'Comptes et rôles'], ['push', 'Notifications de mise à jour']];
 /** Rubriques des paramètres : une ligne claire par rubrique, comme les réglages d'un téléphone. */
 const MENU = [
-  ['display', '🎨', 'Affichage et accessibilité', 'Thème, icône, texte, couleurs et langue'],
+  ['display', '🎨', 'Affichage et accessibilité', 'Thème, icônes de l’app et des notifications, texte, couleurs, langue'],
   ['session', '▶️', 'Pendant la séance', 'Voix, sons, vibration, repos et durée'],
   ['notifs', '🔔', 'Notifications et rappels', 'Choisir ce qui m’avertit et quand'],
   ['integrations', '🔗', 'Applications connectées', 'Strava, montres et imports sportifs'],
@@ -44,6 +45,8 @@ const MENU = [
   ['votes', '🗳️', 'Idées à voter', 'Les idées retenues par l’équipe : vote pour celles que tu veux', 'ideasOpen'],
   ['admin', '🛡️', 'Administration', 'Modifier le site et gérer les membres'],
 ];
+// Les indications de chemin vers ces pages, écrites dans l'app, deviennent des liens (pas les actions).
+registerPaths('Paramètres', 'settings', MENU.filter((m) => m.length < 5).map(([id, , label]) => [label, id]));
 /** Partager le site : QR code qui ouvre l'adresse de l'app, comme si on la tapait. */
 export const SITE_URL = 'https://seances-sport.pages.dev/';
 ACT.shareApp = async () => {
@@ -123,7 +126,9 @@ function vDisplay() {
   return h`<div class="card"><h3>Thème et langue</h3>
       <label>Thème</label>${segA('mode', [['dark', 'Sombre'], ['light', 'Clair'], ['auto', 'Automatique']])}
       <label>Langue<select data-change="pref" name="lang"><option value="fr" ${st.lang !== 'en' ? 'selected' : ''}>Français</option><option value="en" ${st.lang === 'en' ? 'selected' : ''}>English (beta)</option></select></label></div>
+    <span class="kicker">🖼️ Icônes de l’app et des notifications</span>
     ${appIconsCard()}
+    ${notificationIconsCard()}
     ${a11yCard(a)}
     <details class="card" ${advancedUI() ? 'open' : ''}><summary>Couleurs, ambiance et animations</summary>
       <label>Ambiance</label><div class="vibes">${VIBES.map(([id, n, d]) => h`<button type="button" class="vibe ${(a.vibe || 'classique') === id ? 'on' : ''}" data-act="appear" data-k="vibe" data-v="${id}" data-vibe-preview="${id}"><span class="vprev"><i></i><i></i><i></i></span><b>${n}</b><small>${d}</small></button>`)}</div>
@@ -185,7 +190,7 @@ CHG.pref = (el) => { S.settings[el.name] = el.type === 'checkbox' ? el.checked :
 function vNotifs() {
   const st = S.settings;
   return h`${remindersCard()}
-    ${notificationIconsCard()}
+    <button type="button" class="card spotlink" data-act="goSpot" data-to="settings/display" data-spot="#notification-icons"><span class="sic">🖼️</span><span class="grow"><b>Icône et image des notifications</b><small>Elles se changent dans Paramètres › Affichage et accessibilité, avec l’icône de l’app : touche ici pour y aller.</small></span><span class="chev">›</span></button>
     <div class="card"><h3>🎵 Son dans l’app</h3><p class="small muted">Joué quand de nouvelles notifications arrivent pendant que l’app est ouverte. Le son des notifications du téléphone, lui, se règle dans les réglages du téléphone.</p>
       <div class="row"><select data-change="pref" name="notifSound" class="grow">${[['aucun', 'Aucun'], ...SOUND_STYLES].map(([v, l]) => h`<option value="${v}" ${(st.notifSound || 'doux') === v ? 'selected' : ''}>${l}</option>`)}</select><button class="btn sm" data-act="notifSoundTest">Écouter</button></div></div>
     <button class="btn" data-act="notifOpen">🔔 Ouvrir mes notifications</button>`;

@@ -141,9 +141,9 @@ ACT.npGo = () => {
 };
 ACT.impactHide = () => { S.impactHidden = ctx().history[0]?.id || ''; render(); };
 ACT.goLib = () => go('library', 'seances');
-ACT.goCarnet = () => { go('profile', 'climbing'); window.scrollTo(0, 0); };
-ACT.topCal = () => { go('home', 'cal'); window.scrollTo(0, 0); };
-ACT.goProgressTop = () => { go('progress', 'summary'); window.scrollTo(0, 0); };
+ACT.goCarnet = () => go('profile', 'climbing');
+ACT.topCal = () => go('home', 'cal');
+ACT.goProgressTop = () => go('progress', 'summary');
 // Programme, calendrier et rappels : une seule page « Planning ».
 ACT.topProgram = () => ACT.topCal();
 /** « Je suis à : … » : changer de lieu d'un toucher (la séance du jour s'adapte à son matériel). */
@@ -151,7 +151,7 @@ function whereAmI() {
   const c = ctx(), envs = c.envs.filter((e) => !e.archived); if (envs.length < 2) return '';
   return h`<div class="chips whereami"><span class="tiny muted">📍 Je suis à :</span>${envs.slice(0, 6).map((e) => chip(c.defEnv?.id === e.id, e.name, `data-act="envDefault" data-id="${e.id}"`))}</div>`;
 }
-ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); closeSheet(); go(t, sub); window.scrollTo(0, 0); };
+ACT.allGo = (el) => { const [t, sub] = String(el.dataset.to || '').split('/'); closeSheet(); go(t, sub); };
 ACT.layEditHome = () => { closeSheet(); go('home', 'dash'); setTimeout(() => ACT.layEdit(), 150); };
 ACT.loopClose = () => { S.lastLoop = null; render(); };
 ACT.genOpen = () => openWizard({});

@@ -1,4 +1,5 @@
 import { advancedUI, creationChoices, comparisonView } from './views-experience.js';
+import { registerPaths } from './pathlinks.js';
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
 import { personalFit } from './fit.js';
@@ -87,6 +88,7 @@ const LIB_INFO = {
   common: ['🌍', 'Bibliothèque commune', () => 'Séances partagées par les membres (non vérifiées)'],
   search: ['🔍', 'Rechercher', () => 'Une séance, un exercice, une capacité…'],
 };
+registerPaths('Bibliothèque', 'library', Object.entries(LIB_INFO).map(([id, [, label]]) => [label, id]));
 /** Bibliothèque : créer une séance, puis la liste des rubriques (même format que les paramètres). */
 function vLibHome() {
   if (!advancedUI() && !S.lay && !savedLayouts().library) return h`<h1>Bibliothèque</h1><p class="small muted">Mes séances, le catalogue intégré et les partages.</p>${menuList([['libSub','seances','📋','Mes séances','Personnel : mes créations et mes copies'],['libSub','exercises','💪','Exercices','Catalogue intégré et exercices personnels'],['libSub','catalog','📖','Séances prêtes','Catalogue intégré'],['libSub','common','🌍','Découvrir','Publications de la communauté']])}<details class="card"><summary>Programmes et outils spécialisés</summary>${menuList([['libSub','gym','🏋️','Ma salle de sport','Machines et charges'],['libSub','moments','🧩','Mes moments','Routines et petits compléments'],['libSub','search','🔍','Rechercher','Dans toute la bibliothèque']])}</details>`;
@@ -97,7 +99,7 @@ function vLibHome() {
     'r-seances': row('seances'), 'r-climbplan': row('climbplan'), 'r-gym': row('gym'), 'r-moments': row('moments'), 'r-catalog': row('catalog'), 'r-exercises': row('exercises'), 'r-common': row('common'), 'r-search': row('search'),
   })}`;
 }
-ACT.libSub = (el) => { closeSheet(); S.sel = null; window.scrollTo(0, 0); go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
+ACT.libSub = (el) => { closeSheet(); S.sel = null; go('library', el.dataset.id); if (el.dataset.id === 'common') loadCommon(); };
 
 /* ═════════ Mes séances ═════════ */
 const SF_KEY = 'sea:seances-filter';

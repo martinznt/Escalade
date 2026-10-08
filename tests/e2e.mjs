@@ -1280,8 +1280,11 @@ await step('mise à jour : un nouveau déploiement est proposé (« Mettre à jo
   await G.waitForSelector('#updbar [data-act=updNow]', { timeout: 20000 });
   await Promise.all([G.waitForNavigation({ timeout: 20000 }), g.click('#updbar [data-act=updNow]')]);
   await G.waitForSelector('nav.tabs');
-  // Un cache est créé dès install ; attendre le BUILD du contrôleur réel, y compris un second rechargement.
-  try { await poll(async () => (await controllerBuild(G).catch(() => '')) === 'deploy-e2e-2', 20000, 'nouveau contrôleur activé'); }
+  // Un cache est créé dès install : on attend que la nouvelle version soit active (son activation supprime l'ancien
+  // cache), sans envoyer de messages en boucle à l'ancien contrôleur (ils le réveillent et retardent l'activation),
+  // puis on lit une seule fois le BUILD du contrôleur réel.
+  const activeNew = () => G.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(), k = await caches.keys(); return r?.active?.state === 'activated' && !r.waiting && k.length === 1 && k[0].endsWith('deploy-e2e-2') && !!navigator.serviceWorker.controller; }).catch(() => false);
+  try { await poll(activeNew, 20000, 'nouveau contrôleur activé'); await G.waitForSelector('nav.tabs'); await poll(async () => (await controllerBuild(G).catch(() => '')) === 'deploy-e2e-2', 6000, 'BUILD du nouveau contrôleur'); }
   catch (e) { // l'état exact du Service Worker dans le journal de la CI (les captures n'y sont pas toujours accessibles)
     const sw = await G.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return { active: r?.active?.state || '', installing: r?.installing?.state || '', waiting: r?.waiting?.state || '', controlled: !!navigator.serviceWorker.controller, demande: sessionStorage.getItem('sea:user-update') }; }).catch((x) => ({ evalError: String(x) }));
     e.message += ` — Service Worker : ${JSON.stringify({ ...sw, build: await controllerBuild(G).catch(() => '') })}`; throw e;

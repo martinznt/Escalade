@@ -61,10 +61,48 @@ export function toast(msg, ms = 2800, kind = '') {
 }
 export const buzzOk = () => { try { if (navigator.vibrate && document.documentElement.dataset.haptics !== 'off') navigator.vibrate(12); } catch { /* rien */ } };
 let sheetStack = 0;
+/* ═════════ Écran redessiné sans sauter : rubriques et position gardées ═════════ */
+// Un choix (une couleur, un sport, un créneau…) redessine l'écran. Les rubriques <details> que la personne a ouvertes
+// ou fermées ELLE-MÊME (toucher sur le titre) le restent, page par page ; celles que l'app ouvre (créateur, étape…)
+// suivent l'app. Rubriques à état propre : .setsec ou [data-free].
+const userOpen = new Map();
+const detailText = (d) => (d.querySelector(':scope > summary')?.textContent || '').replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 80);
+const scopeOf = (root) => (root.id === 'main' ? 'page:' + (location.hash || '#/').split('?')[0] : 'sheet:' + sheetTitle(root));
+function keyOf(root, target) {
+  const seen = new Map();
+  for (const d of root.querySelectorAll('details')) { const t = detailText(d), n = seen.get(t) || 0; seen.set(t, n + 1); if (d === target) return `${scopeOf(root)}|${t}|${n}`; }
+  return '';
+}
+if (typeof document !== 'undefined') document.addEventListener('click', (e) => {
+  const sm = e.target.closest?.('summary'), d = sm?.parentElement;
+  if (!d || d.tagName !== 'DETAILS' || d.matches('.setsec,[data-free]')) return;
+  const root = d.closest('#sheet > .panel') || d.closest('#main'); if (!root) return;
+  setTimeout(() => { const k = keyOf(root, d); if (k) userOpen.set(k, d.open); }, 0);
+}, true);
+/** Réapplique les rubriques ouvertes ou fermées par la personne sur cet écran (après un rendu). */
+export function restoreUserDetails(root) {
+  if (!root || !userOpen.size) return;
+  const seen = new Map(), scope = scopeOf(root);
+  for (const d of root.querySelectorAll('details')) {
+    const t = detailText(d), n = seen.get(t) || 0; seen.set(t, n + 1);
+    if (d.matches('.setsec,[data-free]')) continue;
+    const k = `${scope}|${t}|${n}`; if (userOpen.has(k) && d.open !== userOpen.get(k)) d.open = userOpen.get(k);
+  }
+}
+const sheetTitle = (el) => (el?.querySelector('h2,h3')?.textContent || '').replace(/\d+/g, '#').trim();
+let sheetHook = null;
+/** Appelé après chaque ouverture de fenêtre (ex. liens des indications de chemin). */
+export const onSheetRender = (fn) => { sheetHook = fn; };
 export function openSheet(content, { wide = false } = {}) {
   const s = $('#sheet');
   const body = val(content), close = body.includes('data-act="closeSheet"') ? '' : '<button type="button" class="btn sm ghost" data-act="closeSheet" aria-label="Fermer la fenêtre">Fermer</button>';
+  // La même fenêtre redessinée (même titre) garde sa position et ses rubriques ouvertes.
+  const old = s.classList.contains('open') ? s.querySelector('.panel') : null, oldTitle = sheetTitle(old), keep = old ? { top: old.scrollTop } : null;
   s.innerHTML = `<div class="back" data-act="closeSheet"></div><div class="panel${wide ? ' wide' : ''}" role="dialog" aria-modal="true"><div class="sheet-tools"><div class="grab" aria-hidden="true"></div>${close}</div>${body}</div>`;
+  const panel = s.querySelector('.panel');
+  try { sheetHook?.(panel); } catch { /* un lien de moins, jamais une fenêtre cassée */ }
+  restoreUserDetails(panel);
+  if (keep && oldTitle && sheetTitle(panel) === oldTitle) panel.scrollTop = keep.top;
   s.classList.add('open'); sheetStack++;
   setTimeout(() => { const f = s.querySelector('[autofocus]'); if (f) f.focus(); }, 30);
 }

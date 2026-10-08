@@ -32,7 +32,7 @@ export function appIconInstallUrl(id=currentAppIcon().id,token=currentAppIcon().
   const choice=id==='custom'?customAppIcon(token)||appIcon():appIcon(id);
   return `/?appIcon=${choice.id}${choice.token?'&appIconToken='+choice.token:''}#/settings/display`;
 }
-let previousOwner, panelOpen=false, notificationOpen=false, focusedIcon=null, creator=null, collection=null;
+let previousOwner, panelOpen=false, notificationOpen=false, focusedIcon=null, creators={}, collection=null;
 const panelListeners = new WeakMap();
 const cachedTokens=new Map();
 const iconOffline=()=>!navigator.onLine||S.sync==='offline';
@@ -50,7 +50,7 @@ export function syncAppIcon() {
   const choice = currentAppIcon();
   if (typeof document === 'undefined') return choice;
   const owner = S.user?.id ?? null;
-  if (previousOwner !== owner) { panelOpen=false;notificationOpen=false;focusedIcon=null;creator=null;collection=null; }
+  if (previousOwner !== owner) { panelOpen=false;notificationOpen=false;focusedIcon=null;creators={};collection=null; }
   if (previousOwner != null && previousOwner !== owner) {
     const url = new URL(location.href); if (url.searchParams.has('appIcon')) { url.searchParams.delete('appIcon');url.searchParams.delete('appIconToken');history.replaceState(null,'',url.pathname+url.search+url.hash); }
   }
@@ -112,8 +112,9 @@ export function notificationIconsCard() {
     <p class="tiny muted">Le petit repère reste monochrome. Certains systèmes, notamment iOS, utilisent leur propre icône à la place.</p>${creatorCard('notification')}</details>`;
 }
 function creatorFor(target) {
-  const owner=S.user?.id??null;
-  if(!creator||creator.owner!==owner||creator.target!==target){const c=config(target);creator={owner,target,open:false,step:0,busy:false,design:readIconDesign(target==='app'?(c.appIconDraft||c.appIconDesign):(c.notificationDraft||c.notificationDesign))};}
+  // Un créateur par cible : l'icône de l'app et celle des notifications sont sur la même page et gardent chacune leur brouillon.
+  const owner=S.user?.id??null;let creator=creators[target];
+  if(!creator||creator.owner!==owner){const c=config(target);creator=creators[target]={owner,target,open:false,step:0,busy:false,design:readIconDesign(target==='app'?(c.appIconDraft||c.appIconDesign):(c.notificationDraft||c.notificationDesign))};}
   return creator;
 }
 function creatorCard(target) {
@@ -189,27 +190,27 @@ ACT.iconSavedDelete=async el=>{
 };
 ACT.iconUploadAbort=async el=>{
   if(!ownControl(el)||!iconLibrary().uploads.some(x=>x.uploadToken===el.dataset.token))return;const store=iconLibrary();
-  try{await api('DELETE','/api/app-icons/uploads/'+el.dataset.token);if(!ownControl(el)||collection!==store)return;store.uploads=store.uploads.filter(x=>x.uploadToken!==el.dataset.token);if(creator?.uploadToken===el.dataset.token){creator.uploadToken=null;creator.uploadOpId=null;}render();toast('Envoi abandonné. Ton brouillon est conservé.');}catch(e){if(ownControl(el)&&collection===store)toast(e.message||'Envoi indisponible.',5000,'bad');}
+  try{await api('DELETE','/api/app-icons/uploads/'+el.dataset.token);if(!ownControl(el)||collection!==store)return;store.uploads=store.uploads.filter(x=>x.uploadToken!==el.dataset.token);for(const c of Object.values(creators))if(c?.uploadToken===el.dataset.token){c.uploadToken=null;c.uploadOpId=null;}render();toast('Envoi abandonné. Ton brouillon est conservé.');}catch(e){if(ownControl(el)&&collection===store)toast(e.message||'Envoi indisponible.',5000,'bad');}
 };
 ACT.iconCreateSave=async el=>{
   if(!ownControl(el)||S.user.guest||iconOffline())return;
   const c=creatorFor(el.dataset.target);if(c.busy)return;const owner=S.user.id;c.busy=true;render();
   try{
-    const images=await iconPngBundle(c.design);if(S.user?.id!==owner||creator!==c)return;
-    if(!c.uploadToken){c.uploadOpId ||= 'op-icon-'+crypto.randomUUID();const started=await api('POST','/api/app-icons/start',{},{opId:c.uploadOpId});if(S.user?.id!==owner||creator!==c)return;c.uploadToken=started.uploadToken;}
+    const images=await iconPngBundle(c.design);if(S.user?.id!==owner||creators[c.target]!==c)return;
+    if(!c.uploadToken){c.uploadOpId ||= 'op-icon-'+crypto.randomUUID();const started=await api('POST','/api/app-icons/start',{},{opId:c.uploadOpId});if(S.user?.id!==owner||creators[c.target]!==c)return;c.uploadToken=started.uploadToken;}
     if(!/^[A-Za-z0-9_-]{43}$/.test(c.uploadToken||''))throw new Error('L’icône n’a pas pu être enregistrée.');
     const designHash=JSON.stringify(c.design);let response;
     try{
-      for(const [name,image] of Object.entries(images)){await api('PUT','/api/app-icons/'+c.uploadToken+'/'+name,{image});if(S.user?.id!==owner||creator!==c)return;}
+      for(const [name,image] of Object.entries(images)){await api('PUT','/api/app-icons/'+c.uploadToken+'/'+name,{image});if(S.user?.id!==owner||creators[c.target]!==c)return;}
       c.uploadDesign=designHash;
     }catch(e){
-      if(S.user?.id!==owner||creator!==c)return;
+      if(S.user?.id!==owner||creators[c.target]!==c)return;
       if(e.status!==409)throw e;
-      if(c.uploadDesign!==designHash){await api('DELETE','/api/app-icons/uploads/'+c.uploadToken);if(S.user?.id!==owner||creator!==c)return;c.uploadToken=null;c.uploadOpId=null;throw new Error('L’envoi précédent est terminé. Relance l’enregistrement de ton nouveau dessin.');}
+      if(c.uploadDesign!==designHash){await api('DELETE','/api/app-icons/uploads/'+c.uploadToken);if(S.user?.id!==owner||creators[c.target]!==c)return;c.uploadToken=null;c.uploadOpId=null;throw new Error('L’envoi précédent est terminé. Relance l’enregistrement de ton nouveau dessin.');}
       response=await api('POST','/api/app-icons/'+c.uploadToken+'/complete',{});
     }
     if(!response)response=await api('POST','/api/app-icons/'+c.uploadToken+'/complete',{});
-    if(S.user?.id!==owner||creator!==c)return;
+    if(S.user?.id!==owner||creators[c.target]!==c)return;
     c.uploadToken=null;
     c.uploadOpId=null;
     const selected=customAppIcon(response.token);if(!selected)throw new Error('L’icône n’a pas pu être enregistrée.');
@@ -219,11 +220,11 @@ ACT.iconCreateSave=async el=>{
       const url=new URL(location.href);if(url.searchParams.has('appIcon')){url.searchParams.set('appIcon','custom');url.searchParams.set('appIconToken',selected.token);history.replaceState(null,'',url.pathname+url.search+url.hash);}
     }else putItem('config','notification-icon',{...data,notificationIcon:'custom',notificationToken:selected.token,notificationDesign:design,notificationDraft:design});
     await cacheCustomIcon(selected);
-    if(S.user?.id!==owner||creator!==c)return;
+    if(S.user?.id!==owner||creators[c.target]!==c)return;
     void loadIconLibrary(true);
     toast(c.target==='app'?'Icône enregistrée. Ouvre la page d’installation pour l’utiliser sur ton téléphone.':'Icône de notification enregistrée.');
-  }catch(e){if(S.user?.id===owner&&creator===c){if([404,409].includes(e.status)){c.uploadToken=null;c.uploadOpId=null;}toast(e.message||'L’icône n’a pas pu être enregistrée.',5000,'bad');}}
-  finally{if(S.user?.id===owner&&creator===c){c.busy=false;render();}}
+  }catch(e){if(S.user?.id===owner&&creators[c.target]===c){if([404,409].includes(e.status)){c.uploadToken=null;c.uploadOpId=null;}toast(e.message||'L’icône n’a pas pu être enregistrée.',5000,'bad');}}
+  finally{if(S.user?.id===owner&&creators[c.target]===c){c.busy=false;render();}}
 };
 ACT.appIconSet = (el) => {
   const id = el.dataset.id;

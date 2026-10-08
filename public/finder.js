@@ -79,7 +79,7 @@ export const FEATURE_INDEX = [
   E('feature', '🧪', 'Lab (expériences)', 'Mon analyse', 'progress/lab', 'graphique courbe lab details', {}),
   E('feature', '📸', 'Bilan du mois', 'Progrès', '', 'bilan mois image partager recap', { act: 'recapOpen' }),
   E('feature', '🫀', 'Mon corps', 'Profil', 'profile/body', 'age poids taille silhouette forme corps pesee', {}),
-  E('feature', '📋', 'Mon bilan physique', 'Moi', 'profile/bilan', 'bilan physique condition tests reperes questionnaire forme', {}),
+  E('feature', '📋', 'Mon bilan physique', 'Profil', 'profile/bilan', 'bilan physique condition tests reperes questionnaire forme', {}),
   E('feature', '🏅', 'Mes sports', 'Profil', 'profile/activities', 'sport activites categories', {}),
   E('feature', '🎯', 'Objectifs', 'Profil', 'profile/goals', 'objectif but perte de poids figure front lever', {}),
   E('feature', '🧰', 'Matériel et lieux', 'Profil', 'profile/equipment', 'materiel salle maison lieu barre poutre', {}),
