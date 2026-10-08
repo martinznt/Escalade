@@ -749,7 +749,9 @@ export function neverTried(ctx, { activityId, goal, level = 0, envId } = {}) {
   const eq = availableEquipment(ctx, envId);
   const done = new Set(); for (const h of ctx.history) for (const e of h.data?.exercises || []) { const lib = libFor(e); if (lib) done.add(lib.id); }
   const wantCaps = goal ? goalCaps(goal, ctx).map((x) => x.id) : Object.keys(relevantCaps(ctx, activityId));
-  const cands = LIBRARY.filter((x) => x.role === 'main' && !done.has(x.id) && (x.minLevel || 0) <= level && x.needs.every((n) => eq.has(n)) && ctx.prefs[exKey(x.name)]?.value !== 'evite'
+  // Sports « jamais » avec contenu masqué (Profil › Mes sports) : leurs exercices ne sont pas suggérés.
+  const sp = ctx.config?.sports || {}, never = new Set(sp.never || []), hide = new Set((sp.neverHide || []).filter((x) => never.has(x)));
+  const cands = LIBRARY.filter((x) => x.role === 'main' && !(hide.size && x.acts?.length && x.acts.every((a) => hide.has(a))) && !done.has(x.id) && (x.minLevel || 0) <= level && x.needs.every((n) => eq.has(n)) && ctx.prefs[exKey(x.name)]?.value !== 'evite'
     && (!activityId || x.acts.includes(activityId)) && Object.keys(x.caps).some((c) => wantCaps.includes(c)) && x.intensity !== 'high');
   return cands.map((x) => {
     const c = Object.entries(x.caps).filter(([id]) => wantCaps.includes(id)).sort((a, b) => b[1] - a[1])[0];

@@ -2,6 +2,7 @@ import { advancedUI, memoryView } from './views-experience.js';
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
 import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG, ymd } from './ui.js';
+import { sportState, setSportState, hiddenSports } from './sportprefs.js';
 import { registerPaths } from './pathlinks.js';
 import { hoursText, cleanSlots } from './planning.js';
 import { composePage, savedLayouts } from './layout.js';
@@ -153,7 +154,9 @@ ACT.capTrain = (el) => { closeSheet(); openWizard({ focus: { label: CAPACITIES[e
 function vActivities() {
   const c = ctx(), acts = itemsOf('activity');
   const natives = Object.entries(ACTIVITIES);
-  return h`<div class="card"><h3>Activités natives</h3><div class="chips">${natives.map(([id, a]) => chip(!!c.activities[id], `${a.emoji} ${a.label}`, `data-act="obAct" data-id="${id}"`))}</div></div>
+  const hide = hiddenSports(), word = { on: '✓ Je le fais', off: 'Pas pour l’instant', never: '🚫 Jamais : plus jamais proposé' };
+  return h`<span class="kicker">🏅 Les sports de l’app</span><p class="tiny muted">Touche un sport pour dire si tu le fais, pas pour l’instant, ou jamais (il ne te sera plus proposé ; tu peux aussi masquer ses exercices et séances).</p>
+    <div class="setmenu">${natives.map(([id, a]) => { const st = sportState(id, c.activities); return h`<button class="setrow ${st === 'never' ? 'dim' : ''}" data-act="sportPick" data-id="${id}"><span class="sic">${a.emoji}</span><span class="grow"><b>${a.label}</b><small>${word[st]}${st === 'never' && hide.has(id) ? ' · exercices et séances masqués' : ''}</small></span><span class="chev">›</span></button>`; })}</div>
     <div class="card"><div class="row between"><h3>Mes activités personnalisées</h3><button class="btn sm pri" data-act="actNew">＋ Activité</button></div>
       ${acts.filter((a) => !a.preset && !a.archived).map((a) => h`<div class="item"><div class="ico">${a.emoji || '🏅'}</div><div class="grow"><b>${a.label}</b><div class="tiny muted">${itemsOf('category').filter((x) => x.activityId === a.id && !x.archived).map((x) => x.label).join(', ') || 'aucune catégorie'}</div></div><button class="btn sm" data-act="actEdit" data-id="${a.id}">✎</button></div>`)}
       ${!acts.some((a) => !a.preset && !a.archived) ? h`<p class="muted small">Basketball, cyclisme, tennis, ski… : crée ton activité avec ses propres catégories, métriques et exercices.</p>` : ''}</div>
@@ -169,6 +172,17 @@ function vActivityCard(a) {
     <div class="chips">${cats.map((x) => x.native ? h`<span class="chip static" title="${x.caps.map((k) => capL(k.id)).join(', ')}">${x.label}</span>` : chip(false, `${x.emoji ? x.emoji + ' ' : ''}${x.label} ✎`, `data-act="catEdit" data-id="${x.id}"`))}</div>
     ${sw.strengths.length || sw.weaknesses.length ? h`<div class="chips">${sw.strengths.slice(0, 3).map((s) => h`<button class="chip okc" data-act="capOpen" data-id="${s.capId}">💪 ${s.label}</button>`)}${sw.weaknesses.slice(0, 3).map((s) => h`<button class="chip warnc" data-act="capOpen" data-id="${s.capId}">🌱 ${s.label}</button>`)}</div>` : ''}</div>`;
 }
+/** Un sport : je le fais / pas pour l'instant / jamais (et masquer ses exercices et séances). Réversible à tout moment. */
+ACT.sportPick = (el) => {
+  const id = el.dataset.id, a = ACTIVITIES[id]; if (!a) return;
+  const c = ctx(), st = sportState(id, c.activities), hidden = hiddenSports().has(id), opt = (v, t, d) => h`<button class="setrow ${st === v ? 'on' : ''}" data-act="sportSet" data-id="${id}" data-v="${v}" aria-pressed="${st === v}"><span class="sic">${st === v ? '✓' : ''}</span><span class="grow"><b>${t}</b><small>${d}</small></span></button>`;
+  openSheet(h`<div class="stack"><h2 style="margin:0">${a.emoji} ${a.label}</h2>
+    <div class="setmenu">${opt('on', 'Je le fais', 'Proposé dans tes séances, ta semaine et tes suggestions')}${opt('off', 'Pas pour l’instant', 'Rangé : tu peux toujours le choisir')}${opt('never', 'Jamais', 'Plus jamais proposé (créateur, planning, suggestions)')}</div>
+    ${st === 'never' ? h`<label class="chk"><input type="checkbox" data-change="sportHide" data-id="${id}" ${hidden ? 'checked' : ''}> Masquer aussi ses exercices et ses séances prêtes partout</label><p class="tiny muted">Un exercice qui sert aussi à un de tes autres sports reste visible. Ton historique n’est pas touché.</p>` : ''}
+    <p class="tiny muted">Tout se remet d’un toucher, ici.</p></div>`);
+};
+ACT.sportSet = (el) => { const id = el.dataset.id, v = el.dataset.v; if (!['on', 'off', 'never'].includes(v)) return; setSportState(id, v); buzzOk(); toast(v === 'never' ? `${ACTIVITIES[id].label} : plus jamais proposé` : v === 'on' ? `${ACTIVITIES[id].label} ajouté à tes sports` : `${ACTIVITIES[id].label} rangé`); render(); ACT.sportPick({ dataset: { id } }); };
+CHG.sportHide = (el) => { setSportState(el.dataset.id, 'never', { hide: el.checked }); toast(el.checked ? 'Exercices et séances de ce sport masqués' : 'Exercices et séances de ce sport visibles'); render(); ACT.sportPick({ dataset: { id: el.dataset.id } }); };
 ACT.actNew = (el) => openSheet(h`<h2 style="margin:0">Nouvelle activité</h2><form data-submit="actSave" class="stack"><input type="hidden" name="id" value=""><div class="row"><input name="emoji" value="🏅" maxlength="4" class="emoji-in" aria-label="Emoji"><input name="label" required maxlength="60" value="${el?.dataset?.q || ''}" placeholder="Ex. Basketball, cyclisme, tennis…" aria-label="Nom"></div><label>Mots-clés (séparés par des virgules)<input name="aliases" maxlength="180"></label><button class="btn pri" type="submit">Créer</button></form>`);
 ACT.actEdit = (el) => { const a = item('activity', el.dataset.id); if (!a) return; openSheet(h`<h2 style="margin:0">Modifier l’activité</h2><form data-submit="actSave" class="stack"><input type="hidden" name="id" value="${a.id}"><div class="row"><input name="emoji" value="${a.emoji || '🏅'}" maxlength="4" class="emoji-in" aria-label="Emoji"><input name="label" required maxlength="60" value="${a.label}" aria-label="Nom"></div><label>Mots-clés<input name="aliases" maxlength="180" value="${(a.aliases || []).join(', ')}"></label><div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button><button class="btn danger" type="button" data-act="actArchive" data-id="${a.id}">Archiver</button></div></form>`); };
 SUBMIT.actSave = (f) => { const d = Object.fromEntries(new FormData(f)); const id = d.id || 'custom-' + uid().slice(0, 12); putItem('activity', id, { label: d.label, emoji: d.emoji, aliases: String(d.aliases || '').split(',').map((x) => x.trim()).filter(Boolean), preset: '', archived: false }); closeSheet(); buzzOk(); toast('Activité enregistrée'); render(); };

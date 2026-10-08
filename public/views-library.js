@@ -1,4 +1,5 @@
 import { advancedUI, creationChoices, comparisonView } from './views-experience.js';
+import { visibleEx, exHidden } from './sportprefs.js';
 import { registerPaths } from './pathlinks.js';
 // views-library.js — Bibliothèque : mes séances (création, édition, modèles, archives), générateur avec simulation,
 // exercices (anatomie, capacités), bibliothèque commune (contributions, copies indépendantes), recherche.
@@ -439,7 +440,7 @@ ACT.exAdd = () => openSheet(h`<h2 style="margin:0">Ajouter un exercice</h2>
 function pickRows(q) {
   const n = String(q || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const e = editing(), act = e?.s.activity;
-  const lib = LIBRARY.filter((x) => !x.hidden || S.user?.isAdmin).filter((x) => !n || x.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(n)).sort((a, b) => Number(b.acts.includes(act)) - Number(a.acts.includes(act)));
+  const lib = visibleEx(LIBRARY).filter((x) => !x.hidden || S.user?.isAdmin).filter((x) => !n || x.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(n)).sort((a, b) => Number(b.acts.includes(act)) - Number(a.acts.includes(act)));
   const pers = S.personal.filter((p) => !n || p.name.toLowerCase().includes(n));
   return h`${pers.map((p) => h`<button class="item pick" data-act="exPick" data-kind="personal" data-id="${p.id}"><div class="ico">${p.data?.emoji || '💪'}</div><div class="grow"><b>${p.name}</b><div class="tiny muted">exercice personnel</div></div></button>`)}
     ${lib.slice(0, 40).map((x) => h`<button class="item pick" data-act="exPick" data-kind="lib" data-id="${x.id}"><div class="ico">${x.emoji}</div><div class="grow"><b>${x.name}</b><div class="tiny muted">${Object.keys(x.caps).slice(0, 2).map(capL).join(', ')}${x.needs.length ? ' · ' + x.needs.map((k) => EQUIPMENT[k] || k).join(', ') : ''}</div></div></button>`)}`;
@@ -598,7 +599,7 @@ function vExercises() {
   const q = S.filters.exq || '', act = S.filters.exAct || '', cap = S.filters.exCap || '';
   const n = q.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const match = (name) => !n || name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(n);
-  const lib = LIBRARY.filter((x) => x.role === 'main' && match(x.name) && (!act || x.acts.includes(act)) && (!cap || (x.caps[cap] || 0) >= 0.5));
+  const lib = visibleEx(LIBRARY).filter((x) => x.role === 'main' && match(x.name) && (!act || x.acts.includes(act)) && (!cap || (x.caps[cap] || 0) >= 0.5));
   const c = ctx(), tried = neverTried(c, { activityId: act || undefined, level: 1 });
   const top = h`<button class="card pick row" data-act="libSub" data-id="best"><span class="catemoji">🏆</span><span class="grow"><b>Top exercices pour toi</b><small class="tiny muted" style="display:block">Les plus utiles par catégorie, selon ton profil</small></span><span class="chev">›</span></button>`;
   return h`${top}${contentAdmin() ? h`<button class="btn" data-act="exNewGlobal">🌍 ＋ Exercice pour tout le monde</button>` : ''}<button class="card pick ai-cta" data-act="aiOpen" data-id="exercise"><span>🤖</span><div><b>Créer un exercice avec l’assistant</b><small>Écris « clipage », « pompes diamant »… elle prépare la fiche.</small></div></button>
@@ -739,8 +740,10 @@ ACT.commonPublish = () => {
 /* ═════════ Recherche ═════════ */
 function vSearch() {
   const q = S.search.q, c = ctx();
-  const classic = q ? classicSearch(q, { seances: S.seances.items, history: S.history, personal: S.personal, common: S.shared.common || [], goals: c.goals.map((g) => ({ ...g, label: goalLabel(g) })) }) : [];
-  const smart = q && S.search.smart ? smartSearch(q, c, { seances: S.seances.items }) : [];
+  // Exercices d'un sport « jamais » masqué (Profil › Mes sports) : retirés des résultats.
+  const okEx = (r) => !(r.kind === 'library' && exHidden(byId(r.id))) && !(r.lib && exHidden(r.lib)) && !(r.acts && exHidden(r));
+  const classic = q ? classicSearch(q, { seances: S.seances.items, history: S.history, personal: S.personal, common: S.shared.common || [], goals: c.goals.map((g) => ({ ...g, label: goalLabel(g) })) }).filter(okEx) : [];
+  const smart = q && S.search.smart ? smartSearch(q, c, { seances: S.seances.items }).map((g) => ({ ...g, results: g.results.filter(okEx) })) : [];
   const row = (r) => h`<button class="item pick" data-act="searchOpen" data-kind="${r.kind}" data-id="${r.id}"><div class="grow"><b>${r.label}</b><div class="tiny muted">${r.detail}</div></div></button>`;
   return h`<form data-submit="search" class="row"><input type="search" name="q" value="${q}" placeholder="Ex. front lever, séances sans matériel, records de tirage…" aria-label="Rechercher" class="grow"><button class="btn pri" type="submit">🔎</button></form>
     <label class="chk"><input type="checkbox" data-change="searchSmart" ${S.search.smart ? 'checked' : ''}> Recherche intelligente (capacités, figures, muscles, matériel, styles)</label>

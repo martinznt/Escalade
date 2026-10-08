@@ -187,6 +187,8 @@ export const SCHEMAS = {
     pauseMode: ['e', ['', 'vacances', 'blesse'], ''], pauseFrom: ['day'], pauseTo: ['day'], pauseNote: ['s', 120],
     // 8.30 — séances du carnet mises en favori (item « catalog »).
     favs: ['strs', 300, 60],
+    // 8.34 — sports que je ne fais jamais (item « sports ») et ceux dont exercices et séances prêtes sont masqués.
+    never: ['strs', 20, 40], neverHide: ['strs', 20, 40],
   },
 };
 export const COLLECTIONS = Object.keys(SCHEMAS);

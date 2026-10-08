@@ -1,4 +1,5 @@
 import { comparisonView, advancedUI } from './views-experience.js';
+import { proposable } from './sportprefs.js';
 import { sessionFromHistory } from './live.js';
 // views-climbplan.js — « Structurer ma séance d'escalade » : par objectif de fin de séance, ou partie par partie.
 import { h, raw, chip, openSheet, closeSheet, toast, ask, askText, seg } from './ui.js';
@@ -239,7 +240,7 @@ function wallWarn(sp) {
 }
 function vWhere() {
   const c = CP(), x = ctx(), env = envOf(), eq = [...availableEquipment(x, c.envId)], more = sportsOf(c).slice(1);
-  const sports = [...new Set([...Object.keys(x.activities), ...Object.keys(ACTIVITIES)])].filter((id) => x.activities[id] || ACTIVITIES[id]); // tous les sports, même pas encore dans le profil
+  const sports = [...new Set([...Object.keys(x.activities), ...Object.keys(ACTIVITIES)])].filter((id) => (x.activities[id] || ACTIVITIES[id]) && (proposable(id, c.sport) || more.includes(id))); // tous les sports, même pas encore dans le profil, sauf ceux que tu ne fais jamais
   const multi = more.some((sp) => (c.places?.[sp] || '') && c.places[sp] !== baseEnv(c));
   return h`<div class="card stack">
     <span class="kicker">Sport principal</span><div class="chips">${sports.map((id) => chip(c.sport === id, sportLabel(id), `data-act="cpSport" data-id="${id}"`))}<button type="button" class="chip add" data-act="allGo" data-to="profile/activities">＋ Ajouter un sport</button></div>

@@ -1,5 +1,6 @@
 // Planning et bilan courts, sur les API calendrier/historique et l'outbox existantes.
 import { h, openSheet, closeSheet, toast, ymd, ask, fmtDay } from './ui.js';
+import { proposable } from './sportprefs.js';
 import { S, accountToken, accountMatches, ACT, SUBMIT, CHG, api, ctx, saveEvent, deleteEvent, addHistory, updateHistory, deleteHistory, getSeance, render, go, putItem } from './state.js';
 import { uid } from './shared.js';
 import { ACTIVITIES } from './model.js';
@@ -12,7 +13,7 @@ const DAYS = [[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],
 const today = () => dayInZone(Date.now(), zone());
 const activities = () => ({ ...ACTIVITIES, ...ctx().activities });
 const label = (id) => activities()[id]?.label || id;
-const options = (current) => Object.entries(activities()).filter(([,a]) => !a.archived).map(([k,a]) => h`<option value="${k}" ${current === k ? 'selected' : ''}>${a.emoji || ''} ${a.label}</option>`);
+const options = (current) => Object.entries(activities()).filter(([id,a]) => !a.archived && proposable(id, current)).map(([k,a]) => h`<option value="${k}" ${current === k ? 'selected' : ''}>${a.emoji || ''} ${a.label}</option>`);
 const at = (id, date) => agendaEvents(S.events, date).find((e) => e.id === id || e.sourceId === id);
 /** Lieu écrit → lieu décrit du même nom (son matériel servira à préparer la séance) ; sinon le texte seul. */
 const placeMeta = (meta, place) => { const p = String(place || '').trim().slice(0, 80), env = p && ctx().envs.find((v) => !v.archived && v.name.toLocaleLowerCase() === p.toLocaleLowerCase()); const { envId, ...rest } = meta || {}; return { ...rest, place: p, ...(env ? { envId: env.id } : {}) }; };
