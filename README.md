@@ -1,8 +1,10 @@
-# Séances entraînement — v8.33.0
+# Séances entraînement — v8.34.0
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
 activité personnalisée. Les recommandations distinguent faits, estimations et données manquantes ; les réponses IA sont contrôlées avant de proposer des changements.
+
+La [version 8.34.0](DELIVERY_8_34.md) (préparée sur une branche, non déployée) apporte : séance écrite à sa façon, ses propres choix dans les listes (« ＋ Autre… », Profil › Mes ajouts), chrono en six formats avec « Mes chronos », exercices expliqués (départ, charge, variantes), installation guidée sur chaque appareil, annonce envoyée seulement aux appareils autorisés.
 
 La [version 8.33.0](DELIVERY_8_33.md) apporte : objectifs distincts des phases, choix et création guidée d’icônes par compte, notifications personnalisées, contrôles de provenance étendus à l’IA, recherche admin et imports sportifs avec un connecteur Strava à configurer. Elle a été revérifiée le 7 octobre (correctif des séances courtes compris) puis envoyée sur `main` par Pull Request, ce qui déclenche le déploiement automatique existant. Gemini, Strava, les icônes installées et les notifications restent à activer ou à vérifier soi-même : les opérations Cloudflare sont dans [CLOUDFLARE_GUIDE.md](CLOUDFLARE_GUIDE.md).
 

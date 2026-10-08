@@ -157,6 +157,9 @@ export const SCHEMAS = {
   // 8.34 — « ＋ Ajouter le mien » : un choix ajouté par la personne à une liste de l'app (choices.js), identifiant « my-… ».
   // n = durée (liste « minutes ») ; on = zone à ménager cochée en ce moment.
   choice: { list: ['e', ['zone', 'equipment', 'envie', 'minutes', 'muscled', 'physique', 'fall', ''], ''], label: ['s', 40], n: ['n', 1, 300, null], on: ['b'] },
+  // 8.34 — « Mes chronos » : un chrono réglé, gardé pour le relancer en un toucher (relu par timerConfig, bornes comprises).
+  chrono: { name: ['s', 60], format: ['e', ['emom', 'amrap', 'fortime', 'intervals', 'countdown', 'stopwatch'], 'intervals'], every: ['n', 10, 600, null], minutes: ['n', 0, 300, null], cap: ['n', 0, 180, null],
+    secs: ['n', 0, 59, null], work: ['n', 1, 600, null], rest: ['n', 0, 600, null], reps: ['n', 1, 50, null], sets: ['n', 1, 20, null], setRest: ['n', 0, 900, null], text: ['s', 2400] },
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
   habit: { key: ['s', 120], decision: ['e', ['accepted', 'dismissed'], 'dismissed'] },
   // Configuration personnelle (tableau de bord, environnement par défaut…) : un item par clé.

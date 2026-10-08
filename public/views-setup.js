@@ -30,7 +30,7 @@ export const GOALS = [['climb', '🧗 Progresser en escalade'], ['force', '💪 
 const AVOID = () => [...AVOID_ZONES, ['none', '👍 Rien de particulier']];
 const BUILTIN_ZONES = () => AVOID_ZONES.filter(([k]) => !isMine(k)).map(([k]) => k);
 /** Champ « ＋ Autre… » des questions : ce que la personne peut écrire elle-même. */
-const OTHER_PH = { sport: '＋ Un autre sport (basket, vélo…)', minutes: '＋ Autre durée (ex. 75 ou 1 h 15)', count: '＋ Autre nombre (jusqu’à 14)', place: '＋ Un autre lieu (son nom)', goal: '＋ Un objectif à moi, avec mes mots', zone: '＋ Autre zone', physique: '＋ Mon souhait' };
+const OTHER_PH = { sport: '＋ Un autre sport', minutes: '＋ Autre durée (ex. 75)', count: '＋ Autre nombre', place: '＋ Un autre lieu', goal: '＋ Mon objectif à moi', zone: '＋ Autre zone', physique: '＋ Mon souhait' };
 const ownSports = () => Object.entries(ctx().activities).filter(([id]) => !ACTIVITIES[id]).map(([id, a]) => [id, `${a.emoji || '🏅'} ${a.label}`]);
 /** Un sport écrit : celui de l'app s'il existe (« course à pied »), sinon un des miens, sinon il est créé. */
 function ownSport(text) {

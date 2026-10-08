@@ -1,6 +1,7 @@
 // views-gym.js — Bibliothèque › « 🏋️ Ma salle de sport » : ma salle (machines cochées par zone), la séance du jour
 // (découpage, but, durée, machines d'abord, remplacer un exercice), et le carnet de mes machines (charges, réglages).
 import { h, openSheet, closeSheet, toast, chip, fmtDay, askText } from './ui.js';
+import { addField, onChoice, withMyMinutes } from './views-choices.js';
 import { S, ACT, ctx, render, putItem, item, itemsOf, saveSeance } from './state.js';
 import { uid } from './shared.js';
 import { EQUIPMENT } from './model.js';
@@ -31,7 +32,7 @@ export function vGym() {
       <span class="kicker">Découpage</span><div class="chips">${Object.entries(SPLITS).map(([k, [l]]) => chip(g.split === k, l, `data-act="gymSet" data-k="split" data-v="${k}"`))}</div>
       <span class="kicker">Aujourd’hui</span><div class="chips">${SPLITS[g.split][1].map(([d, l]) => chip(day === d, `${l.split(' :')[0]}${!g.day && d === day ? ' · conseillé' : ''}`, `data-act="gymSet" data-k="day" data-v="${d}"`))}</div>
       <span class="kicker">But</span><div class="chips">${Object.entries(GOALS).map(([k, [l]]) => chip(g.goal === k, l, `data-act="gymSet" data-k="goal" data-v="${k}"`))}</div>
-      <span class="kicker">Durée</span><div class="chips">${[30, 45, 60, 75, 90].map((m) => chip(g.minutes === m, `${m} min`, `data-act="gymSet" data-k="minutes" data-v="${m}"`))}</div>
+      <span class="kicker">Durée</span><div class="chips">${withMyMinutes([30, 45, 60, 75, 90, g.minutes]).map((m) => chip(g.minutes === m, `${m} min`, `data-act="gymSet" data-k="minutes" data-v="${m}"`))}${addField('minutes', 'gymMin')}</div>
       <div class="chips">${chip(g.machinesFirst, '⚙️ Machines d’abord (plus simple, plus sûr)', 'data-act="gymMf"')}</div>
       <p class="tiny muted">${GOALS[g.goal][1]}. ${!g.day ? 'Le jour conseillé suit ta dernière séance de salle.' : ''}</p>
       ${mains.length ? h`<div class="setmenu">${mains.map((e) => h`<div class="setrow"><span class="sic">${e.emoji}</span><span class="grow"><b>${e.name}${isMachine(byId(e.libId)) ? ' ⚙️' : ''}</b><small>${e.sets} × ${e.repsMin}–${e.repsMax} · repos ${Math.round(e.rest / 15) * 15} s${/kg/.test(e.load) ? ` · ${e.load}` : ''}${e.note ? ` · ${e.note}` : ''}</small></span>
@@ -76,6 +77,7 @@ ACT.gymMachines = () => {
 };
 ACT.gymEq = (el) => { const env = curEnv(); if (!env) return; const eq = new Set(env.equipment || []), k = el.dataset.id; if (eq.has(k)) eq.delete(k); else eq.add(k); saveEnv(env, [...eq]); render(); ACT.gymMachines(); };
 ACT.gymPreset = (el) => { const env = curEnv(), p = GYM_PRESETS[el.dataset.id]; if (!env || !p) return; saveEnv(env, [...(env.equipment || []).filter((k) => !GYM_ZONES.some(([, l]) => l.includes(k))), ...p[1]]); render(); ACT.gymMachines(); toast(`Modèle « ${p[0]} » appliqué`); };
+onChoice('gymMin', { builtins: () => [30, 45, 60, 75, 90], apply: (key, el, r) => ACT.gymSet({ dataset: { k: 'minutes', v: String(r.n) } }) });
 ACT.gymSet = (el) => {
   const g = st(), k = el.dataset.k, v = el.dataset.v;
   if (k === 'minutes') g.minutes = Number(v); else if (k === 'split') { g.split = v; g.day = ''; } else g[k] = v;

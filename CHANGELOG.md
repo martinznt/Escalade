@@ -1,6 +1,6 @@
 # CHANGELOG — Séances entraînement
 
-## 8.34.0 — Séance à ma façon, chrono complet, exercices expliqués, installation partout
+## 8.34.0 — Séance à ma façon, tes propres choix, chrono complet, exercices expliqués, installation partout
 
 Détails, vérifications et limites : [DELIVERY_8_34.md](DELIVERY_8_34.md). Préparée sur la branche `claude/new-session-wi9olv`, **non déployée** (ZIP remis pour relecture).
 
@@ -15,6 +15,10 @@ Détails, vérifications et limites : [DELIVERY_8_34.md](DELIVERY_8_34.md). Pré
 - Installation : les gestes exacts pour l’appareil et le navigateur reconnus (iPhone et iPad Safari, Chrome iPhone, Instagram/Facebook, Android Chrome/Samsung/Firefox, ordinateur Chrome/Edge/Firefox, Mac Safari), lien à copier, QR code depuis l’ordinateur.
 - Annonce aux membres : l’administrateur choisit quand l’envoyer ; la notification ne part que vers les appareils qui l’ont autorisée ; bandeau dans le site facultatif.
 - Durées jusqu’à 5 h partout (durée habituelle, séance sur mesure, séances prêtes).
+- Tes propres choix : « ＋ Autre… » au bout des listes (zones à ménager, matériel d’un lieu, envie de séance, durées, zones musclées, souhaits de silhouette, raisons de chute, questions du profil). Un choix que l’app connaît déjà est coché (« poignet droit » = Poignets) ; sinon il est ajouté pour ce compte, avec ce que l’app en fait vraiment. Profil › Mes ajouts pour les voir et les retirer.
+- Les 7 zones à ménager (doigts, épaules, coudes, poignets, dos, genoux, chevilles) s’enregistrent dans le profil et écartent vraiment les exercices qui les chargent.
+- Mes chronos : un chrono réglé se garde et se relance en un toucher.
+- Petites corrections : points verts du calendrier, objectif sans chiffre, « stable » au lieu de « 0 % », 23 actions inutilisées retirées.
 
 ## 8.33.0 — Objectifs et phases, icônes par compte, IA plus vérifiable, applications sportives
 

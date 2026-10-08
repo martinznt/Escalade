@@ -20,7 +20,7 @@ import { byId } from './library.js';
 import { startPlayer } from './player.js';
 import { surprise, surpriseClimbParts, AIMS } from './surprise.js';
 import { intentsFor, AVOID_ZONES, FORMES } from './intentions.js';
-import { addField, onChoice } from './views-choices.js';
+import { addField, onChoice, withMyMinutes } from './views-choices.js';
 import { isMine } from './choices.js';
 import { activePains, readiness, ZONE_LABEL } from './coachbrain.js';
 import { activeGoals, goalLabel } from './brain.js';
@@ -260,7 +260,7 @@ function vWhere() {
     ${isClimb(c.sport) ? sysSelect(kindOf(c.sport)) : ''}
     <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>${c.formeFrom === 'checkin' ? h`<p class="tiny muted">Pré-rempli d’après ton check-in du matin : change-le si besoin.</p>` : ''}
     ${winOn(c) ? h`<p class="small">⏱ Temps disponible : <b>${fmtMin(c.minutes)}</b> <span class="tiny muted">(calculé d’après tes horaires)</span></p>` : h`<span class="kicker">Temps disponible${more.length ? ' (trajets compris)' : ''}</span>
-    <div class="chips">${slotMinutes(c) ? chip(c.minutes === slotMinutes(c), `🕒 Mon créneau (${fmtMin(slotMinutes(c))})`, `data-act="cpMin" data-id="${slotMinutes(c)}"`) : ''}${[30, 45, 60, 90, 120, 150, 180, 240, 300].filter((m) => m !== slotMinutes(c)).map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="300" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
+    <div class="chips">${slotMinutes(c) ? chip(c.minutes === slotMinutes(c), `🕒 Mon créneau (${fmtMin(slotMinutes(c))})`, `data-act="cpMin" data-id="${slotMinutes(c)}"`) : ''}${withMyMinutes([30, 45, 60, 90, 120, 150, 180, 240, 300]).filter((m) => m >= 10 && m !== slotMinutes(c)).map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="300" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
 }
 /** Horaires précis : une arrivée et un départ par lieu ; le temps entre deux lieux devient le trajet. */
 function winCard() {

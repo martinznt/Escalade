@@ -11,6 +11,7 @@ import { readiness } from './coachbrain.js';
 import { activeProgram } from './views-program.js';
 import { openWizard } from './views-climbplan.js';
 import { sourcesLine } from './srcui.js';
+import { addField, onChoice, withMyMinutes } from './views-choices.js';
 import { availableEquipment, testReminders } from './brain.js';
 import { ACTIVITIES } from './model.js';
 
@@ -218,7 +219,7 @@ function egSheet() {
     <label class="small">Quand ?<input type="date" name="date" value="${g.date}" min="${ymd(new Date(Date.now() + 2 * 86400000))}" required data-change="egDate"></label>
     <span class="small"><b>Pour quoi ?</b></span><div class="chips">${Object.entries(PROGRAM_GOALS).filter(([k]) => k !== 'goal').map(([k, x]) => chip(g.goal === k, `${x.emoji} ${x.label}`, `data-act="egSet" data-k="goal" data-v="${k}"`))}</div>
     <span class="small"><b>Quels jours ?</b></span><div class="chips days">${DAY_NAMES.map((d, i) => chip(g.days.includes(i), d, `data-act="egDay" data-v="${i}"`))}</div>
-    <span class="small"><b>Durée d’une séance</b></span><div class="chips">${[30, 45, 60, 90].map((n) => chip(g.minutes === n, `${n} min`, `data-act="egSet" data-k="minutes" data-v="${n}"`))}</div>
+    <span class="small"><b>Durée d’une séance</b></span><div class="chips">${withMyMinutes([30, 45, 60, 90, g.minutes]).map((n) => chip(g.minutes === n, `${n} min`, `data-act="egSet" data-k="minutes" data-v="${n}"`))}${addField('minutes', 'egMin')}</div>
     ${plan ? h`<div class="card flat"><b>${plan.sessions.length} séances sur ${plan.weeks} semaine${plan.weeks > 1 ? 's' : ''}</b><p class="small">${phases.join(' · ')}</p><p class="tiny muted">Aucune séance la veille ni le jour J. Les séances manquées ne sont pas entassées : le programme se recalcule jusqu’à la date.</p>${sourcesLine(['bosquet2007', 'issurin2010'])}</div>` : h`<p class="small warn-t">Choisis une date à au moins 2 jours d’ici.</p>`}
     <button class="btn pri big" type="submit" ${plan ? '' : 'disabled'}>Créer le programme</button></form>`, { wide: true });
 }
@@ -230,6 +231,7 @@ ACT.egRace = (el) => {
   if (run && k === '42' && S.eg.minutes < 60) S.eg.minutes = 60;
   S.eg.run = run; egSheet();
 };
+onChoice('egMin', { builtins: () => [30, 45, 60, 90], apply: (key, el, r) => ACT.egSet({ dataset: { k: 'minutes', v: String(r.n) } }) });
 ACT.egSet = (el) => { S.eg[el.dataset.k] = el.dataset.k === 'minutes' ? Number(el.dataset.v) : el.dataset.v; keepLabel(); egSheet(); };
 ACT.egDay = (el) => { const d = Number(el.dataset.v), s = new Set(S.eg.days); if (s.has(d)) { if (s.size > 1) s.delete(d); } else s.add(d); S.eg.days = [...s].sort(); keepLabel(); egSheet(); };
 CHG.egDate = (el) => { S.eg.date = el.value; keepLabel(); egSheet(); };

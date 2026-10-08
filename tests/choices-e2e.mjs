@@ -15,7 +15,7 @@ const srv = await startServer(env), browser = await chromium.launch(process.env.
 let count = 0; const step = async (name, fn) => { await fn(); count++; console.log('  ✓', name); };
 const context = await browser.newContext({ viewport: { width: 320, height: 760 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' }), page = await context.newPage();
 page.on('pageerror', (e) => errors.push(e.message));
-const noOverflow = async () => assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1 && [...document.querySelectorAll('#app *, #sheet .panel *')].filter((el) => el.offsetParent).every((el) => el.getBoundingClientRect().right <= innerWidth + 1)), 'rien ne dépasse à 320 px');
+const noOverflow = async () => assert.ok(await page.evaluate(() => { const w = document.documentElement.clientWidth; return w <= 321 && document.documentElement.scrollWidth <= w + 1 && [...document.querySelectorAll('#app *, #sheet .panel *')].filter((el) => el.offsetParent).every((el) => el.getBoundingClientRect().right <= w + 1); }), 'rien ne dépasse à 320 px');
 const type = async (sel, text) => { await page.fill(sel, text); await page.press(sel, 'Enter'); };
 const toast = () => page.locator('#toast').innerText();
 const mine = () => page.evaluate(async () => (await import('/state.js')).itemsOf('choice').map((x) => ({ list: x.list, label: x.label, on: !!x.on, n: x.n })));

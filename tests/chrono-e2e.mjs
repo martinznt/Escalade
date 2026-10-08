@@ -46,5 +46,19 @@ try {
     await page.waitForTimeout(600); await page.click('#itimer [data-act=timerLap]'); assert.match(await timer.innerText(), /Tours : 1\. 0:0/);
     await page.click('#itimer [data-act=timerFinish]'); await sheet.waitFor(); assert.match(await sheet.innerText(), /1 tour : 0:0/);
   });
+  await step('mes chronos : un chrono gardé se relance en un toucher, puis se retire', async () => {
+    await open('emom'); await sheet.locator('input[name=every]').fill('60'); await sheet.locator('input[name=minutes]').fill('12'); await sheet.locator('textarea[name=text]').fill('10 squats\n8 fentes');
+    await sheet.locator('input[name=name]').fill('Jambes'); await sheet.locator('input[name=keep]').check();
+    await sheet.locator('button[type=submit]').click(); await timer.waitFor(); await page.click('#itimer [data-act=timerStop]'); await timer.waitFor({ state: 'detached' });
+    await page.evaluate(async () => { const { ACT } = await import('/state.js'); ACT.timerOpen(); }); await sheet.waitFor();
+    assert.match(await sheet.innerText(), /Mes chronos[\s\S]*Jambes[\s\S]*Chaque minute, pendant 12 min · 2 exercices/i); await noOverflow();
+    await sheet.locator('[data-act=timerMine]').first().click(); await timer.waitFor(); assert.match(await timer.innerText(), /Jambes/);
+    await page.click('#itimer [data-act=timerSkip]'); assert.match(await timer.innerText(), /10 squats[\s\S]*Minute 1 \/ 12/);
+    await page.click('#itimer [data-act=timerStop]'); await timer.waitFor({ state: 'detached' });
+    await page.evaluate(async () => { const { ACT } = await import('/state.js'); ACT.timerOpen(); }); await sheet.waitFor();
+    await sheet.locator('[data-act=timerMineDel]').first().click(); await page.waitForSelector('#dialog.open'); await page.click('#dialog.open .btn.danger');
+    await page.waitForFunction(() => !document.querySelector('#sheet [data-act=timerMine]'));
+    assert.equal(await page.evaluate(async () => (await import('/state.js')).itemsOf('chrono').length), 0);
+  });
   assert.deepEqual(errors, []); console.log(`\n${count} étapes chrono E2E OK`);
 } catch (error) { await page.screenshot({ path: '/tmp/escalade-chrono-fail.png', fullPage: true }).catch(() => {}); throw error; } finally { await browser.close(); await new Promise((resolve) => srv.server.close(resolve)); }

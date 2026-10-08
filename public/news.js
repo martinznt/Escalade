@@ -200,9 +200,10 @@ export const NEWS = [
     ['settings','integrations','','Tes applications sportives','Retrouve les imports de fichiers et la connexion Strava, disponible après configuration du site. Tu vérifies chaque activité avant de l’ajouter.'],
     ['settings','main','','Des réponses plus explicites','L’assistant montre ses références ou demande une précision. Les outils manuels restent disponibles lorsqu’une réponse ne peut pas être vérifiée.'],
   ] },
-  { v:'8.34.0', date:'2026-10-08', title:'Ta séance à ta façon, un vrai chrono, des exercices bien expliqués', why:'Écris ta séance comme dans un carnet, chronomètre-toi en EMOM ou AMRAP, et retrouve pour chaque exercice comment te placer et où mettre la charge.', steps:[
+  { v:'8.34.0', date:'2026-10-08', title:'Ta séance à ta façon, tes propres choix, un vrai chrono', why:'Écris ta séance comme dans un carnet, ajoute tes propres choix quand il en manque, chronomètre-toi en EMOM ou AMRAP, et retrouve pour chaque exercice comment te placer et où mettre la charge.', steps:[
     ['library','home','[data-act=newSeance]','À ta façon','« ✍️ À ma façon » : une page blanche. Écris tes exercices un par ligne (« 4 × 8 tractions repos 2 min ») : l’app comprend les nombres. Rien n’est imposé.'],
-    ['home','dash','[data-act=timerOpen]','Un chrono pour tout','Chaque minute (EMOM), le plus de tours (AMRAP), pour le temps, intervalles et Tabata, compte à rebours, chronomètre : le résultat va dans ton historique.'],
+    ['home','dash','[data-act=timerOpen]','Un chrono pour tout','Chaque minute (EMOM), le plus de tours (AMRAP), pour le temps, intervalles et Tabata, compte à rebours, chronomètre : le résultat va dans ton historique. Garde tes réglages dans « ⭐ Mes chronos ».'],
+    ['profile','mine','','Ajoute tes propres choix','Il manque une zone à ménager, un matériel, une envie ou une durée ? Écris-la dans « ＋ Autre… » au bout de la liste. Tes ajouts sont ici, avec ce que l’app en fait.'],
     ['library','exercises','','Des exercices bien expliqués','Pour chaque exercice : la position de départ, le mouvement, où mettre la charge, et une version plus facile ou plus dure. Et 40 exercices de plus.'],
     ['profile','activities','','Les sports que tu ne fais jamais','Marque-les « Jamais » : ils ne te sont plus proposés, et leurs exercices peuvent être masqués. Un toucher pour les remettre.'],
     ['settings','main','[data-act=installNow]','Installer, sur tous les appareils','« 📲 Installer » montre les gestes exacts pour ton téléphone ou ton ordinateur, iPhone compris.'],

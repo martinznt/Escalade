@@ -18,7 +18,7 @@ export const isMine = (k) => typeof k === 'string' && k.startsWith(MY);
 export const MAX_PER_LIST = 30;
 export const CHOICE_LISTS = {
   zone: { title: 'Zones à ménager', icon: '🩹', add: '＋ Autre zone', aria: 'Ajouter une zone à ménager',
-    effect: 'Rappelée sur chaque exercice de tes séances. L’app ne sait pas quels exercices la chargent : passe ou remplace ceux qui la gênent.' },
+    effect: 'Cochée « en ce moment », ou choisie pour une séance, elle est rappelée sur chaque exercice. L’app ne sait pas quels exercices la chargent : passe ou remplace ceux qui la gênent.' },
   equipment: { title: 'Mon matériel', icon: '🧰', add: '＋ Autre matériel', aria: 'Ajouter du matériel',
     effect: 'Coché dans tes lieux et nommé partout. Un de tes moments (Mes moments) peut en avoir besoin : il n’est alors proposé que là où ce matériel est.' },
   envie: { title: 'Mes envies de séance', icon: '✨', add: '＋ Mon envie', aria: 'Écrire mon envie de séance',

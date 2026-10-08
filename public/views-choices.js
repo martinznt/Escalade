@@ -51,8 +51,8 @@ export function vMine() {
     ${n ? '' : h`<p class="small">Aucun ajout pour l’instant.</p>`}
     ${ORDER.map((list) => { const L = CHOICE_LISTS[list], xs = mine(list); return h`<details class="card fold" ${xs.length ? 'open' : ''}><summary><span>${L.icon} ${L.title}</span><span class="tiny muted">${xs.length || ''}</span></summary>
       <p class="tiny muted">${L.effect}</p>
-      ${xs.length ? h`<div class="setmenu">${xs.map((x) => h`<div class="setrow"><span class="grow"><b>${list === 'minutes' ? fmtMinutes(x.n) : x.label}</b>${list === 'zone' ? h`<small>${x.on ? '✓ à ménager en ce moment' : 'pas cochée en ce moment'}</small>` : ''}</span>
-        ${list === 'zone' ? h`<button class="btn sm ${x.on ? 'pri' : ''}" data-act="choiceOn" data-id="${x.id}" aria-pressed="${!!x.on}">${x.on ? 'En ce moment' : 'Cocher'}</button>` : ''}
+      ${xs.length ? h`<div class="setmenu">${xs.map((x) => h`<div class="setrow mine-row"><span class="grow"><b>${list === 'minutes' ? fmtMinutes(x.n) : x.label}</b>${list === 'zone' ? h`<small>${x.on ? '✓ à ménager en ce moment' : 'pas cochée en ce moment'}</small>
+          <button class="btn sm ${x.on ? '' : 'pri'}" data-act="choiceOn" data-id="${x.id}" aria-pressed="${!!x.on}">${x.on ? 'Décocher' : 'Cocher'}</button>` : ''}</span>
         <button class="btn sm ic danger" data-act="choiceDel" data-id="${x.id}" aria-label="Retirer ${x.label}">✕</button></div>`)}</div>` : ''}
       <div class="chips">${addField(list, 'mine')}</div></details>`; })}`;
 }

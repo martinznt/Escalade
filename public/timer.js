@@ -6,8 +6,8 @@
 //  · Compte à rebours, et Chronomètre avec des tours.
 // Préparation → effort → … → fin. Bips, vibrations et voix (si le coach est activé). Le temps est calculé à partir
 // d'horodatages : juste même si l'écran s'éteint un instant.
-import { h, $, openSheet, closeSheet, toast, mmss, buzzOk } from './ui.js';
-import { S, ACT, SUBMIT, addHistory, render } from './state.js';
+import { h, $, openSheet, closeSheet, toast, mmss, buzzOk, ask } from './ui.js';
+import { S, ACT, SUBMIT, addHistory, render, itemsOf, item, putItem, delItem } from './state.js';
 import { uid } from './shared.js';
 import { beep } from './sound.js';
 import { sourcesLine } from './srcui.js';
@@ -68,6 +68,19 @@ export function buildPlan(cfg = {}) {
 }
 export const totalSeconds = (phases) => phases.reduce((t, p) => t + p.s, 0);
 
+/** Ce que fait un chrono gardé, en une ligne (pure, testée). */
+export function chronoSummary(c = {}) {
+  const ex = exerciseLines(c.text).length, plus = ex ? ` · ${ex} exercice${ex > 1 ? 's' : ''}` : '';
+  switch (c.format) {
+    case 'emom': return `Chaque ${c.every >= 60 && c.every % 60 === 0 ? (c.every === 60 ? 'minute' : `${c.every / 60} min`) : `${c.every} s`}, pendant ${c.minutes} min${plus}`;
+    case 'amrap': return `Le plus de tours en ${c.minutes} min${plus}`;
+    case 'fortime': return `Pour le temps${c.cap ? `, limite ${c.cap} min` : ', sans limite'}${plus}`;
+    case 'countdown': return `Compte à rebours de ${mmss(Math.max(5, (c.minutes || 0) * 60 + (c.secs || 0)))}`;
+    case 'stopwatch': return 'Chronomètre avec tours';
+    default: return `${c.work} s d’effort / ${c.rest} s de pause × ${c.reps}${c.sets > 1 ? `, ${c.sets} séries` : ''}`;
+  }
+}
+const myChronos = () => itemsOf('chrono').sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
 /* ───────── Réglage ───────── */
 const saved = () => { try { return JSON.parse(localStorage.getItem('sea:timer2') || 'null') || {}; } catch { return {}; } };
 const DEFAULTS = { emom: { every: 60, minutes: 12, text: '' }, amrap: { minutes: 12, text: '' }, fortime: { cap: 20, text: '' }, countdown: { minutes: 5, secs: 0 }, stopwatch: {}, intervals: { ...PRESETS[0] } };
@@ -88,11 +101,16 @@ function setupBody() {
       ${num('setRest', 'Repos entre les séries', c.setRest, 0, 900, 's')}
       <p class="small muted" id="tnote">${c.note || ''}</p><div id="tsrc">${sourcesLine(c.src || [])}</div>`,
   };
+  const mineList = myChronos();
   return h`<div class="itimer-setup"><h2>⏱ Chrono et minuteur</h2>
+    ${mineList.length ? h`<span class="kicker">⭐ Mes chronos</span><div class="stack tight">${mineList.map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${chronoSummary(x)}</div></div>
+      <button type="button" class="btn sm pri" data-act="timerMine" data-id="${x.id}" aria-label="Démarrer ${x.name}">▶</button><button type="button" class="btn sm ic danger" data-act="timerMineDel" data-id="${x.id}" aria-label="Retirer ${x.name} de mes chronos">✕</button></div>`)}</div>
+      <span class="kicker">Ou un nouveau chrono</span>` : ''}
     <div class="setmenu">${FORMATS.map(([id, ic, t, d]) => h`<button type="button" class="setrow ${id === f ? 'on' : ''}" data-act="timerFmt" data-id="${id}" aria-pressed="${id === f}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${id === f ? '✓' : '›'}</span></button>`)}</div>
     <form data-submit="timerStart" class="stack" id="tform"><input type="hidden" name="format" value="${f}">
       <span class="kicker">${FMT[f][1]} ${FMT[f][2]}</span>${forms[f]}
       <label>Nom <span class="tiny muted">(facultatif, pour ton historique)</span><input name="name" maxlength="60" value="${c.name && f === 'intervals' ? c.name : ''}" placeholder="${FMT[f][2]}"></label>
+      <label class="chk"><input type="checkbox" name="keep"> ⭐ Le garder dans « Mes chronos » <span class="tiny muted">(pour le relancer en un toucher)</span></label>
       <button class="btn pri big" type="submit">▶ Démarrer</button></form></div>`;
 }
 ACT.timerOpen = () => { S.tfmt = ''; openSheet(setupBody()); };
@@ -116,10 +134,18 @@ export function timerConfig(d) {
   return { format: 'intervals', name, work: n('work', 1, 600, 7), rest: n('rest', 0, 600, 3), reps: n('reps', 1, 50, 6), sets: n('sets', 1, 20, 1), setRest: n('setRest', 0, 900, 0) };
 }
 SUBMIT.timerStart = (f) => {
-  const cfg = timerConfig(Object.fromEntries(new FormData(f)));
+  const d = Object.fromEntries(new FormData(f)), cfg = timerConfig(d);
   try { const st = saved(); localStorage.setItem('sea:timer2', JSON.stringify({ format: cfg.format, cfgs: { ...(st.cfgs || {}), [cfg.format]: cfg } })); } catch { /* rien */ }
+  // « Mes chronos » : même nom et même format → mis à jour, sinon ajouté (30 au plus).
+  if (d.keep) {
+    const same = myChronos().find((x) => x.format === cfg.format && String(x.name).toLowerCase() === cfg.name.toLowerCase());
+    if (!same && myChronos().length >= 30) toast('Déjà 30 chronos gardés : retire ceux qui ne servent plus.', 4000, 'bad');
+    else { const { exercises, seconds, ...keep } = cfg; putItem('chrono', same?.id || 'tm-' + uid().slice(0, 12), keep); toast(`⭐ « ${cfg.name} » gardé dans Mes chronos`); }
+  }
   closeSheet(); startTimer(cfg);
 };
+ACT.timerMine = (el) => { const x = item('chrono', el.dataset.id); if (!x) return toast('Chrono introuvable.'); closeSheet(); startTimer(timerConfig(x)); };
+ACT.timerMineDel = async (el) => { const x = item('chrono', el.dataset.id); if (!x || !(await ask(`Retirer « ${x.name} » de tes chronos ?`, { ok: 'Retirer', danger: true }))) return; delItem('chrono', x.id); openSheet(setupBody()); };
 
 /* ───────── En cours ───────── */
 export function startTimer(cfg, { onDone } = {}) {

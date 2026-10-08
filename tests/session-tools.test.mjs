@@ -4,7 +4,8 @@ globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
 Object.defineProperty(globalThis, 'navigator', { value: { onLine: true }, configurable: true });
 globalThis.document = { querySelector: () => null, documentElement: { dataset: {} } };
 globalThis.window = { matchMedia: () => ({ matches: false }) };
-const { buildPhases, totalSeconds, PRESETS, buildPlan, timerConfig, timerResult, exerciseLines, FORMATS } = await import('../public/timer.js');
+const { buildPhases, totalSeconds, PRESETS, buildPlan, timerConfig, timerResult, exerciseLines, FORMATS, chronoSummary } = await import('../public/timer.js');
+const SCHEMA = await import('../public/items.js');
 const { parseHr } = await import('../public/hr.js');
 const { moveKind, figure } = await import('../public/anim.js');
 const { warmupFor } = await import('../public/generator.js');
@@ -42,6 +43,18 @@ ok('chrono : EMOM sur 12 min avec exercices qui tournent, toutes les 2 min, AMRA
   assert.equal(timerResult({ format: 'fortime', cap: 20 }, { capped: true }), 'Limite de 20 min atteinte');
   assert.match(timerResult({ format: 'stopwatch' }, { secs: 125, laps: [60000, 125000] }), /2 tours : 1:00, 2:05/);
   assert.equal(timerResult({ format: 'emom', every: 60, minutes: 12 }), '12 intervalles de 60 s');
+});
+ok('mes chronos : un chrono gardé se relit à l’identique (bornes comprises) et se résume en une ligne', () => {
+  const { cleanItem } = SCHEMA;
+  const kept = cleanItem({ c: 'chrono', id: 'tm-1', u: 1, d: { ...timerConfig({ format: 'emom', name: 'Jambes', every: '120', minutes: '20', text: '10 squats\n8 fentes' }), evil: 1 } }).d;
+  assert.equal(kept.evil, undefined);
+  const again = timerConfig(kept); assert.equal(again.name, 'Jambes'); assert.deepEqual(again.exercises, ['10 squats', '8 fentes']);
+  assert.equal(buildPlan(again).filter((p) => p.k === 'work').length, 10);
+  assert.equal(chronoSummary(kept), 'Chaque 2 min, pendant 20 min · 2 exercices');
+  assert.equal(chronoSummary(timerConfig({ format: 'emom', every: '60', minutes: '12' })), 'Chaque minute, pendant 12 min');
+  assert.equal(chronoSummary(timerConfig({ format: 'intervals', work: '20', rest: '10', reps: '8', sets: '1' })), '20 s d’effort / 10 s de pause × 8');
+  assert.equal(chronoSummary(timerConfig({ format: 'fortime', cap: '0' })), 'Pour le temps, sans limite');
+  assert.equal(chronoSummary(timerConfig({ format: 'countdown', minutes: '1', secs: '30' })), 'Compte à rebours de 1:30');
 });
 ok('cardio Bluetooth : BPM sur 8 ou 16 bits', () => {
   const v = (bytes) => new DataView(Uint8Array.from(bytes).buffer);

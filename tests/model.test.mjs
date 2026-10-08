@@ -74,6 +74,7 @@ const SAMPLES = {
   swap: { from: 'Pompes', to: 'Dips', date: 1, where: 'player' },
   habit: { key: 'swap:pompes', decision: 'accepted' },
   choice: { list: 'zone', label: 'Hanche gauche', n: 45, on: true },
+  chrono: { name: 'Jambes', format: 'emom', every: 60, minutes: 12, cap: 0, secs: 0, work: 7, rest: 3, reps: 6, sets: 4, setRest: 180, text: '10 squats\n8 fentes' },
   exsetup: { key: 'presse a cuisses', label: 'Presse à cuisses', setup: 'Siège 4, dossier 2' },
   routine: { label: 'No foot', emoji: '🙌', when: 'end', sports: ['climbing_boulder'], minutes: 15, libId: 'no-foot', needs: ['wall'], effort: 'hard', fingers: true, note: 'Sur le dévers', auto: true, off: false },
   season: { theme: 'mobilite', start: 1780000000000, closed: true, won: true },
