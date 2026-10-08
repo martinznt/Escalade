@@ -9,7 +9,7 @@ import { chooseScope, saveLayoutGlobal, isAdmin as isAdminUser } from './content
 
 /** Icônes possibles en haut à droite : [emoji, nom, action]. */
 export const ICONS = {
-  cal: ['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], notif: ['🔔', 'Notifications', 'notifOpen'], timer: ['⏱', 'Minuteur', 'timerOpen'], carnet: ['🧗', 'Carnet', 'goCarnet'],
+  cal: ['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], notif: ['🔔', 'Notifications', 'notifOpen'], timer: ['⏱', 'Chrono', 'timerOpen'], carnet: ['🧗', 'Carnet', 'goCarnet'],
   coach: ['💬', 'Assistant', 'coachOpen'], all: ['☰', 'Menu : toutes les fonctions', 'allOpen'], recap: ['📸', 'Bilan du mois', 'recapOpen'], gen: ['🎯', 'Séance du jour', 'genOpen'],
   seances: ['📚', 'Mes séances', 'goLib'], progress: ['📈', 'Mes progrès', 'goProgressTop'], program: ['📆', 'Planning', 'topCal'], streak: ['🔥', 'Ma série', 'goProgressTop'],
   badges: ['🏅', 'Badges', 'goProgressTop'], search: ['🔍', 'Rechercher dans l’app', 'findOpen'],
@@ -22,7 +22,7 @@ const F = (l, k, extra = {}) => ({ l, k, ...extra });
 export const FEATURES = {
   home: {
     search: F('Recherche', ['icon']), hero: F('Bonjour et semaine', ['big']), gen: F('Séance du jour', ['big', 'icon'], { tile: 1 }), seances: F('Mes séances', ['big', 'icon'], { tile: 1 }),
-    timer: F('Minuteur', ['big', 'icon'], { tile: 1 }), carnet: F('Carnet d’escalade', ['big', 'icon'], { tile: 1 }), progress: F('Mes progrès', ['big', 'icon'], { tile: 1 }),
+    timer: F('Chrono', ['big', 'icon'], { tile: 1 }), carnet: F('Carnet d’escalade', ['big', 'icon'], { tile: 1 }), progress: F('Mes progrès', ['big', 'icon'], { tile: 1 }),
     cal: F('Calendrier', ['icon', 'big']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach et commandes', ['icon', 'big']),
     program: F('Programme', ['big', 'icon']), finger: F('Alerte doigts', ['big']), streak: F('Ma série', ['big', 'icon']), today: F('Que faire aujourd’hui ?', ['big']), question: F('Petite question', ['big']),
     next: F('Prochaines séances', ['big']), goals: F('Objectifs', ['big']), reco: F('Recommandations', ['big']), weekprog: F('Progression 7 jours', ['big']),
@@ -35,20 +35,20 @@ export const FEATURES = {
     regularity: F('Régularité', ['big']), load: F('Charge', ['big']), muscles: F('Muscles travaillés', ['big']), badges: F('Badges', ['big']), weeksum: F('Résumé de la période', ['big']),
     learned: F('Ce que l’app a appris sur toi', ['big']),
     story: F('Mon parcours (saison, lettre, année, avant / après, rapport, photos)', ['big']),
-    recap: F('Bilan du mois', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']),
+    recap: F('Bilan du mois', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Chrono', ['icon']),
   },
   // 8.29 : la Bibliothèque et le Profil se personnalisent aussi (ordre, masquer, couleur), pas seulement leurs icônes.
   library: {
     search: F('Recherche', ['icon']), newbtn: F('Bouton « ＋ Nouvelle séance »', ['big'], { ic: '＋' }), draft: F('Séance en cours de création', ['big'], { ic: '📝' }),
     'r-seances': F('Mes séances', ['big'], { row: 1, ic: '📋' }), 'r-climbplan': F('Créer une séance', ['big'], { row: 1, ic: '✨' }), 'r-gym': F('Ma salle de sport', ['big'], { row: 1, ic: '🏋️' }), 'r-moments': F('Mes moments', ['big'], { row: 1, ic: '🧩' }), 'r-catalog': F('Carnet de séances', ['big'], { row: 1, ic: '📖' }),
     'r-exercises': F('Exercices', ['big'], { row: 1, ic: '💪' }), 'r-common': F('Bibliothèque commune', ['big'], { row: 1, ic: '🌍' }), 'r-search': F('Rechercher', ['big'], { row: 1, ic: '🔍' }),
-    gen: F('Séance du jour', ['icon']), timer: F('Minuteur', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach', ['icon']),
+    gen: F('Séance du jour', ['icon']), timer: F('Chrono', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), coach: F('Coach', ['icon']),
   },
   profile: {
     search: F('Recherche', ['icon']), hero: F('En-tête : nom, sports, chiffres', ['big'], { ic: '👤' }), sw: F('Points forts et à travailler', ['big'], { ic: '💪' }),
     bilan: F('Mon bilan physique (carte)', ['big'], { ic: '🩺' }), complete: F('Profil à compléter', ['big'], { ic: '🧩' }),
     'g-moi': F('Tuiles « Moi »', ['big'], { ic: '🙂' }), 'g-res': F('Tuiles « Mes résultats »', ['big'], { ic: '🏆' }), 'g-why': F('Tuiles « Comprendre mes conseils »', ['big'], { ic: '🔎' }), 'g-share': F('Tuiles « Partager »', ['big'], { ic: '🔗' }),
-    carnet: F('Carnet', ['icon']), coach: F('Coach', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Minuteur', ['icon']),
+    carnet: F('Carnet', ['icon']), coach: F('Coach', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']), timer: F('Chrono', ['icon']),
   },
   settings: { search: F('Recherche', ['icon']), notif: F('Notifications', ['icon']), all: F('Toutes les fonctions', ['icon']) },
 };
@@ -184,7 +184,7 @@ ACT.layReset = async (el) => {
 
 /* ───────── Toutes les fonctions, triées ───────── */
 const ALL = [
-  ['S’entraîner', [['✨', 'Créer une séance', 'cpResume'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['📖', 'Carnet de séances', 'allGo', 'library/catalog'], ['⏱', 'Minuteur', 'timerOpen'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Assistant (questions, exercices avec tes mots)', 'coachOpen']]],
+  ['S’entraîner', [['✨', 'Créer une séance', 'cpResume'], ['📚', 'Mes séances', 'goLib'], ['🔀', 'Fusionner des séances', 'mergeOpen'], ['📖', 'Carnet de séances', 'allGo', 'library/catalog'], ['⏱', 'Chrono (EMOM, AMRAP, Tabata…)', 'timerOpen'], ['👥', 'Séance à deux', 'duoJoinAsk'], ['💬', 'Assistant (questions, exercices avec tes mots)', 'coachOpen']]],
   ['Escalade', [['🧗', 'Carnet (blocs, voies)', 'goCarnet'], ['📌', 'Projets (dans Objectifs)', 'goProjects'], ['✋', 'Test de doigts (Records et mesures)', 'allGo', 'profile/perfs']]],
   ['Suivre mes progrès', [['📈', 'Résumé', 'goProgressTop'], ['📝', 'Journal (séances, blocs, notes)', 'allGo', 'progress/journal'], ['🏆', 'Records et mesures', 'allGo', 'profile/perfs'], ['🔎', 'Mon analyse', 'allGo', 'profile/analyse']]],
   ['Planifier', [['📅', 'Planning (calendrier, programme, rappels)', 'topCal'], ['🔔', 'Notifications', 'notifOpen']]],

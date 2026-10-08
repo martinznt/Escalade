@@ -12,7 +12,7 @@ const EN = {
   'Raccourcis': 'Shortcuts', 'Calendrier': 'Calendar', 'Notifications': 'Notifications', 'Toutes les fonctions': 'All features', 'Modifier la mise en page': 'Edit layout',
   'Synchronisé': 'Synced', 'Navigation principale': 'Main navigation', 'Bonjour': 'Good morning', 'Salut': 'Hi', 'Bonsoir': 'Good evening', 'Bonne nuit': 'Good night',
   'Séance du jour': 'Today’s session', 'Préparée selon ton niveau et ton temps': 'Built for your level and your time', 'Mes séances': 'My sessions', 'Lancer, créer, modifier': 'Start, create, edit',
-  'Minuteur': 'Timer', 'Suspensions, Tabata…': 'Hangs, Tabata…', 'Carnet': 'Logbook', 'Blocs, voies et projets': 'Boulders, routes and projects', 'Coach': 'Coach',
+  'Minuteur': 'Timer', 'Chrono': 'Timer', 'Suspensions, Tabata…': 'Hangs, Tabata…', 'Chrono (EMOM, AMRAP, Tabata…)': 'Timer (EMOM, AMRAP, Tabata…)', 'EMOM, AMRAP, Tabata, compte à rebours': 'EMOM, AMRAP, Tabata, countdown', 'Carnet': 'Logbook', 'Blocs, voies et projets': 'Boulders, routes and projects', 'Coach': 'Coach',
   'Que faire aujourd’hui ?': 'What should I do today?', 'Séance découverte': 'Discovery session', 'Comment le sais-tu ?': 'How do you know?',
   'Express 10 minutes': '10-minute express', 'Peu de temps ? Une séance courte reconstruite pour 10 minutes.': 'Short on time? A quick session rebuilt for 10 minutes.',
   'On commence quand tu veux : ta première séance t’attend.': 'Start whenever you like: your first session is waiting.',

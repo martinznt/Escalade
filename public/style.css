@@ -773,3 +773,6 @@ button.item.rowpick:last-child{border-bottom:0}
 .spotlight{animation:spotlight 2.2s ease-out}
 @keyframes spotlight{0%,40%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:0 0 0 0 transparent}}
 @media (prefers-reduced-motion:reduce){.spotlight{animation:none;box-shadow:0 0 0 3px var(--accent)}}
+/* 8.34 — chrono : circuit affiché (AMRAP, pour le temps), boutons d'action sur deux colonnes. */
+#itimer .it-list{margin:0;padding-left:1.4em;text-align:left;font-size:1.05rem;line-height:1.5;max-width:min(420px,86vw)}
+#itimer .it-bot{gap:10px}#itimer .it-bot .grid2 .btn{min-height:64px}

@@ -231,13 +231,13 @@ await step('notifications : boîte des mises à jour (utilité, visite), répons
 await step('recherche 🔍 dans toute l’app, et recherche limitée aux paramètres', async () => {
   await a.tab('home'); await a.click('.topicons [data-act=findOpen]'); await A.waitForSelector('#sheet input[data-input=findQ]');
   await A.fill('#sheet input[data-input=findQ]', 'minuteur'); await A.waitForSelector('#findres [data-act=findGo]');
-  assert.match(await a.text('#findres'), /Minuteur/);
+  assert.match(await a.text('#findres'), /Chrono/);
   await A.fill('#sheet input[data-input=findQ]', 'anglais'); await A.waitForFunction(() => /Langue/.test(document.querySelector('#findres')?.textContent || ''));
   await a.click('#findres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/display'));
   await A.waitForSelector('#main .found'); // l'élément trouvé est mis en lumière
   await a.tab('settings'); await A.fill('input[data-input=setFind]', 'vibration'); await A.waitForSelector('#setfindres [data-act=findGo]');
   assert.equal(await A.locator('.setmain').isVisible(), false, 'la liste des rubriques laisse place aux résultats');
-  assert.doesNotMatch(await a.text('#setfindres'), /Minuteur|Exercice/, 'seulement des paramètres');
+  assert.doesNotMatch(await a.text('#setfindres'), /Chrono|Minuteur|Exercice/, 'seulement des paramètres');
   await a.click('#setfindres [data-act=findGo]'); await A.waitForFunction(() => location.hash.startsWith('#/settings/session')); await A.waitForSelector('#main input[name=vibration]');
 });
 await step('séances prêtes : filtres, tri pour toi, sources consultables, lancer / garder ; top exercices', async () => {
@@ -1314,8 +1314,9 @@ await step('après une mise à jour : visite des nouveautés, seulement ce qui a
   await G.reload(); await G.waitForSelector('nav.tabs'); await G.waitForTimeout(800);
   assert.equal(await g.count('#updbar'), 0, 'plus proposée une fois faite');
 });
-await step('minuteur d’intervalles : préréglage, préparation puis effort, pause, arrêt', async () => {
+await step('chrono, format intervalles : préréglage, préparation puis effort, pause, arrêt', async () => {
   await g.tab('home'); await g.click('[data-act=timerOpen]'); await G.waitForSelector('#tform');
+  await g.click('[data-act=timerFmt][data-id=intervals]'); await G.waitForSelector('#tform input[name=work]');
   await g.click('[data-act=timerPreset][data-id=tabata]'); assert.equal(await G.inputValue('#tform input[name=work]'), '20');
   await g.click('#tform button[type=submit]'); await G.waitForSelector('#itimer.ph-prep');
   await G.waitForSelector('#itimer.ph-work', { timeout: 8000 }); assert.match(await g.text('#itimer'), /Série 1 \/ 1 · 1 \/ 8/);

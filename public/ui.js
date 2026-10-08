@@ -73,7 +73,7 @@ function keyOf(root, target) {
   for (const d of root.querySelectorAll('details')) { const t = detailText(d), n = seen.get(t) || 0; seen.set(t, n + 1); if (d === target) return `${scopeOf(root)}|${t}|${n}`; }
   return '';
 }
-if (typeof document !== 'undefined') document.addEventListener('click', (e) => {
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('click', (e) => {
   const sm = e.target.closest?.('summary'), d = sm?.parentElement;
   if (!d || d.tagName !== 'DETAILS' || d.matches('.setsec,[data-free]')) return;
   const root = d.closest('#sheet > .panel') || d.closest('#main'); if (!root) return;

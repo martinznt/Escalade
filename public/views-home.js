@@ -104,7 +104,7 @@ function vDash() {
       hero,
       gen: () => h`${tile('genOpen', '🎯', 'Séance du jour', 'Préparée selon ton niveau et ton temps', true)}${whereAmI()}`,
       seances: () => tile('goLib', '📚', 'Mes séances', 'Lancer, créer, modifier'),
-      timer: () => tile('timerOpen', '⏱', 'Minuteur', 'Suspensions, Tabata…'),
+      timer: () => tile('timerOpen', '⏱', 'Chrono', 'EMOM, AMRAP, Tabata…'),
       carnet: () => tile('goCarnet', '🧗', 'Carnet', 'Blocs, voies et projets'),
       progress: () => tile('goProgress', '📈', 'Mes progrès', 'Historique et records', false, 'summary'),
       cal: safe('calendar'), coach: safe('command'), program: () => programCard() || '', finger: () => fingerCard() || '',

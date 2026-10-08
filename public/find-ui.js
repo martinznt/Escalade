@@ -22,8 +22,8 @@ function results(q, scope) {
   return S.findRes;
 }
 function resultsView(q, scope) {
-  if (!norm(q)) return scope === 'settings' ? '' : h`<p class="tiny muted">Par exemple : « minuteur », « langue », « rappel », « tractions », « étirements »…</p>
-    <div class="chips">${['Séance du jour', 'Minuteur', 'Rappels', 'Thème', 'Mes séances'].map((t) => h`<button type="button" class="chip" data-act="findTry" data-v="${t}">${t}</button>`)}</div>`;
+  if (!norm(q)) return scope === 'settings' ? '' : h`<p class="tiny muted">Par exemple : « chrono », « langue », « rappel », « tractions », « étirements »…</p>
+    <div class="chips">${['Séance du jour', 'Chrono', 'Rappels', 'Thème', 'Mes séances'].map((t) => h`<button type="button" class="chip" data-act="findTry" data-v="${t}">${t}</button>`)}</div>`;
   const list = results(q, scope);
   if (!list.length) return h`<p class="small muted">Rien trouvé pour « ${q} ». Essaie un autre mot.</p>`;
   const row = (r) => h`<button class="setrow" data-act="findGo" data-i="${S.findRes.indexOf(r)}"><span class="sic">${r.icon}</span><span class="grow"><b>${r.title}</b><small>${r.sub}</small></span><span class="chev">›</span></button>`;

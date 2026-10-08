@@ -66,7 +66,7 @@ export const FEATURE_INDEX = [
   E('feature', '🌍', 'Séances partagées', 'Bibliothèque', 'library/common', 'communaute partage publiees commune', {}),
   E('feature', '📋', 'Coller un texte de séance', 'Bibliothèque', '', 'importer texte coller', { act: 'openImport' }),
   E('feature', '👥', 'Séance à deux', 'Bibliothèque', '', 'ami partenaire duo ensemble synchronise code', { act: 'duoJoinAsk' }),
-  E('feature', '⏱', 'Minuteur', 'Outil', '', 'chrono tabata emom suspensions intervalles timer', { act: 'timerOpen' }),
+  E('feature', '⏱', 'Chrono', 'EMOM, AMRAP, Tabata, compte à rebours', '', 'minuteur chrono chronomètre tabata emom amrap for time pour le temps compte à rebours suspensions intervalles timer', { act: 'timerOpen' }),
   E('feature', '📆', 'Programme sur plusieurs semaines', 'Accueil', '', 'plan programme semaines calendrier', { act: 'topProgram' }),
   E('feature', '📅', 'Calendrier', 'Accueil', '', 'agenda planifier date prevoir', { act: 'topCal' }),
   E('feature', '💬', 'Coach (discussion)', 'Outil', '', 'coach question conseil discuter chat assistant', { act: 'coachOpen' }),
