@@ -3,6 +3,7 @@
 
 import { normalizeEx, normalizeSession, uid, exKey, norm, parseKg } from './shared.js';
 import { LIBRARY, FOCUS, GROUP_TARGET, GROUP_LABEL, byId } from './library.js';
+import { zoneRisk } from './intentions.js';
 
 const DAY = 86400000, HOUR = 3600000;
 const avg = (a, b) => (a + b) / 2;
@@ -591,7 +592,7 @@ export function generateSession(opts = {}, ctx = {}) {
   const A = analyze(history, now);
   const level = levelFrom(settings);
   const eq = equipmentOf(settings, opts.equipment);
-  const avoid = settings.avoid || {};
+  const avoid = settings.avoid || {}, moreZones = ['wrists', 'back', 'ankles'].filter((z) => avoid[z]);
   const levelSet = !!(settings.level && (settings.level.boulderMax || settings.level.routeMax || settings.level.years));
   const rng = mulberry32(Number.isFinite(opts.seed) ? opts.seed : now % 2147483647);
   const size = SIZES[opts.size] ? opts.size : 'moyenne';
@@ -632,6 +633,7 @@ export function generateSession(opts = {}, ctx = {}) {
     if (avoid.shoulders && SHOULDER_IDS.has(x.id)) return false;
     if (avoid.elbows && ELBOW_IDS.has(x.id)) return false;
     if (avoid.knees && KNEE_IDS.has(x.id)) return false;
+    if (moreZones.length && zoneRisk(x, moreZones).length) return false;
     return true;
   };
 
@@ -866,9 +868,9 @@ export function swapExercise(session, exId, ctx = {}) {
   const eq = equipmentOf(settings);
   const level = levelFrom(settings);
   const inUse = new Set(session.exercises.map((e) => e.libId));
-  const avoid = settings.avoid || {};
+  const avoid = settings.avoid || {}, moreZones = ['wrists', 'back', 'ankles'].filter((z) => avoid[z]);
   const cands = LIBRARY.filter((x) => x.role === lib.role && x.kind === lib.kind && (x.climb !== false) === (lib.climb !== false) && x.id !== lib.id && !inUse.has(x.id) && x.minLevel <= level && x.needs.every((n) => eq[n])
-    && !(x.risk === 'finger' && (avoid.fingers || (x.intensity === 'high' && level < 1))) && !(avoid.shoulders && (x.risk === 'shoulder' || SHOULDER_IDS.has(x.id))) && !(avoid.elbows && ELBOW_IDS.has(x.id)) && !(avoid.knees && KNEE_IDS.has(x.id)));
+    && !(x.risk === 'finger' && (avoid.fingers || (x.intensity === 'high' && level < 1))) && !(avoid.shoulders && (x.risk === 'shoulder' || SHOULDER_IDS.has(x.id))) && !(avoid.elbows && ELBOW_IDS.has(x.id)) && !(avoid.knees && KNEE_IDS.has(x.id)) && !(moreZones.length && zoneRisk(x, moreZones).length));
   if (!cands.length) return session;
   const pick = cands[Math.floor((ctx.rng ? ctx.rng() : Math.random()) * cands.length)];
   const ex = toEx(pick, cur.block);

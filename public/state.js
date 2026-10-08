@@ -16,6 +16,7 @@ import { uid, normalizeSession, normalizeHistory, mergeSeances, readStored } fro
 import { cleanItem, itemKey } from './items.js';
 import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
+import { registerMine } from './choices.js';
 import { toast, tz, $ } from './ui.js';
 
 export const APP_VERSION = '8.33.0';
@@ -380,6 +381,8 @@ let ctxCache = null, ctxVer = -1, ctxMin = 0;
 export function ctx() {
   const minute = Math.floor(Date.now() / 60000);
   if (!ctxCache || ctxVer !== S.ver || ctxMin !== minute) {
+    // Mes ajouts (« ＋ Autre… ») : nommés et utilisés partout comme les choix de l'app, pour CE compte seulement.
+    registerMine([...S.items.values()].filter((it) => it.c === 'choice' && !it.del).map((it) => ({ id: it.id, ...it.d })));
     ctxCache = buildContext({ items: [...S.items.values()], history: S.history, events: S.events, seances: S.seances.items, personal: S.personal, settings: S.settings, now: Date.now(), tz: tz() });
     ctxVer = S.ver; ctxMin = minute;
   }

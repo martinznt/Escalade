@@ -10,6 +10,7 @@ import { celebrate } from './fx.js';
 import { startTimer } from './timer.js';
 import { sourcesLine } from './srcui.js';
 import { FALL_WHY, fallTraining } from './sports.js';
+import { addField, onChoice } from './views-choices.js';
 import { climbTools } from './views-sports.js';
 import { openWizard } from './views-climbplan.js';
 
@@ -219,7 +220,7 @@ ACT.projOpen = (el) => {
       <div class="row"><input id="pjsec" maxlength="40" placeholder="Ex. départ, le crux, la sortie" class="grow"><button class="btn sm" data-act="projSecAdd" data-id="${p.id}">＋</button></div></details>
     <details class="how mini" ${(p.fallWhy || []).length ? 'open' : ''}><summary>🪂 Où et pourquoi je tombe</summary>
       <p class="tiny muted">Marque l’endroit sur la photo (type « Là où je tombe »), puis la raison : l’app propose quoi travailler.</p>
-      <div class="chips">${Object.entries(FALL_WHY).map(([k, [ic, l]]) => chip((p.fallWhy || []).includes(k), `${ic} ${l}`, `data-act="projWhy" data-id="${p.id}" data-v="${k}"`))}</div>
+      <div class="chips">${Object.entries(FALL_WHY).map(([k, [ic, l]]) => chip((p.fallWhy || []).includes(k), `${ic} ${l}`, `data-act="projWhy" data-id="${p.id}" data-v="${k}"`))}${addField('fall', 'projWhy', { i: p.id })}</div>
       ${(p.fallWhy || []).length ? h`<ul class="clean tight small">${fallTraining(p.fallWhy).tips.map((t) => h`<li>${t}</li>`)}</ul><button class="btn sm pri" data-act="projTrain" data-id="${p.id}">✨ Séance ciblée pour ce projet</button>` : ''}</details>
     ${p.status === 'active' ? h`<div class="grid2"><button class="btn big" data-act="projTry" data-id="${p.id}">＋1 essai</button><button class="btn pri big" data-act="projDone" data-id="${p.id}">✓ Réussi !</button></div>` : h`<p class="ok-t">🎉 Réussi le ${fmtDay(p.doneAt)}</p>`}
     <div class="row wrapf"><button class="btn sm ghost" data-act="projArchive" data-id="${p.id}">${p.status === 'archived' ? 'Réactiver' : 'Mettre de côté'}</button><button class="btn sm ghost danger" data-act="projDel" data-id="${p.id}">Supprimer</button><span class="grow"></span><button class="btn" data-act="closeSheet">Fermer</button></div></div>`, { wide: true });
@@ -229,6 +230,7 @@ CHG.projHigh = (el) => { const p = item('project', el.dataset.id); if (p) putIte
 INPUT.projHighLive = (el) => { const o = document.getElementById('pjhi'); if (o) o.textContent = el.value; };
 CHG.projSec = (el) => { const p = item('project', el.dataset.id); if (!p) return; const l = [...(p.sections || [])]; const i = Number(el.dataset.i); if (l[i]) l[i] = { ...l[i], done: el.checked }; putItem('project', p.id, { ...p, sections: l }); };
 ACT.projSecAdd = (el) => { const p = item('project', el.dataset.id), i = $('#pjsec'), name = String(i?.value || '').trim().slice(0, 40); if (!p || !name) return; putItem('project', p.id, { ...p, sections: [...(p.sections || []), { name, done: false }].slice(0, 12) }); ACT.projOpen(el); };
+onChoice('projWhy', { apply: (key, el) => { const p = item('project', el.dataset.i); if (p && !(p.fallWhy || []).includes(key)) ACT.projWhy({ dataset: { id: p.id, v: key } }); else if (p) ACT.projOpen({ dataset: { id: p.id } }); } });
 ACT.projWhy = (el) => { const p = item('project', el.dataset.id); if (!p) return; const l = new Set(p.fallWhy || []); l.has(el.dataset.v) ? l.delete(el.dataset.v) : l.add(el.dataset.v); putItem('project', p.id, { ...p, fallWhy: [...l].slice(0, 6) }); ACT.projOpen(el); };
 ACT.projTrain = (el) => { const p = item('project', el.dataset.id); if (!p) return; const t = fallTraining(p.fallWhy || []); closeSheet(); openWizard({ sport: p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder', focus: { label: `projet « ${p.name} »`, caps: t.caps } }); };
 ACT.holdAdd = (el, e) => {

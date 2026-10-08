@@ -13,6 +13,8 @@ import { availableEquipment } from './brain.js';
 import { buildWorkPart, workTitle, SPORT_STRUCTS, sportFamily } from './sportplan.js';
 import { byId } from './library.js';
 import { normalizeAimLinks, linkedAimCaps } from './objectivelinks.js';
+import { isMine } from './choices.js';
+import { AVOID_ZONES } from './intentions.js';
 
 export const INTENSITY = { easy: ['🌿', 'Tranquille'], mod: ['🙂', 'Modéré'], hard: ['🔥', 'Intense'], max: ['🚀', 'Max'] };
 /** Types de parties : grimpe (bloc ou voie) ou parties du corps (échauffement, renfo, étirements…) construites par le générateur. */
@@ -265,7 +267,7 @@ export function buildFromParts(parts, ctx, opts = {}) {
   const now = Date.now();
   return normalizeSession({
     id: uid(), name: opts.name || 'Ma séance', emoji: opts.emoji || (acts[0]?.startsWith('climbing') ? '🧗' : '🏋️'), source: 'generated', activity: acts[0] || opts.sport || 'climbing_boulder', sports: acts.slice(1),
-    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: base.envId || '', envName: base.envName || '', plannedMin: parts.reduce((t, p) => t + p.minutes, 0), intent: base.intent || null, aims: base.aims || [], phases: parts.map((p) => ({ id: p.id, type: p.type, activity: p.activity || (p.type === 'climb' ? (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder') : ''), role: p.role, goal: p.goal, minutes: p.minutes, intensity: p.intensity, priorities: p.priorities, envId: p.envId || '', travelMin: p.travelBefore || 0, subIntents: (p.subIntents || []).map((x) => x.id), objective: !!p.objective, aimLinks: normalizeAimLinks(p, base.aims || []), locks: p.locks, window: p.window })) },
+    exercises: out, durationMin: sessionMinutes({ exercises: out }), context: { env: base.envId || '', envName: base.envName || '', spare: (base.avoidZones || []).filter(isMine).map((k) => AVOID_ZONES.find(([z]) => z === k)?.[1]?.replace(/^\S+\s/, '')).filter(Boolean), plannedMin: parts.reduce((t, p) => t + p.minutes, 0), intent: base.intent || null, aims: base.aims || [], phases: parts.map((p) => ({ id: p.id, type: p.type, activity: p.activity || (p.type === 'climb' ? (p.kind === 'voie' ? 'climbing_route' : 'climbing_boulder') : ''), role: p.role, goal: p.goal, minutes: p.minutes, intensity: p.intensity, priorities: p.priorities, envId: p.envId || '', travelMin: p.travelBefore || 0, subIntents: (p.subIntents || []).map((x) => x.id), objective: !!p.objective, aimLinks: normalizeAimLinks(p, base.aims || []), locks: p.locks, window: p.window })) },
     objectives: opts.goal ? [opts.goal] : [],
     notes: [{ title: 'Pourquoi cette séance', text: [opts.goal || 'Séance structurée par toi, partie par partie.', ...why].join('\n') }],
     createdAt: now, updatedAt: now,

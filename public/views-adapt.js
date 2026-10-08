@@ -6,6 +6,7 @@ import { S, ACT, CHG, ctx, getSeance, saveSeance } from './state.js';
 import { CATALOG, buildSession } from './catalog.js';
 import { EQUIPMENT } from './model.js';
 import { AVOID_ZONES } from './intentions.js';
+import { addField, onChoice, withMyMinutes } from './views-choices.js';
 import { sessionMinutes } from './engine.js';
 import { startPlayer } from './player.js';
 import { adaptSession, parseAdapt, sessionNeeds, WARM_OPTS, COOL_OPTS, INTENSITY_OPTS } from './adapt.js';
@@ -22,9 +23,9 @@ function drawAdapt() {
   openSheet(h`<div class="stack"><h2 style="margin:0">🔁 Adapter « ${s.name} »</h2>
     <p class="small acc-t">Pour cette fois seulement : ta séance d’origine ne change pas. Tu pourras lancer la version adaptée, ou la garder comme nouvelle séance.</p>
     <span class="kicker">⏱ Durée <span class="tiny muted">(prévue : ${mins} min)</span></span>
-    <div class="chips">${chip(!o.minutes, 'Pareil', 'data-act="adSet" data-k="minutes" data-v=""')}${[10, 15, 20, 30, 45, 60, 90].filter((m) => m !== mins).map((m) => chip(o.minutes === m, `${m} min`, `data-act="adSet" data-k="minutes" data-v="${m}"`))}</div>
+    <div class="chips">${chip(!o.minutes, 'Pareil', 'data-act="adSet" data-k="minutes" data-v=""')}${withMyMinutes([10, 15, 20, 30, 45, 60, 90, ...(o.minutes ? [o.minutes] : [])]).filter((m) => m !== mins).map((m) => chip(o.minutes === m, `${m} min`, `data-act="adSet" data-k="minutes" data-v="${m}"`))}${addField('minutes', 'adaptMin')}</div>
     ${needs.length ? h`<span class="kicker">🧰 Matériel que tu n’as pas cette fois</span><div class="chips">${needs.map((k) => chip((o.remove || []).includes(k), EQUIPMENT[k] || k, `data-act="adTog" data-k="remove" data-v="${k}"`))}</div>` : h`<p class="tiny muted">🧰 Cette séance ne demande aucun matériel.</p>`}
-    <span class="kicker">🩹 J’ai mal ou je dois ménager</span><div class="chips">${AVOID_ZONES.map(([k, l]) => chip((o.zones || []).includes(k), l, `data-act="adTog" data-k="zones" data-v="${k}"`))}</div>
+    <span class="kicker">🩹 J’ai mal ou je dois ménager</span><div class="chips">${AVOID_ZONES.map(([k, l]) => chip((o.zones || []).includes(k), l, `data-act="adTog" data-k="zones" data-v="${k}"`))}${addField('zone', 'adaptZone')}</div>
     <span class="kicker">🔥 Échauffement</span>${seg('adSeg', `warm:${o.warm || 'keep'}`, WARM_OPTS.map(([k, l]) => [`warm:${k}`, l]))}
     <span class="kicker">🌬️ Retour au calme</span>${seg('adSeg', `cool:${o.cool || 'keep'}`, COOL_OPTS.map(([k, l]) => [`cool:${k}`, l]))}
     <span class="kicker">💥 Intensité</span>${seg('adSeg', `intensity:${o.intensity || 'same'}`, INTENSITY_OPTS.map(([k, l]) => [`intensity:${k}`, l]))}
@@ -33,6 +34,8 @@ function drawAdapt() {
     <button class="btn pri big" data-act="adPreview">Voir la version adaptée</button></div>`, { wide: true });
 }
 ACT.adSet = (el) => { const o = S.adapt.o, k = el.dataset.k, v = el.dataset.v; o[k] = k === 'minutes' ? (v ? Number(v) : undefined) : v; drawAdapt(); };
+onChoice('adaptZone', { apply: (key) => { const o = S.adapt.o; o.zones = [...new Set([...(o.zones || []), key])]; drawAdapt(); } });
+onChoice('adaptMin', { builtins: () => [10, 15, 20, 30, 45, 60, 90], apply: (key, el, r) => { S.adapt.o.minutes = r.n; drawAdapt(); } });
 ACT.adTog = (el) => { const o = S.adapt.o, k = el.dataset.k, v = el.dataset.v, s = new Set(o[k] || []); if (s.has(v)) s.delete(v); else s.add(v); o[k] = [...s]; drawAdapt(); };
 ACT.adSeg = (el) => { const [k, v] = String(el.dataset.id).split(':'); if (!['warm', 'cool', 'intensity'].includes(k)) return; S.adapt.o[k] = v === 'keep' || v === 'same' ? undefined : v; drawAdapt(); };
 CHG.adText = (el) => {

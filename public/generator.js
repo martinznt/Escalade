@@ -134,7 +134,7 @@ export function candidates(activityId, ctx, { eq, level, light, noPlyo = false, 
     if (avoid.shoulders && (x.risk === 'shoulder' || SHOULDER.has(x.id))) why.push('épaules à ménager (ton réglage)');
     if (avoid.elbows && ELBOW.has(x.id)) why.push('coudes à ménager (ton réglage)');
     if (avoid.knees && KNEE.has(x.id)) why.push('genoux à ménager (ton réglage)');
-    why.push(...zoneRisk(x, zones));
+    why.push(...zoneRisk(x, [...new Set([...zones, ...['wrists', 'back', 'ankles'].filter((z) => avoid[z])])]));
     (why.length ? excluded : ok).push(why.length ? { x, why } : x);
   }
   return { ok, excluded };

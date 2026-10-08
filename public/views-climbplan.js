@@ -20,6 +20,8 @@ import { byId } from './library.js';
 import { startPlayer } from './player.js';
 import { surprise, surpriseClimbParts, AIMS } from './surprise.js';
 import { intentsFor, AVOID_ZONES, FORMES } from './intentions.js';
+import { addField, onChoice } from './views-choices.js';
+import { isMine } from './choices.js';
 import { activePains, readiness, ZONE_LABEL } from './coachbrain.js';
 import { activeGoals, goalLabel } from './brain.js';
 import { presetParts } from './format.js';
@@ -318,9 +320,9 @@ function vWhy() {
     <span class="kicker">Ou une autre façon de construire la séance</span>
     <div class="setmenu">${OTHER.map(([k, ic, t, d]) => h`<button class="setrow" data-act="cpAim" data-id="${k}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev">${aim === k ? '✓' : '›'}</span></button>`)}</div>
     <div class="card stack"><span class="kicker">🛡️ Zones à ménager <span class="tiny muted">(facultatif)</span></span>
-      <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}</div>
+      <div class="chips">${AVOID_ZONES.map(([k, l]) => chip((c.zones || []).includes(k), l, `data-act="cpZone" data-id="${k}"`))}${addField('zone', 'cpZone')}</div>
       ${(c.painZones || []).filter((z) => (c.zones || []).includes(z)).length ? h`<p class="tiny warn-t">🩹 Pré-coché d’après tes douleurs notées (${c.painZones.filter((z) => (c.zones || []).includes(z)).map((z) => ZONE_LABEL[z]).join(', ')}). Décoche si c’est passé.</p>` : ''}
-      <p class="tiny muted">Les exercices qui les chargent fort sont écartés de cette séance.</p></div>
+      <p class="tiny muted">Les exercices qui les chargent fort sont écartés de cette séance.${(c.zones || []).some(isMine) ? ' Tes zones ajoutées sont rappelées sur chaque exercice : l’app ne sait pas lesquels les chargent.' : ''}</p></div>
     ${aim === 'goals' ? '' : h`<div class="card stack">${wordsField(false)}</div>`}`;
 }
 function aimsCard() {
@@ -772,6 +774,7 @@ ACT.cpAim = (el) => { const c = CP(); c.aim = el.dataset.id; c.result = null; c.
 ACT.cpSurAim = (el) => { CP().surAim = el.dataset.id; keep(); render(); };
 const tog = (k) => (el) => { const c = CP(), id = el.dataset.id, l = c[k] || []; c[k] = l.includes(id) ? l.filter((x) => x !== id) : [...l, id]; keep(); render(); };
 ACT.cpZone = tog('zones');
+onChoice('cpZone', { apply: (key) => { const c = CP(); if (!(c.zones || []).includes(key)) c.zones = [...(c.zones || []), key]; keep(); render(); } });
 // Aller ajouter des objectifs, puis revenir à la séance (le brouillon est gardé).
 const WORK_HINT = { run: 'fractionné, seuil…', swim: 'séries, pyramide…', load: 'force, 5×5…', body: 'EMOM, pyramide…' };
 function vPhases() {
@@ -905,8 +908,9 @@ function forYou() {
   const eq = [...availableEquipment(x, c.envId)], other = sportsOf(c).slice(1).map((sp) => [sp, x.envs.find((e) => e.id === placeOfSport(sp, c))]).filter(([, e]) => e && e.id !== baseEnv(c));
   out.push(`📍 ${env ? env.name : 'Sans lieu décrit'}${other.length ? ` (${sportShort(c.sport, x.activities).toLowerCase()})` : ''} : seulement des exercices faisables avec ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun matériel'}.`);
   for (const [sp, e] of other) out.push(`📍 ${e.name} (${sportShort(sp, x.activities).toLowerCase()}) : avec ${[...availableEquipment(x, e.id)].map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() || 'aucun matériel'}.`);
-  const zones = (c.zones || []).map((z) => AVOID_ZONES.find(([k]) => k === z)?.[1]?.replace(/^\S+\s/, '').toLowerCase()).filter(Boolean);
+  const zl = (z) => AVOID_ZONES.find(([k]) => k === z)?.[1]?.replace(/^\S+\s/, '').toLowerCase(), zones = (c.zones || []).filter((z) => !isMine(z)).map(zl).filter(Boolean), own = (c.zones || []).filter(isMine).map(zl).filter(Boolean);
   if (zones.length) out.push(`🛡️ À ménager : ${zones.join(', ')} — les exercices qui les chargent fort sont écartés.`);
+  if (own.length) out.push(`🩹 Rappel sur chaque exercice : ${own.join(', ')} (ajouté par toi ; l’app ne sait pas quels exercices les chargent).`);
   out.push(`📊 Niveau : ${['débutant', 'intermédiaire', 'avancé'][lv.level] || 'débutant'} — ${lv.how}.`);
   if (c.forme && c.forme !== 'ok') out.push(`💡 Ta forme du jour (${FORMES.find(([k]) => k === c.forme)?.[2]?.toLowerCase() || c.forme}) est prise en compte.`);
   return h`<details class="card flat acc-b" open><summary><b class="small">✨ Faite pour toi</b></summary><ul class="clean tight small">${out.map((t) => h`<li>${t}</li>`)}</ul>
@@ -954,11 +958,12 @@ ACT.cpResume = () => { closeSheet(); go('library', 'climbplan'); };
  * une commande au coach… ouvrent toutes l'assistant, déjà rempli. auto : directement à la dernière validation (étape 7) :
  * un toucher sur « Générer », ou retour aux étapes d'avant pour modifier.
  */
-export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true, envId = '' } = {}) {
+export function openWizard({ sport = '', minutes = 0, goalIds = [], forme = '', intents = [], focus = null, auto = true, envId = '', words = '' } = {}) {
   closeSheet();
   const help = CP().help || 'auto'; S.cp = null; ls.set(key(), {}); const c = CP(), x = ctx();
   c.help = help; c.sport = sport || c.sport || Object.keys(x.activities)[0] || 'conditioning'; placeFor(c); c.minutes = Math.max(10, Math.min(300, minutes || S.settings.defaultMinutes || 45));
   c.goalIds = goalIds.filter(Boolean); c.intents = intents; c.focus = focus?.caps ? focus : null; c.aim = 'goals'; if (forme) c.forme = forme;
+  if (words) c.intentText = String(words).slice(0, 240); // envie écrite avec ses mots : l'intention de cette séance
   if (envId && x.envs.some((v) => v.id === envId)) { c.envId = envId; c.envPicked = true; } else if (envId === 'none') { c.envId = ''; c.envPicked = true; }
   // Une demande précise (objectif, intention, capacité) remplace les objectifs tirés du profil ; sinon ceux-ci suivent le sport.
   if (c.goalIds.length || intents.length || c.focus) c.aims = [];

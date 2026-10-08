@@ -73,6 +73,7 @@ const SAMPLES = {
   media: { kind: 'video', ref: 'h1', refType: 'history', url: 'https://example.org/v', note: 'Mon essai', activity: 'climbing_boulder', goalId: 'g1', styles: ['st-dalle'], date: 7, hasPhoto: false },
   swap: { from: 'Pompes', to: 'Dips', date: 1, where: 'player' },
   habit: { key: 'swap:pompes', decision: 'accepted' },
+  choice: { list: 'zone', label: 'Hanche gauche', n: 45, on: true },
   exsetup: { key: 'presse a cuisses', label: 'Presse à cuisses', setup: 'Siège 4, dossier 2' },
   routine: { label: 'No foot', emoji: '🙌', when: 'end', sports: ['climbing_boulder'], minutes: 15, libId: 'no-foot', needs: ['wall'], effort: 'hard', fingers: true, note: 'Sur le dévers', auto: true, off: false },
   season: { theme: 'mobilite', start: 1780000000000, closed: true, won: true },

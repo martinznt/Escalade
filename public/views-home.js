@@ -11,6 +11,9 @@ import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHist
 import { uid, summarizeHistory } from './shared.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, EQUIPMENT, CAPACITIES, SKILLS } from './model.js';
 import { openWizard } from './views-climbplan.js';
+import { mine, addField, onChoice, withMyMinutes } from './views-choices.js';
+import { isMine } from './choices.js';
+import { keywordCaps } from './intentions.js';
 import { sessionMinutes } from './engine.js';
 import { parseCommand } from './commands.js';
 import { todayOptions, regularity, benchmarks, activeGoals, goalLabel, goalProgress, records, profileCapacities, strengthsWeaknesses, STATUS_WORD, testReminders, forgottenGoals, undertrained, habits, neverTried, loadAnalysis, periodSummary, achievements, entryActivity, activityLabel, blockers, whyNoProgress } from './brain.js';
@@ -113,17 +116,26 @@ const ENVIE_CAPS = { force: { tirage_vertical: 0.8, poussee_horizontale: 0.8, fo
 function nothingSheet() {
   const q = S.np, c = ctx(), envs = c.envs.filter((e) => !e.archived);
   openSheet(h`<div class="stack"><h2 style="margin:0">⚡ Je n’ai rien prévu</h2>
-    <span class="small"><b>1 · Combien de temps ?</b></span><div class="chips">${[10, 20, 30, 45, 60].map((m) => chip(q.min === m, `${m} min`, `data-act="npSet" data-k="min" data-v="${m}"`))}</div>
+    <span class="small"><b>1 · Combien de temps ?</b></span><div class="chips">${withMyMinutes([10, 20, 30, 45, 60, q.min]).map((m) => chip(q.min === m, `${m} min`, `data-act="npSet" data-k="min" data-v="${m}"`))}${addField('minutes', 'npMin')}</div>
     <span class="small"><b>2 · Où ?</b></span><div class="chips">${envs.slice(0, 6).map((e) => chip(q.env === e.id, e.name, `data-act="npSet" data-k="env" data-v="${e.id}"`))}${chip(q.env === 'none', '🧍 Ici, sans matériel', 'data-act="npSet" data-k="env" data-v="none"')}</div>
-    <span class="small"><b>3 · Envie de quoi ?</b></span><div class="chips">${ENVIES.map(([k, l]) => chip(q.envie === k, l, `data-act="npSet" data-k="envie" data-v="${k}"`))}</div>
+    <span class="small"><b>3 · Envie de quoi ?</b></span><div class="chips">${[...ENVIES, ...mine('envie').map((x) => [x.id, `✨ ${x.label}`])].map(([k, l]) => chip(q.envie === k, l, `data-act="npSet" data-k="envie" data-v="${k}"`))}${addField('envie', 'npEnvie')}</div>
+    ${isMine(q.envie) ? h`<p class="tiny muted">${Object.keys(keywordCaps(item('choice', q.envie)?.label || '')).length ? `Ça oriente la séance vers : ${Object.keys(keywordCaps(item('choice', q.envie)?.label || '')).map((c) => CAPACITIES[c]?.label || c).join(', ').toLowerCase()}.` : 'Aucun mot reconnu : ton envie est gardée comme intention de la séance, à toi de choisir ce que tu fais.'}</p>` : ''}
     <button class="btn pri big" data-act="npGo">▶ Préparer ma séance</button></div>`);
 }
 ACT.nothingPlanned = () => { const c = ctx(), here = slotPlaceNow(); S.np = { min: Number(S.settings.defaultMinutes) || 30, env: here?.id || c.defEnv?.id || 'none', envie: 'surprise' }; nothingSheet(); };
+onChoice('npMin', { builtins: () => [10, 20, 30, 45, 60], apply: (key, el, r) => { S.np.min = r.n; nothingSheet(); } });
+onChoice('npEnvie', { builtins: () => ENVIES, apply: (key) => { S.np.envie = key; nothingSheet(); } });
 ACT.npSet = (el) => { S.np[el.dataset.k] = el.dataset.k === 'min' ? Number(el.dataset.v) : el.dataset.v; nothingSheet(); };
 ACT.npGo = () => {
   const q = S.np, c = ctx(), acts = Object.keys(c.activities), climb = acts.find((a) => /^climbing/.test(a));
-  const sport = q.envie === 'technique' && climb ? climb : q.envie === 'endurance' ? (acts.find((a) => ['running', 'conditioning', 'swimming'].includes(a)) || acts[0]) : q.envie === 'mobilite' ? (acts.find((a) => a === 'conditioning') || acts[0]) : (acts.find((a) => ['strength', 'calisthenics', 'conditioning'].includes(a)) || acts[0]);
+  // Envie écrite : le sport suit les capacités reconnues (cardio → endurance, doigts / technique → escalade, souplesse).
+  const oc = isMine(q.envie) ? keywordCaps(item('choice', q.envie)?.label || '') : null;
+  const kind = !oc ? q.envie : oc.endurance_aerobie ? 'endurance' : (oc.technique_escalade || oc.force_doigts || oc.technique_pieds) ? 'technique' : Object.keys(oc).some((k) => k.startsWith('mobilite')) ? 'mobilite' : 'force';
+  const sport = kind === 'technique' && climb ? climb : kind === 'endurance' ? (acts.find((a) => ['running', 'conditioning', 'swimming'].includes(a)) || acts[0]) : kind === 'mobilite' ? (acts.find((a) => a === 'conditioning') || acts[0]) : (acts.find((a) => ['strength', 'calisthenics', 'conditioning'].includes(a)) || acts[0]);
   closeSheet();
+  // Envie écrite par la personne : les mots reconnus deviennent des capacités visées, et le texte reste l'intention.
+  const own = isMine(q.envie) ? item('choice', q.envie) : null, ownCaps = own ? keywordCaps(own.label) : {};
+  if (own) return openWizard({ sport: sport || 'conditioning', minutes: q.min, envId: q.env, words: own.label, focus: Object.keys(ownCaps).length ? { label: own.label, caps: ownCaps } : null });
   openWizard({ sport: sport || 'conditioning', minutes: q.min, envId: q.env, focus: ENVIE_CAPS[q.envie] ? { label: ENVIES.find(([k]) => k === q.envie)[1].replace(/^\S+\s/, ''), caps: ENVIE_CAPS[q.envie] } : null });
 };
 ACT.impactHide = () => { S.impactHidden = ctx().history[0]?.id || ''; render(); };

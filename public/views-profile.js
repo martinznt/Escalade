@@ -33,14 +33,17 @@ import { COMPOSITION, MEASURES, lastValue, evolution, indices, checkWeighIn } fr
 import { painCard } from './views-forme.js';
 import { sportTools } from './views-sports.js';
 import { cheersCard, loadCheers } from './views-community.js';
+import { vMine, mine, addField, onChoice, insertCheckChip } from './views-choices.js';
+import { isMine } from './choices.js';
+import { AVOID_ZONES } from './intentions.js';
 import { PHYSIQUE, PHYSIQUE_SOURCES, physiqueGroups, physiqueMeasures, physiqueTrack, weeklySets, SETS_RANGE } from './physique.js';
 
-const SUBS = [['memory', 'Mémoire d’entraînement'], ['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage']];
+const SUBS = [['memory', 'Mémoire d’entraînement'], ['bilan', 'Mon bilan physique'], ['analyse', 'Mon analyse'], ['body', 'Mon corps'], ['understand', 'Pourquoi ces conseils'], ['map', 'Mes capacités'], ['activities', 'Sports'], ['perfs', 'Mesures'], ['climbing', 'Carnet'], ['goals', 'Objectifs'], ['equipment', 'Matériel'], ['prefs', 'Préférences'], ['public', 'Partage'], ['mine', 'Mes ajouts']];
 const TILES = { bilan: ['🩺', 'Mon bilan physique', 'ce que l’app sait de ta condition, tests à faire'], analyse: ['🔎', 'Mon analyse', 'capacités, tendances, pourquoi ces conseils'], body: ['🫀', 'Mon corps et mes préférences', 'âge, forme, aime / évite, zones à ménager'], understand: ['🔎', 'Pourquoi ces conseils', 'ce que l’app sait de toi'], map: ['🗺️', 'Mes capacités', 'forces et points à travailler'], activities: ['🏅', 'Mes sports', 'et catégories'], perfs: ['🏆', 'Records et mesures', 'records, tests, maxima'],
-  climbing: ['🧗', 'Carnet', 'blocs, voies, pyramide'], goals: ['🎯', 'Objectifs', 'figures, projets d’escalade'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'] };
+  climbing: ['🧗', 'Carnet', 'blocs, voies, pyramide'], goals: ['🎯', 'Objectifs', 'figures, projets d’escalade'], equipment: ['📍', 'Mes lieux', 'salles, falaises, matériel, ce que tu y as fait'], prefs: ['❤️', 'Préférences', 'aime / évite'], public: ['🌍', 'Partage', 'profil public'], mine: ['✍️', 'Mes ajouts', 'mes propres choix dans les listes'] };
 registerPaths('Profil', 'profile', Object.entries(TILES).filter(([id]) => id !== 'prefs').map(([id, [, label]]) => [label, id]));
 /** Tuiles rangées par thème : qui je suis, ce que je fais, pourquoi l'app conseille ça. */
-const GROUPS = [['Moi', ['bilan', 'body', 'activities', 'goals', 'equipment']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['analyse']], ['Partager', ['public']]];
+const GROUPS = [['Moi', ['bilan', 'body', 'activities', 'goals', 'equipment', 'mine']], ['Mes résultats', ['perfs', 'climbing']], ['Comprendre mes conseils', ['analyse']], ['Partager', ['public']]];
 export function vProfile() {
   const sub = SUBS.some(([k]) => k === S.sub.profile) ? S.sub.profile : 'home';
   if (sub === 'home') return h`${vHub()}<section class="card"><h3>🧠 Ce que l’app a compris</h3><p class="small muted">Tes habitudes, leur origine et tes corrections.</p><button class="btn" data-act="profSub" data-id="memory">Ma mémoire d’entraînement</button></section>`;
@@ -48,7 +51,7 @@ export function vProfile() {
   // Préférences : avec « Mon corps » ; capacités et « pourquoi » : dans « Mon analyse ».
   if (sub === 'prefs') { setTimeout(() => go('profile', 'body'), 0); return ''; }
   if (sub === 'map' || sub === 'understand') { const [ic, title] = TILES[sub]; return h`${subHead('profSub', 'analyse', 'Mon analyse', `${ic} ${title}`)}${(sub === 'map' ? vMap : vUnderstand)()}`; }
-  const views = { analyse: vAnalyseHub, body: () => h`${vBody()}<span class="kicker">❤️ Mes préférences</span>${vPrefs()}`, understand: vUnderstand, map: vMap, bilan: vBilan, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic };
+  const views = { analyse: vAnalyseHub, body: () => h`${vBody()}<span class="kicker">❤️ Mes préférences</span>${vPrefs()}`, understand: vUnderstand, map: vMap, bilan: vBilan, activities: vActivities, perfs: vPerfs, climbing: () => vCarnet(), goals: vGoals, equipment: vEquipment, prefs: vPrefs, public: vPublic, mine: vMine };
   const [ic, title] = TILES[sub];
   return h`${subHead('profSub', 'home', 'Profil', `${ic} ${title}`)}${views[sub]()}`;
 }
@@ -69,7 +72,7 @@ function completeCard(c, acts, goals, climbing) {
     <div class="setmenu">${left.map(([, ic, t, to]) => h`<button class="setrow" data-act="allGo" data-to="${to}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b></span><span class="chev">›</span></button>`)}</div></section>`;
 }
 function vHub() {
-  if (!advancedUI() && !S.lay && !savedLayouts().profile) { const c = ctx(); return h`<h1>Profil</h1><p class="small muted">${Object.values(c.activities).map((a) => a.label).join(' · ') || 'Mon entraînement'}</p>${menuList([['profSub','activities','🏅','Mes sports','Les sports que je fais, mon niveau'],['profSub','goals','🎯','Objectifs','Ce que je veux réussir'],['profSub','equipment','📍','Mes lieux','Salles, falaises, maison et leur matériel'],['profSub','perfs','🏆','Records et mesures','Mesures, records et cotations']])}<details class="card"><summary>Préférences, capacités et autres détails</summary>${menuList([['profSub','bilan','📋','Mon bilan physique','Mes repères et les tests disponibles'],['profSub','body','❤️','Mon corps et mes préférences','Mes choix, les zones à ménager'],['profSub','analyse','🔎','Mon analyse','Mes capacités : faits, estimations et inconnues'],['profSub','climbing','🧗','Carnet','Blocs, voies et projets d’escalade'],['profSub','public','🌍','Partage','Je choisis ce que je partage']])}</details>`; }
+  if (!advancedUI() && !S.lay && !savedLayouts().profile) { const c = ctx(); return h`<h1>Profil</h1><p class="small muted">${Object.values(c.activities).map((a) => a.label).join(' · ') || 'Mon entraînement'}</p>${menuList([['profSub','activities','🏅','Mes sports','Les sports que je fais, mon niveau'],['profSub','goals','🎯','Objectifs','Ce que je veux réussir'],['profSub','equipment','📍','Mes lieux','Salles, falaises, maison et leur matériel'],['profSub','perfs','🏆','Records et mesures','Mesures, records et cotations']])}<details class="card"><summary>Préférences, capacités et autres détails</summary>${menuList([['profSub','bilan','📋','Mon bilan physique','Mes repères et les tests disponibles'],['profSub','body','❤️','Mon corps et mes préférences','Mes choix, les zones à ménager'],['profSub','analyse','🔎','Mon analyse','Mes capacités : faits, estimations et inconnues'],['profSub','climbing','🧗','Carnet','Blocs, voies et projets d’escalade'],['profSub','public','🌍','Partage','Je choisis ce que je partage'],['profSub','mine','✍️','Mes ajouts','Mes propres choix ajoutés aux listes']])}</details>`; }
   const c = ctx(), acts = Object.values(c.activities), st = profileCapacities(c), sw = strengthsWeaknesses(st), goals = activeGoals(c);
   const known = st.filter((x) => x.level != null).length;
   const bil = assessment(c), envies = bil.envies;
@@ -437,6 +440,8 @@ export function silhouetteCard(b = item('config', 'body') || {}, goals = item('c
     ${sourcesLine(PHYSIQUE_SOURCES)}</section>`;
 }
 const saveBody = (b) => { const clean = cleanBody(b); putItem('config', 'body', Object.fromEntries(Object.entries({ ...(item('config', 'body') || {}), ...clean }).filter(([k, v]) => v !== undefined || !(k in clean)).map(([k, v]) => [k, v ?? null]).filter(([, v]) => v !== null))); };
+onChoice('envEq', { apply: (key, el, r) => insertCheckChip(el, el.dataset.i || 'eq', key, EQUIPMENT[key] || r.label) });
+onChoice('bodySet', { apply: (key, el) => { const k = el.dataset.list, b = item('config', 'body') || {}; if (!(b[k] || []).includes(key)) saveBody(bodyToggle(b, k, key)); render(); } });
 ACT.bodySet = (el) => { saveBody(bodyToggle(item('config', 'body') || {}, el.dataset.k, el.dataset.v)); render(); };
 CHG.bodyIn = (el) => {
   const b = { ...(item('config', 'body') || {}), [el.dataset.k]: el.value }; saveBody(b);
@@ -769,7 +774,8 @@ ACT.placeTrain = (el) => { S.cp = { ...(S.cp || {}), envId: el.dataset.id, step:
 ACT.placeLog = (el) => { S.aqEnvPreset = el.dataset.id; ACT.ascQuick?.(); };
 function envForm(e, back = '') {
   const t = e?.type || S.envType || 'maison', eq = new Set(e?.equipment || ENV_TEMPLATES[t] || []);
-  const eqChips = (name, keys, sel) => h`<div class="chips">${keys.map((k) => h`<label class="chip ${sel.has(k) ? 'on' : ''}"><input type="checkbox" class="hidden" name="${name}" value="${k}" ${sel.has(k) ? 'checked' : ''} data-change="chipToggle">${EQUIPMENT[k] || k}</label>`)}</div>`;
+  // « ＋ Autre matériel » au bout de chaque liste : le matériel écrit est coché ici (celui de l'app s'il existe déjà).
+  const eqChips = (name, keys, sel, add = false) => h`<div class="chips">${keys.map((k) => h`<label class="chip ${sel.has(k) ? 'on' : ''}"><input type="checkbox" class="hidden" name="${name}" value="${k}" ${sel.has(k) ? 'checked' : ''} data-change="chipToggle">${EQUIPMENT[k] || k}</label>`)}${add ? addField('equipment', 'envEq', { i: name }) : ''}</div>`;
   const head = h`<div class="grid2"><label>Nom<input name="name" required maxlength="60" value="${e?.name || ENV_TYPES[t]}" placeholder="${t === 'escalade' ? 'Ex. Arkose Montreuil' : ''}"></label><label>Type<select name="type" data-change="envType">${Object.entries(ENV_TYPES).map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label></div>`;
   let body;
   if (t === 'escalade') {
@@ -779,16 +785,17 @@ function envForm(e, back = '') {
     body = h`<label>Ville <span class="tiny muted">(facultatif)</span><input name="city" maxlength="60" value="${e?.city || ''}"></label>
       <label>Cotation de la salle</label><div class="row wrapf"><select name="gradeSys" class="grow"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin || x.global).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select><button class="btn sm" type="button" data-act="sysNew">＋ Créer (U1 → U8+, couleurs…)</button></div>
       <label>Les espaces de la salle et leur matériel</label>
-      ${Object.entries(GYM_AREAS).map(([id, [ic, label, sugg]]) => { const a = areas.get(id), sel = new Set(a?.items || (e ? [] : sugg.slice(0, 2))); const keys = [...new Set([...sugg, ...sel])]; return h`<div class="card flat garea"><label class="chk"><input type="checkbox" name="areaOn" value="${id}" ${on(id) ? 'checked' : ''}> <b>${ic} ${label}</b></label>${eqChips('ar_' + id, keys, sel)}<input name="arn_${id}" maxlength="120" value="${a?.note || ''}" placeholder="Précision (facultatif) : ex. poutre Beastmaker 2000"></div>`; })}`;
+      ${Object.entries(GYM_AREAS).map(([id, [ic, label, sugg]]) => { const a = areas.get(id), sel = new Set(a?.items || (e ? [] : sugg.slice(0, 2))); const keys = [...new Set([...sugg, ...sel])]; return h`<div class="card flat garea"><label class="chk"><input type="checkbox" name="areaOn" value="${id}" ${on(id) ? 'checked' : ''}> <b>${ic} ${label}</b></label>${eqChips('ar_' + id, keys, sel, true)}<input name="arn_${id}" maxlength="120" value="${a?.note || ''}" placeholder="Précision (facultatif) : ex. poutre Beastmaker 2000"></div>`; })}`;
   } else if (t === 'falaise') {
     const c = ctx(), systems = Object.values(c.systems).filter((x) => !x.archived);
     body = h`<label>Région ou ville <span class="tiny muted">(facultatif)</span><input name="city" maxlength="60" value="${e?.city || ''}" placeholder="Ex. Fontainebleau, Céüse"></label>
       <label>Cotation utilisée<select name="gradeSys"><option value="">Fontainebleau / française</option>${systems.filter((x) => !x.builtin).map((x) => h`<option value="${x.id}" ${e?.gradeSys === x.id ? 'selected' : ''}>${x.name}</option>`)}</select></label>
       <label>Secteurs <span class="tiny muted">(un par ligne : tu les choisiras en notant tes blocs et tes voies)</span><textarea name="sectors" rows="4" placeholder="Ex. Bas Cuvier&#10;Apremont&#10;Secteur des dalles">${(e?.sectors || []).join('\n')}</textarea></label>
       <label>Coordonnées GPS <span class="tiny muted">(facultatif : pour la météo des conditions, ex. « 48.40, 2.63 »)</span><input name="gps" maxlength="40" inputmode="decimal" value="${Number.isFinite(e?.lat) && Number.isFinite(e?.lon) ? `${e.lat}, ${e.lon}` : ''}" placeholder="latitude, longitude"></label>`;
-  } else { const grouped = new Set(EQUIPMENT_GROUPS.flatMap(([, k]) => k)), rest = Object.keys(EQUIPMENT).filter((k) => !grouped.has(k));
+  } else { const grouped = new Set(EQUIPMENT_GROUPS.flatMap(([, k]) => k)), rest = Object.keys(EQUIPMENT).filter((k) => !grouped.has(k) && !isMine(k)), own = Object.keys(EQUIPMENT).filter(isMine);
     body = h`<label>Matériel disponible</label><p class="tiny muted">« Machines de musculation (toutes) » suffit pour une salle classique ; sinon coche machine par machine.</p>
-      ${EQUIPMENT_GROUPS.map(([t, keys]) => h`<span class="kicker">${t}</span>${eqChips('eq', keys.filter((k) => EQUIPMENT[k]), eq)}`)}${rest.length ? h`<span class="kicker">Autre</span>${eqChips('eq', rest, eq)}` : ''}`; }
+      ${EQUIPMENT_GROUPS.map(([t, keys]) => h`<span class="kicker">${t}</span>${eqChips('eq', keys.filter((k) => EQUIPMENT[k]), eq)}`)}${rest.length ? h`<span class="kicker">Autre</span>${eqChips('eq', rest, eq)}` : ''}
+      <span class="kicker">✍️ Mon matériel <span class="tiny muted">(ce qui manque dans les listes)</span></span>${eqChips('eq', own, eq, true)}`; }
   // 8.30 : horaires d'ouverture (lieux qui ferment : salles, piscines, pistes…) — la semaine automatique cale l'heure dessus.
   const H = new Map((e?.hours || []).map((x) => [x.d, x])), hours = ['escalade', 'salle', 'piscine', 'piste', 'autre'].includes(t) ? h`<details class="card flat" ${e?.hours?.length ? 'open' : ''}><summary><b>🕒 Horaires d’ouverture</b> <span class="tiny muted">(facultatif)</span></summary>
       <p class="tiny muted">Laisse vide un jour où c’est fermé. Sans aucun horaire, l’app ne suppose rien.</p>
@@ -835,12 +842,24 @@ function vPrefs() {
     <div class="card"><h3>Ce que l’application observe</h3>${learned.length ? learned.map((x) => h`<div class="item"><div class="grow"><b>${x.name}</b><div class="tiny muted">${x.text || '—'}</div>${x.suggestion ? h`<div class="tiny acc-t">Suggestion : ${x.suggestion === 'evite' ? 'l’éviter' : 'le marquer comme apprécié'} ?</div>` : ''}</div>${prefChips(x.key, x.name, x.explicit)}</div>`) : h`<p class="muted small">Pas encore de données.</p>`}</div>
     ${(() => { const f = estimatedFormats(c), prefs = Object.fromEntries(itemsOf('pref').map((p) => [p.key, p.value])); return h`<div class="card"><h3>Tes habitudes de séance (estimées)</h3>${f.insufficient ? h`<p class="small muted">⚠️ Données insuffisantes : quelques séances de plus et l’app pourra estimer tes durées, lieux et intensités habituels.</p>` : f.items.length ? f.items.map((x) => h`<div class="item"><div class="grow"><b>${x.label}</b><div class="tiny muted">Pourquoi : ${x.why}</div>${prefs[x.key] ? h`<div class="tiny ${prefs[x.key] === 'aime' ? 'ok-t' : 'muted'}">${prefs[x.key] === 'aime' ? '✓ Confirmé par toi' : '✗ Corrigé : ce n’est pas une préférence'}</div>` : ''}</div><button class="btn sm" data-act="prefSet" data-k="${x.key}" data-l="${x.label}" data-v="aime" aria-label="C’est juste">👍</button><button class="btn sm" data-act="prefSet" data-k="${x.key}" data-l="${x.label}" data-v="neutre" aria-label="Pas vraiment">✗</button></div>`) : h`<p class="small muted">Rien de régulier pour l’instant.</p>`}<p class="tiny muted">Corrige ce qui est faux : l’app ne s’en servira pas.</p></div>`; })()}
     <div class="card"><h3>Habitudes détectées</h3>${hb.length ? hb.map((x) => h`<div class="item"><div class="grow small">${x.text}</div>${x.proposal ? h`<button class="btn sm pri" data-act="habitYes" data-k="${x.key}">Oui</button><button class="btn sm" data-act="habitNo" data-k="${x.key}">Non</button>` : ''}</div>`) : h`<p class="muted small">Aucune habitude marquée pour l’instant.</p>`}</div>
-    <form data-submit="avoidSave" class="card"><h3>Zones à ménager</h3><p class="tiny muted">Réglage personnel pris en compte par le générateur (pas un diagnostic).</p>${[['fingers', 'Doigts / poulies'], ['shoulders', 'Épaules'], ['elbows', 'Coudes'], ['knees', 'Genoux / chevilles']].map(([k, l]) => h`<label class="chk"><input type="checkbox" name="${k}" ${av[k] ? 'checked' : ''}> ${l}</label>`)}
+    <form data-submit="avoidSave" class="card"><h3>Zones à ménager</h3><p class="tiny muted">Réglage personnel pris en compte par le générateur (pas un diagnostic) : les exercices qui chargent fort ces zones sont écartés.</p>${AVOID_ZONES.filter(([k]) => !isMine(k)).map(([k, l]) => h`<label class="chk"><input type="checkbox" name="${k}" ${av[k] ? 'checked' : ''}> ${l}</label>`)}
+      ${mine('zone').map((x) => h`<label class="chk"><input type="checkbox" name="mz" value="${x.id}" ${x.on ? 'checked' : ''}> 🩹 ${x.label} <span class="tiny muted">(ajoutée par toi : rappelée sur chaque exercice)</span></label>`)}
+      <div class="chips">${addField('zone', 'prefsZone')}</div>
       ${numberField('years', 'Années de pratique de l’escalade (facultatif)', S.settings.level?.years ?? '', { min: 0, max: 80, step: 0.5 })}<button class="btn pri" type="submit">Enregistrer</button></form>`;
 }
 const prefChips = (key, label, cur) => h`<div class="row tight">${[['aime', '👍'], ['neutre', '😐'], ['evite', '👎']].map(([v, e]) => h`<button class="btn sm ic ${cur === v ? 'pri' : ''}" data-act="prefSet" data-k="${key}" data-l="${label}" data-v="${v}" aria-label="${v}">${e}</button>`)}</div>`;
 ACT.prefSet = (el) => { putItem('pref', 'x-' + el.dataset.k.replace(/[^\w-]/g, '_').slice(0, 60), { key: el.dataset.k, label: el.dataset.l, value: el.dataset.v, source: 'explicit' }); render(); };
-SUBMIT.avoidSave = (f) => { const d = Object.fromEntries(new FormData(f)); S.settings.avoid = Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, !!d[k]])); S.settings.level = { ...(S.settings.level || {}), years: d.years === '' ? null : Number(d.years) }; saveSettings(); buzzOk(); toast('Enregistré'); render(); };
+// Une zone écrite dans « ＋ Autre zone » : celle de l'app est cochée, sinon la zone ajoutée apparaît cochée (rien n'est
+// enregistré avant « Enregistrer », comme le reste du formulaire).
+onChoice('prefsZone', { apply: (key, el) => {
+  const f = el.closest('form'), box = f?.elements[key];
+  if (box) { box.checked = true; return; }
+  const x = item('choice', key); if (!x || f.querySelector(`input[name="mz"][value="${key}"]`)) { const c = f.querySelector(`input[name="mz"][value="${key}"]`); if (c) c.checked = true; return; }
+  const lab = document.createElement('label'); lab.className = 'chk'; const inp = document.createElement('input'); Object.assign(inp, { type: 'checkbox', name: 'mz', value: key, checked: true });
+  lab.append(inp, document.createTextNode(` 🩹 ${x.label} (ajoutée par toi : rappelée sur chaque exercice)`)); el.closest('.chips').before(lab);
+} });
+SUBMIT.avoidSave = (f) => { const d = Object.fromEntries(new FormData(f)), on = new Set(new FormData(f).getAll('mz')); S.settings.avoid = Object.fromEntries(AVOID_ZONES.filter(([k]) => !isMine(k)).map(([k]) => [k, !!d[k]]));
+  for (const x of mine('zone')) if (!!x.on !== on.has(x.id)) putItem('choice', x.id, { ...x, on: on.has(x.id) }); S.settings.level = { ...(S.settings.level || {}), years: d.years === '' ? null : Number(d.years) }; saveSettings(); buzzOk(); toast('Enregistré'); render(); };
 
 /* ═════════ Profil public et communauté ═════════ */
 export async function loadSocial() {

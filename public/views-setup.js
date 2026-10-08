@@ -3,7 +3,11 @@
 // proposition d'installer l'application. Tout ce qui est répondu est enregistré comme DÉCLARÉ par l'utilisateur
 // (jamais présenté comme mesuré) et reste modifiable dans Profil.
 import { h, raw, openSheet, closeSheet, sheetOpen, toast, buzzOk, chip, meter } from './ui.js';
-import { S, ACT, INPUT, render, go, putItem, item, itemsOf, ctx, saveSettings, ls } from './state.js';
+import { S, ACT, CHG, INPUT, render, go, putItem, item, itemsOf, ctx, saveSettings, ls } from './state.js';
+import { uid } from './shared.js';
+import { AVOID_ZONES, keywordCaps } from './intentions.js';
+import { MY, isMine, matchOption, minutesOf, fmtMinutes, resolveChoice, cleanLabel } from './choices.js';
+import { mine, addField, onChoice } from './views-choices.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, SKILLS, CAPACITIES } from './model.js';
 import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
 import { nextQuestion, pendingQuestions, bucketValue } from './questions.js';
@@ -22,20 +26,35 @@ export const setupDone = () => !!mainConfig().setupDone;
 /* ═════════ Questions ═════════ */
 const LEVELS = [['0', '🌱 Je débute'], ['1', '🙂 Je pratique régulièrement'], ['2', '💪 Je suis confirmé(e)'], ['nsp', '🤷 Je ne sais pas']];
 export const GOALS = [['climb', '🧗 Progresser en escalade'], ['force', '💪 Devenir plus fort(e)'], ['endurance', '🔋 Avoir plus d’endurance / de cardio'], ['mobilite', '🧘 Être plus souple, bouger mieux'], ['forme', '🙂 Rester en forme'], ['figure', '🤸 Réussir une figure (front lever, drapeau…)'], ['poids', '⚖️ Perdre du poids'], ['muscle', '🏋️ Prendre du muscle'], ['physique', '🪞 Changer ma silhouette (V, abdos…)'], ['sante', '❤️ Être en meilleure santé']];
-const AVOID = [['fingers', '✋ Doigts'], ['shoulders', '🦾 Épaules'], ['elbows', '💪 Coudes'], ['knees', '🦵 Genoux'], ['none', '👍 Rien de particulier']];
+// Zones de l'app (les 7) et zones ajoutées par la personne (« ＋ Autre zone »), puis « rien ».
+const AVOID = () => [...AVOID_ZONES, ['none', '👍 Rien de particulier']];
+const BUILTIN_ZONES = () => AVOID_ZONES.filter(([k]) => !isMine(k)).map(([k]) => k);
+/** Champ « ＋ Autre… » des questions : ce que la personne peut écrire elle-même. */
+const OTHER_PH = { sport: '＋ Un autre sport (basket, vélo…)', minutes: '＋ Autre durée (ex. 75 ou 1 h 15)', count: '＋ Autre nombre (jusqu’à 14)', place: '＋ Un autre lieu (son nom)', goal: '＋ Un objectif à moi, avec mes mots', zone: '＋ Autre zone', physique: '＋ Mon souhait' };
+const ownSports = () => Object.entries(ctx().activities).filter(([id]) => !ACTIVITIES[id]).map(([id, a]) => [id, `${a.emoji || '🏅'} ${a.label}`]);
+/** Un sport écrit : celui de l'app s'il existe (« course à pied »), sinon un des miens, sinon il est créé. */
+function ownSport(text) {
+  const label = cleanLabel(text, 60); if (label.length < 2) return '';
+  const b = matchOption(label, Object.entries(ACTIVITIES).map(([id, x]) => [id, x.label])); if (b) return b.key;
+  const lc = label.toLowerCase(), cur = Object.entries(ctx().activities).find(([, x]) => String(x.label).toLowerCase() === lc); if (cur) return cur[0];
+  const old = itemsOf('activity').find((x) => !x.preset && String(x.label).toLowerCase() === lc), id = old?.id || 'custom-' + uid().slice(0, 12);
+  putItem('activity', id, { label, emoji: old?.emoji || '🏅', aliases: old?.aliases || [], preset: '', archived: false });
+  if (S.setup) (S.setup.created ||= []).push(id);
+  return id;
+}
 export const INTENT_OF = { climb: 'specifique', force: 'force', endurance: 'endurance', mobilite: 'mobilite', forme: '', figure: 'force', poids: 'endurance', muscle: 'force', physique: 'force', sante: 'endurance' };
 const BLOC_CHOICES = ['4', '5', '5+', '6A', '6A+', '6B', '6B+', '6C', '7A', '7A+', '7B', '7C', '8A'];
 
 const STEPS = [
-  { id: 'acts', multi: true, q: 'Quels sports pratiques-tu ?', help: 'Choisis-en un ou plusieurs. Tu pourras en ajouter d’autres (basket, vélo…) dans ton Profil.', opts: () => Object.entries(ACTIVITIES).map(([id, a]) => [id, `${a.emoji} ${a.label}`]) },
+  { id: 'acts', multi: true, other: 'sport', q: 'Quels sports pratiques-tu ?', help: 'Choisis-en un ou plusieurs. Le tien n’y est pas ? Écris-le dans « ＋ Un autre sport ».', opts: () => [...Object.entries(ACTIVITIES).map(([id, a]) => [id, `${a.emoji} ${a.label}`]), ...ownSports()] },
   { id: 'level', q: 'Comment décrirais-tu ton niveau ?', help: 'Une première idée suffit : l’app ajustera avec tes séances et tes mesures.', opts: () => LEVELS },
-  { id: 'perWeek', q: 'Combien de séances par semaine aimerais-tu faire ?', opts: () => [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5 ou plus']] },
+  { id: 'perWeek', other: 'count', q: 'Combien de séances par semaine aimerais-tu faire ?', opts: (a = {}) => [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5 ou plus'], ...(Number(a.perWeek) > 5 ? [[a.perWeek, a.perWeek]] : [])] },
   { id: 'climbPerWeek', q: 'Et combien de fois grimpes-tu par semaine ?', help: 'En salle ou en falaise, en moyenne. Ça aide l’app à doser le travail des doigts et la récupération.', when: (a) => (a.acts || []).some((x) => x.startsWith('climbing')), opts: () => [['0', 'Pas en ce moment'], ['1', '1 fois'], ['2', '2 fois'], ['3', '3 fois'], ['4', '4 fois ou plus']] },
-  { id: 'minutes', q: 'Combien de temps as-tu en général pour une séance ?', opts: () => [['10', '10 min'], ['20', '20 min'], ['30', '30 min'], ['45', '45 min'], ['60', '1 h'], ['90', '1 h 30']] },
-  { id: 'places', multi: true, q: 'Où t’entraînes-tu ?', help: 'L’app proposera seulement des exercices faisables avec le matériel de ces lieux (modifiable dans Profil › Mes lieux).', opts: () => Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre') },
-  { id: 'goals', multi: true, q: 'Quels sont tes objectifs ?', help: 'Choisis-en autant que tu veux. Tu pourras aussi écrire un objectif à toi dans Profil › Objectifs.', opts: () => GOALS },
+  { id: 'minutes', other: 'minutes', q: 'Combien de temps as-tu en général pour une séance ?', opts: (a = {}) => [...new Set([10, 20, 30, 45, 60, 90, ...mine('minutes').map((x) => x.n), ...(Number(a.minutes) ? [Number(a.minutes)] : [])])].sort((x, y) => x - y).map((n) => [String(n), fmtMinutes(n)]) },
+  { id: 'places', multi: true, other: 'place', q: 'Où t’entraînes-tu ?', help: 'L’app proposera seulement des exercices faisables avec le matériel de ces lieux (modifiable dans Profil › Mes lieux).', opts: (a = {}) => [...Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre'), ...(a.placesOwn || []).map((n, i) => ['own:' + i, `📍 ${n}`])] },
+  { id: 'goals', multi: true, other: 'goal', q: 'Quels sont tes objectifs ?', help: 'Choisis-en autant que tu veux, ou écris le tien avec tes mots.', opts: (a = {}) => [...GOALS, ...(a.goalTexts || []).map((t, i) => ['own:' + i, `✍️ ${t}`])] },
   { id: 'skill', q: 'Quelle figure veux-tu réussir ?', when: (a) => (a.goals || []).includes('figure'), opts: () => Object.entries(SKILLS).map(([id, s]) => [id, `${s.emoji} ${s.label}`]) },
-  { id: 'avoid', multi: true, q: 'Y a-t-il une zone à ménager ?', help: 'L’app évitera les exercices qui la sollicitent fortement. Ce n’est pas un avis médical : en cas de douleur, consulte un professionnel.', opts: () => AVOID },
+  { id: 'avoid', multi: true, other: 'zone', q: 'Y a-t-il une zone à ménager ?', help: 'L’app évitera les exercices qui la sollicitent fortement. Ce n’est pas un avis médical : en cas de douleur, consulte un professionnel.', opts: () => AVOID() },
   { id: 'body', q: 'Parle-nous un peu de toi', help: 'Facultatif : ça aide à doser l’intensité, les repos et le type d’exercices.' },
   { id: 'marks', q: 'Quelques repères pour tes objectifs (facultatif)', help: 'Choisis selon tes objectifs. Si tu ne sais pas, touche « Je ne sais pas » ou passe : rien ne sera inventé. Tu pourras faire les tests guidés plus tard (Profil › Mon bilan physique).' },
 ];
@@ -63,8 +82,9 @@ function stepBody(st, a) {
   if (st.id === 'marks') return markFields(a);
   if (st.id === 'body') return bodyFields(a.body || {}, { act: 'setBody', inp: 'setBodyIn' });
   const cur = a[st.id];
-  const on = (v) => (st.multi ? (cur || []).includes(v) : cur === v);
-  return h`<div class="choices">${st.opts().map(([v, l]) => h`<button type="button" class="choice ${on(v) ? 'on' : ''}" aria-pressed="${on(v)}" data-act="setPick" data-q="${st.id}" data-v="${v}">${l}</button>`)}</div>`;
+  const on = (v) => (String(v).startsWith('own:') || (st.multi ? (cur || []).includes(v) : cur === v));
+  return h`<div class="choices">${st.opts(a).map(([v, l]) => h`<button type="button" class="choice ${on(v) ? 'on' : ''}" aria-pressed="${on(v)}" data-act="setPick" data-q="${st.id}" data-v="${v}" ${String(v).startsWith('own:') ? h`aria-label="${l} (écrit par toi : touche pour retirer)"` : ''}>${l}</button>`)}
+    ${st.other ? h`<input class="choicein" data-change="setOther" data-q="${st.id}" maxlength="${st.other === 'goal' ? 80 : 40}" ${['minutes', 'count'].includes(st.other) ? h`inputmode="numeric"` : ''} placeholder="${OTHER_PH[st.other]}" aria-label="${OTHER_PH[st.other]}" enterkeyhint="done">` : ''}</div>`;
 }
 
 /* ═════════ Écran questionnaire / fiche ═════════ */
@@ -79,7 +99,7 @@ export function vSetup() {
       <button class="btn ghost" data-act="setupMode" data-id="quiz">Préférer les questions une par une</button>`;
   }
   const i = Math.min(st.i || 0, steps.length - 1), s = steps[i];
-  const answered = s.id === 'marks' || s.id === 'body' || (s.multi ? (st.a[s.id] || []).length : st.a[s.id] != null);
+  const answered = s.id === 'marks' || s.id === 'body' || (s.multi ? (st.a[s.id] || []).length || (s.id === 'places' && st.a.placesOwn?.length) || (s.id === 'goals' && st.a.goalTexts?.length) : st.a[s.id] != null);
   return h`<div class="setup">
     <div class="row between"><span class="small muted">Question ${i + 1} sur ${steps.length}</span><button class="btn sm ghost" data-act="setupLater">Finir plus tard</button></div>
     ${meter(((i + 1) / steps.length) * 100)}
@@ -93,7 +113,7 @@ function initialAnswers() {
   const c = ctx(), cfg = mainConfig(), av = S.settings.avoid || {};
   const acts = Object.keys(c.activities).filter((id) => ACTIVITIES[id]);
   const places = [...new Set(c.envs.map((e) => e.type).filter((t) => ENV_TYPES[t] && t !== 'autre'))];
-  const avoid = Object.entries(av).filter(([, v]) => v).map(([k]) => k);
+  const avoid = [...Object.entries(av).filter(([, v]) => v).map(([k]) => k), ...mine('zone').filter((x) => x.on).map((x) => x.id)];
   return { i: 0, mode: 'quiz', a: { acts: acts.length ? acts : [], places, avoid, perWeek: cfg.perWeek ? String(Math.min(5, cfg.perWeek)) : undefined, climbPerWeek: cfg.climbPerWeek != null ? String(Math.min(4, cfg.climbPerWeek)) : undefined, minutes: cfg.durations?.[0] || undefined, goals: cfg.goals?.length ? [...cfg.goals] : cfg.goal ? [cfg.goal] : undefined, body: { ...(item('config', 'body') || {}) }, marks: {} } };
 }
 export function openSetup(mode = 'quiz') { S.setup = initialAnswers(); S.setup.mode = mode; go('home', 'setup'); }
@@ -101,6 +121,8 @@ ACT.setupStart = (el) => openSetup(el.dataset.id || 'quiz');
 ACT.setupMode = (el) => { S.setup.mode = el.dataset.id; render(); window.scrollTo(0, 0); };
 ACT.setPick = (el) => {
   const a = S.setup.a, q = el.dataset.q, v = el.dataset.v, st = STEPS.find((s) => s.id === q);
+  // Réponse écrite par la personne (lieu, objectif) : un toucher la retire.
+  if (String(v).startsWith('own:')) { const k = q === 'places' ? 'placesOwn' : 'goalTexts', i = Number(v.slice(4)); a[k] = (a[k] || []).filter((_, j) => j !== i); render(); return; }
   if (st.multi) {
     let list = [...(a[q] || [])];
     if (v === 'none') list = list.includes('none') ? [] : ['none'];
@@ -110,9 +132,27 @@ ACT.setPick = (el) => {
   a[q] = v; render();
   if (S.setup.mode === 'quiz') setTimeout(() => ACT.setupNext(), 180); // réponse unique : on avance tout seul
 };
+/** « ＋ Autre… » dans le questionnaire : la réponse écrite est reconnue (choix de l'app) ou gardée telle quelle. */
+CHG.setOther = (el) => {
+  const a = S.setup?.a, q = el.dataset.q, st = STEPS.find((s) => s.id === q), text = el.value; el.value = '';
+  if (!a || !st || !String(text).trim()) return;
+  const bad = (m) => toast(m, 4500, 'bad');
+  switch (st.other) {
+    case 'sport': { const id = ownSport(text); if (!id) return bad('Écris le nom du sport (au moins deux lettres).'); a.acts = [...new Set([...(a.acts || []), id])]; toast(ACTIVITIES[id] ? `« ${ACTIVITIES[id].label} » coché.` : `« ${cleanLabel(text, 60)} » ajouté à tes sports.`); break; }
+    case 'minutes': { const n = minutesOf(text, { min: 5, max: 300 }); if (!n) return bad('Écris une durée entre 5 min et 5 h (ex. 75 ou 1 h 15).'); a.minutes = String(n); break; }
+    case 'count': { const n = Math.round(Number(String(text).replace(',', '.'))); if (!(n >= 1 && n <= 14)) return bad('Écris un nombre de séances entre 1 et 14.'); a.perWeek = String(n); break; }
+    case 'place': { const n = cleanLabel(text, 60); if (n.length < 2) return bad('Écris le nom du lieu.'); const t = matchOption(n, Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre')); if (t) a.places = [...new Set([...(a.places || []), t.key])]; else a.placesOwn = [...new Set([...(a.placesOwn || []), n])].slice(0, 6); break; }
+    case 'goal': { const g = cleanLabel(text, 80); if (g.length < 3) return bad('Écris ton objectif en quelques mots.'); const b = matchOption(g, GOALS); if (b) a.goals = [...new Set([...(a.goals || []), b.key])]; else a.goalTexts = [...new Set([...(a.goalTexts || []), g])].slice(0, 3); break; }
+    case 'zone': { const r = resolveChoice('zone', text, { mine: mine('zone') }); if (r.error) return bad(r.error); let key = r.key; if (!key) { key = MY + uid().slice(0, 10); putItem('choice', key, { list: 'zone', label: r.label }); } a.avoid = [...new Set([...(a.avoid || []).filter((x) => x !== 'none'), key])]; if (r.builtin) toast(`« ${String(text).trim()} » : c’est « ${r.label} » dans l’app, coché.`); break; }
+    default: return;
+  }
+  render();
+  if (!st.multi && S.setup.mode === 'quiz') setTimeout(() => ACT.setupNext(), 180);
+};
 INPUT.setMark = (el) => { const m = (S.setup.a.marks ||= {}), v = Number(String(el.value).replace(',', '.')); m[el.dataset.k] = el.value === '' || !Number.isFinite(v) ? undefined : Math.max(0, Math.min(100000, Math.round(v * 10) / 10)); };
 ACT.setNsp = (el) => { const m = (S.setup.a.marks ||= {}), k = el.dataset.k; m[k + '_nsp'] = !m[k + '_nsp']; if (m[k + '_nsp']) m[k] = undefined; render(); };
 ACT.setBloc = (el) => { const m = (S.setup.a.marks ||= {}); m.bloc = m.bloc === el.dataset.v ? undefined : el.dataset.v; render(); };
+onChoice('setBody', { apply: (key, el) => { const k = el.dataset.list, b = S.setup?.a?.body || {}; if (!(b[k] || []).includes(key)) S.setup.a.body = bodyToggle(b, k, key); render(); } });
 ACT.setBody = (el) => { S.setup.a.body = bodyToggle(S.setup.a.body || {}, el.dataset.k, el.dataset.v); render(); };
 INPUT.setBodyIn = (el) => { (S.setup.a.body ||= {})[el.dataset.k] = el.value; };
 ACT.setupNext = () => { const steps = visibleSteps(S.setup.a); S.setup.i = Math.min(steps.length - 1, (S.setup.i || 0) + 1); render(); window.scrollTo(0, 0); };
@@ -141,15 +181,16 @@ ACT.setupBilan = () => { closeSheet(); go('profile', 'bilan'); };
 
 function summaryLines(a) {
   const out = [];
-  if (a.acts?.length) out.push('Sports : ' + a.acts.map((x) => ACTIVITIES[x]?.label || x).join(', '));
+  if (a.acts?.length) out.push('Sports : ' + a.acts.map((x) => ACTIVITIES[x]?.label || ctx().activities[x]?.label || x).join(', '));
   if (a.level && a.level !== 'nsp') out.push('Niveau : ' + LEVELS.find(([k]) => k === a.level)[1].replace(/^\S+\s/, ''));
   if (a.perWeek) out.push(`Objectif de rythme : ${a.perWeek === '5' ? '5 ou plus' : a.perWeek} séance(s) par semaine`);
   if (a.climbPerWeek != null) out.push(a.climbPerWeek === '0' ? 'Escalade : pas en ce moment' : `Escalade : ${a.climbPerWeek === '4' ? '4 fois ou plus' : a.climbPerWeek + ' fois'} par semaine`);
-  if (a.minutes) out.push(`Durée habituelle : ${a.minutes} min`);
-  if (a.places?.length) out.push('Lieux : ' + a.places.map((p) => ENV_TYPES[p]).join(', '));
+  if (a.minutes) out.push(`Durée habituelle : ${fmtMinutes(Number(a.minutes))}`);
+  if (a.places?.length || a.placesOwn?.length) out.push('Lieux : ' + [...(a.places || []).map((p) => ENV_TYPES[p]), ...(a.placesOwn || [])].join(', '));
+  if (a.goalTexts?.length) out.push('Mes objectifs écrits : ' + a.goalTexts.join(' · '));
   if (a.goals?.length) out.push('Objectifs : ' + a.goals.map((k) => (k === 'figure' && a.skill ? `réussir la figure « ${SKILLS[a.skill]?.label} »` : (GOALS.find(([x]) => x === k)?.[1] || k).replace(/^\S+\s/, ''))).join(', '));
   const av = (a.avoid || []).filter((x) => x !== 'none');
-  if (av.length) out.push('À ménager : ' + av.map((x) => AVOID.find(([k]) => k === x)[1].replace(/^\S+\s/, '')).join(', '));
+  if (av.length) out.push('À ménager : ' + av.map((x) => (AVOID().find(([k]) => k === x)?.[1] || x).replace(/^\S+\s/, '')).join(', '));
   const m = a.marks || {};
   for (const k of Object.keys(m).filter((x) => ALL_METRICS[x] && m[x] != null)) out.push(`${ALL_METRICS[k].label} : ${m[k]} ${ALL_METRICS[k].unit === 'reps' ? 'rép.' : ALL_METRICS[k].unit}`);
   if (m.bloc && m.bloc !== 'nsp') out.push(`Meilleur bloc : ${m.bloc}`);
@@ -162,10 +203,12 @@ export function applyAnswers(a) {
   let n = 0;
   const now = Date.now(), c = ctx();
   for (const id of a.acts || []) {
-    if (!ACTIVITIES[id]) continue;
+    if (!ACTIVITIES[id]) { const it = item('activity', id); if (it?.archived) putItem('activity', id, { ...it, archived: false }); continue; }
     const ex = itemsOf('activity').find((x) => x.preset === id || x.id === 'act-' + id);
     putItem('activity', ex?.id || 'act-' + id, { preset: id, label: ACTIVITIES[id].label, emoji: ACTIVITIES[id].emoji, archived: false });
   }
+  // Sports écrits pendant ce questionnaire puis décochés : retirés (rien d'autre n'est touché).
+  for (const id of S.setup?.created || []) if (!(a.acts || []).includes(id)) { const it = item('activity', id); if (it && !it.archived) putItem('activity', id, { ...it, archived: true }); }
   if (a.acts?.length) n++;
   if (a.level != null && a.level !== 'nsp') {
     const lvl = Number(a.level);
@@ -191,11 +234,21 @@ export function applyAnswers(a) {
     if (!ENV_TYPES[t] || envs.some((e) => e.type === t && !e.archived)) return;
     putItem('env', 'env-' + t, { name: ENV_TYPES[t], type: t, equipment: ENV_TEMPLATES[t] || [], isDefault: !envs.length && i === 0 });
   });
-  if (a.places?.length) n++;
+  // Lieux écrits par la personne : créés avec leur nom, sans matériel supposé (à compléter dans Profil › Mes lieux).
+  (a.placesOwn || []).forEach((name, i) => {
+    if (envs.some((e) => !e.archived && String(e.name).toLowerCase() === name.toLowerCase())) return;
+    putItem('env', 'env-' + uid().slice(0, 12), { name, type: 'autre', equipment: [], isDefault: !envs.length && !(a.places || []).length && i === 0 });
+  });
+  if (a.places?.length || a.placesOwn?.length) n++;
+  // Objectifs écrits avec ses mots : un objectif personnel ; les mots reconnus le relient à des capacités.
+  for (const t of a.goalTexts || []) {
+    if (c.goals.some((g) => g.label === t)) continue;
+    putItem('goal', 'g-' + uid().slice(0, 12), { type: 'custom', label: t, caps: Object.entries(keywordCaps(t)).slice(0, 8).map(([id, w]) => ({ id, w })), status: 'active', startedAt: now, note: 'Écrit au questionnaire de départ' }); n++;
+  }
   if ((a.goals || []).includes('figure') && a.skill && SKILLS[a.skill] && !c.goals.some((g) => g.skillId === a.skill && (g.status || 'active') === 'active')) {
     putItem('goal', 'goal-' + a.skill, { type: 'skill', skillId: a.skill, label: SKILLS[a.skill].label, status: 'active', startedAt: now }); n++;
   }
-  if (a.avoid?.length) { const av = new Set(a.avoid); S.settings.avoid = Object.fromEntries(['fingers', 'shoulders', 'elbows', 'knees'].map((k) => [k, av.has(k)])); n++; }
+  if (a.avoid?.length) { const av = new Set(a.avoid); S.settings.avoid = Object.fromEntries(BUILTIN_ZONES().map((k) => [k, av.has(k)])); for (const x of mine('zone')) if (!!x.on !== av.has(x.id)) putItem('choice', x.id, { ...x, on: av.has(x.id) }); n++; }
   const m = a.marks || {};
   for (const k of [...new Set(Object.keys(m).map((x) => x.replace(/_nsp$/, '')))].filter((x) => ALL_METRICS[x] && ALL_METRICS[x].kind !== 'grade')) {
     if (m[k] != null) { putItem('perf', 'setup-' + k, { metricId: k, value: m[k], unit: ALL_METRICS[k].unit, date: now, source: 'declared', note: 'Indiqué au questionnaire de départ' }); n++; }
@@ -293,7 +346,7 @@ const snoozed = () => { try { return JSON.parse(localStorage.getItem(SNOOZE_KEY)
 const snooze = (id, days = 3) => { const s = snoozed(); s[id] = Date.now() + days * 86400000; try { localStorage.setItem(SNOOZE_KEY, JSON.stringify(s)); } catch { /* rien */ } };
 export const currentQuestion = () => (S.sub.home === 'setup' ? null : nextQuestion(ctx(), snoozed()));
 const qBody = (x) => h`<div class="qask"><div class="qhead"><span class="qemoji">${x.emoji}</span><div><span class="kicker">Petite question</span><h3>${x.text}</h3></div></div>
-  <div class="chips big">${x.options.map(([v, l]) => h`<button type="button" class="chip" data-act="qAnswer" data-q="${x.id}" data-v="${v}">${l}</button>`)}${x.nsp ? h`<button type="button" class="chip ghost" data-act="qAnswer" data-q="${x.id}" data-v="nsp">🤷 Je ne sais pas</button>` : ''}</div>
+  <div class="chips big">${x.options.map(([v, l]) => h`<button type="button" class="chip" data-act="qAnswer" data-q="${x.id}" data-v="${v}">${l}</button>`)}${x.nsp ? h`<button type="button" class="chip ghost" data-act="qAnswer" data-q="${x.id}" data-v="nsp">🤷 Je ne sais pas</button>` : ''}${x.other ? h`<input class="chipin" data-change="qOther" data-q="${x.id}" maxlength="${x.other === 'goal' ? 80 : 40}" ${['minutes', 'count'].includes(x.other) ? h`inputmode="numeric"` : ''} placeholder="${OTHER_PH[x.other]}" aria-label="${OTHER_PH[x.other]}" enterkeyhint="done">` : ''}</div>
   <details class="how mini"><summary>Pourquoi cette question ?</summary><p class="tiny">${x.why}</p></details>
   <button class="btn ghost sm" data-act="qLater" data-q="${x.id}">Plus tard</button></div>`;
 export function questionCard() {
@@ -304,6 +357,24 @@ export function questionCard() {
 /** La question reste dans sa carte de l'accueil : plus de fenêtre qui s'ouvre toute seule par-dessus (elle faisait doublon). */
 export function maybeAskOnOpen() {}
 ACT.qLater = (el) => { snooze(el.dataset.q); closeSheet(); render(); };
+/** Réponse écrite à une petite question (« ＋ Autre… ») : reconnue si l'app la connaît, sinon gardée telle quelle. */
+CHG.qOther = (el) => {
+  const id = el.dataset.q, x = pendingQuestions(ctx()).find((y) => y.id === id), text = el.value; el.value = '';
+  if (!x?.other || !String(text).trim()) return;
+  const cfg = mainConfig(), done = (patch = {}) => saveMain({ ...patch, asked: [...new Set([...(cfg.asked || []), id])].slice(-30) }), bad = (m) => toast(m, 4500, 'bad');
+  let msg = 'Merci ! C’est noté 👍';
+  switch (x.other) {
+    case 'sport': { const sid = ownSport(text); if (!sid) return bad('Écris le nom du sport (au moins deux lettres).'); if (ACTIVITIES[sid]) { const ex = itemsOf('activity').find((y) => y.preset === sid); putItem('activity', ex?.id || 'act-' + sid, { preset: sid, label: ACTIVITIES[sid].label, emoji: ACTIVITIES[sid].emoji, archived: false }); } done(); msg = `« ${ACTIVITIES[sid]?.label || cleanLabel(text, 60)} » ajouté à tes sports.`; break; }
+    case 'place': { const n = cleanLabel(text, 60); if (n.length < 2) return bad('Écris le nom du lieu.'); const t = matchOption(n, Object.entries(ENV_TYPES).filter(([k]) => k !== 'autre')); if (t) putItem('env', 'env-' + t.key, { name: ENV_TYPES[t.key], type: t.key, equipment: ENV_TEMPLATES[t.key] || [], isDefault: !itemsOf('env').length }); else putItem('env', 'env-' + uid().slice(0, 12), { name: n, type: 'autre', equipment: [], isDefault: !itemsOf('env').length }); done(); msg = t ? `« ${ENV_TYPES[t.key]} » ajouté à tes lieux.` : `« ${n} » ajouté à tes lieux : coche son matériel dans Profil › Mes lieux.`; break; }
+    case 'minutes': { const n = minutesOf(text, { min: 5, max: 300 }); if (!n) return bad('Écris une durée entre 5 min et 5 h (ex. 75 ou 1 h 15).'); S.settings.defaultMinutes = n; S.gen.minutes = n; saveSettings(); done({ durations: [String(n)] }); msg = `Durée habituelle : ${fmtMinutes(n)}.`; break; }
+    case 'count': { const n = Math.round(Number(String(text).replace(',', '.'))); if (!(n >= 1 && n <= 14)) return bad('Écris un nombre de séances entre 1 et 14.'); done({ perWeek: n }); break; }
+    case 'goal': { const g = cleanLabel(text, 80); if (g.length < 3) return bad('Écris ton objectif en quelques mots.'); done(); closeSheet(); render(); ACT.goalWrite?.({ dataset: { text: g } }); return; }
+    case 'physique': { const r = resolveChoice('physique', text, { mine: mine('physique') }); if (r.error) return bad(r.error); let key = r.key; if (!key) { key = MY + uid().slice(0, 10); putItem('choice', key, { list: 'physique', label: r.label }); } const b = item('config', 'body') || {}; putItem('config', 'body', { ...b, physique: [...new Set([...(b.physique || []), key])] }); done(); msg = `« ${r.label} » noté dans ton profil.`; break; }
+    case 'zone': { const r = resolveChoice('zone', text, { mine: mine('zone') }); if (r.error) return bad(r.error); if (r.key && !isMine(r.key)) { S.settings.avoid = { ...(S.settings.avoid || {}), [r.key]: true }; saveSettings(); msg = `« ${r.label} » à ménager : les exercices qui la chargent fort sont écartés.`; } else { const key = r.key || MY + uid().slice(0, 10), prev = item('choice', key) || { list: 'zone', label: r.label }; putItem('choice', key, { ...prev, on: true }); msg = `« ${r.label} » : rappelée sur chaque exercice (l’app ne sait pas lesquels la chargent).`; } done(); break; }
+    default: return;
+  }
+  closeSheet(); buzzOk(); toast(msg, 4500); render();
+};
 ACT.qAnswer = (el) => {
   const id = el.dataset.q, v = el.dataset.v, now = Date.now(), cfg = mainConfig();
   const done = (patch = {}) => saveMain({ ...patch, asked: [...new Set([...(cfg.asked || []), id])].slice(-30) });

@@ -156,6 +156,7 @@ export function normalizeContext(c) {
   });
   return {
     env: ID_RE.test(String(c.env || '')) ? String(c.env) : '', envName: str(c.envName, 60), equipment: idList(c.equipment, 30),
+    ...(Array.isArray(c.spare) && c.spare.length ? { spare: [...new Set(c.spare.map((x) => str(x, 40)).filter(Boolean))].slice(0, 8) } : {}),
     plannedMin: clamp(c.plannedMin, 0, 600, 0), goalId: ID_RE.test(String(c.goalId || '')) ? String(c.goalId) : '', place: str(c.place, 80), ...(/^[\w:.-]{1,80}$/.test(String(c.adaptedFrom || '')) ? { adaptedFrom: String(c.adaptedFrom) } : {}),
     // V1 : intention ponctuelle de la séance (jamais un objectif du compte) et ossature validée, phase par phase.
     ...(c.intent && typeof c.intent === 'object' && (c.intent.text || c.intent.priorities?.length) ? { intent: { text: str(c.intent.text, 240), priorities: idList(c.intent.priorities, 6) } } : {}),

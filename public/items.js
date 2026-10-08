@@ -154,6 +154,9 @@ export const SCHEMAS = {
   // 8.30 — saison de 4 semaines autour d'un thème, et lettre à soi-même (scellée jusqu'à openAt).
   season: { theme: ['e', ['regularite', 'doigts', 'mobilite', 'endurance', 'recup', 'variete'], 'regularite'], start: ['n', 0, 9e15, 0], closed: ['b'], won: ['b'] },
   letter: { text: ['s', 3000], writtenAt: ['n', 0, 9e15, 0], openAt: ['n', 0, 9e15, 0], openedAt: ['n', 0, 9e15, 0], snap: ['s', 300] },
+  // 8.34 — « ＋ Ajouter le mien » : un choix ajouté par la personne à une liste de l'app (choices.js), identifiant « my-… ».
+  // n = durée (liste « minutes ») ; on = zone à ménager cochée en ce moment.
+  choice: { list: ['e', ['zone', 'equipment', 'envie', 'minutes', 'muscled', 'physique', 'fall', ''], ''], label: ['s', 40], n: ['n', 1, 300, null], on: ['b'] },
   // Réponse de l'utilisateur à une proposition d'habitude (pour ne pas reposer la même question).
   habit: { key: ['s', 120], decision: ['e', ['accepted', 'dismissed'], 'dismissed'] },
   // Configuration personnelle (tableau de bord, environnement par défaut…) : un item par clé.
