@@ -89,6 +89,9 @@ function exForm(x, isNew = false) {
     <label>Repos (s)<input type="number" name="rest" min="0" max="3600" value="${x.rest ?? 60}"></label>
     <label>Consignes (une par ligne)<textarea name="cues" rows="3">${(x.cues || []).join('\n')}</textarea></label>
     <label>À éviter (une par ligne)<textarea name="bad" rows="2">${(x.bad || []).join('\n')}</textarea></label>
+    <label>Position de départ<textarea name="start" rows="2" maxlength="300">${x.start || ''}</textarea></label>
+    <label>La charge : où la mettre <small class="muted">(vide s’il n’y en a pas)</small><textarea name="loadHow" rows="2" maxlength="300">${x.loadHow || ''}</textarea></label>
+    <div class="grid2"><label>Plus facile<textarea name="easier" rows="2" maxlength="300">${x.easier || ''}</textarea></label><label>Plus dur<textarea name="harder" rows="2" maxlength="300">${x.harder || ''}</textarea></label></div>
     <label>C’est quoi ? <small class="muted">(vide = phrase automatique)</small><textarea name="what" rows="2" maxlength="240" placeholder="Ex. Se suspendre à une réglette de 20 mm, bras tendus, 10 secondes.">${x.what || ''}</textarea></label>
     <label>À quoi ça sert ?<textarea name="why" rows="2" maxlength="240">${x.why || ''}</textarea></label>
     <button class="btn pri big">Enregistrer</button></form>`;
@@ -98,6 +101,7 @@ ACT.exNewGlobal = () => { if (isAdmin()) openSheet(exForm({ mode: 'reps', sets: 
 SUBMIT.exEditGo = async (f) => {
   const d = Object.fromEntries(new FormData(f)), t = d.mode === 'time';
   const data = { name: d.name.trim(), emoji: d.emoji.trim(), sets: num(d.sets, 3), rest: num(d.rest, 60), cues: lines(d.cues), bad: lines(d.bad), why: d.why.trim(), what: String(d.what || '').trim(),
+    start: String(d.start || '').trim().slice(0, 300), loadHow: String(d.loadHow || '').trim().slice(0, 300), easier: String(d.easier || '').trim().slice(0, 300), harder: String(d.harder || '').trim().slice(0, 300),
     ...(t ? { secMin: num(d.min, 30), secMax: Math.max(num(d.min, 30), num(d.max, 30)) } : { repsMin: num(d.min, 8), repsMax: Math.max(num(d.min, 8), num(d.max, 8)) }) };
   if (d.isNew) {
     if (!isAdmin()) return;
@@ -133,7 +137,7 @@ ACT.gcEdit = (el) => {
   const e = CATALOG.find((x) => x.id === el.dataset.id); if (!e) return;
   openSheet(h`<form data-submit="catEditGo" class="stack"><input type="hidden" name="id" value="${e.id}"><h2 style="margin:0">✏️ ${e.name}</h2>
     <div class="grid2"><label>Nom<input name="name" maxlength="80" required value="${e.name}"></label><label>Emoji<input name="emoji" maxlength="8" value="${e.emoji}"></label></div>
-    <label>Durée (min)<input type="number" name="minutes" min="5" max="240" value="${e.minutes}"></label>
+    <label>Durée (min)<input type="number" name="minutes" min="5" max="300" value="${e.minutes}"></label>
     <label>Pourquoi cette séance<textarea name="why" rows="3" maxlength="400">${e.why}</textarea></label>
     <label>Conseils (un par ligne)<textarea name="tips" rows="2">${(e.tips || []).join('\n')}</textarea></label>
     <b class="small">Exercices</b>${e.ex.map((x, i) => { const l = byId(x.libId); return h`<div class="partrow catexrow"><span class="grow small"><b>${l?.emoji || ''} ${l?.name || x.libId}</b></span>

@@ -13,6 +13,7 @@ import { cleanItem, itemKey } from './items.js';
 import { parseCSV, proposeMapping, checkMapping, proposeMetricMap, buildImport, TARGETS, MAX_CSV_BYTES } from './csv.js';
 import { describeOp } from './outbox.js';
 import { installCard, openSetup, showTour } from './views-setup.js';
+import { isInstalled } from './install.js';
 import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
 import { NEWS } from './news.js';
@@ -93,13 +94,13 @@ function vMain() {
   const rows = (list) => h`<div class="setmenu">${list.map(([k, ic, t, d, a]) => h`<button class="setrow" data-act="${a || 'setSub'}" data-id="${k}"><span class="sic" aria-hidden="true">${icon(k, ic)}</span><span class="grow"><b>${t}</b><small>${d}</small></span><span class="chev" aria-hidden="true">›</span></button>`)}</div>`;
   return h`<label class="findbox"><span aria-hidden="true">🔍</span><input type="search" data-input="setFind" placeholder="Ex. texte, rappel, mot de passe…" aria-label="Rechercher un paramètre" autocomplete="off"></label>
     <div id="setfindres" aria-live="polite"></div>
-    <div class="setmain">${interfaceChoice()}${rows(entries.filter(([k]) => common.has(k)))}${account}
+    <div class="setmain">${interfaceChoice()}${rows(entries.filter(([k]) => common.has(k)))}${account}${isInstalled() ? '' : installCard({ force: true })}
     <details class="card" id="settings-more" ${advancedUI() ? 'open' : ''}><summary>Autres options</summary>
     ${rows(entries.filter(([k]) => !common.has(k)))}
     <div class="card"><h3>🧩 Mon profil sportif</h3><p class="small muted">Pour que l’app s’adapte à toi (sports, niveau, temps, matériel, objectif).</p>
       <button class="btn pri" data-act="setupAgain" data-id="quiz">Mettre à jour mon profil</button>
       <details class="how mini"><summary>Modifier avec la fiche complète</summary><button class="btn" data-act="setupAgain" data-id="form">Ouvrir la fiche</button></details></div>
-    ${installCard({ force: true })}
+    ${isInstalled() ? installCard({ force: true }) : ''}
     <div class="card"><h3>ℹ️ À propos</h3><p class="small">Séances entraînement · version ${APP_VERSION}. ${S.user.guest ? 'Mode invité : données sur cet appareil uniquement.' : 'Tes données sont liées à ton compte et synchronisées ; elles restent utilisables hors ligne.'}</p>
       <p class="tiny muted">Les séances et analyses suivent des principes d’entraînement courants. Elles ne constituent ni un avis médical ni un diagnostic. Aucune comparaison avec d’autres personnes n’est faite.</p></div></details></div>`;
 }
@@ -169,7 +170,7 @@ function vSession() {
       <label>Volume<input type="range" data-change="pref" name="volume" min="0" max="100" step="10" value="${st.volume ?? 60}"></label></div>
       <button class="btn sm" data-act="soundTest">🔔 Écouter</button>
       <div class="grid2"><label>Repos par défaut<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultRest" min="0" max="600" value="${st.defaultRest ?? 60}"><em>secondes</em></span></label>
-      <label>Durée de séance habituelle<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultMinutes" min="5" max="240" value="${st.defaultMinutes ?? 30}"><em>min</em></span></label></div>
+      <label>Durée de séance habituelle<span class="unitbox"><input type="number" inputmode="numeric" data-change="pref" name="defaultMinutes" min="5" max="300" value="${st.defaultMinutes ?? 30}"><em>min</em></span></label></div>
       <details class="how mini"><summary>Options avancées</summary>${[['handsFree', 'Mode mains libres (commandes vocales)'], ['autoBase', 'Proposer d’utiliser mes valeurs réalisées comme nouvelle base']].map(tog)}</details></div>
 `;
 }
@@ -439,10 +440,12 @@ function vAdminPush() {
   if (S.admin.push === undefined) { S.admin.push = null; loadAdminPush(); }
   const draft = S.admin.broadcast || {}, previous = S.admin.push?.broadcast;
   return h`<section class="card stack"><div class="row between"><h3>Annoncer la version finale</h3><button class="btn sm" data-act="adminPushReload">Actualiser</button></div>
-    <p class="small">Quand tu es satisfait de la version, envoie ton message à tous les utilisateurs.</p>
-    <p class="small muted">L’annonce apparaît dans le site, même si les mises à jour automatiques sont désactivées. Le téléphone reçoit aussi une notification s’il a autorisé celles de l’app. Un téléphone qui les a refusées ne peut pas être joint.</p>
+    <p class="small">C’est toi qui choisis quand envoyer : écris le message, puis confirme.</p>
+    <ul class="clean tight small"><li>📱 <b>Notification</b> : seulement les appareils qui ont autorisé les notifications de l’app${S.admin.push ? h` (<b>${S.admin.push.devices ?? 0}</b> appareil${(S.admin.push.devices ?? 0) > 1 ? 's' : ''} aujourd’hui)` : ''}. Les autres ne reçoivent rien sur leur téléphone.</li>
+      <li>🔔 <b>Dans le site</b> : tous les membres la voient dans Notifications, même si les mises à jour automatiques sont coupées.</li></ul>
     ${canRole('technical') ? h`<form class="stack" data-submit="pushBroadcast"><label>Titre<input name="title" maxlength="100" required value="${draft.title || 'La nouvelle version de Mes séances est prête'}" data-input="pushBroadcastField" placeholder="Un titre court"></label>
       <label>Message<textarea name="body" rows="3" maxlength="1200" required data-input="pushBroadcastField" placeholder="Décris ce qui est prêt et ce que les utilisateurs peuvent faire.">${draft.body || ''}</textarea></label>
+      <label class="chk"><input type="checkbox" name="banner" ${draft.banner === false ? '' : 'checked'} data-change="pushBroadcastBanner"> Afficher aussi un bandeau en haut du site pendant 7 jours</label>
       <button type="submit" class="btn pri" ${S.admin.broadcastSending ? 'disabled' : ''}>${S.admin.broadcastSending ? 'Envoi en cours…' : 'Préparer l’envoi à tous'}</button></form>` : ''}
     ${previous ? h`<div class="card flat"><b>Dernière annonce : ${previous.title}</b><p class="small">Version ${previous.version} · ${fmtDateTime(previous.at)}</p><p class="tiny muted">${previous.sent} appareil(s) joint(s)${previous.pending ? ` · ${previous.pending} en attente de reprise` : ''}. L’annonce reste visible dans le site pour tous.</p></div>` : ''}
     ${S.admin.pushError ? h`<p class="err small">${S.admin.pushError}</p>` : ''}</section>
@@ -457,25 +460,26 @@ async function loadAdminPush() {
 }
 ACT.adminPushReload = () => { S.admin.push = null; S.admin.pushError = ''; loadAdminPush(); };
 INPUT.pushBroadcastField = (el) => { S.admin.broadcast = { ...(S.admin.broadcast || {}), [el.name]: el.value }; };
+CHG.pushBroadcastBanner = (el) => { S.admin.broadcast = { ...(S.admin.broadcast || {}), banner: el.checked }; };
 SUBMIT.pushBroadcast = async (form) => {
   if (S.admin.broadcastSending || S.admin.broadcastPreparing) return;
   const token = accountToken(), admin = S.admin, current = () => accountMatches(token) && S.admin === admin;
-  const d = Object.fromEntries(new FormData(form)), title = String(d.title || '').trim(), body = String(d.body || '').trim();
+  const d = Object.fromEntries(new FormData(form)), title = String(d.title || '').trim(), body = String(d.body || '').trim(), banner = d.banner === 'on';
   if (!title || !body) { toast('Ajoute un titre et un message.', 4000, 'bad'); return; }
   S.admin.broadcastPreparing = true;
   const button = form.querySelector('button[type=submit]'); if (button) button.disabled = true;
   let p;
   try { p = await api('GET', '/api/admin/push-status'); if (!current()) return; admin.push = p; }
   catch (e) { if (!current()) return; admin.broadcastPreparing = false; if (button) button.disabled = false; toast(e.offline ? 'Connexion requise pour préparer l’envoi.' : e.message, 4000, 'bad'); return; }
-  const confirmed = await ask('Envoyer cette annonce à tous ?', { ok: 'Envoyer à tous', detail: `Version ${p.version || APP_VERSION}. Dans le site : tous les utilisateurs. Sur téléphone : ${p.devices} appareil(s) ayant autorisé les notifications, même si les mises à jour automatiques sont désactivées.\n\n${title}\n${body}` });
+  const confirmed = await ask('Envoyer cette annonce maintenant ?', { ok: 'Envoyer', detail: `Version ${p.version || APP_VERSION}.\n📱 Notification : ${p.devices} appareil(s) qui ont autorisé les notifications (personne d’autre).\n🔔 Dans le site : tous les membres${banner ? ', avec un bandeau pendant 7 jours' : ''}.\n\n${title}\n${body}` });
   if (!current()) return;
   S.admin.broadcastPreparing = false; if (button) button.disabled = false;
   if (!confirmed) return;
   const old = S.admin.broadcast || {}, version = p.version || APP_VERSION, build = p.build;
   const id = old.id && old.title === title && old.body === body && old.build === build ? old.id : 'final-' + uid().slice(0, 24);
-  S.admin.broadcast = { id, title, body, version, build }; S.admin.broadcastSending = true; render();
+  S.admin.broadcast = { id, title, body, version, build, banner }; S.admin.broadcastSending = true; render();
   try {
-    const r = await api('POST', '/api/admin/push-broadcast', { id, title, body, version, build, confirmed: true });
+    const r = await api('POST', '/api/admin/push-broadcast', { id, title, body, version, build, banner, confirmed: true });
     if (!current()) return;
     toast(`Annonce publiée pour tous · ${r.sent} appareil(s) joint(s)${r.pending ? ` · ${r.pending} en attente de reprise` : ''}.`, 6000);
     S.admin.broadcast = {}; await Promise.all([loadAdminPush(), loadGlobal()]);

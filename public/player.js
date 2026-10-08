@@ -178,8 +178,11 @@ function stepper(k, value, unit, label) { return h`<div class="center"><div clas
 function cues(ex, sess) {
   const use = exUse(ex), here = sess ? exWhyHere(ex, sess) : '';
   const brief = h`<details class="how mini"><summary>🧐 C’est quoi ? À quoi ça sert ?</summary><p class="small"><b>C’est quoi ?</b> ${exWhat(ex)}</p>${use ? h`<p class="small"><b>À quoi ça sert ?</b> ${use}</p>` : ''}${here ? h`<p class="small"><b>Pourquoi ici ?</b> ${here}</p>` : ''}</details>`;
-  if (!ex.ok.length && !ex.bad.length) return h`<div class="card cues">${brief}</div>`;
-  return h`<div class="card cues">${ex.ok.length ? h`<b>📋 Consignes</b><ul>${ex.ok.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${ex.bad.length ? h`<b class="small">⚠️ À éviter</b><ul class="bad">${ex.bad.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${brief}</div>`;
+  // Séances plus anciennes : la position de départ et la charge viennent de la fiche du catalogue.
+  const lib = ex.libId ? byId(ex.libId) : null, start = ex.start || lib?.start || '', load = ex.loadHow || lib?.loadHow || '';
+  const setup = h`${start ? h`<p class="small"><b>🧍 Départ :</b> ${start}</p>` : ''}${load ? h`<p class="small"><b>🏋️ Charge :</b> ${load}</p>` : ''}`;
+  if (!ex.ok.length && !ex.bad.length) return h`<div class="card cues">${setup}${brief}</div>`;
+  return h`<div class="card cues">${setup}${ex.ok.length ? h`<b>📋 Consignes</b><ul>${ex.ok.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${ex.bad.length ? h`<b class="small">⚠️ À éviter</b><ul class="bad">${ex.bad.map((c) => h`<li>${c}</li>`)}</ul>` : ''}${brief}</div>`;
 }
 function vSet(p) {
   const ex = cur(), t = ex.mode === 'time', working = p.phase === 'work';

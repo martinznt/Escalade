@@ -47,7 +47,7 @@ const CONTEXT = { env: ['id'], place: ['s', 80], kind: ['e', ['salle', 'falaise'
 
 // Modification « pour moi » d'un exercice ou d'une séance prête du catalogue (id = celui de l'élément modifié).
 const EX_EDIT = { name: ['s', 80], emoji: ['s', 8], sets: ['n', 1, 20, null], repsMin: ['n', 0, 500, null], repsMax: ['n', 0, 500, null], secMin: ['n', 0, 7200, null], secMax: ['n', 0, 7200, null], rest: ['n', 0, 3600, null],
-  cues: ['strs', 8, 200], bad: ['strs', 6, 200], why: ['s', 240], what: ['s', 240], hidden: ['b'] };
+  cues: ['strs', 8, 200], bad: ['strs', 6, 200], why: ['s', 240], what: ['s', 240], start: ['s', 300], loadHow: ['s', 300], easier: ['s', 300], harder: ['s', 300], hidden: ['b'] };
 const CAT_EDIT = { name: ['s', 80], emoji: ['s', 8], why: ['s', 400], minutes: ['n', 5, 300, null], tips: ['strs', 5, 200], exjson: ['s', 4000], hidden: ['b'] };
 export const SCHEMAS = {
   exedit: EX_EDIT, catedit: CAT_EDIT,

@@ -44,7 +44,7 @@ export function remindersCard() {
   const p = prefs();
   let body;
   if (S.user?.guest) body = h`<p class="small muted">Crée un compte (gratuit) pour recevoir des notifications.</p>`;
-  else if (!pushSupported()) body = h`<p class="small muted">${isIOS() && !isInstalled() ? 'Sur iPhone, installe d’abord l’application sur l’écran d’accueil : les notifications marchent ensuite.' : 'Ce navigateur ne gère pas les notifications.'}</p>`;
+  else if (!pushSupported()) body = h`<p class="small muted">${isIOS() && !isInstalled() ? 'Sur iPhone, installe d’abord l’application sur l’écran d’accueil : les notifications marchent ensuite.' : 'Ce navigateur ne gère pas les notifications.'}</p>${isIOS() && !isInstalled() ? h`<button class="btn sm" data-act="installNow">📲 Comment installer</button>` : ''}`;
   else if (Notification.permission === 'denied') body = h`<p class="small warn-t">Les notifications sont bloquées pour ce site. Autorise-les dans les réglages du navigateur, puis reviens ici.</p>`;
   else body = h`<label class="chk big"><input type="checkbox" data-change="remOn" ${p.on ? 'checked' : ''}> Recevoir des notifications sur cet appareil</label>
     ${p.on ? h`<div class="ntypes">${TYPE_LABELS.filter(([k]) => k !== 'admin' || S.user?.isAdmin).map(([k, ic, l, d]) => h`<label class="ntype"><input type="checkbox" data-change="remType" value="${k}" ${p.types.includes(k) ? 'checked' : ''}><span class="nti">${ic}</span><span class="grow"><b>${l}</b><small>${d}</small></span></label>

@@ -47,7 +47,7 @@ export const SETTINGS_INDEX = [
   E('setting', '🔑', 'Changer le mot de passe', 'Compte', 'settings/main', 'mot de passe password securite', { sel: '[data-act=chpass]' }),
   E('setting', '🗑️', 'Supprimer mon compte', 'Compte', 'settings/main', 'supprimer effacer compte donnees', { sel: '[data-act=delAccount]' }),
   E('setting', '🧩', 'Mon profil sportif (questions)', 'Paramètres', 'settings/main', 'profil questionnaire niveau sports refaire', { sel: '[data-act=setupAgain]' }),
-  E('setting', '📲', 'Installer l’application', 'Paramètres', 'settings/main', 'installer application ecran accueil telephone', { sel: '[data-act=installNow]' }),
+  E('setting', '📲', 'Installer l’application', 'Paramètres', 'settings/main', 'installer application ecran accueil telephone iphone ipad android ordinateur safari chrome samsung raccourci icone', { sel: '[data-act=installNow]' }),
 ];
 /** Fonctions de l'app (onglets, rubriques, outils). act = action à lancer ; to = page/sous-page. */
 export const FEATURE_INDEX = [

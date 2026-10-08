@@ -2,7 +2,7 @@
 // ou fiche complète sur une seule page, avec « Plus tard » à tout moment ; visite guidée des onglets ;
 // proposition d'installer l'application. Tout ce qui est répondu est enregistré comme DÉCLARÉ par l'utilisateur
 // (jamais présenté comme mesuré) et reste modifiable dans Profil.
-import { h, openSheet, closeSheet, sheetOpen, toast, buzzOk, chip, meter } from './ui.js';
+import { h, raw, openSheet, closeSheet, sheetOpen, toast, buzzOk, chip, meter } from './ui.js';
 import { S, ACT, INPUT, render, go, putItem, item, itemsOf, ctx, saveSettings, ls } from './state.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, SKILLS, CAPACITIES } from './model.js';
 import { BUILTIN_SYSTEMS, gradeSnapshot } from './grading.js';
@@ -11,7 +11,8 @@ import { startTour } from './tour.js';
 import { bodyFields, bodyToggle, cleanBody } from './body.js';
 import { batteryFor } from './assess.js';
 import { METRICS as ALL_METRICS } from './model.js';
-import { canPrompt, isIOS, isInstalled, shouldOffer, dismissInstall, promptInstall, onInstallChange } from './install.js';
+import { canPrompt, isIOS, isInstalled, shouldOffer, dismissInstall, promptInstall, onInstallChange, deviceInfo, installSteps } from './install.js';
+import { qrSvg } from './share.js';
 
 /* ═════════ Configuration personnelle (item config « main ») ═════════ */
 export const mainConfig = () => item('config', 'main') || {};
@@ -246,28 +247,45 @@ ACT.reinstallDone = () => { ls.del('sea:reinstall'); render(); };
 export function installCard({ force = false } = {}) {
   if (isInstalled()) return force ? h`<section class="card flat"><p class="small">✅ L’application est installée sur cet appareil.</p></section>` : '';
   if (!force && !shouldOffer()) return '';
-  const ios = isIOS() && !canPrompt();
+  const direct = canPrompt(), st = installSteps();
   return h`<section class="card acc-b install"><div class="row"><img src="/icon-192.png" alt="" width="44" height="44" class="app-mini"><div class="grow"><b>Installer l’application</b>
-      <div class="tiny muted">${ios ? 'Sur iPhone, 2 gestes dans Safari suffisent.' : 'Elle s’ouvrira comme une vraie application : plein écran, dans ta liste d’applications, même hors connexion.'}</div></div></div>
-    <div class="row wrapf"><button class="btn pri" data-act="installNow">${ios ? 'Voir comment faire' : '📲 Installer'}</button>${force ? '' : h`<button class="btn ghost" data-act="installLater">Plus tard</button>`}</div></section>`;
+      <div class="tiny muted">${direct ? 'Un toucher : elle s’ouvrira comme une vraie application, en plein écran, même hors connexion.' : st.can ? 'Les gestes exacts pour ton appareil, pas à pas.' : `Ouvre d’abord le site dans ${st.open}.`}</div></div></div>
+    <div class="row wrapf"><button class="btn pri" data-act="installNow">📲 Installer</button>${force ? '' : h`<button class="btn ghost" data-act="installLater">Plus tard</button>`}</div></section>`;
 }
 ACT.installNow = async () => {
   const r = await promptInstall();
   if (r === 'accepted') { toast('Installation en cours… Tu retrouveras « Séances entraînement » avec tes autres applications.', 5000); return; }
-  if (r === 'ios') { iosHelp(); return; }
-  if (r === 'unavailable') {
-    openSheet(h`<h2 style="margin:0">Installer l’application</h2>
-      <p class="small">Ton navigateur ne propose pas l’installation directe pour le moment. Essaie :</p>
-      <ul class="small"><li><b>Android</b> : ouvre le site dans <b>Chrome</b>, menu <b>⋮</b> › <b>Installer l’application</b>.</li><li><b>Ordinateur</b> : dans Chrome ou Edge, icône d’installation à droite de la barre d’adresse.</li><li><b>iPhone</b> : dans <b>Safari</b>, bouton Partager › <b>Sur l’écran d’accueil</b>.</li></ul>
-      <p class="tiny muted">Si tu viens de refuser l’installation, le navigateur peut attendre un peu avant de la reproposer.</p><button class="btn" data-act="closeSheet">OK</button>`);
-  }
+  if (r === 'dismissed') { toast('Installation annulée. Tu peux la relancer quand tu veux depuis les Paramètres (carte « Installer l’application »).', 4500); return; }
+  installHelp();
 };
 ACT.installLater = () => { dismissInstall(14); toast('D’accord. Tu pourras installer l’app plus tard depuis Paramètres.', 4000); };
-function iosHelp() {
-  openSheet(h`<h2 style="margin:0">Installer sur iPhone / iPad</h2>
-    <ol class="small steps"><li>Ouvre ce site dans <b>Safari</b>.</li><li>Touche le bouton <b>Partager</b> (le carré avec une flèche ↑, en bas de l’écran).</li><li>Choisis <b>« Sur l’écran d’accueil »</b>, puis <b>Ajouter</b>.</li></ol>
-    <p class="tiny muted">Sur iPhone, Apple n’autorise pas d’autre méthode : l’icône ouvre ensuite l’app en plein écran, comme une application.</p><button class="btn pri" data-act="closeSheet">Compris</button>`);
+// Exemples pour les autres appareils (la personne aide souvent quelqu'un d'autre à installer).
+const OTHER_DEVICES = [
+  ['📱 iPhone (Safari)', { os: 'iphone', browser: 'safari', ios: true, mobile: true }], ['📱 iPad (Safari)', { os: 'ipad', browser: 'safari', ios: true, mobile: true }],
+  ['🤖 Android (Chrome)', { os: 'android', browser: 'chrome', android: true, mobile: true }], ['🤖 Android (Samsung Internet)', { os: 'android', browser: 'samsung', android: true, mobile: true }],
+  ['💻 Ordinateur (Chrome)', { os: 'windows', browser: 'chrome' }], ['💻 Ordinateur (Edge)', { os: 'windows', browser: 'edge' }], ['🍎 Mac (Safari)', { os: 'mac', browser: 'safari' }],
+];
+const appLink = () => `${location.origin}/`;
+// Le bouton Partager d'iPhone / iPad dessiné tel qu'il apparaît (un carré ouvert et une flèche vers le haut).
+const SHARE_ICON = '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.5 10H6.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+/** Les gestes pour installer sur CET appareil, puis les autres appareils et un QR code pour le téléphone. */
+export function installHelp(info = deviceInfo()) {
+  const st = installSteps(info);
+  openSheet(h`<div class="stack"><h2 style="margin:0">📲 ${st.title}</h2><p class="tiny muted">Appareil reconnu : ${st.where}</p>
+    ${info.ios && info.browser !== 'inapp' ? h`<div class="row card flat"><span class="acc-t">${raw(SHARE_ICON)}</span><span class="grow small">Le bouton <b>Partager</b> ressemble à ça. Le menu <b>⋯</b>, ce sont trois points.</span></div>` : ''}
+    <ol class="small steps">${st.steps.map((x) => h`<li>${x}</li>`)}</ol>
+    <div class="row wrapf"><button class="btn" data-act="installCopy">🔗 Copier le lien</button>${typeof navigator !== 'undefined' && navigator.share ? h`<button class="btn" data-act="installShare">⬆️ Envoyer le lien</button>` : ''}</div>
+    ${info.mobile ? '' : h`<details class="how"><summary>📱 L’installer sur ton téléphone</summary><p class="small">Scanne ce code avec l’appareil photo du téléphone, ouvre le lien, puis touche « 📲 Installer » : les gestes de ton téléphone s’afficheront.</p><div class="qrbox">${raw(qrSvg(appLink()))}</div></details>`}
+    <details class="how"><summary>Un autre appareil ou navigateur ?</summary>${OTHER_DEVICES.map(([label, i]) => h`<p class="small"><b>${label}</b> : ${installSteps(i).steps.slice(0, 2).join(' ')}</p>`)}</details>
+    <p class="tiny muted">Sans l’installer, tout marche aussi dans le navigateur. L’installation ajoute l’icône, le plein écran et, sur iPhone, les notifications.</p>
+    <button class="btn pri" data-act="closeSheet">Compris</button></div>`);
 }
+ACT.installHelp = () => installHelp();
+ACT.installCopy = async () => {
+  try { await navigator.clipboard.writeText(appLink()); toast('Lien copié : colle-le dans la barre d’adresse de ton navigateur.', 4000); }
+  catch { openSheet(h`<h2 style="margin:0">Le lien de l’application</h2><p class="small">Appuie longuement pour le copier :</p><input readonly value="${appLink()}" aria-label="Lien de l’application"><button class="btn" data-act="installHelp">‹ Retour</button>`); }
+};
+ACT.installShare = async () => { try { await navigator.share({ title: 'Séances entraînement', url: appLink() }); } catch { /* partage annulé */ } };
 
 /* ═════════ « Petite question » : l'app demande ce qui lui manque, une question à la fois ═════════ */
 const SNOOZE_KEY = 'sea:q-snooze';

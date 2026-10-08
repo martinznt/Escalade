@@ -37,7 +37,7 @@ export const FILTER_DEFS = {
   distance: { label: 'Distance (km)', type: 'range', apply: 'param' },
   terrain: { label: 'Terrain', type: 'enum', options: opts({ route: 'Route', piste: 'Piste', trail: 'Trail' }), apply: 'param' },
   nage: { label: 'Nage', type: 'multi', options: opts({ crawl: 'Crawl', brasse: 'Brasse', dos: 'Dos', papillon: 'Papillon' }), apply: 'param' },
-  duree: { label: 'Durée (min)', type: 'num', min: 5, max: 240, apply: 'param' },
+  duree: { label: 'Durée (min)', type: 'num', min: 5, max: 300, apply: 'param' },
 };
 const COMMON = ['intensite', 'niveau', 'materiel', 'duree'];
 /** Filtres pertinents par activité (l'ordre est celui de l'affichage). */

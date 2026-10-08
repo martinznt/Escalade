@@ -177,6 +177,10 @@ await ok('annonce finale manuelle : visible par tous, choix automatique inchang�
   assert.equal((await broadcastNotice(env, { ...input, title: 'Autre titre' }, f)).status, 409);
   assert.equal((await env.DB.prepare('SELECT types FROM push_subs').first()).types, '[]', 'les préférences ne sont pas changées');
   assert.equal((await env.DB.prepare("SELECT COUNT(*) c FROM audit_events WHERE action='push_broadcast'").first()).c, 1);
+  // Sans bandeau : la notification part quand même vers les appareils autorisés, et l'annonce reste dans 🔔 Notifications.
+  const quiet = await broadcastNotice(env, { ...input, id: 'finale-sans-bandeau', banner: false }, f); assert.equal(quiet.sent, 1);
+  const q2 = (await new Client(env).get('/api/global')).data.items.find((x) => x.kind === 'announce' && x.id === 'finale-sans-bandeau');
+  assert.equal(q2.data.banner, undefined); assert.equal(q2.data.until, undefined); assert.equal(q2.data.update, true);
 });
 await ok('annonce manuelle en erreur : reprise durable et suivi mis à jour sans répéter le succès', async () => {
   const env = makeEnv(), u = new Client(env); await u.register('manualretry');

@@ -6,6 +6,7 @@
 // Ces fiches reprennent des principes d'entraînement courants en escalade — voir SOURCES.
 
 import { MORE } from './library-more.js';
+import { HOWTO } from './library-howto.js';
 
 export const EQUIPMENT = {
   wall: 'Mur / salle d’escalade',
@@ -557,6 +558,9 @@ for (const x of L) {
 // élastique ou tapis ; les figures (front lever, drapeau, équilibre sur les mains…) en font partie.
 const BODY_EQ = new Set(['bar', 'dips', 'rings', 'mat', 'band', 'box', 'pole']);
 for (const x of L) if ((x.acts.includes('conditioning') || x.kind === 'skill') && !['run', 'swim'].includes(x.kind) && !/^(run-|shuttle)/.test(x.id) && (x.needs || []).every((n) => BODY_EQ.has(n)) && !x.acts.includes('calisthenics')) x.acts.push('calisthenics');
+
+// 8.34 : comment se placer, où mettre la charge, plus facile / plus dur (library-howto.js ou la fiche elle-même).
+for (const x of L) { const w = HOWTO[x.id] || {}; x.start ||= w.s || ''; x.loadHow ||= w.l || ''; x.easier ||= w.e || ''; x.harder ||= w.h || ''; }
 
 export const LIBRARY = L;
 export const LIB_BY_ID = new Map(L.map((x) => [x.id, x]));

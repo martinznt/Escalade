@@ -1,5 +1,21 @@
 # CHANGELOG — Séances entraînement
 
+## 8.34.0 — Séance à ma façon, chrono complet, exercices expliqués, installation partout
+
+Détails, vérifications et limites : [DELIVERY_8_34.md](DELIVERY_8_34.md). Préparée sur la branche `claude/new-session-wi9olv`, **non déployée** (ZIP remis pour relecture).
+
+- Mise à jour fiable : la nouvelle version s’active à coup sûr après « Mettre à jour » (cause de l’échec de la CI de `main` en 8.33.0 corrigée).
+- Plus aucun saut en haut de page ni rubrique qui se referme seule après un choix ; les liens « Paramètres › … » emmènent à la bonne page.
+- Affichage : icônes de l’app et des notifications au même endroit ; un lien coloré depuis Notifications.
+- Mes sports : « Je ne le fais jamais » retire un sport des propositions et peut masquer ses exercices et séances prêtes ; un toucher pour le remettre.
+- Mes disponibilités : un lieu par créneau, repris par la semaine automatique et le créateur.
+- Chrono : six formats (chaque minute EMOM, le plus de tours AMRAP, pour le temps, intervalles et Tabata, compte à rebours, chronomètre), résultat gardé dans l’historique.
+- Séance « à ma façon » : page blanche visible partout, exercices écrits un par ligne (nombres compris tout seuls), parties libres, note par exercice, réglages facultatifs repliés.
+- Exercices : position de départ pour les 315 exercices, où mettre la charge pour tous ceux qui en ont, versions plus facile / plus dure ; 40 exercices de plus (débuter, reprendre, mobilité, natation de base, course pour débuter, pince).
+- Installation : les gestes exacts pour l’appareil et le navigateur reconnus (iPhone et iPad Safari, Chrome iPhone, Instagram/Facebook, Android Chrome/Samsung/Firefox, ordinateur Chrome/Edge/Firefox, Mac Safari), lien à copier, QR code depuis l’ordinateur.
+- Annonce aux membres : l’administrateur choisit quand l’envoyer ; la notification ne part que vers les appareils qui l’ont autorisée ; bandeau dans le site facultatif.
+- Durées jusqu’à 5 h partout (durée habituelle, séance sur mesure, séances prêtes).
+
 ## 8.33.0 — Objectifs et phases, icônes par compte, IA plus vérifiable, applications sportives
 
 Détails et limites : [DELIVERY_8_33.md](DELIVERY_8_33.md) ; réglages à faire soi-même : [CLOUDFLARE_GUIDE.md](CLOUDFLARE_GUIDE.md).

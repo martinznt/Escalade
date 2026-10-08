@@ -242,9 +242,10 @@ export async function updateNotice(env, build, fetchFn = fetch, options = {}) {
   if (current === build && (await q(env, 'SELECT COUNT(*) c FROM push_updates WHERE notice_id=?', build).first())?.c) await recordNotice(env, build, 'update', now);
   return sent;
 }
-/** Annonce finale choisie par un administrateur : visible sur le site pour tous, push sur les appareils autorisés.
- * Son identifiant est stable lors d'une reprise. Le réglage des mises à jour automatiques n'est pas modifié. */
-export async function broadcastNotice(env, { id, title, body, version, build, actorId }, fetchFn = fetch, options = {}) {
+/** Annonce finale choisie par un administrateur : visible sur le site pour tous (🔔 Notifications, et en bandeau si
+ * banner), push seulement sur les appareils qui ont autorisé les notifications. Son identifiant est stable lors d'une
+ * reprise. Le réglage des mises à jour automatiques n'est pas modifié. */
+export async function broadcastNotice(env, { id, title, body, version, build, actorId, banner = true }, fetchFn = fetch, options = {}) {
   const clean = (s, max) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
   title = clean(title, 100); body = clean(body, 1200);
   if (!/^[\w-]{1,64}$/.test(String(id || '')) || !title || !body || !actorId) return { error: 'Ajoute un titre et un message.', status: 400 };
@@ -253,14 +254,14 @@ export async function broadcastNotice(env, { id, title, body, version, build, ac
     const d = JSON.parse(old.data_json);
     if (d.title !== title || d.body !== body || d.version !== version || d.build !== build) return { error: 'Cette annonce a déjà été envoyée avec un autre contenu.', status: 409 };
   }
-  const data = { title, body, version, build, update: true, banner: true, until: now + 7 * 86400000, emoji: '📣' };
+  const data = { title, body, version, build, update: true, emoji: '📣', ...(banner !== false ? { banner: true, until: now + 7 * 86400000 } : {}) };
   const token = crypto.randomUUID(), notice = 'announce-' + id;
   await env.DB.batch([
     q(env, "INSERT OR IGNORE INTO global_content(kind,id,data_json,hidden,updated_at,updated_by) VALUES('announce',?,?,0,?,?)", id, JSON.stringify(data), now, actorId),
     q(env, "INSERT OR IGNORE INTO system_state(key,value) VALUES(?,?)", noticeKey(notice), token),
     queueNotice(env, notice, 'announce:' + id, true, now, token),
     q(env, `INSERT INTO audit_events(id,at,actor_id,action,target_type,target_id,after_json)
-      SELECT ?,?,?,'push_broadcast','announce',?,? WHERE EXISTS (SELECT 1 FROM system_state WHERE key=? AND value=?)`, crypto.randomUUID(), now, actorId, id, JSON.stringify({ title, body, version, build, audience: 'all' }), noticeKey(notice), token),
+      SELECT ?,?,?,'push_broadcast','announce',?,? WHERE EXISTS (SELECT 1 FROM system_state WHERE key=? AND value=?)`, crypto.randomUUID(), now, actorId, id, JSON.stringify({ title, body, version, build, audience: 'all', push: 'appareils autorisés', banner: banner !== false }), noticeKey(notice), token),
   ]);
   const stored = JSON.parse((await q(env, "SELECT data_json FROM global_content WHERE kind='announce' AND id=?", id).first()).data_json);
   if (stored.title !== title || stored.body !== body || stored.version !== version || stored.build !== build) return { error: 'Cette annonce a déjà été envoyée avec un autre contenu.', status: 409 };

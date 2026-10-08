@@ -410,8 +410,10 @@ function exForm(e, ctxk) {
     <div class="grid2" data-m="time" ${t ? '' : 'hidden'}>${numberField('secMin', 'Durée min', e.secMin, { min: 1, max: 18000, step: 1, unit: 's' })}${numberField('secMax', 'Durée max', e.secMax, { min: 1, max: 18000, step: 1, unit: 's' })}</div>
     <div class="grid2"><label>Charge<input type="text" name="load" value="${e.load}" maxlength="60" placeholder="+10 kg, poids du corps…"></label><label>Unité<input type="text" name="unit" value="${e.unit}" maxlength="30" placeholder="m, km, blocs, voies…"></label></div>
     ${inSession ? h`<label>Note pour cet exercice <span class="tiny muted">(facultatif)</span><input name="note" value="${e.note}" maxlength="400" placeholder="Ex. élastique rouge, réglette de 20 mm, au ralenti…"></label>` : ''}
-    <details class="how"><summary>Consignes, muscles et capacités <span class="tiny muted">(facultatif)</span></summary><div class="stack">
+    <details class="how"><summary>Position de départ, consignes, muscles <span class="tiny muted">(facultatif)</span></summary><div class="stack">
+    <label>Position de départ<textarea name="start" rows="2" maxlength="300" placeholder="Ex. Debout, pieds largeur d’épaules, barre sur le haut du dos.">${e.start || ''}</textarea></label>
     <label>Consignes (une par ligne)<textarea name="ok">${e.ok.join('\n')}</textarea></label>
+    <label>La charge : où la mettre<textarea name="loadHow" rows="2" maxlength="300" placeholder="Ex. Un haltère dans chaque main, bras le long du corps.">${e.loadHow || ''}</textarea></label>
     <label>Erreurs à éviter (une par ligne)<textarea name="bad" style="min-height:60px">${e.bad.join('\n')}</textarea></label>
     <label>Muscles principaux</label><div class="chips">${Object.entries(MUSCLES).map(([id, m]) => h`<label class="chip ${e.prim.includes(id) ? 'on' : ''}"><input type="checkbox" name="prim" value="${id}" ${e.prim.includes(id) ? 'checked' : ''} class="hidden" data-change="chipToggle">${m.label}</label>`)}</div>
     <label>Capacités travaillées</label><div class="chips">${Object.entries(CAPACITIES).map(([id, c]) => h`<label class="chip ${e.caps[id] ? 'on' : ''}"><input type="checkbox" name="caps" value="${id}" ${e.caps[id] ? 'checked' : ''} class="hidden" data-change="chipToggle">${c.label}</label>`)}</div></div></details>
@@ -428,7 +430,7 @@ function formExercise(form, base = {}) {
   // Partie (fiche d'une séance) : un des trois blocs, une partie existante ou une nouvelle ; sinon le bloc choisi.
   let block = f.block || base.block || 'main', part = base.part || '';
   if (f.part != null) { if (BLOCKS[f.part]) { block = f.part; part = ''; } else if (f.part === '__new') { part = String(f.partNew || '').trim().slice(0, 40); if (!part) part = base.part || ''; } else { part = String(f.part).slice(0, 40); } }
-  return normalizeEx({ ...base, name: f.name, emoji: f.emoji, mode: f.mode, block, part, note: f.note != null ? f.note : base.note, sets: f.sets, repsMin: f.repsMin, repsMax: f.repsMax, secMin: f.secMin, secMax: f.secMax, perSide: !!f.perSide, load: f.load, unit: f.unit, rest: parseDur(f.rest), ok: lines(f.ok), bad: lines(f.bad), prim, caps, muscles: prim.map((m) => MUSCLES[m]?.label.toLowerCase() || m) });
+  return normalizeEx({ ...base, name: f.name, emoji: f.emoji, mode: f.mode, block, part, note: f.note != null ? f.note : base.note, start: f.start != null ? f.start : base.start, loadHow: f.loadHow != null ? f.loadHow : base.loadHow, sets: f.sets, repsMin: f.repsMin, repsMax: f.repsMax, secMin: f.secMin, secMax: f.secMax, perSide: !!f.perSide, load: f.load, unit: f.unit, rest: parseDur(f.rest), ok: lines(f.ok), bad: lines(f.bad), prim, caps, muscles: prim.map((m) => MUSCLES[m]?.label.toLowerCase() || m) });
 }
 ACT.exEdit = (el) => { const e = editing(); const ex = e?.s.exercises.find((x) => x.id === el.dataset.id); if (ex) openSheet(exForm(ex, { kind: 'session', eid: ex.id }), { wide: true }); };
 SUBMIT.exSave = async (form) => {
@@ -587,7 +589,7 @@ function vGenerate() {
 }
 ACT.gSet = (el) => { S.gen[el.dataset.k] = el.dataset.k === 'minutes' ? Number(el.dataset.v) : el.dataset.v; S.gen.plan = null; S.gen.result = null; S.gen.priorities = {}; render(); };
 CHG.gGoal = (el) => { S.gen.goalId = el.value; S.gen.plan = null; S.gen.result = null; render(); };
-CHG.gMinutes = (el) => { S.gen.minutes = Math.max(5, Math.min(240, Number(el.value) || 30)); S.gen.plan = null; S.gen.result = null; render(); };
+CHG.gMinutes = (el) => { S.gen.minutes = Math.max(5, Math.min(300, Number(el.value) || 30)); S.gen.plan = null; S.gen.result = null; render(); };
 CHG.gEnv = (el) => { S.gen.envId = el.value; S.gen.plan = null; S.gen.result = null; render(); };
 CHG.gLight = (el) => { S.gen.light = el.checked; S.gen.plan = null; S.gen.result = null; render(); };
 ACT.gIntent = (el) => { const list = [...(S.gen.intentions || [])], i = list.findIndex((x) => x.id === el.dataset.id); if (i < 0) list.push({ id: el.dataset.id, p: 1 }); else if (list[i].p < 3) list[i] = { ...list[i], p: list[i].p + 1 }; else list.splice(i, 1); S.gen.intentions = list; S.gen.plan = null; S.gen.result = null; render(); };
@@ -661,15 +663,19 @@ CHG.exCap = (el) => { S.filters.exCap = el.value; render(); };
 export function exerciseSheet(ex, actions = '', session = null) {
   const lib = byId(ex.libId || ex.id) || null;
   const e = lib ? { ...lib, ...ex, caps: Object.keys(ex.caps || {}).length ? ex.caps : lib.caps, prim: ex.prim?.length ? ex.prim : lib.prim, sec: ex.sec?.length ? ex.sec : lib.sec } : ex;
+  if (lib) for (const k of ['start', 'loadHow', 'easier', 'harder']) e[k] = ex[k] || lib[k] || '';
   const g = graphFromExercise({ caps: e.caps || {}, prim: e.prim || [], sec: e.sec || [] }, ctx());
   const cues = e.ok?.length ? e.ok : e.cues || [];
   return h`<div class="row"><div class="ico">${e.emoji}</div><div class="grow"><h2 style="margin:0">${e.name}</h2>${e.sets ? h`<div class="muted small">${exLine(normalizeEx(e))}</div>` : ''}</div></div>
     ${exerciseBrief({ ...ex, libId: ex.libId || (lib ? lib.id : '') }, session)}
+    ${e.start ? h`<section class="card flat"><b class="small">🧍 Position de départ</b><p class="small" style="margin:.2em 0 0">${e.start}</p></section>` : ''}
+    ${cues.length ? h`<section class="card flat"><b class="small ok-t">✅ Le mouvement</b><ul class="clean tight">${cues.map((c) => h`<li>${c}</li>`)}</ul></section>` : ''}
+    ${e.loadHow ? h`<section class="card flat"><b class="small">🏋️ La charge : où la mettre</b><p class="small" style="margin:.2em 0 0">${e.loadHow}</p></section>` : ''}
+    ${e.bad?.length ? h`<details class="how mini"><summary>⚠️ Erreurs à éviter (${e.bad.length})</summary><ul class="small">${e.bad.map((c) => h`<li>${c}</li>`)}</ul></details>` : ''}
+    ${e.easier || e.harder ? h`<section class="card flat"><b class="small">🎚️ À ton niveau</b>${e.easier ? h`<p class="small" style="margin:.2em 0 0">↘️ <b>Plus facile :</b> ${e.easier}</p>` : ''}${e.harder ? h`<p class="small" style="margin:.2em 0 0">↗️ <b>Plus dur :</b> ${e.harder}</p>` : ''}</section>` : ''}
+    <div class="chips">${e.needs?.length ? e.needs.map((k) => h`<span class="chip static">🧰 ${EQUIPMENT[k] || k}</span>`) : h`<span class="chip static">🙌 Sans matériel</span>`}${e.diff ? h`<span class="chip static">📶 ${'●'.repeat(e.diff)}${'○'.repeat(5 - e.diff)}</span>` : ''}${e.minLevel ? h`<span class="chip static">⭐ niveau ${['débutant', 'intermédiaire', 'avancé'][e.minLevel]}</span>` : ''}</div>
     ${raw(anatomySvg({ primary: e.prim || [], secondary: e.sec || [] }))}
     <div class="chips">${g.muscles.prim.map((m) => h`<span class="chip static"><i class="lg p"></i>${m}</span>`)}${g.muscles.sec.map((m) => h`<span class="chip static"><i class="lg s"></i>${m}</span>`)}</div>
-    <div class="chips">${e.needs?.length ? e.needs.map((k) => h`<span class="chip static">🧰 ${EQUIPMENT[k] || k}</span>`) : h`<span class="chip static">🙌 Sans matériel</span>`}${e.diff ? h`<span class="chip static">📶 ${'●'.repeat(e.diff)}${'○'.repeat(5 - e.diff)}</span>` : ''}${e.minLevel ? h`<span class="chip static">⭐ niveau ${['débutant', 'intermédiaire', 'avancé'][e.minLevel]}</span>` : ''}</div>
-    ${cues.length ? h`<section class="card flat"><b class="small ok-t">✅ À faire</b><ul class="clean tight">${cues.map((c) => h`<li>${c}</li>`)}</ul></section>` : ''}
-    ${e.bad?.length ? h`<details class="how mini"><summary>⚠️ Erreurs à éviter (${e.bad.length})</summary><ul class="small">${e.bad.map((c) => h`<li>${c}</li>`)}</ul></details>` : ''}
     ${g.caps.length ? h`<details class="how mini"><summary>💪 Ce que ça travaille (${g.caps.length})</summary>${g.caps.map((c) => h`<div class="cbar"><span>${c.label}</span><div class="track"><i class="cur" style="width:${Math.round(c.w * 100)}%"></i></div><b></b></div>${c.goals.length ? h`<p class="tiny muted">→ utile pour ${c.goals.map((x) => x.label).join(', ')}</p>` : ''}`)}</details>` : ''}
     ${actions}<button class="btn" data-act="closeSheet">Fermer</button>`;
 }

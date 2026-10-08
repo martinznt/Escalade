@@ -50,6 +50,11 @@ export function normalizeEx(x = {}) {
     ok,
     bad: strList(x.bad, 30, 300),
     note: str(x.note, 400),
+    // 8.34 : position de départ, où mettre la charge, versions plus facile / plus dure.
+    start: str(x.start, 300),
+    loadHow: str(x.loadHow, 300),
+    easier: str(x.easier, 300),
+    harder: str(x.harder, 300),
     group: str(x.group, 20),
     intensity: ['low', 'mod', 'high'].includes(x.intensity) ? x.intensity : '',
     risk: ['finger', 'shoulder', 'elbow', 'knee'].includes(x.risk) ? x.risk : '',
