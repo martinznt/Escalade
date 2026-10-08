@@ -41,10 +41,16 @@ try {
     await page.waitForSelector('#main .install'); assert.match(await page.locator('#main .install').innerText(), /Ouvre d’abord le site dans Safari/);
     await page.click('#main .install [data-act=installNow]'); await page.waitForSelector('#sheet.open');
     assert.match(await page.locator('#sheet').innerText(), /Ouvre d’abord le site dans Safari[\s\S]*Ouvrir dans Safari/);
+    // Les deux cas, sans dépendre du presse-papiers de la machine de test : copie acceptée, puis copie refusée.
+    await page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: (t) => { window.__copied = t; return Promise.resolve(); } } }); });
     await page.click('#sheet [data-act=installCopy]');
-    await page.waitForFunction(() => /Lien copié/.test(document.querySelector('#toast')?.textContent || '') || document.querySelector('#sheet input[readonly]'));
-    const shown = await page.evaluate(() => document.querySelector('#sheet input[readonly]')?.value || document.querySelector('#toast')?.textContent || '');
-    assert.ok(/Lien copié/.test(shown) || shown.startsWith(location.origin), shown);
+    await page.waitForFunction(() => /Lien copié/.test(document.querySelector('#toast')?.textContent || ''));
+    assert.equal(await page.evaluate(() => window.__copied), `${srv.base}/`, 'le lien du site est copié');
+    await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.reject(new Error('refusé')) } }); });
+    await page.click('#sheet [data-act=installCopy]');
+    await page.waitForSelector('#sheet input[readonly]');
+    assert.equal(await page.inputValue('#sheet input[readonly]'), `${srv.base}/`, 'copie refusée : le lien est affiché, à copier à la main');
+    await noOverflow(page);
     await context.close();
   });
   await step('Android sans proposition du navigateur : menu ⋮ › « Installer l’application »', async () => {
