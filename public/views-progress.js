@@ -149,12 +149,24 @@ function vJournal() {
     <div class="chips">${JF.map(([k, l]) => chip(f === k, l, `data-act="jFilter" data-id="${k}"`))}</div>
     ${list.length ? list.slice(0, max).map((e) => { const inner = h`<span class="ico sm">${e.icon}</span><div class="grow"><div class="row between wrapf"><b>${e.title}</b><span class="tiny muted">${e.kind === 'step' ? fmtDay(e.t) : fmtDateTime(e.t)}</span></div>${e.text ? h`<div class="small">${e.text}</div>` : ''}${e.note ? h`<div class="small muted">« ${e.note} »</div>` : ''}${e.more?.length ? h`<div class="tiny muted">${e.more.join(' · ')}</div>` : ''}</div>`;
         if (e.kind === 'media') return h`<div class="card journal media row">${inner}${e.media.hasPhoto ? h`<button class="btn sm" data-act="mediaView" data-id="${e.media.id}">Voir</button>` : ''}${e.media.url && /^https:\/\//.test(e.media.url) ? h`<a class="btn sm" href="${e.media.url}" target="_blank" rel="noopener noreferrer">Ouvrir</a>` : ''}${e.id ? h`<button class="btn sm ghost" data-act="histOpen" data-id="${e.id}">Séance</button>` : ''}</div>`;
+        if (e.kind === 'note' && e.noteId) return h`<div class="card journal note row">${inner}<button class="btn sm ghost" data-act="jnoteEdit" data-id="${e.noteId}" aria-label="Modifier la note">✎</button></div>`;
+        // Mesure ou bloc / voie : un toucher pour corriger (valeur, date, cotation…) ou supprimer.
+        if (e.kind === 'perf' && e.perfId) return h`<button class="card pick journal perf row" data-act="perfEdit" data-id="${e.perfId}">${inner}<span class="chev">›</span></button>`;
+        if (e.kind === 'ascent' && e.ascId) return h`<button class="card pick journal ascent row" data-act="ascEdit" data-id="${e.ascId}">${inner}<span class="chev">›</span></button>`;
         return e.kind === 'session' && e.id ? h`<button class="card pick journal session row" data-act="histOpen" data-id="${e.id}">${inner}<span class="chev">›</span></button>` : h`<div class="card journal ${e.kind} row">${inner}</div>`; })
       : empty(f === 'all' ? 'Ton journal regroupera tes séances, blocs et voies, mesures, notes et étapes.' : 'Rien de ce type pour l’instant.', f === 'all' || f === 'session' ? h`<button class="btn pri" data-act="genOpen">▶ Faire la séance du jour</button> <button class="btn" data-act="cpResume">Créer une séance</button>` : '')}
     ${list.length > max ? h`<button class="btn ghost" data-act="jMore">Voir plus (${list.length - max})</button>` : ''}`;
 }
 ACT.jFilter = (el) => { S.jf = el.dataset.id; S.jMax = 60; render(); };
 ACT.jMore = () => { S.jMax = (S.jMax || 60) + 60; render(); };
+ACT.jnoteEdit = (el) => {
+  const n = item('jnote', el.dataset.id); if (!n) return;
+  openSheet(h`<form class="stack" data-submit="jnoteSave"><h2 style="margin:0">📝 Note du ${fmtDay(n.date)}</h2><input type="hidden" name="id" value="${el.dataset.id}">
+    <textarea name="text" maxlength="1000" rows="5" required aria-label="Texte de la note">${n.text}</textarea>
+    <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button><button class="btn danger" type="button" data-act="jnoteDel" data-id="${el.dataset.id}">Supprimer la note</button></div></form>`);
+};
+SUBMIT.jnoteSave = (f) => { const d = Object.fromEntries(new FormData(f)), n = item('jnote', d.id), t = String(d.text || '').trim(); if (!n) return closeSheet(); if (!t) return toast('Écris quelque chose, ou supprime la note.'); putItem('jnote', d.id, { ...n, text: t.slice(0, 1000) }); closeSheet(); toast('Note modifiée'); render(); };
+ACT.jnoteDel = async (el) => { if (!item('jnote', el.dataset.id) || !(await ask('Supprimer cette note du journal ?', { ok: 'Supprimer', danger: true }))) return; delItem('jnote', el.dataset.id); closeSheet(); toast('Note supprimée'); render(); };
 SUBMIT.jnote = (f) => { const t = String(new FormData(f).get('text') || '').trim(); if (!t) return; putItem('jnote', 'jn-' + uid().slice(0, 14), { date: Date.now(), text: t }); f.reset(); buzzOk(); toast('Note ajoutée'); render(); };
 
 /* ═════════ Analyses descriptives ═════════ */

@@ -5,7 +5,7 @@
 import { h, openSheet, closeSheet, toast, ask, menuList, fmtDay, ymd, buzzOk, chip } from './ui.js';
 import { S, ACT, SUBMIT, CHG, ctx, render, putItem, item, saveEvent, deleteEvent, api, go } from './state.js';
 import { uid } from './shared.js';
-import { backwardPlan, eventPhase, recalcToEvent, cleanSlots, pauseState, weekPlan, conflicts, missedEvents, weekReview, eventsBetween, PHASES, DAY_LONG, parseDay, toMin } from './planning.js';
+import { backwardPlan, eventPhase, recalcToEvent, cleanSlots, pauseState, weekPlan, conflicts, missedEvents, weekReview, eventsBetween, PHASES, DAY_LONG, parseDay, toMin, placeSuits, MAX_SLOTS, slotsOn } from './planning.js';
 import { DAY_NAMES, PROGRAM_GOALS, defaultDays } from './program.js';
 import { readiness } from './coachbrain.js';
 import { activeProgram } from './views-program.js';
@@ -18,7 +18,9 @@ const day = (s) => fmtDay(parseDay(s)), dLong = (s) => new Date(parseDay(s)).toL
 const slots = () => cleanSlots(item('config', 'availability')?.slots);
 const pauseCfg = () => item('config', 'pause') || {};
 const actLabel = (a) => { const x = ctx().activities[a] || ACTIVITIES[a]; return x ? `${x.emoji || ''} ${x.label}`.trim() : 'Séance'; };
-const slotsText = (l) => { const t = l.map((s) => `${DAY_NAMES[s.d].toLowerCase()} ${s.from}–${s.to}`).join(' · '); return t.length > 70 ? t.slice(0, 68) + '…' : t; };
+/** Lieu encore décrit (un lieu supprimé ou archivé n'est plus proposé ni affiché). */
+const envById = (id) => (id && ctx().envs.find((e) => e.id === id && !e.archived)) || null;
+const slotsText = (l) => { const t = l.map((s) => `${DAY_NAMES[s.d].toLowerCase()} ${s.from}–${s.to}${envById(s.envId) ? ` à ${envById(s.envId).name}` : ''}`).join(' · '); return t.length > 70 ? t.slice(0, 68) + '…' : t; };
 /** Lieu le plus adapté à un sport (mur pour l'escalade, piscine pour la natation, sinon le lieu par défaut). */
 export function envFor(a) {
   const c = ctx(), envs = c.envs.filter((e) => !e.archived);
@@ -27,6 +29,16 @@ export function envFor(a) {
   if (a === 'running') return envs.find((e) => e.type === 'piste' || e.type === 'exterieur') || null;
   return c.defEnv || envs[0] || null;
 }
+/** Lieu du créneau en cours ou à venir aujourd'hui (« Mes disponibilités »), s'il est noté ; sinon null. */
+export function slotPlaceNow(now = new Date()) {
+  const m = now.getHours() * 60 + now.getMinutes();
+  for (const s of slotsOn(slots(), ymd(now), m)) { const e = envById(s.envId); if (e) return e; }
+  return null;
+}
+/** Créneaux d'un jour donné (« AAAA-MM-JJ ») avec leur lieu : pour pré-remplir un rendez-vous du planning. */
+export const slotsForDay = (date) => slotsOn(slots(), date).map((s) => ({ ...s, env: envById(s.envId) }));
+/** Le sport (ou l'activité personnalisée, d'après son sport d'origine) peut-il se faire dans ce lieu ? 0, 1 ou 2. */
+export const suitsPlace = (a, env) => { const c = ctx(), it = c.activities[a]; return placeSuits(it?.native === false ? '' : a, env, env ? availableEquipment(c, env.id) : null); };
 
 /* ═════════ Outils (liste façon Réglages) ═════════ */
 export function planTools() {
@@ -64,12 +76,14 @@ ACT.confFix = (el) => {
 /* ═════════ Semaine automatique ═════════ */
 function proposal() {
   const c = ctx(), main = item('config', 'main') || {}, rd = readiness(c);
-  const w = weekPlan(c, { slots: slots(), perWeek: Number(main.perWeek) || 3, minutes: Number(S.settings.defaultMinutes) || Number(main.durations?.[0]) || 45, activities: Object.keys(c.activities), pause: pauseCfg(), lowForm: rd.checked && rd.level === 'low', envFor });
+  const w = weekPlan(c, { slots: slots(), perWeek: Number(main.perWeek) || 3, minutes: Number(S.settings.defaultMinutes) || Number(main.durations?.[0]) || 45, activities: Object.keys(c.activities), pause: pauseCfg(), lowForm: rd.checked && rd.level === 'low', envFor, envById, suits: suitsPlace });
   // Tests du mois : si des mesures utiles datent (6 semaines ou jamais) et qu'aucun test n'est prévu depuis 4 semaines,
   // la dernière séance proposée devient une séance test (tes mesures refaites, pour suivre tes progrès).
+  // Une seule vraie séance dans la semaine : elle reste celle prévue (le test est seulement rappelé).
   const due = testReminders(c), recent = S.events.some((e) => e.meta?.kind === 'test' && Math.abs(parseDay(e.date) - c.now) < 28 * 86400000);
-  const last = w.sessions.filter((x) => !x.light).at(-1);
-  if (due.length && !recent && last) { last.test = true; last.why = [...last.why, `mesures à refaire : ${due.slice(0, 3).map((t) => t.label.toLowerCase()).join(', ')}`]; }
+  const real = w.sessions.filter((x) => !x.light), last = real.at(-1), what = due.slice(0, 3).map((t) => t.label.toLowerCase()).join(', ');
+  if (due.length && !recent && last && real.length >= 2) { last.test = true; last.why = [...last.why, `mesures à refaire : ${what}`]; }
+  else if (due.length && !recent && last) w.notes.push(`Mesures à refaire quand tu peux (${what}) : avec une seule séance cette semaine, elle reste une séance normale.`);
   return w;
 }
 ACT.autoWeek = () => {
@@ -91,7 +105,7 @@ ACT.autoWeekSave = () => {
 ACT.autoPlay = (el) => {
   const e = S.events.find((x) => x.id === el.dataset.id); if (!e) return; closeSheet();
   if (e.meta?.kind === 'test') { go('profile', 'bilan'); window.scrollTo(0, 0); setTimeout(() => ACT.bilanRun?.(), 200); return; }
-  openWizard({ sport: e.meta?.activityId || '', minutes: e.meta?.minutes || 45, forme: e.meta?.light ? 'tired' : '' });
+  openWizard({ sport: e.meta?.activityId || '', minutes: e.meta?.minutes || 45, forme: e.meta?.light ? 'tired' : '', envId: e.meta?.envId || '' });
 };
 /** Partager sa semaine (texte simple) pour caler des séances avec un partenaire. */
 ACT.shareWeek = async () => {
@@ -105,23 +119,63 @@ ACT.shareWeek = async () => {
 };
 
 /* ═════════ Disponibilités ═════════ */
+// Chaque créneau peut dire où l'on est (« le mardi de 18 h à 20 h, je suis à ma salle ») : la semaine automatique y
+// propose un sport qui s'y fait, et « Créer une séance » prend ce lieu (et son matériel) le jour venu.
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const placeSelect = (cur) => { const envs = ctx().envs.filter((e) => !e.archived); return h`<label class="small">Où es-tu ? <span class="tiny muted">(facultatif)</span><select name="envId" data-change="slotEnv"><option value="">Pas de lieu précis</option>${envs.map((e) => h`<option value="${e.id}" ${cur === e.id ? 'selected' : ''}>${e.name}</option>`)}<option value="__new">＋ Ajouter un lieu…</option></select></label>`; };
+const draftOf = (i) => { const d = S.slotDraft; S.slotDraft = null; return d && d.i === i ? d : null; };
 ACT.slotsOpen = () => {
-  const sl = slots(), row = (d) => { const s = sl.filter((x) => x.d === d); return h`<div class="slotrow"><b>${DAY_LONG[d]}</b>${s.length ? s.map((x) => h`<span class="chip on static">${x.from}–${x.to}</span>`) : h`<span class="tiny muted">—</span>`}</div>`; };
+  const sl = slots(), dr = draftOf(undefined) || {}, free = [0, 1, 2, 3, 4, 5, 6].filter((d) => !sl.some((x) => x.d === d)).map((d) => DAY_LONG[d]);
   openSheet(h`<form class="stack" data-submit="slotAdd"><h2 style="margin:0">🕒 Mes disponibilités</h2>
-    <p class="tiny muted">Les créneaux où tu peux t’entraîner chaque semaine. La semaine automatique s’en sert, et cale l’heure sur l’ouverture de tes lieux.</p>
-    <div class="stack tight">${[0, 1, 2, 3, 4, 5, 6].map(row)}</div>
+    <p class="tiny muted">Quand tu peux t’entraîner chaque semaine, et où tu es à ce moment-là. La semaine automatique s’en sert (sport faisable sur place, heure calée sur l’ouverture) ; « Créer une séance » reprend le lieu du créneau du jour.</p>
+    ${sl.length ? h`<div class="setmenu">${sl.map((x, i) => h`<button class="setrow" type="button" data-act="slotEdit" data-i="${i}"><span class="sic">🕒</span><span class="grow"><b>${cap(DAY_LONG[x.d])} <span class="hm">${x.from}–${x.to}</span></b><small>${envById(x.envId) ? `📍 ${envById(x.envId).name}` : 'Lieu au choix'}</small></span><span class="chev">›</span></button>`)}</div>
+      ${free.length && free.length < 7 ? h`<p class="tiny muted">Sans créneau : ${free.join(', ')}.</p>` : ''}` : h`<p class="small muted">Aucun créneau pour l’instant.</p>`}
     <span class="kicker">Ajouter un créneau</span>
-    <div class="chips">${DAY_NAMES.map((d, i) => h`<label class="chip"><input type="checkbox" class="hidden" name="d" value="${i}" data-change="chipToggle">${d}</label>`)}</div>
-    <div class="grid2"><label class="small">De<input type="time" name="from" value="18:00" required></label><label class="small">À<input type="time" name="to" value="20:00" required></label></div>
+    <div class="chips">${DAY_NAMES.map((d, i) => h`<label class="chip ${dr.days?.includes(i) ? 'on' : ''}"><input type="checkbox" class="hidden" name="d" value="${i}" ${dr.days?.includes(i) ? 'checked' : ''} data-change="chipToggle">${d}</label>`)}</div>
+    <div class="grid2"><label class="small">De<input type="time" name="from" value="${dr.from || '18:00'}" required></label><label class="small">À<input type="time" name="to" value="${dr.to || '20:00'}" required></label></div>
+    ${placeSelect(dr.envId || '')}
     <div class="row wrapf"><button class="btn pri" type="submit">＋ Ajouter</button>${sl.length ? h`<button class="btn ghost" type="button" data-act="slotsClear">Tout effacer</button>` : ''}</div></form>`, { wide: true });
 };
+/** Vérifie un créneau saisi : jour(s), heures, lieu encore décrit. Retourne un message d'erreur ou ''. */
+const slotError = (days, from, to) => (!days.length ? 'Choisis au moins un jour.' : !/^\d\d:\d\d$/.test(from) || !/^\d\d:\d\d$/.test(to) || !(toMin(to) > toMin(from)) ? 'L’heure de fin doit être après le début.' : '');
+const saveSlots = (list) => putItem('config', 'availability', { ...(item('config', 'availability') || {}), slots: cleanSlots(list) });
 SUBMIT.slotAdd = (f) => {
-  const fd = new FormData(f), ds = fd.getAll('d').map(Number), from = String(fd.get('from') || ''), to = String(fd.get('to') || '');
-  if (!ds.length) return toast('Choisis au moins un jour.');
-  if (!(toMin(to) > toMin(from))) return toast('L’heure de fin doit être après le début.', 3500, 'bad');
-  const next = cleanSlots([...slots(), ...ds.map((d) => ({ d, from, to }))]);
-  putItem('config', 'availability', { ...(item('config', 'availability') || {}), slots: next }); buzzOk(); toast('Créneau ajouté'); ACT.slotsOpen(); render();
+  const fd = new FormData(f), ds = fd.getAll('d').map(Number), from = String(fd.get('from') || ''), to = String(fd.get('to') || ''), envId = envById(String(fd.get('envId') || ''))?.id || '';
+  const err = slotError(ds, from, to); if (err) return toast(err, 3500, ds.length ? 'bad' : '');
+  // Même jour et mêmes heures qu'un créneau existant : le nouveau remplace l'ancien (son lieu change).
+  const merged = [...ds.map((d) => ({ d, from, to, envId })), ...slots()];
+  if (new Set(merged.map((x) => `${x.d}-${x.from}-${x.to}`)).size > MAX_SLOTS) return toast(`${MAX_SLOTS} créneaux au plus : supprime ou modifie un créneau avant d’en ajouter.`, 4500, 'bad');
+  saveSlots(merged); buzzOk(); toast(ds.length > 1 ? 'Créneaux ajoutés' : 'Créneau ajouté'); ACT.slotsOpen(); render();
 };
+ACT.slotEdit = (el) => {
+  const i = Number(el.dataset.i), x = slots()[i]; if (!x) return ACT.slotsOpen();
+  const v = draftOf(i) || x;
+  openSheet(h`<form class="stack" data-submit="slotSave"><h2 style="margin:0">🕒 ${cap(DAY_LONG[x.d])} · ${x.from}–${x.to}</h2><input type="hidden" name="i" value="${i}">
+    <label class="small">Jour<select name="day">${DAY_LONG.map((n, d) => h`<option value="${d}" ${Number(v.d) === d ? 'selected' : ''}>${cap(n)}</option>`)}</select></label>
+    <div class="grid2"><label class="small">De<input type="time" name="from" value="${v.from}" required></label><label class="small">À<input type="time" name="to" value="${v.to}" required></label></div>
+    ${placeSelect(v.envId || '')}
+    <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button><button class="btn danger" type="button" data-act="slotDel" data-i="${i}">Supprimer ce créneau</button><button class="btn ghost" type="button" data-act="slotsOpen">‹ Retour</button></div></form>`, { wide: true });
+};
+SUBMIT.slotSave = (f) => {
+  const fd = new FormData(f), i = Number(fd.get('i')), all = slots(); if (!all[i]) return ACT.slotsOpen();
+  const d = Number(fd.get('day')), from = String(fd.get('from') || ''), to = String(fd.get('to') || ''), envId = envById(String(fd.get('envId') || ''))?.id || '';
+  const err = slotError([d], from, to); if (err) return toast(err, 3500, 'bad');
+  saveSlots([{ d, from, to, envId }, ...all.filter((_, k) => k !== i)]); buzzOk(); toast('Créneau modifié'); ACT.slotsOpen(); render();
+};
+ACT.slotDel = (el) => { const i = Number(el.dataset.i), all = slots(); if (!all[i]) return ACT.slotsOpen(); saveSlots(all.filter((_, k) => k !== i)); toast('Créneau supprimé'); ACT.slotsOpen(); render(); };
+/** « ＋ Ajouter un lieu… » : la saisie en cours est gardée, et l'on revient au créneau avec le nouveau lieu choisi. */
+CHG.slotEnv = (el) => {
+  if (el.value !== '__new') return;
+  const f = el.form, fd = new FormData(f), i = f.elements.i ? Number(f.elements.i.value) : undefined;
+  S.slotDraft = { i, days: fd.getAll('d').map(Number), d: Number(fd.get('day')), from: String(fd.get('from') || ''), to: String(fd.get('to') || ''), envId: '' };
+  ACT.envNew({ dataset: { back: i === undefined ? 'slots' : `slot:${i}` } });
+};
+/** Retour après la création d'un lieu depuis un créneau (appelé par la fiche du lieu). */
+export function slotPlaceCreated(back, envId) {
+  S.slotDraft = { ...(S.slotDraft || {}), envId };
+  const m = /^slot:(\d+)$/.exec(back || '');
+  if (m) ACT.slotEdit({ dataset: { i: m[1] } }); else ACT.slotsOpen();
+}
 ACT.slotsClear = async () => { if (!(await ask('Effacer toutes tes disponibilités ?', { ok: 'Effacer', danger: true }))) return; putItem('config', 'availability', { ...(item('config', 'availability') || {}), slots: [] }); ACT.slotsOpen(); render(); };
 
 /* ═════════ Pause ═════════ */

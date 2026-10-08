@@ -182,7 +182,8 @@ export const SCHEMAS = {
     // Notifications cochées « vu » (item « inbox »).
     seenIds: ['strs', 200, 40],
     // 8.30 — disponibilités (item « availability ») et pause vacances / blessure (item « pause »).
-    slots: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5] }, 21],
+    // 8.34 — lieu facultatif de chaque créneau (« le mardi de 18 h à 20 h, je suis à ma salle »).
+    slots: ['list', { d: ['n', 0, 6, 0], from: ['s', 5], to: ['s', 5], envId: ['id'] }, 21],
     pauseMode: ['e', ['', 'vacances', 'blesse'], ''], pauseFrom: ['day'], pauseTo: ['day'], pauseNote: ['s', 120],
     // 8.30 — séances du carnet mises en favori (item « catalog »).
     favs: ['strs', 300, 60],

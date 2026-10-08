@@ -2,7 +2,7 @@ import { comparisonView, advancedUI } from './views-experience.js';
 import { sessionFromHistory } from './live.js';
 // views-climbplan.js — « Structurer ma séance d'escalade » : par objectif de fin de séance, ou partie par partie.
 import { h, raw, chip, openSheet, closeSheet, toast, ask, askText, seg } from './ui.js';
-import { S, accountToken, accountMatches, ACT, CHG, INPUT, ctx, render, go, saveSeance, ls, putItem, itemsOf, api } from './state.js';
+import { S, accountToken, accountMatches, ACT, CHG, INPUT, ctx, render, go, saveSeance, ls, putItem, delItem, itemsOf, api } from './state.js';
 import { aiEvidence, aiProposalReady } from './srcui.js';
 import { uid } from './shared.js';
 import { simulate } from './whatif.js';
@@ -30,6 +30,8 @@ import { sessionMinutes } from './engine.js';
 import { INTENT_FAMILIES, PRIO, subIntentsFor, labelOf } from './intents.js';
 import { FILTER_DEFS, filtersFor, effectiveFilters, filterText, MODES } from './filters.js';
 import { resolvePlaces, transitions, budget } from './budget.js';
+import { slotsOn, placeSuits, DAY_LONG, toMin as hmMin } from './planning.js';
+import { ymd as dayKey } from './program.js';
 import { LINKS, chainStatus, paramsFor } from './sessionchain.js';
 import { ROLES, LOCKABLE, LOCK_STATES, FATIGUE, ATTEMPT_TYPES, FOCUS, VOLUME, TRADEOFFS, PLACE_MODES, normalizePhases, normalizePhase, fitDurations, fitShort, newPhase, totalMinutes as phTotal, sessionActivities, sessionIntent, activityLabel as actLabel } from './phase.js';
 import { proposeForPhase, analyzeSession, applySuggestion, REASON, phaseName } from './phaseplan.js';
@@ -123,9 +125,25 @@ function syncAims(c = CP()) {
 /** Lieu cohérent avec le sport : pour l'escalade, un lieu qui a un mur (sinon on garde le lieu et on le dit). */
 function placeFor(c) {
   if (c.envPicked) return;
-  const x = ctx();
+  const x = ctx(), here = slotHere(c.sport);
+  // 8.34 : le lieu noté dans ton créneau d'aujourd'hui (« le mardi, je suis à ma salle »), s'il convient au sport.
+  c.slotHint = here ? { date: dayKey(Date.now()), day: here.slot.d, from: here.slot.from, to: here.slot.to, envId: here.env.id } : null;
+  if (here) { c.envId = here.env.id; return; }
   if (isClimb(c.sport)) { const e = x.envs.find((v) => availableEquipment(x, v.id).has('wall')); c.envId = e ? e.id : ''; }
   else if (c.envId && !x.envs.some((v) => v.id === c.envId)) c.envId = '';
+}
+/** Durée du créneau d'aujourd'hui retenu (10 min à 5 h), proposée comme temps disponible ; 0 s'il n'y en a pas. */
+const slotMinutes = (c) => { const sl = hintToday(c); if (!sl) return 0; const m = hmMin(sl.to) - hmMin(sl.from); return m >= 10 ? Math.min(300, m) : 0; };
+/** Le créneau retenu n'est valable que le jour même (un brouillon rouvert le lendemain ne le montre plus). */
+const hintToday = (c) => (c.slotHint && c.slotHint.date === dayKey(Date.now()) ? c.slotHint : null);
+/** Créneau d'aujourd'hui (en cours ou à venir, d'après « Mes disponibilités ») dont le lieu convient à ce sport. */
+function slotHere(sport) {
+  const x = ctx(), now = new Date(), m = now.getHours() * 60 + now.getMinutes(), it = x.activities[sport];
+  for (const s of slotsOn(x.config?.availability?.slots, dayKey(now.getTime()), m)) {
+    const e = s.envId && x.envs.find((v) => v.id === s.envId && !v.archived);
+    if (e && placeSuits(it?.native === false ? '' : sport, e, availableEquipment(x, e.id))) return { slot: s, env: e };
+  }
+  return null;
 }
 // Le brouillon est gardé sur l'appareil (fermeture accidentelle, hors ligne) : ossature, choix, changements appliqués.
 const keep = () => { const { result, reasons, aimDone, bopts, ...rest } = CP(); ls.set(key(), rest); };
@@ -229,6 +247,7 @@ function vWhere() {
     <div class="chips">${sports.filter((id) => id !== c.sport).map((id) => chip(more.includes(id), sportLabel(id), `data-act="cpSport2" data-id="${id}"`))}</div>
     ${more.length ? h`<p class="tiny muted">Dans cette séance (${sportsOf(c).length} sports, autant que tu veux) : <b>${sportsOf(c).map((sp) => sportShort(sp, x.activities)).join(' → ')}</b>. L’app les place selon tes objectifs et les lieux ; tu peux tout déplacer à l’étape 3.</p>` : ''}
     <label>Lieu${more.length ? ` pour ${sportLabel(c.sport)}` : ''}<select data-change="cpEnv"><option value="">${x.defEnv ? 'Par défaut : ' + x.defEnv.name : 'Aucun lieu décrit'}</option>${envOptions(c.envId, x)}<option value="__new">＋ Ajouter un lieu…</option></select></label>
+    ${hintToday(c) && hintToday(c).envId === c.envId ? h`<p class="tiny muted">📍 Lieu de ton créneau du ${DAY_LONG[c.slotHint.day]} (${c.slotHint.from}–${c.slotHint.to}), d’après « Mes disponibilités ».</p>` : ''}
     <p class="tiny ${eq.length ? 'muted' : 'warn-t'}">🧰 ${env ? `Matériel de ${env.name}` : 'Matériel'} : ${eq.length ? eq.map((k) => EQUIPMENT[k] || k).join(', ').toLowerCase() : 'aucun déclaré (séance sans matériel)'} · <button class="linkish acc-t" data-act="allGo" data-to="profile/equipment">modifier</button></p>
     ${more.map((sp) => h`<label>Lieu pour ${sportLabel(sp)}<select data-change="cpEnvFor" data-sp="${sp}"><option value="">Le même que la phase d’avant</option>${envOptions(c.places?.[sp] || '', x)}<option value="__new">＋ Ajouter un lieu…</option></select></label>`)}
     ${multi && !winOn(c) ? h`<label>Trajet entre deux lieux<span class="unitbox"><input type="number" min="0" max="120" step="5" value="${c.travel ?? 15}" data-change="cpTravel" aria-label="Minutes de trajet entre deux lieux"><em>min</em></span></label><p class="tiny muted">Compté dans ton temps disponible, à chaque changement de lieu.</p>` : ''}
@@ -237,7 +256,7 @@ function vWhere() {
     ${isClimb(c.sport) ? sysSelect(kindOf(c.sport)) : ''}
     <span class="kicker">Ma forme aujourd’hui</span><div class="chips">${FORMES.map(([k, e, l]) => chip((c.forme || 'ok') === k, `${e} ${l}`, `data-act="cpForme" data-id="${k}"`))}</div>${c.formeFrom === 'checkin' ? h`<p class="tiny muted">Pré-rempli d’après ton check-in du matin : change-le si besoin.</p>` : ''}
     ${winOn(c) ? h`<p class="small">⏱ Temps disponible : <b>${fmtMin(c.minutes)}</b> <span class="tiny muted">(calculé d’après tes horaires)</span></p>` : h`<span class="kicker">Temps disponible${more.length ? ' (trajets compris)' : ''}</span>
-    <div class="chips">${[30, 45, 60, 90, 120, 150, 180, 240, 300].map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="300" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
+    <div class="chips">${slotMinutes(c) ? chip(c.minutes === slotMinutes(c), `🕒 Mon créneau (${fmtMin(slotMinutes(c))})`, `data-act="cpMin" data-id="${slotMinutes(c)}"`) : ''}${[30, 45, 60, 90, 120, 150, 180, 240, 300].filter((m) => m !== slotMinutes(c)).map((m) => chip(c.minutes === m, fmtMin(m), `data-act="cpMin" data-id="${m}"`))}<label class="row tight"><input type="number" min="10" max="300" step="5" value="${c.minutes}" data-change="cpMinIn" style="width:80px" aria-label="Minutes"><span class="tiny">min</span></label></div>`}</div>`;
 }
 /** Horaires précis : une arrivée et un départ par lieu ; le temps entre deux lieux devient le trajet. */
 function winCard() {
@@ -1202,7 +1221,7 @@ ACT.cpDnaSave = async () => {
 ACT.cpDnaOpen = () => {
   const l = dnaList();
   openSheet(h`<div class="stack"><h2 style="margin:0">📂 Mes structures (ADN)</h2><p class="tiny muted">Une structure garde la répartition du temps et les réglages des phases, pas les exercices. Elle s’adapte à ${fmtMin(CP().minutes)}.</p>
-    ${l.length ? h`<div class="setmenu">${l.map((x) => h`<button class="setrow" data-act="cpDnaUse" data-id="${x.id}"><span class="sic">🧬</span><span class="grow"><b>${x.name}</b><small>${x.summary}</small></span><span class="chev">›</span></button>`)}</div>` : h`<p class="small muted">Aucune structure enregistrée : « 💾 Enregistrer la structure » la garde pour la réutiliser.</p>`}
+    ${l.length ? h`<div class="setmenu">${l.map((x) => h`<div class="setrow"><span class="sic">🧬</span><button class="grow rowbtn" data-act="cpDnaUse" data-id="${x.id}"><b>${x.name}</b><small>${x.summary}</small></button><button class="btn sm ghost" data-act="cpDnaDel" data-id="${x.id}" aria-label="Supprimer la structure ${x.name}">🗑</button></div>`)}</div>` : h`<p class="small muted">Aucune structure enregistrée : « 💾 Enregistrer la structure » la garde pour la réutiliser.</p>`}
     <button class="btn" data-act="closeSheet">Fermer</button></div>`);
 };
 ACT.cpDnaUse = (el) => {
@@ -1219,11 +1238,14 @@ ACT.cpModOpen = () => {
   const l = modList(), c = CP();
   openSheet(h`<div class="stack"><h2 style="margin:0">🧩 Insérer un module</h2>
     ${l.length ? h`<label>Position<select data-change="cpModAt">${c.parts.map((p, k) => h`<option value="${k}" ${S.cpModAt === k ? 'selected' : ''}>Avant « ${phaseName(p)} »</option>`)}<option value="${c.parts.length}" ${S.cpModAt == null || S.cpModAt === c.parts.length ? 'selected' : ''}>À la fin</option></select></label>
-      <div class="setmenu">${l.map((x) => h`<button class="setrow" data-act="cpModUse" data-id="${x.id}"><span class="sic">🧩</span><span class="grow"><b>${x.name}</b><small>${fmtMin(x.minutes)}</small></span><span class="chev">›</span></button>`)}</div>`
+      <div class="setmenu">${l.map((x) => h`<div class="setrow"><span class="sic">🧩</span><button class="grow rowbtn" data-act="cpModUse" data-id="${x.id}"><b>${x.name}</b><small>${fmtMin(x.minutes)}</small></button><button class="btn sm ghost" data-act="cpModDel" data-id="${x.id}" aria-label="Supprimer le module ${x.name}">🗑</button></div>`)}</div>`
       : h`<p class="small muted">Aucun module : dans « Régler » d’une phase, « 💾 Enregistrer comme module ».</p>`}
     <button class="btn" data-act="closeSheet">Fermer</button></div>`);
 };
 CHG.cpModAt = (el) => { S.cpModAt = Number(el.value); };
+/** Structures et modules enregistrés : supprimables un par un (la séance en cours n'est pas modifiée). */
+ACT.cpDnaDel = async (el) => { const x = dnaList().find((d) => d.id === el.dataset.id); if (!x || !(await ask(`Supprimer la structure « ${x.name} » ?`, { ok: 'Supprimer', danger: true, detail: 'Ta séance en cours ne change pas.' }))) return ACT.cpDnaOpen(); delItem('sdna', x.id); toast('Structure supprimée'); ACT.cpDnaOpen(); };
+ACT.cpModDel = async (el) => { const x = modList().find((d) => d.id === el.dataset.id); if (!x || !(await ask(`Supprimer le module « ${x.name} » ?`, { ok: 'Supprimer', danger: true, detail: 'Ta séance en cours ne change pas.' }))) return ACT.cpModOpen(); delItem('smodule', x.id); toast('Module supprimé'); ACT.cpModOpen(); };
 ACT.cpModUse = async (el) => {
   const c = CP(), owner = S.user?.id, x = modList().find((d) => d.id === el.dataset.id), m = parseJson(x?.json); if (!m) return toast('Module illisible.');
   const r = insertModule(c.parts, m, S.cpModAt ?? c.parts.length);

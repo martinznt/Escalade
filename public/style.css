@@ -757,3 +757,11 @@ html[data-contrast=on] .btn,html[data-contrast=on] .chip,html[data-contrast=on] 
 .agenda-event input[type=time] { width:auto; max-width:100%; }
 [data-interface=simple] .stephelp { line-height:1.5; }
 @media (max-width:360px) { .quick-row .grid2 { grid-template-columns:1fr; } .agenda-event .btn { white-space:normal; } }
+/* 8.34 — heures d'un créneau : jamais coupées au milieu (« 15:00–18:00 »). */
+.hm{white-space:nowrap}
+/* 8.34 — ligne de liste avec une action principale et une petite action à droite (ex. 🗑). */
+.setrow .rowbtn,.item .rowbtn{appearance:none;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-width:0}
+.setrow .rowbtn b,.setrow .rowbtn small,.item .rowbtn b{overflow-wrap:anywhere}
+/* 8.34 — ligne .item entièrement cliquable (séance faite dans un lieu…). */
+button.item.rowpick{appearance:none;width:100%;text-align:left;font:inherit;color:inherit;background:none;border:0;border-bottom:1px solid var(--line);cursor:pointer}
+button.item.rowpick:last-child{border-bottom:0}

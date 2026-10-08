@@ -26,7 +26,7 @@ import { programStatus } from './program.js';
 import { buildIcs } from './ics.js';
 import { vSetup, setupCard, installCard, reinstallCard, questionCard } from './views-setup.js';
 import { formeBlock } from './views-forme.js';
-import { planTools, planAlerts, weekReviewCard } from './views-planning.js';
+import { planTools, planAlerts, weekReviewCard, slotPlaceNow } from './views-planning.js';
 import { storyHome } from './views-story.js';
 
 export const DASH_BLOCKS = {
@@ -131,7 +131,7 @@ function nothingSheet() {
     <span class="small"><b>3 · Envie de quoi ?</b></span><div class="chips">${ENVIES.map(([k, l]) => chip(q.envie === k, l, `data-act="npSet" data-k="envie" data-v="${k}"`))}</div>
     <button class="btn pri big" data-act="npGo">▶ Préparer ma séance</button></div>`);
 }
-ACT.nothingPlanned = () => { const c = ctx(); S.np = { min: Number(S.settings.defaultMinutes) || 30, env: c.defEnv?.id || 'none', envie: 'surprise' }; nothingSheet(); };
+ACT.nothingPlanned = () => { const c = ctx(), here = slotPlaceNow(); S.np = { min: Number(S.settings.defaultMinutes) || 30, env: here?.id || c.defEnv?.id || 'none', envie: 'surprise' }; nothingSheet(); };
 ACT.npSet = (el) => { S.np[el.dataset.k] = el.dataset.k === 'min' ? Number(el.dataset.v) : el.dataset.v; nothingSheet(); };
 ACT.npGo = () => {
   const q = S.np, c = ctx(), acts = Object.keys(c.activities), climb = acts.find((a) => /^climbing/.test(a));

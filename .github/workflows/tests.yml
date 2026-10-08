@@ -10,6 +10,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Une exécution normale dure une dizaine de minutes : un blocage échoue vite au lieu d'occuper le runner 6 h.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,8 +23,19 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       - run: npm run check
       - run: npm test
-      - run: npx --no-install playwright install --with-deps chromium
+      - name: Navigateur de test (Chromium)
+        timeout-minutes: 16
+        shell: bash
+        # L'installation reste parfois bloquée côté runner (téléchargement ou paquets) : 3 essais de 5 min au plus.
+        run: |
+          for i in 1 2 3; do
+            if timeout -k 15 300 npx --no-install playwright install --with-deps chromium; then exit 0; fi
+            echo "::warning title=Navigateur de test::installation interrompue ou en échec (essai $i/3)"
+            sleep 10
+          done
+          exit 1
       - name: Parcours navigateur
+        timeout-minutes: 30
         shell: bash
         run: |
           mkdir -p artifacts

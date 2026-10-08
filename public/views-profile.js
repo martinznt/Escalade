@@ -2,6 +2,7 @@ import { advancedUI, memoryView } from './views-experience.js';
 // views-profile.js — Profil : comprendre mon profil, carte d'entraînement et graphe, activités et catégories,
 // performances, escalade (cotations, styles, maxima, journal), objectifs complexes, matériel, préférences, profil public.
 import { h, subHead, menuList, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, fmtDay, relDate, numberField, buzzOk, lineChart, skeleton, SOURCE_TAG, ymd } from './ui.js';
+import { hoursText, cleanSlots } from './planning.js';
 import { composePage, savedLayouts } from './layout.js';
 import { shareButton } from './content.js';
 import { openAssistant } from './views-ai.js';
@@ -314,7 +315,7 @@ ACT.ascNew = () => {
 };
 CHG.ascSys = (el) => { S.ascSys = el.value; const sel = el.form.querySelector('[name=levelId]'); sel.innerHTML = sortedLevels(ctx().systems[el.value]).map((l) => `<option value="${l.id}">${l.label.replace(/[<>&"]/g, '')}</option>`).join(''); };
 SUBMIT.ascSave = (f) => { const fd = new FormData(f), d = Object.fromEntries(fd), c = ctx(); putItem('ascent', 'asc-' + uid().slice(0, 14), { kind: d.kind, name: d.name, grade: gradeSnapshot(c.systems[d.systemId], d.levelId), result: d.result, attempts: Number(d.attempts) || 1, styles: fd.getAll('styles'), date: Date.now(), note: d.note }); closeSheet(); buzzOk(); toast('Enregistré dans ton journal'); render(); };
-ACT.ascDel = async (el) => { if (await ask('Supprimer cette entrée ?', { danger: true, ok: 'Supprimer' })) { delItem('ascent', el.dataset.id); render(); } };
+ACT.ascDel = async (el) => { if (await ask('Supprimer cette entrée ?', { danger: true, ok: 'Supprimer' })) { delItem('ascent', el.dataset.id); if (S.aq?.id === el.dataset.id) { S.aq = null; closeSheet(); } toast('Entrée supprimée'); render(); } };
 
 /* ═════════ Objectifs (dont figures complexes) ═════════ */
 function vGoals() {
@@ -726,27 +727,32 @@ function vEquipment() {
     <div class="card"><h3>Indisponible aujourd’hui</h3><p class="tiny muted">Une barre prise, pas de poutre ? Décoche-le : les séances générées s’adaptent et expliquent les remplacements.</p>
       <div class="chips">${[...new Set(c.envs.flatMap((e) => e.equipment))].map((k) => chip(!un.has(k), EQUIPMENT[k] || k, `data-act="eqToggle" data-id="${k}"`))}</div>${un.size ? h`<button class="btn sm" data-act="eqReset">Tout est disponible</button>` : ''}</div>`;
 }
-const placeLine = (e, st) => [e.city, st.sessions.length ? `${st.sessions.length} séance(s)` : '', st.ascents.length ? `${st.sent} bloc(s)/voie(s) réussi(s)` : '', st.bestBloc ? `max bloc ${st.bestBloc}` : '', st.bestVoie ? `max voie ${st.bestVoie}` : '', st.last ? `dernière fois ${relDate(st.last)}` : '', !st.count ? 'rien d’enregistré ici pour l’instant' : ''].filter(Boolean).join(' · ');
+/** Créneaux de « Mes disponibilités » passés dans ce lieu. */
+const slotsAt = (id) => cleanSlots(item('config', 'availability')?.slots).filter((x) => x.envId === id);
+const placeLine = (e, st) => [e.city, slotsAt(e.id).length ? `🕒 ${hoursText(slotsAt(e.id))}` : '', st.sessions.length ? `${st.sessions.length} séance(s)` : '', st.ascents.length ? `${st.sent} bloc(s)/voie(s) réussi(s)` : '', st.bestBloc ? `max bloc ${st.bestBloc}` : '', st.bestVoie ? `max voie ${st.bestVoie}` : '', st.last ? `dernière fois ${relDate(st.last)}` : '', !st.count ? 'rien d’enregistré ici pour l’instant' : ''].filter(Boolean).join(' · ');
 function vPlaceDetail(e) {
   const c = ctx(), st = placeStats(e.id, c, e.name), sys = e.gradeSys && c.systems[e.gradeSys];
-  const asc = (a) => h`<div class="item"><span class="gpill">${a.grade?.label || a.gradeText || '?'}</span><div class="grow"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${fmtDay(a.date)} · ${({ onsight: '👀 à vue', flash: '⚡ flash', send: '✓ réussi', work: '💪 après travail', top: '✓ réussi', attempt: '… essayé', fail: '✗' })[a.result] || ''}</div></div></div>`;
+  const asc = (a) => h`<div class="item"><span class="gpill">${a.grade?.label || a.gradeText || '?'}</span><button class="grow rowbtn" data-act="ascEdit" data-id="${a.id}" aria-label="Modifier cette entrée"><b>${a.name || (a.kind === 'voie' ? 'Voie' : 'Bloc')}</b><div class="tiny muted">${fmtDay(a.date)} · ${({ onsight: '👀 à vue', flash: '⚡ flash', send: '✓ réussi', work: '💪 après travail', top: '✓ réussi', attempt: '… essayé', fail: '✗' })[a.result] || ''}</div></button></div>`;
+  const open = hoursText(e.hours), mine = slotsAt(e.id);
   return h`<div class="row"><button class="btn sm" data-act="placeBack" aria-label="Retour">‹</button><h2 class="grow" style="margin:0">${KIND_LABEL[kindOfEnv(e)][0]} ${e.name}</h2></div>
     <div class="card"><p class="small">${ENV_TYPES[e.type] || e.type}${e.city ? ` · ${e.city}` : ''}${sys ? ` · cotation ${sys.name}` : ''}</p>
       ${e.equipment?.length && e.type !== 'falaise' ? h`<p class="tiny muted">🧰 ${e.equipment.map((k) => EQUIPMENT[k] || k).join(', ')}</p>` : ''}
       ${e.sectors?.length ? h`<p class="tiny muted">📌 Secteurs : ${e.sectors.join(', ')}</p>` : ''}
+      ${open ? h`<p class="tiny muted">🚪 Ouvert : ${open}</p>` : ''}
+      <p class="tiny muted">🕒 ${mine.length ? `Tes créneaux ici : ${hoursText(mine)}` : 'Aucun de tes créneaux n’est noté ici'} · <button class="linkish acc-t" data-act="slotsOpen">${mine.length ? 'modifier' : 'en ajouter'}</button></p>
       ${Number.isFinite(e.lat) && Number.isFinite(e.lon) ? h`<p class="tiny"><a href="https://www.openstreetmap.org/?mlat=${e.lat}&amp;mlon=${e.lon}#map=15/${e.lat}/${e.lon}" target="_blank" rel="noopener noreferrer">🗺️ Voir sur la carte (OpenStreetMap)</a></p>` : ''}
       <div class="row wrapf"><button class="btn pri" data-act="placeTrain" data-id="${e.id}">✨ Créer une séance ici</button>${['escalade', 'falaise'].includes(e.type) ? h`<button class="btn" data-act="placeLog" data-id="${e.id}">🧗 Noter un bloc / une voie ici</button>` : ''}
         <button class="btn" data-act="envEdit" data-id="${e.id}">✎ Modifier</button>${c.defEnv?.id === e.id ? '' : h`<button class="btn" data-act="envDefault" data-id="${e.id}">Par défaut</button>`}</div></div>
     <div class="kpis">${[['🏋️', 'Séances', st.sessions.length], ['⏱', 'Minutes', st.minutes], ['🧗', 'Réussis', st.sent], ...(st.bestBloc ? [['🪨', 'Max bloc', st.bestBloc]] : []), ...(st.bestVoie ? [['🧗', 'Max voie', st.bestVoie]] : [])].map(([ic, l, v]) => h`<div class="kpi"><span>${ic}</span><b>${v}</b><small>${l}</small></div>`)}</div>
     ${st.sectors.length ? st.sectors.map((sec) => h`<section class="card"><h3>${sec.name ? `📌 ${sec.name}` : st.sectors.length > 1 ? 'Sans secteur' : 'Blocs et voies'} <span class="tiny muted">${sec.sent}/${sec.list.length} réussi(s)</span></h3>${sec.list.slice(0, 12).map(asc)}</section>`) : ''}
-    ${st.sessions.length ? h`<section class="card"><h3>Séances faites ici</h3>${st.sessions.slice(0, 15).map((x) => h`<div class="item"><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">${fmtDay(x.startedAt)} · ${Math.round((x.durationSeconds || 0) / 60)} min</div></div></div>`)}</section>` : ''}
+    ${st.sessions.length ? h`<section class="card"><h3>Séances faites ici</h3>${st.sessions.slice(0, 15).map((x) => h`<button class="item pick rowpick" data-act="histOpen" data-id="${x.id}"><div class="grow"><b>${x.sessionName}</b><div class="tiny muted">${fmtDay(x.startedAt)} · ${Math.round((x.durationSeconds || 0) / 60)} min</div></div><span class="chev">›</span></button>`)}</section>` : ''}
     ${!st.count ? empty('Rien d’enregistré ici pour l’instant. Crée une séance ici, ou note un bloc / une voie : tout apparaîtra sur cette page.') : ''}`;
 }
 ACT.placeOpen = (el) => go('profile', 'equipment', el.dataset.id);
 ACT.placeBack = () => go('profile', 'equipment');
 ACT.placeTrain = (el) => { S.cp = { ...(S.cp || {}), envId: el.dataset.id, step: 2, result: null, built: null, partsTouched: false }; go('library', 'climbplan'); };
 ACT.placeLog = (el) => { S.aqEnvPreset = el.dataset.id; ACT.ascQuick?.(); };
-function envForm(e) {
+function envForm(e, back = '') {
   const t = e?.type || S.envType || 'maison', eq = new Set(e?.equipment || ENV_TEMPLATES[t] || []);
   const eqChips = (name, keys, sel) => h`<div class="chips">${keys.map((k) => h`<label class="chip ${sel.has(k) ? 'on' : ''}"><input type="checkbox" class="hidden" name="${name}" value="${k}" ${sel.has(k) ? 'checked' : ''} data-change="chipToggle">${EQUIPMENT[k] || k}</label>`)}</div>`;
   const head = h`<div class="grid2"><label>Nom<input name="name" required maxlength="60" value="${e?.name || ENV_TYPES[t]}" placeholder="${t === 'escalade' ? 'Ex. Arkose Montreuil' : ''}"></label><label>Type<select name="type" data-change="envType">${Object.entries(ENV_TYPES).map(([k, l]) => h`<option value="${k}" ${t === k ? 'selected' : ''}>${l}</option>`)}</select></label></div>`;
@@ -773,31 +779,33 @@ function envForm(e) {
       <p class="tiny muted">Laisse vide un jour où c’est fermé. Sans aucun horaire, l’app ne suppose rien.</p>
       <div class="stack tight">${['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((dn, d) => h`<div class="hoursrow"><b class="small">${dn}</b><input type="time" name="hf_${d}" value="${H.get(d)?.from || ''}" aria-label="${dn} : ouverture"><span class="tiny muted">→</span><input type="time" name="ht_${d}" value="${H.get(d)?.to || ''}" aria-label="${dn} : fermeture"></div>`)}</div>
       <button class="btn sm" type="button" data-act="hoursCopy">Copier lundi sur tous les jours</button></details>` : '';
-  return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle d’escalade' : t === 'falaise' ? 'Nouvelle falaise' : 'Nouveau lieu'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">
+  return h`<h2 style="margin:0">${e ? 'Modifier' : t === 'escalade' ? 'Nouvelle salle d’escalade' : t === 'falaise' ? 'Nouvelle falaise' : 'Nouveau lieu'}</h2><form data-submit="envSave" class="stack"><input type="hidden" name="id" value="${e?.id || ''}">${!e && /^(slots|slot:\d+)$/.test(back) ? h`<input type="hidden" name="back" value="${back}">` : ''}
     ${head}${body}${hours}
     <div class="row wrapf"><button class="btn pri" type="submit">Enregistrer</button>${e ? h`<button class="btn danger" type="button" data-act="envDel" data-id="${e.id}">Supprimer</button>` : ''}</div></form>`;
 }
-ACT.envNew = () => { S.envType = 'maison'; openSheet(envForm(null), { wide: true }); };
+ACT.envNew = (el) => { S.envType = 'maison'; openSheet(envForm(null, el?.dataset?.back || ''), { wide: true }); };
 ACT.envNewGym = () => { S.envType = 'escalade'; openSheet(envForm(null), { wide: true }); };
 ACT.envNewCrag = () => { S.envType = 'falaise'; openSheet(envForm(null), { wide: true }); };
 ACT.envEdit = (el) => { const e = item('env', el.dataset.id); if (e) openSheet(envForm(e), { wide: true }); };
-CHG.envType = (el) => { if (!el.form.id.value) { S.envType = el.value; openSheet(envForm(null), { wide: true }); } };
+CHG.envType = (el) => { if (!el.form.id.value) { S.envType = el.value; openSheet(envForm(null, el.form.elements.back?.value || ''), { wide: true }); } };
 ACT.hoursCopy = (el) => { const f = el.closest('form'), a = f.elements.hf_0?.value, b = f.elements.ht_0?.value; if (!a || !b) return toast('Remplis d’abord lundi.'); for (let d = 1; d < 7; d++) { f.elements['hf_' + d].value = a; f.elements['ht_' + d].value = b; } };
 SUBMIT.envSave = (f) => {
   const fd = new FormData(f), d = Object.fromEntries(fd), first = !ctx().envs.length;
   const hours = [0, 1, 2, 3, 4, 5, 6].map((k) => ({ d: k, from: String(fd.get('hf_' + k) || ''), to: String(fd.get('ht_' + k) || '') })).filter((x) => /^\d\d:\d\d$/.test(x.from) && /^\d\d:\d\d$/.test(x.to));
   if (hours.some((x) => x.to <= x.from)) return toast('Horaires : la fermeture doit être après l’ouverture.', 3500, 'bad');
-  const base = { name: d.name, type: d.type, isDefault: d.id ? item('env', d.id)?.isDefault : first, hours };
+  const base = { name: d.name, type: d.type, isDefault: d.id ? item('env', d.id)?.isDefault : first, hours }, id = d.id || 'env-' + uid().slice(0, 12);
   if (d.type === 'escalade') {
     const areas = fd.getAll('areaOn').filter((id) => GYM_AREAS[id]).map((id) => ({ id, items: fd.getAll('ar_' + id), note: String(fd.get('arn_' + id) || '') }));
-    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', areas, equipment: [...new Set(areas.flatMap((a) => a.items))] });
+    putItem('env', id, { ...base, city: d.city || '', gradeSys: d.gradeSys || '', areas, equipment: [...new Set(areas.flatMap((a) => a.items))] });
   } else if (d.type === 'falaise') {
     const sectors = [...new Set(String(d.sectors || '').split('\n').map((x) => x.trim()).filter(Boolean))].slice(0, 30);
     const g = String(d.gps || '').match(/^\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*$/), lat = g ? Number(g[1].replace(',', '.')) : null, lon = g ? Number(g[2].replace(',', '.')) : null;
     if (String(d.gps || '').trim() && !(g && Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return toast('Coordonnées GPS : écris « latitude, longitude », par exemple 48.40, 2.63.', 4500, 'bad');
-    putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, city: d.city || '', gradeSys: d.gradeSys || '', sectors, equipment: ['wall'], ...(g ? { lat: Math.round(lat * 1e4) / 1e4, lon: Math.round(lon * 1e4) / 1e4 } : {}) });
-  } else putItem('env', d.id || 'env-' + uid().slice(0, 12), { ...base, equipment: fd.getAll('eq') });
+    putItem('env', id, { ...base, city: d.city || '', gradeSys: d.gradeSys || '', sectors, equipment: ['wall'], ...(g ? { lat: Math.round(lat * 1e4) / 1e4, lon: Math.round(lon * 1e4) / 1e4 } : {}) });
+  } else putItem('env', id, { ...base, equipment: fd.getAll('eq') });
   closeSheet(); buzzOk(); toast({ escalade: 'Salle enregistrée', falaise: 'Falaise enregistrée' }[d.type] || 'Lieu enregistré'); render();
+  // Lieu créé depuis « Mes disponibilités » : retour au créneau, avec ce lieu choisi.
+  if (!d.id && d.back) import('./views-planning.js').then((m) => m.slotPlaceCreated(d.back, id)).catch((e) => toast('Lieu enregistré, mais le créneau n’a pas pu être rouvert : ' + (e.message || e), 4000, 'bad'));
 };
 ACT.envDel = async (el) => { const e = item('env', el.dataset.id); if (e && (await ask(`Supprimer « ${e.name} » ?`, { danger: true, ok: 'Supprimer' }))) { delItem('env', e.id); closeSheet(); render(); } };
 ACT.envDefault = (el) => { putItem('config', 'main', { ...(item('config', 'main') || {}), envId: el.dataset.id }); toast(`📍 ${item('env', el.dataset.id)?.name || 'Lieu'} : c’est ton lieu par défaut`); render(); };

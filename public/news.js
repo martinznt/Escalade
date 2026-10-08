@@ -74,7 +74,7 @@ export const NEWS = [
     ['', '', '', '🌍 Pour tout le monde', 'Si tu es administrateur, l’app te demande à chaque changement : pour toi seulement, ou pour tout le monde. Et tout s’annule en un toucher.'],
   ] },
   { v: '8.13.0', date: '2026-09-30', title: 'Tes idées pour tout le monde', why: 'Propose tes systèmes de cotation, styles, exercices, séances et formats : les administrateurs les ajoutent pour tous. Et toutes les mises à jour ont leur visite.', steps: [
-    ['profile', 'climbing', '[data-act=carnetAdv]', '💡 Proposer', 'Crée ton système de cotation ou ton style, puis « 💡 Proposer à tout le monde ». Pareil pour tes exercices, tes séances et tes formats.'],
+    ['profile', 'climbing', '', '💡 Proposer', 'Crée ton système de cotation ou ton style, puis « 💡 Proposer à tout le monde ». Pareil pour tes exercices, tes séances et tes formats.'],
     ['settings', 'updates', '.upd', '🆕 Toutes les mises à jour', 'L’évolution de l’app depuis le début, avec une visite pour chaque mise à jour.'],
   ] },
   { v: '8.14.0', date: '2026-10-01', title: 'L’app se modifie sans code', why: 'Les administrateurs changent les textes, envoient des annonces, choisissent la mise en page pour tous, gèrent les questions, les sources et les autres administrateurs.', steps: [
