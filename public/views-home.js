@@ -7,7 +7,7 @@ import { parseAgendaText } from './agenda.js';
 import { nextImpact } from './loop.js';
 import { h, raw, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, howBox, meter, bars, ymd, pad, fmtDate, fmtDay, relDate, MONTHS, JOURS, buzzOk, subHead, menuList } from './ui.js';
 import { sceneSvg, moodLine } from './scene.js';
-import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings } from './state.js';
+import { S, ACT, SUBMIT, CHG, ctx, go, render, getSeance, saveSeance, deleteHistory, saveEvent, deleteEvent, putItem, item, itemsOf, newId, saveSettings, own } from './state.js';
 import { uid, summarizeHistory } from './shared.js';
 import { ACTIVITIES, ENV_TYPES, ENV_TEMPLATES, EQUIPMENT, CAPACITIES, SKILLS } from './model.js';
 import { openWizard } from './views-climbplan.js';
@@ -183,7 +183,7 @@ const BLOCK_VIEWS = {
   },
   goals() {
     const gs = activeGoals(ctx());
-    return card('🎯 Objectifs', gs.length ? gs.slice(0, 5).map((g) => { const pr = goalProgress(g, ctx()); return h`<button class="goal item pick" data-act="goalOpen" data-id="${g.id}"><div class="grow"><div class="row between small"><b>${goalLabel(g)}</b><span>${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></div></button>`; }) : h`<p class="muted small">Aucun objectif actif.</p>`, h`<button class="btn sm" data-act="goProfile" data-id="goals">＋ Objectif</button>`);
+    return card('🎯 Objectifs', gs.length ? gs.slice(0, 5).map((g) => { const pr = goalProgress(g, ctx()); return h`<button class="goal item pick" data-act="goalOpen" data-id="${g.id}"><div class="grow"><div class="row between small"><b>${goalLabel(g)}</b><span>${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0, '', `Progression : ${goalLabel(g)}`)}<div class="tiny muted">${pr.text}</div></div></button>`; }) : h`<p class="muted small">Aucun objectif actif.</p>`, h`<button class="btn sm" data-act="goProfile" data-id="goals">＋ Objectif</button>`);
   },
   records() {
     const r = records(ctx()).slice(0, 5);
@@ -222,7 +222,6 @@ const BLOCK_VIEWS = {
   calendar() { return card('📅 Calendrier', miniMonth(), h`<button class="btn sm" data-act="homeSub" data-id="cal">Ouvrir</button>`); },
 };
 ACT.goProgress = (el) => go('progress', el.dataset.id);
-ACT.goalOpen = (el) => go('profile', 'goals', el.dataset.id);
 ACT.todayGoal = (el) => { const g = item('goal', el.dataset.id); openWizard({ goalIds: [el.dataset.id], sport: g?.activityId || SKILLS[g?.skillId]?.activity || '' }); };
 ACT.todayDo = (el) => {
   const o = todayOptions(ctx(), { todayEvents: eventsOn(ymd(new Date())) }).options.find((x) => x.id === el.dataset.id);
@@ -358,7 +357,7 @@ function vCalendar() {
 }
 /** Séances prévues (programme + calendrier, 90 jours) → fichier .ics que le téléphone ouvre dans son agenda. */
 ACT.icsExport = () => {
-  const today = ymd(new Date()), hour = ls.get('sea:reminders', null)?.hour || '18:00', ev = [];
+  const today = ymd(new Date()), hour = own.get('sea:reminders', null, { legacy: 'keep' })?.hour || '18:00', ev = [];
   for (let k = 0; k < 90; k++) {
     const d = new Date(); d.setDate(d.getDate() + k); const day = ymd(d);
     for (const e of eventsOn(day).filter((e) => !['cancelled','missed'].includes(e.meta?.status))) { const s = e.sessionId && getSeance(e.sessionId); ev.push({ uid: `${e.id}-${day}`, title: e.title || s?.name || 'Séance', date: day, time: e.time || hour, minutes: e.meta?.minutes || (s ? Math.max(10, Math.round(sessionMinutes(s))) : 45), done: e.completed }); }

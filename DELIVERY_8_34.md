@@ -1,6 +1,6 @@
-# Version 8.34.0 — préparée sur la branche, non déployée
+# Version 8.34.0 — fusionnée dans `main` le 8 octobre
 
-Préparée le 8 octobre 2026 sur la branche `claude/new-session-wi9olv`, à partir de `main` en 8.33.0 (`0d7a852`). Rien n’a été envoyé en production : pas de déploiement Cloudflare, pas de fusion dans `main`, pas d’annonce « Envoyer à tous ». Le ZIP « site sport final » est remis pour relecture.
+Préparée le 8 octobre 2026 sur la branche `claude/new-session-wi9olv`, à partir de `main` en 8.33.0 (`0d7a852`). **Mise à jour du 9 octobre** : la branche a été fusionnée dans `main` par la PR #24 (commit `475da81`, 8 octobre, 17 h 28 UTC). Sur GitHub, le contrôle Cloudflare « Workers Builds » de cette fusion a réussi et a lancé l’annonce de mise à jour ; je n’ai pas pu ouvrir le site en ligne pour confirmer la version servie. La CI « Tests » de cette fusion est rouge à cause du test d’installation (B19 de l’audit du 9 octobre), corrigé en 8.34.1 : voir [DELIVERY_8_34_1.md](DELIVERY_8_34_1.md). Aucune annonce « Envoyer à tous » n’a été envoyée par moi.
 
 ## Ce qui change pour les membres
 
@@ -87,7 +87,7 @@ Doigts, épaules, coudes, poignets, dos, genoux, chevilles : les 7 s’enregistr
 
 ## À faire de ton côté, quand tu seras satisfait
 
-1. Relire le ZIP. Attention : fusionner la branche dans `main` **publie le site** (le déploiement automatique existant suit `main`, voir [CLOUDFLARE_GUIDE.md](CLOUDFLARE_GUIDE.md)). Ne fusionne donc qu’une fois satisfait.
+1. ~~Relire le ZIP et fusionner~~ : fait le 8 octobre (PR #24). La suite est dans [DELIVERY_8_34_1.md](DELIVERY_8_34_1.md).
 2. Gemini (facultatif) : Cloudflare → Workers & Pages → `seances-entrainement` → Settings → Variables and Secrets → ajouter le secret `GEMINI_API_KEY`. Puis, dans l’app : Paramètres › Administration › Assistant du site → choisir Gemini → Enregistrer → Tester.
 3. Strava (facultatif) : variables `STRAVA_CLIENT_ID` et `STRAVA_REDIRECT_URI`, secrets `STRAVA_CLIENT_SECRET` et `STRAVA_TOKEN_KEY` (détails dans [CLOUDFLARE_GUIDE.md](CLOUDFLARE_GUIDE.md)).
 4. L’annonce « Envoyer à tous » : à envoyer toi-même, quand tu le décides (Paramètres › Administration).

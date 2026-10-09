@@ -208,6 +208,11 @@ export const NEWS = [
     ['profile','activities','','Les sports que tu ne fais jamais','Marque-les « Jamais » : ils ne te sont plus proposés, et leurs exercices peuvent être masqués. Un toucher pour les remettre.'],
     ['settings','main','[data-act=installNow]','Installer, sur tous les appareils','« 📲 Installer » montre les gestes exacts pour ton téléphone ou ton ordinateur, iPhone compris.'],
   ] },
+  { v:'8.34.1', date:'2026-10-09', title:'Des sauvegardes et un chrono plus sûrs', why:'Une sauvegarde se réimporte sur un autre compte, une séance supprimée se récupère, le chrono tient compte de l’écran éteint, et chaque compte garde ses brouillons sur un téléphone partagé.', steps:[
+    ['settings','data','','Sauvegarde plus sûre','Ta sauvegarde se réimporte aussi sur un autre compte, avec les rendez-vous et l’historique liés à tes séances. Une séance supprimée depuis peut être récupérée : l’app te le demande.'],
+    ['home','dash','[data-act=timerOpen]','Un chrono plus juste','L’EMOM dit avant de démarrer combien d’intervalles il fera. Si l’écran s’éteint, le chrono reprend au bon endroit. Seuls les efforts faits vont dans ton historique.'],
+    ['settings','main','','Un téléphone pour plusieurs','Chaque compte garde ses brouillons et ses photos de progrès. Supprimer son compte les efface aussi de l’appareil.'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

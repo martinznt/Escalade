@@ -55,8 +55,9 @@ const EQUIPMENT_WORDS = {
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 
 export function extractMinutes(text) {
-  let m = text.match(/(\d{1,2})\s*h\s*(\d{1,2})?\b/);
-  if (m && /\d\s*h\b|\d\s*h\s*\d/.test(text)) return clampMin(Number(m[1]) * 60 + Number(m[2] || 0));
+  // « 1 h 30 », « 2 heures », « 1,5 h » (heures décimales : jamais « 5 h » lu au milieu du nombre).
+  let m = text.match(/(?<![\d.,])(\d{1,2})(?:[.,](\d{1,2}))?\s*h(?:eures?)?\s*(\d{1,2})?\b/);
+  if (m && /\d\s*h(?:eures?)?\b|\d\s*h\s*\d/.test(text)) return clampMin(m[2] ? Math.round(Number(`${m[1]}.${m[2]}`) * 60) : Number(m[1]) * 60 + Number(m[3] || 0));
   m = text.match(/(\d{1,3})\s*(?:min|minute|minutes|mn|mins)\b/);
   if (m) return clampMin(Number(m[1]));
   if (/\bdemi[- ]heure\b/.test(text)) return 30;

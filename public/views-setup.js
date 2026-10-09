@@ -102,7 +102,7 @@ export function vSetup() {
   const answered = s.id === 'marks' || s.id === 'body' || (s.multi ? (st.a[s.id] || []).length || (s.id === 'places' && st.a.placesOwn?.length) || (s.id === 'goals' && st.a.goalTexts?.length) : st.a[s.id] != null);
   return h`<div class="setup">
     <div class="row between"><span class="small muted">Question ${i + 1} sur ${steps.length}</span><button class="btn sm ghost" data-act="setupLater">Finir plus tard</button></div>
-    ${meter(((i + 1) / steps.length) * 100)}
+    ${meter(((i + 1) / steps.length) * 100, '', `Question ${i + 1} sur ${steps.length}`)}
     <h1 class="q">${s.q}</h1>${s.help ? h`<p class="muted small">${s.help}</p>` : ''}${s.multi ? h`<p class="tiny muted">Plusieurs réponses possibles.</p>` : ''}
     ${stepBody(s, st.a)}
     <div class="row setup-nav">${i > 0 ? h`<button class="btn" data-act="setupPrev">‹ Retour</button>` : h`<button class="btn" data-act="setupMode" data-id="form">Tout sur une page</button>`}

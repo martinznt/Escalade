@@ -18,6 +18,9 @@ ok('durées, heures, distances et charges', () => {
   assert.deepEqual(one('Gainage 3 × 30 s'), { name: 'Gainage', sets: 3, mode: 'time', secMin: 30, secMax: 30 });
   assert.deepEqual(one('5 min de corde à sauter'), { name: 'Corde à sauter', sets: 1, mode: 'time', secMin: 300, secMax: 300 });
   assert.deepEqual(one('Grimpe libre 1 h 30'), { name: 'Grimpe libre', sets: 1, mode: 'time', secMin: 5400, secMax: 5400 });
+  // Heures décimales et en toutes lettres : « 1,5 h » = 90 min (avant : « 5 h » lu au milieu du nombre, 300 min et « 1, » dans le nom).
+  for (const [line, name, sec] of [['Footing 1,5 h', 'Footing', 5400], ['Footing 1.5 h', 'Footing', 5400], ['Vélo 2,25 h', 'Vélo', 8100], ['Rando 2 heures', 'Rando', 7200], ['Vélo 1 heure 15', 'Vélo', 4500], ['Bike 2 hours', 'Bike', 7200], ['Course 1h05', 'Course', 3900], ['Footing 90 min', 'Footing', 5400]])
+    assert.deepEqual(one(line), { name, sets: 1, mode: 'time', secMin: sec, secMax: sec }, line);
   assert.deepEqual(one('Planche 1 min 30'), { name: 'Planche', sets: 1, mode: 'time', secMin: 90, secMax: 90 });
   assert.deepEqual(one('6 × 400 m repos 1:30'), { name: '400 m', rest: 90, sets: 6, mode: 'reps', repsMin: 400, repsMax: 400, unit: 'm' });
   assert.deepEqual(one('Footing 5 km'), { name: 'Footing', sets: 1, mode: 'reps', repsMin: 5, repsMax: 5, unit: 'km' });

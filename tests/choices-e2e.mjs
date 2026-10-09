@@ -32,10 +32,16 @@ try {
     assert.deepEqual(await mine(), [{ list: 'zone', label: 'Hanche gauche', on: true, n: undefined }]);
     assert.match(await page.locator('#main').innerText(), /à ménager en ce moment/); await noOverflow();
   });
-  await step('une zone que l’app connaît (« poignet droit ») coche « Poignets », sans doublon', async () => {
+  await step('une zone que l’app connaît (« poignet droit ») active vraiment « Poignets », sans doublon, et le garde', async () => {
     await type('#main input[data-list=zone]', 'poignet droit');
     await page.waitForFunction(() => /c’est « Poignets » dans l’app/.test(document.querySelector('#toast')?.textContent || ''));
     assert.equal((await mine()).length, 1, 'rien d’ajouté');
+    assert.equal(await page.evaluate(async () => (await import('/state.js')).S.settings.avoid?.wrists), true, 'Poignets activé dans le profil');
+    await page.reload(); await page.waitForFunction(async () => (await import('/state.js')).S.loaded);
+    assert.equal(await page.evaluate(async () => (await import('/state.js')).S.settings.avoid?.wrists), true, 'toujours activé après rechargement');
+    await page.evaluate(() => { location.hash = '#/profile/body'; }); await page.waitForSelector('form[data-submit=avoidSave]');
+    assert.equal(await page.isChecked('form[data-submit=avoidSave] input[name=wrists]'), true, 'coché dans le profil');
+    await page.evaluate(() => { location.hash = '#/profile/mine'; }); await page.waitForSelector('#main details.fold');
   });
   await step('Mon lieu : « ＋ Autre matériel » coche le matériel écrit ; il est nommé dans Mes lieux', async () => {
     await page.evaluate(() => { location.hash = '#/profile/equipment/env-maison'; }); await page.waitForSelector('[data-act=envEdit]');

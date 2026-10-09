@@ -1,7 +1,7 @@
 // views-story.js — Progrès › « 🌟 Mon parcours » : saison de 4 semaines, lettre à toi-même, ton année en sport,
 // avant / après, rapport du mois à imprimer, photos de progrès (gardées sur ce téléphone uniquement).
 import { h, openSheet, closeSheet, toast, menuList, chip, fmtDay, ask } from './ui.js';
-import { S, ACT, SUBMIT, CHG, ctx, render, putItem, delItem, itemsOf, idb, ls } from './state.js';
+import { S, ACT, SUBMIT, CHG, ctx, render, putItem, delItem, itemsOf, idb, own } from './state.js';
 import { uid } from './shared.js';
 import { SEASON_THEMES, SEASON_WEEKS, seasonProgress, seasonSuggestion, seasonStart, LETTER_DELAYS, letterOpenAt, letterState, beforeAfter, yearInSport, monthReport } from './story.js';
 import { activityLabel } from './brain.js';
@@ -37,7 +37,7 @@ export function storyHome() {
   if (ready.length) rows.push(['letterOpen', '', '📬', 'Une lettre de toi est arrivée', `Écrite le ${fmtDay(ready[0].writtenAt)}`]);
   if (sp?.finished) rows.push(['seasonOpen', '', sp.success ? '🏆' : '🗓️', `Saison « ${sp.label} » terminée`, `${sp.doneWeeks} semaine${sp.doneWeeks > 1 ? 's' : ''} sur ${SEASON_WEEKS} réussie${sp.doneWeeks > 1 ? 's' : ''}`]);
   else if (sp && sp.left && new Date().getDay() === 0) rows.push(['seasonOpen', '', sp.icon, `Saison ${sp.label} : dernier jour de la semaine`, `Encore ${fr(sp.left)} ${sp.unit}${sp.left > 1 && sp.unit !== 'min' ? 's' : ''} pour réussir la semaine ${sp.week}`]);
-  if (ls.get('sea:backup-weekly', !!S.user?.guest) && Date.now() - ls.get('sea:backup-last', 0) > 7 * 86400000) rows.push(['backupNow', '', '💾', 'Sauvegarde de la semaine', S.user?.guest ? 'Sans compte, tes données ne sont que sur ce téléphone : garde-en une copie' : 'Un fichier avec toutes tes données, en un toucher']);
+  if (own.get('sea:backup-weekly', !!S.user?.guest, { legacy: 'keep' }) && Date.now() - own.get('sea:backup-last', 0, { legacy: 'keep' }) > 7 * 86400000) rows.push(['backupNow', '', '💾', 'Sauvegarde de la semaine', S.user?.guest ? 'Sans compte, tes données ne sont que sur ce téléphone : garde-en une copie' : 'Un fichier avec toutes tes données, en un toucher']);
   return rows.length ? menuList(rows) : '';
 }
 
@@ -231,10 +231,10 @@ ACT.photoCompare = async () => {
   if (!a || !b) return ACT.photosOpen();
   const [da, db] = await Promise.all([photoData(a.id), photoData(b.id)]), days = Math.round((b.at - a.at) / 86400000);
   openSheet(h`<div class="stack"><h2 style="margin:0">↔️ Avant / après</h2><p class="small">${days} jour${days > 1 ? 's' : ''} d’écart</p>
-    <div class="pcompare">${[[a, da], [b, db]].map(([p, d]) => h`<figure>${d ? h`<img src="${d}" alt="Photo du ${fmtDay(p.at)}">` : h`<span>Photo introuvable</span>`}<figcaption>${fmtDay(p.at)}<br><button class="btn sm danger" data-act="photoDel" data-id="${p.id}">Supprimer</button></figcaption></figure>`)}</div>
+    <div class="pcompare">${[[a, da], [b, db]].map(([p, d]) => h`<figure>${d ? h`<img src="${d}" alt="Photo du ${fmtDay(p.at)}">` : h`<span>Photo introuvable</span>`}<figcaption>${fmtDay(p.at)}<br><button class="btn sm danger" data-act="progressPhotoDel" data-id="${p.id}">Supprimer</button></figcaption></figure>`)}</div>
     <button class="btn" data-act="photosOpen">‹ Toutes les photos</button></div>`, { wide: true });
 };
-ACT.photoDel = async (el) => {
+ACT.progressPhotoDel = async (el) => {
   if (!(await ask('Supprimer cette photo de ce téléphone ? Elle ne pourra pas être récupérée.', { ok: 'Supprimer', danger: true }))) return;
   const id = el.dataset.id, list = await photoIndex();
   try { await idb.del(`${pkey()}:${id}`); await idb.set(pkey(), list.filter((p) => p.id !== id)); } catch (e) { return toast(`Suppression impossible : ${e?.message || 'stockage indisponible'}.`, 4000, 'bad'); }

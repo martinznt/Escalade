@@ -1,8 +1,24 @@
 # CHANGELOG — Séances entraînement
 
+## 8.34.1 — Corrections de l’audit du 9 octobre : sauvegardes, comptes séparés, chrono juste, accessibilité
+
+Détails, constat par constat, vérifications et limites : [DELIVERY_8_34_1.md](DELIVERY_8_34_1.md). Préparée sur la branche `claude/new-session-wi9olv`, **non fusionnée, non déployée** (ZIP remis pour relecture).
+
+- Sauvegarde : importée sur un autre compte, l’historique et les rendez-vous reçoivent de nouveaux identifiants, avec leurs liens (plus de refus 409) ; importer deux fois n’ajoute rien ; une séance supprimée depuis peut être récupérée, si on le choisit ; un import ne supprime jamais rien.
+- Un appareil pour plusieurs comptes : brouillon du chrono, dernier réglage du générateur, rappels, filtre des séances et sauvegarde rangés par compte ; supprimer son compte efface aussi ses photos de progrès de l’appareil ; un invité qui crée son compte garde ses photos.
+- Chrono : 180 min toutes les 10 s = 1 080 intervalles ; une durée qui ne tombe pas juste est annoncée avant de démarrer ; reprise au bon endroit après un écran éteint ; seuls les efforts faits vont dans l’historique.
+- « Footing 1,5 h » = 90 min (aussi « 2 heures », dans les commandes écrites et la saisie rapide d’activités).
+- « Tout sélectionner » dans Mes séances et la suppression d’une photo de progrès refonctionnent ; un test empêche deux actions du même nom.
+- Une zone reconnue depuis Mes ajouts est vraiment cochée.
+- Accessibilité : états ARIA « true » / « false » partout, jauges et liste du son nommées.
+- Le rappel de rendez-vous ouvre le calendrier ; un lien mal encodé ne bloque plus le démarrage ; le bandeau de mise à jour ne recouvre plus la séance ni « Organiser » ; un formulaire n’est jamais envoyé deux fois en même temps.
+- Aide alignée sur l’interface simple (première séance, hors connexion, objectifs) ; Mon parcours aussi dans le résumé simple.
+- « Ajouter mes séances à l’agenda du téléphone » ne plante plus (import manquant).
+- Test d’installation fiable quand la copie du lien est refusée (cause de la CI rouge de `main` après la fusion de la 8.34.0).
+
 ## 8.34.0 — Séance à ma façon, tes propres choix, chrono complet, exercices expliqués, installation partout
 
-Détails, vérifications et limites : [DELIVERY_8_34.md](DELIVERY_8_34.md). Préparée sur la branche `claude/new-session-wi9olv`, **non déployée** (ZIP remis pour relecture).
+Détails, vérifications et limites : [DELIVERY_8_34.md](DELIVERY_8_34.md). Préparée sur la branche `claude/new-session-wi9olv`, fusionnée dans `main` le 8 octobre (PR #24, `475da81`).
 
 - Mise à jour fiable : la nouvelle version s’active à coup sûr après « Mettre à jour » (cause de l’échec de la CI de `main` en 8.33.0 corrigée).
 - Plus aucun saut en haut de page ni rubrique qui se referme seule après un choix ; les liens « Paramètres › … » emmènent à la bonne page.

@@ -19,7 +19,7 @@ import { buildContext } from './brain.js';
 import { registerMine } from './choices.js';
 import { toast, tz, $ } from './ui.js';
 
-export const APP_VERSION = '8.34.0';
+export const APP_VERSION = '8.34.1';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
 export const DEFAULT_SETTINGS = { sound: true, vibration: true, voice: false, keepAwake: true, handsFree: false, defaultRest: 60, defaultMinutes: 30, onboarded: false, autoBase: false, avoid: {}, bigMode: false, autoWarm: true, season: false, soundStyle: 'bip', volume: 60, lang: 'fr', notifSound: 'doux', redMode: false, interfaceMode: 'simple' };
 const initialAccountState = () => ({
@@ -43,6 +43,25 @@ const ls = {
   del(k) { try { localStorage.removeItem(k); } catch { /* rien */ } },
 };
 export { ls, idb };
+/**
+ * Réglages et brouillons locaux propres au compte connecté (chrono, dernier réglage du générateur, rappels, filtres,
+ * sauvegarde) : sur un appareil partagé, rien ne passe d'un compte à l'autre. Une ancienne valeur commune à l'appareil
+ * (avant la 8.34.1) est effacée ; legacy « keep » la laisse au premier compte qui la lit (réglage sans donnée privée).
+ */
+const ownKey = (k, owner = S.user?.id) => `${k}:${owner || 'anon'}`;
+const lsHas = (k) => { try { return localStorage.getItem(k) != null; } catch { return false; } };
+export const own = {
+  get(k, d = null, { legacy = 'drop' } = {}) {
+    const key = ownKey(k);
+    if (lsHas(key)) return ls.get(key, d);
+    if (!S.user?.id || !lsHas(k)) return d;
+    const old = ls.get(k, d); ls.del(k);
+    if (legacy !== 'keep') return d;
+    ls.set(key, old); return old;
+  },
+  set(k, v) { return ls.set(ownKey(k), v); },
+  del(k) { ls.del(ownKey(k)); },
+};
 const idb = {
   db: null,
   open() {
@@ -58,6 +77,7 @@ const idb = {
   async get(k) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('kv').objectStore('kv').get(k); t.onsuccess = () => res(t.result ?? null); t.onerror = () => rej(t.error); }); },
   async set(k, v) { const d = await this.open(); return new Promise((res, rej) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(true); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }); },
   async del(k) { const d = await this.open(); return new Promise((res) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete = () => res(true); tx.onerror = () => res(false); }); },
+  async keys() { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('kv').objectStore('kv').getAllKeys(); t.onsuccess = () => res((t.result || []).map(String)); t.onerror = () => rej(t.error); }); },
 };
 const pendingKey = (owner = S.user?.id) => `sea:pending:${owner}`;
 let accountOwner = null, accountEpoch = 0, localLoad = 0, historyRevision = 0;
@@ -81,7 +101,7 @@ function ensureAccount() {
     const message = document.querySelector('#toast'); if (message) { message.className = ''; message.replaceChildren(); }
     document.body?.classList.remove('grp-open', 'noscroll');
   }
-  for (const name of ('lastOpenSeance lastOpenSeanceOwner clientStamp returnTo lastLoop lay setup ai goalDraft goalBack gDraft command cmdRaw cmdOptions quickDraft agendaDraft agendaEdit adapt importResult importText merge sharedDraft swapFor pickSrc sel cp cpAiBusy cpAiDraft cpEdit cpSheet cpStrats cpModAt cpRuleUnder cpRuleOver chat chatOwner chatBusy chatDraft coachStatus studio inbox notifUnread myBugs bugFrom propCur propDraft ideaDraft textDraft textMode admAct group duo aq aqEnvPreset carnet pj pjWish gym gymEnv cprog progRun recap eg forme autoWeek bilan sysEdit aqEnvPreset boardEdit boardPb comp imp csv connections lp pl pace rmPick reportAt photoSel photoShow').split(' ')) S[name] = null;
+  for (const name of ('lastOpenSeance lastOpenSeanceOwner clientStamp returnTo lastLoop lay setup ai goalDraft goalBack gDraft command cmdRaw cmdOptions quickDraft agendaDraft agendaEdit adapt importResult importText merge sharedDraft swapFor pickSrc sel cp cpAiBusy cpAiDraft cpEdit cpSheet cpStrats cpModAt cpRuleUnder cpRuleOver chat chatOwner chatBusy chatDraft coachStatus studio inbox notifUnread myBugs bugFrom propCur propDraft ideaDraft textDraft textMode admAct group duo aq aqEnvPreset carnet pj pjWish gym gymEnv cprog progRun recap eg forme autoWeek bilan sysEdit aqEnvPreset boardEdit boardPb comp imp csv connections lp pl pace rmPick reportAt photoSel photoShow photoFilter photoPose sfilter tfmt').split(' ')) S[name] = null;
   // Au premier démarrage, parseHash a déjà lu l'identifiant d'un éventuel lien profond.
   if (previousOwner !== null) S.param = '';
   bump();
@@ -159,7 +179,31 @@ function migrateV7Local(owner) {
   if (Array.isArray(d.outbox) && d.outbox.length) ls.set(pendingKey(owner), { v: 1, outbox: d.outbox.map((o) => ({ ...o, opId: o.opId || newOpId() })), failed: d.failedOutbox || [], dirtyItems: [], seances: null });
   return { ...d, commonEx: d.common || [] };
 }
-export async function clearLocal(userId) { try { await idb.del(`data:${userId}`); } catch { /* rien */ } ls.del(`sea:pending:${userId}`); ls.del('sea:data:' + userId); }
+/** Efface de cet appareil tout ce qui appartient à un compte : données, opérations en attente, photos de progrès et
+ * réglages locaux (« …:<id> »). Utilisé à la suppression du compte, à la fin d'une démo et après le passage invité → compte. */
+export async function clearLocal(userId) {
+  const id = String(userId || ''); if (!id) return;
+  try { for (const k of await idb.keys()) if (k === `data:${id}` || k === `photos:${id}` || k.startsWith(`photos:${id}:`)) await idb.del(k); }
+  catch { try { await idb.del(`data:${id}`); } catch { /* rien */ } }
+  ls.del(`sea:pending:${id}`); ls.del('sea:data:' + id);
+  try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k?.startsWith('sea:') && k.endsWith(':' + id)) localStorage.removeItem(k); } } catch { /* rien */ }
+}
+/** Invité qui crée son compte : ses photos de progrès et ses réglages locaux (gardés seulement sur cet appareil) le
+ * suivent. Les données et les opérations en attente passent par transferGuest (app.js). */
+export async function moveLocal(from, to) {
+  if (!from || !to || from === to) return;
+  try {
+    const keys = (await idb.keys()).filter((k) => k === `photos:${from}` || k.startsWith(`photos:${from}:`));
+    for (const k of keys) { const v = await idb.get(k); if (v != null) await idb.set(`photos:${to}${k.slice(`photos:${from}`.length)}`, v); }
+  } catch { /* stockage indisponible : les photos restent sous l'invité */ }
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith('sea:') || !k.endsWith(':' + from) || /^sea:(data|pending):/.test(k)) continue;
+      const nk = k.slice(0, -from.length) + to; if (localStorage.getItem(nk) == null) localStorage.setItem(nk, localStorage.getItem(k));
+    }
+  } catch { /* rien */ }
+}
 
 /* ═════════ Réseau ═════════ */
 let onExpired = () => {};
@@ -402,9 +446,11 @@ export function go(tab, sub, param = '') {
   if (location.hash === hash) { S.tab = tab; S.param = param; render(); }
   else location.hash = hash;
 }
+/** Un lien mal encodé (« % » seul…) ne bloque jamais le démarrage : le paramètre illisible est ignoré. */
+export const safeDecode = (v) => { try { return decodeURIComponent(v); } catch { return ''; } };
 export function parseHash() {
   const [, tab, sub, param] = (location.hash || '').split('/');
-  if (['home', 'progress', 'library', 'profile', 'settings'].includes(tab)) { S.tab = tab; if (sub) S.sub[tab] = sub; S.param = param ? decodeURIComponent(param) : ''; }
+  if (['home', 'progress', 'library', 'profile', 'settings'].includes(tab)) { S.tab = tab; if (sub) S.sub[tab] = sub; S.param = param ? safeDecode(param) : ''; }
 }
 export const newId = () => uid();
 export const GUEST = Object.freeze({ id: 'guest', username: 'Invité', guest: true });

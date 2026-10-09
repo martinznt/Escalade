@@ -1,6 +1,6 @@
 // reminders.js — rappels d'entraînement par notification, réglés ici (jours et heure), envoyés par le serveur.
 import { h, toast } from './ui.js';
-import { S, ACT, CHG, api, ls, render, item } from './state.js';
+import { S, ACT, CHG, api, ls, own, render, item } from './state.js';
 import { isInstalled, isIOS } from './install.js';
 
 const KEY = 'sea:reminders', DAY_NAMES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -8,7 +8,7 @@ export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager'
 const tz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris'; } catch { return 'Europe/Paris'; } };
 const unb64u = (s) => Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
 function prefs() {
-  const saved = ls.get(KEY, null); if (saved) return { types: ['reminder', 'update', 'reply', 'admin'], silent: false, ...saved };
+  const saved = own.get(KEY, null, { legacy: 'keep' }); if (saved) return { types: ['reminder', 'update', 'reply', 'admin'], silent: false, ...saved };
   const prog = [...S.items.values()].find((it) => it.c === 'program' && !it.del && it.d.status === 'active');
   const per = Number(item('config', 'main')?.perWeek) || 3;
   return { on: false, days: prog ? prog.d.days.map(Number) : ({ 1: [2], 2: [1, 4], 3: [0, 2, 4], 4: [0, 1, 3, 5] }[Math.min(4, per)] || [0, 2, 4]), hour: '18:00', types: ['reminder', 'update', 'reply', 'admin'], silent: false };
@@ -20,7 +20,7 @@ async function subscription(create) {
   return sub;
 }
 async function save(p) {
-  ls.set(KEY, p);
+  own.set(KEY, p);
   if (!p.on) return;
   const sub = await subscription(true);
   await api('POST', '/api/push/subscribe', { endpoint: sub.endpoint, days: p.days, hour: p.hour, tz: tz(), types: p.types, silent: !!p.silent });
@@ -66,9 +66,9 @@ CHG.remOn = async (el) => {
   if (el.checked) {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { el.checked = false; toast('Sans ton accord, le téléphone ne peut pas afficher les rappels.'); render(); return; }
-    try { await save({ ...p, on: true }); toast('Rappels activés'); } catch (e) { ls.set(KEY, { ...p, on: false }); toast('Activation impossible : ' + (e.message || 'erreur'), 4500, 'bad'); }
+    try { await save({ ...p, on: true }); toast('Rappels activés'); } catch (e) { own.set(KEY, { ...p, on: false }); toast('Activation impossible : ' + (e.message || 'erreur'), 4500, 'bad'); }
   } else {
-    ls.set(KEY, { ...p, on: false });
+    own.set(KEY, { ...p, on: false });
     try { const sub = await subscription(false); if (sub) { await api('DELETE', '/api/push/subscribe', { endpoint: sub.endpoint }); await sub.unsubscribe(); } } catch { /* déjà désabonné */ }
     toast('Rappels désactivés');
   }

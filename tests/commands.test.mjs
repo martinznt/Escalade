@@ -11,6 +11,7 @@ ok('« Fais une séance de 20 minutes pour les jambes »', () => {
 });
 ok('Express : formulations courtes, pieds en bloc et séance légère sans verbe', () => {
   const c=parseCommand('30 min tirage + gainage');assert.equal(c.type,'generate');assert.equal(c.minutes,30);assert.deepEqual(c.focuses,['tirage','gainage']);
+  for (const [t, v] of [['Séance de 1,5 h de bloc', 90], ['Une séance de 2 heures', 120], ['Séance de 1h30', 90], ['séance de 1.5 h', 90]]) assert.equal(parseCommand(t).minutes, v, t);
   const feet=parseCommand('1 h de bloc pour travailler les pieds');assert.equal(feet.type,'generate');assert.equal(feet.minutes,60);assert.equal(feet.activity,'climbing_boulder');assert.ok(feet.focuses.includes('dalle'));
   assert.equal(parseCommand('séance légère').light,true);assert.equal(parseCommand('Ajoute 20 min de gainage').type,'addExercise');
 });
