@@ -51,7 +51,10 @@ Chaque constat a d’abord été vérifié dans le code. Tous étaient réels ; 
 
 ## Vérifications faites
 
-VERIFICATIONS
+- `npm run check` : syntaxe de tous les fichiers JavaScript et JSON, sans erreur.
+- `npm test` : 105 scripts unitaires, 1 003 contrôles, tous passés. Nouveaux : `tests/backup.test.mjs`, `tests/handlers.test.mjs`, `tests/ui-template.test.mjs` ; complétés : `session-tools`, `quickadd`, `commands`, `agenda`, `push-ics`.
+- `npm run test:e2e` : 25 scripts navigateur (Chromium). Nouveaux : `account-device-e2e` (6 étapes), `backup-e2e` (5 étapes), `audit-fixes-e2e` (9 étapes) ; complétés : `chrono-e2e`, `free-session-e2e`, `choices-e2e`, `install-e2e`. Chaque nouveau test a d’abord été vu échouer sur l’ancien comportement (chrono à clé commune, identifiants d’Alice gardés à l’import, bandeau non masqué). Résultat de la suite complète : en cours au moment de ce commit, complété ci-dessous.
+- `wrangler deploy --dry-run` : le Worker se compile avec ses liaisons (D1, KV, AI, Assets) ; 216 fichiers publics. Rien n’a été envoyé.
 
 ## Limites, dites honnêtement
 
