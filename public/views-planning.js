@@ -280,12 +280,12 @@ ACT.icalOpen = async () => {
   openSheet(h`<div class="stack"><h2 style="margin:0">📡 Abonnement agenda</h2>
     <p class="small">Un lien secret à coller dans ton agenda (Google Agenda : « Autres agendas › À partir de l’URL » ; iPhone : Réglages › Calendrier › Comptes › « Ajouter un calendrier avec abonnement »). Tes séances prévues, ton programme et tes événements y apparaissent et se mettent à jour tout seuls (environ toutes les heures, selon l’agenda).</p>
     <p class="tiny warn-t">Garde ce lien pour toi : qui l’a peut voir tes séances prévues (rien d’autre). Tu peux le remplacer ou le couper à tout moment.</p>
-    ${S.icalUrl ? h`<label class="small">Ton lien (copie-le maintenant : il ne sera plus montré)<input readonly value="${S.icalUrl}" data-act="selAll"></label><button class="btn pri" data-act="icalCopy">📋 Copier le lien</button>` : ''}
+    ${S.icalUrl ? h`<label class="small">Ton lien (copie-le maintenant : il ne sera plus montré)<input readonly value="${S.icalUrl}" data-act="icalSelect" aria-label="Ton lien d’abonnement"></label><button class="btn pri" data-act="icalCopy">📋 Copier le lien</button>` : ''}
     <div class="row wrapf"><button class="btn ${S.icalUrl ? '' : 'pri'}" data-act="icalNew">${st.active ? '🔄 Nouveau lien (coupe l’ancien)' : '✨ Créer mon lien'}</button>${st.active ? h`<button class="btn ghost danger" data-act="icalOff">Couper l’abonnement</button>` : ''}</div>
     ${st.active && !S.icalUrl ? h`<p class="tiny muted">Abonnement actif depuis le ${fmtDay(st.created_at)}.</p>` : ''}</div>`, { wide: true });
 };
 ACT.icalNew = async () => { try { const r = await api('POST', '/api/ical'); S.icalUrl = r.url; buzzOk(); ACT.icalOpen(); } catch (e) { toast('Impossible pour l’instant : ' + (e.message || 'connexion ?'), 4000, 'bad'); } };
 ACT.icalCopy = async () => { try { await navigator.clipboard.writeText(S.icalUrl); toast('Lien copié ✓'); } catch { toast('Sélectionne le lien et copie-le.'); } };
 ACT.icalOff = async () => { if (!(await ask('Couper l’abonnement ? Ton agenda ne recevra plus tes séances.', { ok: 'Couper', danger: true }))) return; try { await api('DELETE', '/api/ical'); S.icalUrl = ''; toast('Abonnement coupé'); ACT.icalOpen(); } catch (e) { toast(e.message || 'Erreur', 4000, 'bad'); } };
-ACT.selAll = (el) => { try { el.select(); } catch { /* rien */ } };
+ACT.icalSelect = (el) => { try { el.select(); } catch { /* rien */ } };
 export const goPlanning = () => go('home', 'cal');

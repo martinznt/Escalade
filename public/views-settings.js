@@ -7,7 +7,7 @@ import { adminSearchCard } from './admin-search.js';
 // views-settings.js — Paramètres : séance, apparence, compte, données (export / import JSON, import CSV),
 // synchronisation et diagnostic, administration (EDIT_PASSWORD vérifié par le serveur), signalement de bug.
 import { h, raw, icon, $, toast, openSheet, closeSheet, ask, seg, chip, tag, empty, fmtDateTime, fmtDay, relDate, buzzOk, skeleton, subHead, menuList } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, ctx, go, render, api, queue, saveSettings, syncAll, retryFailed, discardFailed, restoreConflict, pendingCount, persistNow, clearLocal, DEFAULT_SETTINGS, putItem, itemsOf, addHistory, saveEvent, ls, writePending, persist, bump, syncSoon, accountToken, accountMatches } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, ctx, go, render, api, queue, saveSettings, syncAll, retryFailed, discardFailed, restoreConflict, pendingCount, persistNow, clearLocal, DEFAULT_SETTINGS, putItem, itemsOf, addHistory, saveEvent, ls, own, writePending, persist, bump, syncSoon, accountToken, accountMatches } from './state.js';
 import { uid, mergeSeances, readStored, normalizeSession } from './shared.js';
 import { cleanItem, itemKey } from './items.js';
 import { parseCSV, proposeMapping, checkMapping, proposeMetricMap, buildImport, TARGETS, MAX_CSV_BYTES } from './csv.js';
@@ -176,7 +176,7 @@ function vSession() {
 }
 ACT.setupAgain = (el) => openSetup(el.dataset.id);
 ACT.guestQuit = async () => {
-  if (!(await ask('Quitter le mode invité et effacer ses données de cet appareil ?', { ok: 'Effacer et quitter', danger: true, detail: 'Tes séances, ton historique et ton profil d’invité seront supprimés. Pour les garder, crée plutôt un compte.' }))) return;
+  if (!(await ask('Quitter le mode invité et effacer ses données de cet appareil ?', { ok: 'Effacer et quitter', danger: true, detail: 'Tes séances, ton historique, tes photos de progrès et ton profil d’invité seront supprimés. Pour les garder, crée plutôt un compte.' }))) return;
   await clearLocal('guest'); ls.del('sea:user'); location.hash = ''; location.reload();
 };
 
@@ -225,7 +225,7 @@ ACT.logout = async () => {
   try { await api('POST', '/api/auth/logout', {}); } catch { /* hors ligne : on se déconnecte localement */ }
   ls.del('sea:user'); S.user = null; S.authMode = 'login'; S.authError = ''; location.hash = ''; render();
 };
-ACT.delAccount = async () => { const token = accountToken(); if (!(await ask('Supprimer définitivement ton compte et toutes tes données ?', { ok: 'Continuer', danger: true, detail: 'Tes contributions à la bibliothèque commune resteront, sans ton nom.' }))) return; if (!accountMatches(token)) return; openSheet(h`<h2 style="margin:0">Confirmer la suppression</h2><form data-submit="delacct" class="stack"><input type="text" name="username" value="${S.user.username}" autocomplete="username" class="hidden" aria-hidden="true"><label>Mot de passe<input type="password" name="password" autocomplete="current-password" required></label><button class="btn danger" type="submit">Supprimer définitivement</button></form>`); };
+ACT.delAccount = async () => { const token = accountToken(); if (!(await ask('Supprimer définitivement ton compte et toutes tes données ?', { ok: 'Continuer', danger: true, detail: 'Tes contributions à la bibliothèque commune resteront, sans ton nom. Tes photos de progrès sont effacées de cet appareil ; si tu en as sur un autre téléphone, supprime-les d’abord là-bas.' }))) return; if (!accountMatches(token)) return; openSheet(h`<h2 style="margin:0">Confirmer la suppression</h2><form data-submit="delacct" class="stack"><input type="text" name="username" value="${S.user.username}" autocomplete="username" class="hidden" aria-hidden="true"><label>Mot de passe<input type="password" name="password" autocomplete="current-password" required></label><button class="btn danger" type="submit">Supprimer définitivement</button></form>`); };
 SUBMIT.delacct = async (f) => { const token = accountToken(); try { const id = S.user.id, result = await api('POST', '/api/auth/delete', { password: new FormData(f).get('password') }); await clearLocal(id); if (!accountMatches(token)) return; ls.del('sea:user'); closeSheet(); S.user = null; S.authMode = 'register'; location.hash = ''; render(); toast(result.notice ? 'Compte supprimé. '+result.notice : 'Compte supprimé', result.notice ? 15000 : 3000); } catch (e) { if (accountMatches(token)) toast(e.offline ? 'Connexion requise.' : e.message, 4000, 'bad'); } };
 
 /* ═════════ Données : export / import JSON, import CSV ═════════ */
@@ -233,16 +233,16 @@ function vData() {
   const c = S.csv;
   return h`<div class="card"><h3>📦 Sauvegarde complète</h3><p class="small muted">Exporte toutes tes données (séances, historique, calendrier, profil, performances, objectifs, cotations, préférences…) dans un fichier JSON réimportable.</p>
       <div class="row wrapf"><button class="btn pri" data-act="export">📥 Exporter</button><label class="btn">📤 Importer un JSON<input type="file" accept="application/json,.json" data-change="importJson" class="hidden"></label></div>
-      <label class="chk"><input type="checkbox" data-change="backupWeekly" ${ls.get('sea:backup-weekly', !!S.user?.guest) ? 'checked' : ''}> 🗓️ Me rappeler chaque semaine de faire une sauvegarde (une carte sur l’accueil)</label>
-      ${ls.get('sea:backup-last', 0) ? h`<p class="tiny muted">Dernière sauvegarde depuis cet appareil : ${fmtDay(ls.get('sea:backup-last', 0))}</p>` : ''}</div>
+      <label class="chk"><input type="checkbox" data-change="backupWeekly" ${own.get('sea:backup-weekly', !!S.user?.guest, { legacy: 'keep' }) ? 'checked' : ''}> 🗓️ Me rappeler chaque semaine de faire une sauvegarde (une carte sur l’accueil)</label>
+      ${own.get('sea:backup-last', 0, { legacy: 'keep' }) ? h`<p class="tiny muted">Dernière sauvegarde depuis cet appareil : ${fmtDay(own.get('sea:backup-last', 0, { legacy: 'keep' }))}</p>` : ''}</div>
     <div class="card"><h3>📊 Import CSV</h3><p class="small muted">Importe un historique de séances ou des performances depuis un tableur. Tu vérifies la correspondance des colonnes et un aperçu avant tout import.</p>
       <div class="chips">${chip((c?.kind || 'history') === 'history', 'Séances réalisées', 'data-act="csvKind" data-id="history"')}${chip(c?.kind === 'perf', 'Performances', 'data-act="csvKind" data-id="perf"')}</div>
       <label class="btn">Choisir un fichier CSV<input type="file" accept=".csv,text/csv,text/plain" data-change="csvFile" class="hidden"></label>
       ${c?.parsed ? vCsvWizard(c) : ''}</div>`;
 }
-CHG.backupWeekly = (el) => { ls.set('sea:backup-weekly', !!el.checked); toast(el.checked ? 'Rappel chaque semaine activé' : 'Rappel désactivé'); };
+CHG.backupWeekly = (el) => { own.set('sea:backup-weekly', !!el.checked); toast(el.checked ? 'Rappel chaque semaine activé' : 'Rappel désactivé'); };
 ACT.export = () => {
-  ls.set('sea:backup-last', Date.now());
+  own.set('sea:backup-last', Date.now());
   const data = { app: 'mes-seances', version: 8, exportedAt: new Date().toISOString(), seances: S.seances, history: S.history, events: S.events, settings: S.settings, personal: S.personal, items: [...S.items.values()].filter((i) => !i.del), appearance: window.__sea?.load?.() || {} };
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   a.download = `mes-seances-${new Date().toISOString().slice(0, 10)}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);

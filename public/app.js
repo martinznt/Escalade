@@ -5,7 +5,7 @@ import { returnBar, hintsBar } from './nav.js';
 import './picker.js';
 import { linkPaths } from './pathlinks.js';
 import { restoreUserDetails, onSheetRender, h, raw, icon, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, GUEST, putItem } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, moveLocal, GUEST, putItem } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession, uid } from './shared.js';
 import { maybeMove, maybeClaim } from './move.js';
@@ -169,7 +169,7 @@ async function transferGuest(user) {
   S.user = user; S.seancesDirty = S.seancesDirty || S.seances.items.length > 0;
   for (const k of S.items.keys()) S.dirtyItems.add(k);
   S.outbox.push({ opId: 'op-guest-settings-' + Date.now(), method: 'POST', path: '/api/settings', body: { settings: S.settings }, attempts: 0, at: Date.now(), label: 'Modification — réglages' });
-  writePending(); await persistNow(); await clearLocal('guest');
+  writePending(); await persistNow(); await moveLocal('guest', user.id); await clearLocal('guest');
   S.upgradeGuest = false;
 }
 async function enter(user, fresh) {

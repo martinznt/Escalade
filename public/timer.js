@@ -7,7 +7,7 @@
 // Préparation → effort → … → fin. Bips, vibrations et voix (si le coach est activé). Le temps est calculé à partir
 // d'horodatages : juste même si l'écran s'éteint un instant.
 import { h, $, openSheet, closeSheet, toast, mmss, buzzOk, ask } from './ui.js';
-import { S, ACT, SUBMIT, addHistory, render, itemsOf, item, putItem, delItem } from './state.js';
+import { S, ACT, SUBMIT, addHistory, render, itemsOf, item, putItem, delItem, own } from './state.js';
 import { uid } from './shared.js';
 import { beep } from './sound.js';
 import { sourcesLine } from './srcui.js';
@@ -82,7 +82,8 @@ export function chronoSummary(c = {}) {
 }
 const myChronos = () => itemsOf('chrono').sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr'));
 /* ───────── Réglage ───────── */
-const saved = () => { try { return JSON.parse(localStorage.getItem('sea:timer2') || 'null') || {}; } catch { return {}; } };
+/* Derniers réglages par format : propres au compte connecté (un brouillon d'exercices peut être privé). */
+const saved = () => own.get('sea:timer2', {}) || {};
 const DEFAULTS = { emom: { every: 60, minutes: 12, text: '' }, amrap: { minutes: 12, text: '' }, fortime: { cap: 20, text: '' }, countdown: { minutes: 5, secs: 0 }, stopwatch: {}, intervals: { ...PRESETS[0] } };
 function setupBody() {
   const st = saved(), f = FMT[S.tfmt] ? S.tfmt : FMT[st.format] ? st.format : 'emom', c = { ...DEFAULTS[f], ...(st.cfgs?.[f] || {}) };
@@ -135,7 +136,7 @@ export function timerConfig(d) {
 }
 SUBMIT.timerStart = (f) => {
   const d = Object.fromEntries(new FormData(f)), cfg = timerConfig(d);
-  try { const st = saved(); localStorage.setItem('sea:timer2', JSON.stringify({ format: cfg.format, cfgs: { ...(st.cfgs || {}), [cfg.format]: cfg } })); } catch { /* rien */ }
+  const st = saved(); own.set('sea:timer2', { format: cfg.format, cfgs: { ...(st.cfgs || {}), [cfg.format]: cfg } });
   // « Mes chronos » : même nom et même format → mis à jour, sinon ajouté (30 au plus).
   if (d.keep) {
     const same = myChronos().find((x) => x.format === cfg.format && String(x.name).toLowerCase() === cfg.name.toLowerCase());

@@ -1,7 +1,7 @@
 // views-choices.js — « ＋ Ajouter le mien » : le champ « ＋ Autre… » au bout d'une liste de choix, et la page
 // Profil › Mes ajouts (voir ce que l'app fait de chaque ajout, en ajouter, le retirer). Règles dans choices.js.
 import { h, toast, ask } from './ui.js';
-import { S, ACT, CHG, render, putItem, delItem, itemsOf, item, ctx } from './state.js';
+import { S, ACT, CHG, render, putItem, delItem, itemsOf, item, ctx, saveSettings } from './state.js';
 import { CHOICE_LISTS, MY, resolveChoice, fmtMinutes } from './choices.js';
 import { uid } from './shared.js';
 
@@ -26,7 +26,8 @@ CHG.choiceQuick = (el) => {
   let key = r.key;
   if (!key) { key = MY + uid().slice(0, 10); putItem('choice', key, { list, label: r.label, ...(r.n ? { n: r.n } : {}) }); ctx(); } // ctx() : l'ajout est nommé tout de suite partout
   try { spec?.apply?.(key, el, r); } catch (e) { toast('Ajouté, mais pas coché ici : ' + (e.message || e), 4000, 'bad'); return; }
-  toast(r.builtin ? `« ${String(text).trim()} » : c’est « ${r.label} » dans l’app, coché.` : r.existing ? `« ${r.label} » : déjà dans ta liste, coché.` : `« ${r.label} » ajouté à ta liste. Tu le retrouves dans Profil › Mes ajouts.`, 4500);
+  const said = spec?.message?.(r, String(text).trim(), list); // chaque écran peut dire plus précisément ce qui a été fait
+  toast(said || (r.builtin ? `« ${String(text).trim()} » : c’est « ${r.label} » dans l’app, coché.` : r.existing ? `« ${r.label} » : déjà dans ta liste, coché.` : `« ${r.label} » ajouté à ta liste. Tu le retrouves dans Profil › Mes ajouts.`), 4500);
 };
 // Entrée dans un champ « ＋ Autre… » : ajoute le choix, sans envoyer le formulaire autour (lieu, profil…).
 if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('keydown', (e) => {
@@ -56,7 +57,19 @@ export function vMine() {
         <button class="btn sm ic danger" data-act="choiceDel" data-id="${x.id}" aria-label="Retirer ${x.label}">✕</button></div>`)}</div>` : ''}
       <div class="chips">${addField(list, 'mine')}</div></details>`; })}`;
 }
-onChoice('mine', { apply: (key, el, r) => { if (el.dataset.list === 'zone' && !r.builtin) { const x = item('choice', key); if (x) putItem('choice', key, { ...x, on: true }); } render(); } });
+// Profil › Mes ajouts : une zone ajoutée est cochée « en ce moment » ; une zone de l'app reconnue (« poignet droit »)
+// est vraiment activée dans le profil (pas seulement annoncée). Les autres choix de l'app se cochent là où ils servent.
+const WHERE = { equipment: 'coche-le dans tes lieux (Profil › Mes lieux)', physique: 'choisis-le dans Profil › Mon corps et mes préférences', muscled: 'choisis-la dans Profil › Mon corps et mes préférences', fall: 'choisis-la dans un projet d’escalade', envie: 'elle est déjà proposée dans « Je n’ai rien prévu »' };
+onChoice('mine', {
+  apply: (key, el, r) => {
+    if (el.dataset.list === 'zone') {
+      if (r.builtin) { S.settings.avoid = { ...(S.settings.avoid || {}), [key]: true }; saveSettings(); }
+      else { const x = item('choice', key); if (x) putItem('choice', key, { ...x, on: true }); }
+    }
+    render();
+  },
+  message: (r, text, list) => (!r.builtin ? '' : list === 'zone' ? `« ${text} » : c’est « ${r.label} » dans l’app, cochée dans tes zones à ménager (Profil › Mon corps et mes préférences).` : `« ${text} » existe déjà dans l’app (« ${r.label} ») : ${WHERE[list] || 'rien à ajouter'}.`),
+});
 ACT.choiceOn = (el) => { const x = item('choice', el.dataset.id); if (!x) return; putItem('choice', x.id, { ...x, on: !x.on }); render(); };
 /** Retirer un ajout : il disparaît aussi des lieux, du profil et des projets où il était coché. */
 ACT.choiceDel = async (el) => {
