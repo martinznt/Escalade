@@ -1,10 +1,12 @@
-# Séances entraînement — v8.34.0
+# Séances entraînement — v8.34.1
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
 activité personnalisée. Les recommandations distinguent faits, estimations et données manquantes ; les réponses IA sont contrôlées avant de proposer des changements.
 
-La [version 8.34.0](DELIVERY_8_34.md) (préparée sur une branche, non déployée) apporte : séance écrite à sa façon, ses propres choix dans les listes (« ＋ Autre… », Profil › Mes ajouts), chrono en six formats avec « Mes chronos », exercices expliqués (départ, charge, variantes), installation guidée sur chaque appareil, annonce envoyée seulement aux appareils autorisés.
+La [version 8.34.1](DELIVERY_8_34_1.md) (préparée sur la branche `claude/new-session-wi9olv`, non fusionnée) corrige les 21 constats de l’audit du 9 octobre : sauvegarde importée sur un autre compte et séance supprimée récupérable, comptes séparés sur un même appareil, chrono juste (EMOM long, écran éteint, efforts passés), « 1,5 h », accessibilité, aide alignée sur l’interface simple.
+
+La [version 8.34.0](DELIVERY_8_34.md) (fusionnée dans `main` le 8 octobre par la PR #24 ; version servie en ligne non vérifiée par moi) apporte : séance écrite à sa façon, ses propres choix dans les listes (« ＋ Autre… », Profil › Mes ajouts), chrono en six formats avec « Mes chronos », exercices expliqués (départ, charge, variantes), installation guidée sur chaque appareil, annonce envoyée seulement aux appareils autorisés.
 
 La [version 8.33.0](DELIVERY_8_33.md) apporte : objectifs distincts des phases, choix et création guidée d’icônes par compte, notifications personnalisées, contrôles de provenance étendus à l’IA, recherche admin et imports sportifs avec un connecteur Strava à configurer. Elle a été revérifiée le 7 octobre (correctif des séances courtes compris) puis envoyée sur `main` par Pull Request, ce qui déclenche le déploiement automatique existant. Gemini, Strava, les icônes installées et les notifications restent à activer ou à vérifier soi-même : les opérations Cloudflare sont dans [CLOUDFLARE_GUIDE.md](CLOUDFLARE_GUIDE.md).
 

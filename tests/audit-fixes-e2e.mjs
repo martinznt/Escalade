@@ -1,7 +1,8 @@
 // Vrais clics : petites corrections de l'audit du 9 octobre 2026, vérifiées dans le navigateur.
 //  · B10 le rappel d'un rendez-vous ouvre le calendrier ; B14 un lien mal encodé ne bloque pas le démarrage ;
 //  · B11–B13 états ARIA « true » / « false », jauges et liste du son nommées ;
-//  · B17 le bandeau de mise à jour ne recouvre ni la séance ni l'éditeur « Organiser » ; B18 pas de double ajout.
+//  · B17 le bandeau de mise à jour ne recouvre ni la séance ni l'éditeur « Organiser » ; B18 pas de double ajout ;
+//  · B03 « Tout » sélectionne vraiment les séances ; B04 une photo de progrès se supprime (index et image).
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { makeEnv, startServer } from './server.mjs';
@@ -58,6 +59,29 @@ try {
     await page.waitForFunction(() => document.querySelectorAll('#main .item.ex').length >= 2); await page.waitForTimeout(300);
     assert.equal(await page.locator('#main .item.ex').count(), 2);
     assert.equal(await page.evaluate(async () => (await import('/state.js')).S.seances.items.find((s) => s.id === 's-double').exercises.length), 2);
+  });
+  await step('B03 : Mes séances › Sélectionner plusieurs › « Tout » sélectionne vraiment toutes les séances', async () => {
+    await page.evaluate(async () => { (await import('/state.js')).saveSeance({ id: 's-deux', name: 'Deuxième séance', exercises: [{ id: 'e2', name: 'Pompes', mode: 'reps', sets: 3, repsMin: 10, repsMax: 10 }] }); });
+    await go('#/library/seances', '#main [data-act=selStart]'); await page.click('#main [data-act=selStart]'); await page.click('#main [data-act=selAll]');
+    await page.waitForFunction(() => /2 sélectionnée\(s\)/.test(document.querySelector('#main .selbar')?.textContent || ''));
+    assert.deepEqual((await page.evaluate(async () => (await import('/state.js')).S.sel)).sort(), ['s-deux', 's-double']);
+    assert.equal(await page.locator('#main .selbar [data-act=selBulk][data-id=place]').isDisabled(), false, 'actions groupées utilisables');
+    await page.click('#main [data-act=selEnd]');
+  });
+  await step('B04 : comparer deux photos de progrès puis « Supprimer » : confirmation, puis la photo et son image quittent l’appareil', async () => {
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==', 'base64');
+    for (const name of ['avant.png', 'apres.png']) {
+      await page.evaluate(async () => { const { ACT } = await import('/state.js'); await ACT.photosOpen(); }); await page.waitForSelector('#sheet.open input[data-change=photoAdd]', { state: 'attached' });
+      await page.setInputFiles('#sheet input[data-change=photoAdd]', { name, mimeType: 'image/png', buffer: png }); await page.waitForFunction((n) => document.querySelectorAll('#sheet .pthumb').length === n, name === 'avant.png' ? 1 : 2);
+    }
+    for (const k of [0, 1]) await page.locator('#sheet .pthumb').nth(k).click();
+    await page.click('#sheet [data-act=photoCompare]'); await page.waitForSelector('#sheet [data-act=progressPhotoDel]');
+    await page.locator('#sheet [data-act=progressPhotoDel]').first().click(); await page.waitForSelector('#dialog.open');
+    assert.match(await page.locator('#dialog.open').innerText(), /Supprimer cette photo/); await page.click('#dialog.open [data-dlg="1"]');
+    await page.waitForFunction(() => document.querySelectorAll('#sheet .pthumb').length === 1);
+    const keys = await page.evaluate(async () => { const { idb, S } = await import('/state.js'); const all = await idb.keys(), id = S.user.id; return { index: (await idb.get(`photos:${id}`)).length, images: all.filter((k) => k.startsWith(`photos:${id}:`)).length }; });
+    assert.deepEqual(keys, { index: 1, images: 1 }, 'index et image retirés');
+    await page.evaluate(async () => { (await import('/ui.js')).closeSheet(); });
   });
   await step('B17 : le bandeau « mis à jour » s’efface pendant la séance et dans « Organiser », puis revient', async () => {
     await page.evaluate(() => localStorage.setItem('sea:seen-build', JSON.stringify({ build: 'ancienne-version', at: Date.now() - 86400000 })));
