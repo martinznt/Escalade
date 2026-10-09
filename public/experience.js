@@ -65,8 +65,8 @@ export function parseQuickActivities(input) {
     const n = part.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const activityId = /\bvoie\b/.test(n) ? 'climbing_route' : /\bbloc\b/.test(n) ? 'climbing_boulder' : /course|couru|courir/.test(n) ? 'running' : /natation|nage|nager/.test(n) ? 'swimming' : /musculation/.test(n) ? 'strength' : /renfo|gainage/.test(n) ? 'conditioning' : '';
     if (!activityId) return null;
-    const hours = n.match(/(\d+)\s*h(?:eures?)?\s*(\d{1,2})?/), mins = n.match(/(\d+)\s*min/);
-    const minutes = hours ? Number(hours[1]) * 60 + Number(hours[2] || 0) : mins ? Number(mins[1]) : '';
+    const hours = n.match(/(?<![\d.,])(\d+)(?:[.,](\d+))?\s*h(?:eures?)?\s*(\d{1,2})?/), mins = n.match(/(\d+)\s*min/);
+    const minutes = hours ? (hours[2] ? Math.round(Number(`${hours[1]}.${hours[2]}`) * 60) : Number(hours[1]) * 60 + Number(hours[3] || 0)) : mins ? Number(mins[1]) : '';
     const performance = part.match(/\b[1-9][abc](?:\+)?\b|\bU[1-8]\+?\b/i)?.[0] || '';
     const before = chunks[i * 2 - 1] || '', after = chunks[i * 2 + 1] || '';
     const order = /\bavant\b/i.test(part) || /avant/i.test(after) || /après/i.test(before) ? 'before' : /après/i.test(after) || (/puis|ensuite/i.test(before) && !/\bavant\b/i.test(chunks[i * 2 - 2] || '')) ? 'after' : 'main';

@@ -7,7 +7,7 @@
 // Préparation → effort → … → fin. Bips, vibrations et voix (si le coach est activé). Le temps est calculé à partir
 // d'horodatages : juste même si l'écran s'éteint un instant.
 import { h, $, openSheet, closeSheet, toast, mmss, buzzOk, ask } from './ui.js';
-import { S, ACT, SUBMIT, addHistory, render, itemsOf, item, putItem, delItem, own } from './state.js';
+import { S, ACT, SUBMIT, INPUT, addHistory, render, itemsOf, item, putItem, delItem, own } from './state.js';
 import { uid } from './shared.js';
 import { beep } from './sound.js';
 import { sourcesLine } from './srcui.js';
@@ -29,7 +29,7 @@ export const FORMATS = [
   ['stopwatch', '⏲️', 'Chronomètre', 'Le temps qui passe, avec des tours'],
 ];
 const FMT = Object.fromEntries(FORMATS.map((f) => [f[0], f]));
-const T = { cfg: null, phases: [], i: 0, end: 0, start: 0, paused: 0, raf: 0, tickId: 0, wake: null, startedAt: 0, lastBeep: -1, rounds: 0, laps: [], capped: false };
+const T = { cfg: null, phases: [], i: 0, end: 0, start: 0, paused: 0, raf: 0, tickId: 0, wake: null, startedAt: 0, lastBeep: -1, rounds: 0, laps: [], capped: false, log: [], logged: -1 };
 
 const say = (t) => { if (!S.settings.voice || !window.speechSynthesis) return; try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'fr-FR'; speechSynthesis.speak(u); } catch { /* rien */ } };
 const buzz = (p) => { if (S.settings.vibration && navigator.vibrate) try { navigator.vibrate(p); } catch { /* rien */ } };
@@ -57,8 +57,8 @@ export function buildPhases({ work, rest, reps, sets, setRest, prep = 5 }) {
 export function buildPlan(cfg = {}) {
   const f = FMT[cfg.format] ? cfg.format : 'intervals', prep = cfg.prep ?? 5, out = prep > 0 ? [{ k: 'prep', s: prep, label: 'Prépare-toi' }] : [], ex = cfg.exercises || [];
   if (f === 'emom') {
-    const every = clampInt(cfg.every, 10, 600, 60), n = Math.max(1, Math.min(240, Math.round((clampInt(cfg.minutes, 1, 180, 10) * 60) / every)));
-    for (let i = 0; i < n; i++) out.push({ k: 'work', s: every, label: ex.length ? ex[i % ex.length] : `Intervalle ${i + 1}`, rep: i + 1, of: n, emom: true });
+    const e = emomPlan(cfg), unit = e.every === 60 ? 'Minute' : 'Intervalle';
+    for (let i = 0; i < e.n; i++) out.push({ k: 'work', s: e.every, label: ex.length ? ex[i % ex.length] : `Intervalle ${i + 1}`, rep: i + 1, of: e.n, emom: true, unit });
   } else if (f === 'amrap') out.push({ k: 'work', s: clampInt(cfg.minutes, 1, 180, 12) * 60, label: 'Le plus de tours possible', amrap: true });
   else if (f === 'countdown') out.push({ k: 'work', s: Math.max(5, Math.min(5 * 3600, clampInt(cfg.seconds, 5, 5 * 3600, 300))), label: 'Compte à rebours' });
   else if (f === 'fortime') out.push({ k: 'work', s: clampInt(cfg.cap, 0, 180, 0) * 60, up: true, label: 'Pour le temps' });
@@ -67,15 +67,31 @@ export function buildPlan(cfg = {}) {
   return out;
 }
 export const totalSeconds = (phases) => phases.reduce((t, p) => t + p.s, 0);
+/** Durée lisible : 630 → « 10 min 30 s », 5400 → « 1 h 30 min ». */
+const fmtSec = (s) => { const hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60; return [hh ? `${hh} h` : '', mm ? `${mm} min` : '', ss ? `${ss} s` : ''].filter(Boolean).join(' ') || '0 s'; };
+/**
+ * EMOM (pure, testée) : nombre d'intervalles et durée réels, calculés ici seulement (réglage, chrono, résumé, résultat).
+ * La durée demandée n'est jamais dépassée : 10 min toutes les 90 s → 6 intervalles (9 min). Un intervalle plus long que
+ * la durée demandée en fait un seul. exact : la durée tombe juste.
+ */
+export function emomPlan(cfg = {}) {
+  const every = clampInt(cfg.every, 10, 600, 60), minutes = clampInt(cfg.minutes, 1, 180, 12), n = Math.max(1, Math.floor((minutes * 60) / every));
+  return { every, minutes, n, seconds: n * every, exact: n * every === minutes * 60 };
+}
+/** Ce que fera un EMOM, en une ligne : « 6 intervalles de 1 min 30 s, soit 9 min (au lieu de 10 min) ». */
+export const emomText = (e) => `${e.n} intervalle${e.n > 1 ? 's' : ''} de ${fmtSec(e.every)}, soit ${fmtSec(e.seconds)}${e.exact ? '' : ` (au lieu de ${fmtSec(e.minutes * 60)})`}`;
+const everyLabel = (every) => (every >= 60 && every % 60 === 0 ? (every === 60 ? 'minute' : `${every / 60} min`) : `${every} s`);
+/** Compte à rebours : 5 s à 5 h, la même valeur pour le réglage, le résumé et le chrono. */
+const countdownSeconds = (c) => Math.max(5, Math.min(5 * 3600, (Number(c.minutes) || 0) * 60 + (Number(c.secs) || 0)));
 
 /** Ce que fait un chrono gardé, en une ligne (pure, testée). */
 export function chronoSummary(c = {}) {
   const ex = exerciseLines(c.text).length, plus = ex ? ` · ${ex} exercice${ex > 1 ? 's' : ''}` : '';
   switch (c.format) {
-    case 'emom': return `Chaque ${c.every >= 60 && c.every % 60 === 0 ? (c.every === 60 ? 'minute' : `${c.every / 60} min`) : `${c.every} s`}, pendant ${c.minutes} min${plus}`;
+    case 'emom': { const e = emomPlan(c); return `Chaque ${everyLabel(e.every)}, ${e.exact ? `pendant ${e.minutes} min` : `${e.n} fois (${fmtSec(e.seconds)})`}${plus}`; }
     case 'amrap': return `Le plus de tours en ${c.minutes} min${plus}`;
     case 'fortime': return `Pour le temps${c.cap ? `, limite ${c.cap} min` : ', sans limite'}${plus}`;
-    case 'countdown': return `Compte à rebours de ${mmss(Math.max(5, (c.minutes || 0) * 60 + (c.secs || 0)))}`;
+    case 'countdown': return `Compte à rebours de ${mmss(countdownSeconds(c))}`;
     case 'stopwatch': return 'Chronomètre avec tours';
     default: return `${c.work} s d’effort / ${c.rest} s de pause × ${c.reps}${c.sets > 1 ? `, ${c.sets} séries` : ''}`;
   }
@@ -87,11 +103,12 @@ const saved = () => own.get('sea:timer2', {}) || {};
 const DEFAULTS = { emom: { every: 60, minutes: 12, text: '' }, amrap: { minutes: 12, text: '' }, fortime: { cap: 20, text: '' }, countdown: { minutes: 5, secs: 0 }, stopwatch: {}, intervals: { ...PRESETS[0] } };
 function setupBody() {
   const st = saved(), f = FMT[S.tfmt] ? S.tfmt : FMT[st.format] ? st.format : 'emom', c = { ...DEFAULTS[f], ...(st.cfgs?.[f] || {}) };
-  const num = (n, l, v, mi, ma, unit) => h`<label>${l}<span class="unitbox"><input type="number" name="${n}" value="${v}" min="${mi}" max="${ma}" inputmode="numeric" required><em>${unit}</em></span></label>`;
+  const num = (n, l, v, mi, ma, unit) => h`<label>${l}<span class="unitbox"><input type="number" name="${n}" value="${v}" min="${mi}" max="${ma}" inputmode="numeric" required data-input="timerEmom"><em>${unit}</em></span></label>`;
   const list = (ph) => h`<label>Exercices <span class="tiny muted">(un par ligne, facultatif)</span><textarea name="text" rows="4" maxlength="2400" placeholder="${ph}">${c.text || ''}</textarea></label>`;
   const forms = {
     emom: h`<div class="grid2">${num('every', 'Toutes les', c.every, 10, 600, 's')}${num('minutes', 'Pendant', c.minutes, 1, 180, 'min')}</div>
       <div class="chips">${[[30, '30 s'], [60, '1 min'], [120, '2 min'], [180, '3 min']].map(([v, l]) => h`<button type="button" class="chip" data-act="timerEvery" data-v="${v}">Toutes les ${l}</button>`)}</div>
+      <p class="small" id="temom" aria-live="polite">= ${emomText(emomPlan(c))}</p>
       ${list('10 squats\n8 tractions\n12 pompes')}<p class="tiny muted">Au bip, fais l’exercice de la minute, puis récupère jusqu’au bip suivant. Avec plusieurs lignes, les exercices tournent : minute 1, minute 2, minute 3… puis on recommence.</p>`,
     amrap: h`${num('minutes', 'Durée', c.minutes, 1, 180, 'min')}${list('5 tractions\n10 pompes\n15 squats')}<p class="tiny muted">Enchaîne le circuit sans t’arrêter, et touche « ＋1 tour » à chaque tour fini : ton total est gardé à la fin.</p>`,
     fortime: h`${num('cap', 'Limite de temps (0 = aucune)', c.cap, 0, 180, 'min')}${list('100 tractions assistées\n200 pompes\n300 squats')}<p class="tiny muted">Touche « ✓ Terminé » dès que tout est fait : ton temps est gardé.</p>`,
@@ -116,7 +133,9 @@ function setupBody() {
 }
 ACT.timerOpen = () => { S.tfmt = ''; openSheet(setupBody()); };
 ACT.timerFmt = (el) => { if (!FMT[el.dataset.id]) return; S.tfmt = el.dataset.id; openSheet(setupBody()); };
-ACT.timerEvery = (el) => { const f = $('#tform'); if (f?.elements.every) f.elements.every.value = el.dataset.v; document.querySelectorAll('.itimer-setup [data-act=timerEvery]').forEach((c) => c.classList.toggle('on', c === el)); };
+ACT.timerEvery = (el) => { const f = $('#tform'); if (f?.elements.every) { f.elements.every.value = el.dataset.v; INPUT.timerEmom(f.elements.every); } document.querySelectorAll('.itimer-setup [data-act=timerEvery]').forEach((c) => c.classList.toggle('on', c === el)); };
+/** EMOM : le nombre d'intervalles et la durée réelle, mis à jour pendant la saisie. */
+INPUT.timerEmom = (el) => { const f = el.form, out = $('#temom'); if (!f?.elements.every || !out) return; out.textContent = `= ${emomText(emomPlan({ every: f.elements.every.value, minutes: f.elements.minutes.value }))}`; };
 ACT.timerPreset = (el) => {
   const p = PRESETS.find((x) => x.id === el.dataset.id), f = $('#tform'); if (!p || !f) return;
   for (const k of ['work', 'rest', 'reps', 'sets', 'setRest', 'name']) if (f.elements[k]) f.elements[k].value = p[k];
@@ -130,12 +149,14 @@ export function timerConfig(d) {
   if (f === 'emom') return { format: f, name, every: n('every', 10, 600, 60), minutes: n('minutes', 1, 180, 12), exercises, text };
   if (f === 'amrap') return { format: f, name, minutes: n('minutes', 1, 180, 12), exercises, text };
   if (f === 'fortime') return { format: f, name, cap: n('cap', 0, 180, 0), exercises, text };
-  if (f === 'countdown') { const minutes = n('minutes', 0, 300, 5), secs = n('secs', 0, 59, 0); return { format: f, name, minutes, secs, seconds: Math.max(5, minutes * 60 + secs) }; }
+  if (f === 'countdown') { const seconds = countdownSeconds({ minutes: n('minutes', 0, 300, 5), secs: n('secs', 0, 59, 0) }); return { format: f, name, minutes: Math.floor(seconds / 60), secs: seconds % 60, seconds }; }
   if (f === 'stopwatch') return { format: f, name };
   return { format: 'intervals', name, work: n('work', 1, 600, 7), rest: n('rest', 0, 600, 3), reps: n('reps', 1, 50, 6), sets: n('sets', 1, 20, 1), setRest: n('setRest', 0, 900, 0) };
 }
 SUBMIT.timerStart = (f) => {
   const d = Object.fromEntries(new FormData(f)), cfg = timerConfig(d);
+  if (cfg.format === 'emom' && !emomPlan(cfg).exact) toast(`${emomText(emomPlan(cfg))}.`, 5000);
+  if (cfg.format === 'countdown' && (Number(d.minutes) || 0) * 60 + (Number(d.secs) || 0) > cfg.seconds) toast('5 h au plus : compte à rebours de 5 h.', 4000);
   const st = saved(); own.set('sea:timer2', { format: cfg.format, cfgs: { ...(st.cfgs || {}), [cfg.format]: cfg } });
   // « Mes chronos » : même nom et même format → mis à jour, sinon ajouté (30 au plus).
   if (d.keep) {
@@ -150,7 +171,7 @@ ACT.timerMineDel = async (el) => { const x = item('chrono', el.dataset.id); if (
 
 /* ───────── En cours ───────── */
 export function startTimer(cfg, { onDone } = {}) {
-  T.cfg = cfg; T.onDone = onDone || null; T.phases = buildPlan(cfg); T.i = 0; T.paused = 0; T.startedAt = Date.now(); T.lastBeep = -1; T.rounds = 0; T.laps = []; T.capped = false;
+  T.cfg = cfg; T.onDone = onDone || null; T.phases = buildPlan(cfg); T.i = 0; T.paused = 0; T.startedAt = Date.now(); T.lastBeep = -1; T.rounds = 0; T.laps = []; T.capped = false; T.log = []; T.logged = -1;
   let root = $('#itimer');
   if (!root) { root = document.createElement('div'); root.id = 'itimer'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'Chrono'); document.body.appendChild(root); }
   document.body.classList.add('noscroll');
@@ -159,13 +180,44 @@ export function startTimer(cfg, { onDone } = {}) {
   clearInterval(T.tickId); T.tickId = setInterval(tick, 200);
 }
 const elapsed = () => Math.max(0, (T.paused || Date.now()) - T.start);
-function enter(i) {
-  T.i = i; T.lastBeep = -1;
-  const ph = T.phases[i]; if (!ph) return done();
-  T.start = Date.now(); T.end = ph.up && !ph.s ? Infinity : T.start + ph.s * 1000;
+/**
+ * Où en est le chrono après une absence (écran éteint, onglet suspendu) (pure, testée) : chaque phase écoulée entre-temps
+ * est faite et la suivante commence là où la précédente a fini. end : fin de la phase i. Renvoie la phase en cours
+ * (i, start ; i au-delà de la dernière = fini à start) et les phases faites entre-temps.
+ */
+export function catchUp(phases, i, end, now) {
+  const passed = []; let capped = false;
+  for (let k = i + 1; ; k++) {
+    const ph = phases[k];
+    if (!ph || (ph.up && !ph.s) || end + ph.s * 1000 > now) return { i: k, start: end, passed, capped };
+    if (ph.up) capped = true; // « pour le temps » : la limite est passée pendant l'absence
+    passed.push({ k: ph.k, label: ph.label, planned: ph.s, secs: ph.s, done: !ph.up });
+    end += ph.s * 1000;
+  }
+}
+/** Journal : chaque phase quittée est faite (temps écoulé, « Terminé ») ou passée (« Passer » avant la fin). */
+function closePhase(done, at = Date.now()) {
+  const ph = T.phases[T.i]; if (!ph || T.logged === T.i) return;
+  T.logged = T.i;
+  const ms = Math.max(0, (T.paused || at) - T.start), full = !ph.up && ph.s > 0 && ms >= ph.s * 1000 - 500;
+  T.log.push({ k: ph.k, label: ph.label, planned: ph.s, secs: Math.round(ph.up || !ph.s ? ms / 1000 : Math.min(ph.s, ms / 1000)), done: done || full });
+}
+/** Fin naturelle de la phase en cours, avec rattrapage des phases écoulées pendant une absence. */
+function advance() {
+  const ph = T.phases[T.i]; if (!ph) return;
+  if (ph.up) T.capped = true;
+  closePhase(!ph.up, T.end);
+  const r = catchUp(T.phases, T.i, T.end, Date.now());
+  T.log.push(...r.passed); if (r.capped) T.capped = true;
+  enter(r.i, { at: r.start });
+}
+function enter(i, { at = Date.now() } = {}) {
+  T.i = i; T.lastBeep = -1; T.logged = -1;
+  const ph = T.phases[i]; if (!ph) return done(at);
+  T.start = at; T.end = ph.up && !ph.s ? Infinity : T.start + ph.s * 1000;
   if (ph.k === 'work') {
     beep(1040, 220); buzz(120);
-    if (ph.emom) say(`${ph.of > 1 ? `Minute ${ph.rep}. ` : ''}${ph.label}`);
+    if (ph.emom) say(`${ph.of > 1 ? `${ph.unit || 'Minute'} ${ph.rep}. ` : ''}${ph.label}`);
     else if (ph.amrap || ph.up) say('Go');
     else say(T.cfg.reps > 1 ? `Go, ${ph.rep} sur ${T.cfg.reps}` : 'Go');
   } else if (ph.k === 'rest') { beep(520, 160); say('Pause'); }
@@ -179,14 +231,14 @@ function tick() {
   if (ph.up) {
     const e = elapsed(); if (el) el.textContent = mmss(Math.floor(e / 1000));
     if (bar) bar.style.width = ph.s ? `${Math.min(100, (e / (ph.s * 1000)) * 100)}%` : '0%';
-    if (ph.s && e >= ph.s * 1000) { T.capped = true; enter(T.i + 1); }
+    if (ph.s && e >= ph.s * 1000) advance();
     return;
   }
   const rem = Math.max(0, T.end - Date.now()), sec = Math.ceil(rem / 1000);
   if (el) el.textContent = mmss(sec);
   if (bar) bar.style.width = `${100 - (rem / (ph.s * 1000)) * 100}%`;
   if (sec <= 3 && sec > 0 && T.lastBeep !== sec && ph.s > 3) { T.lastBeep = sec; beep(660, 90); }
-  if (rem <= 0) enter(T.i + 1);
+  if (rem <= 0) advance();
 }
 function draw() {
   const root = $('#itimer'), ph = T.phases[T.i]; if (!root || !ph) return;
@@ -199,7 +251,7 @@ function draw() {
   root.className = 'ph-' + ph.k + (T.paused ? ' paused' : '');
   root.innerHTML = h`<div class="it-top"><button class="btn sm" data-act="timerStop">✕ Arrêter</button><span class="small">${T.cfg.name}</span>${ph.up ? h`<span></span>` : h`<button class="btn sm" data-act="timerSkip">Passer ⏭</button>`}</div>
     <div class="it-mid"><div class="it-label">${T.paused ? 'En pause' : ph.label}</div><div class="big-t">${mmss(shown)}</div><div class="ibar"><i></i></div>
-      ${ph.emom ? h`<div class="it-count">Minute ${ph.rep} / ${ph.of}</div>` : ph.set ? h`<div class="it-count">Série ${ph.set} / ${T.cfg.sets}${ph.rep ? ` · ${ph.rep} / ${T.cfg.reps}` : ''}</div>` : ''}
+      ${ph.emom ? h`<div class="it-count">${ph.unit || 'Minute'} ${ph.rep} / ${ph.of}</div>` : ph.set ? h`<div class="it-count">Série ${ph.set} / ${T.cfg.sets}${ph.rep ? ` · ${ph.rep} / ${T.cfg.reps}` : ''}</div>` : ''}
       ${counter}${circuit}
       ${ph.emom && next ? h`<div class="small it-next">Ensuite : ${next.label}</div>` : !ph.up ? h`<div class="small it-next">${next && ph.k !== 'work' && !next.emom ? `Ensuite : effort ${next.s} s · ` : ''}reste ${mmss(left)}</div>` : ph.s ? h`<div class="small it-next">Limite : ${mmss(ph.s)}</div>` : ''}</div>
     <div class="it-bot">${actions}<button class="btn big" data-act="timerPause">${T.paused ? '▶ Reprendre' : '⏸ Pause'}</button></div>`.s;
@@ -209,40 +261,62 @@ function stop() {
   clearInterval(T.tickId); T.cfg = null; try { T.wake?.release(); } catch { /* rien */ } T.wake = null;
   $('#itimer')?.remove(); document.body.classList.remove('noscroll');
 }
-/** Résumé de fin, selon le format (pure, testée). */
-export function timerResult(cfg, { secs = 0, rounds = 0, laps = [], capped = false } = {}) {
-  const f = cfg?.format || 'intervals';
-  if (f === 'amrap') return `${rounds} tour${rounds > 1 ? 's' : ''} complet${rounds > 1 ? 's' : ''} en ${cfg.minutes} min`;
+/** Résumé de fin, selon le format (pure, testée). Avec le journal (log), seuls les efforts faits comptent. */
+export function timerResult(cfg, { secs = 0, rounds = 0, laps = [], capped = false, log = null } = {}) {
+  const f = cfg?.format || 'intervals', work = (log || []).filter((e) => e.k === 'work'), n = work.filter((e) => e.done).length;
+  const passed = work.length - n, tail = passed ? ` (${passed} passé${passed > 1 ? 's' : ''})` : '';
+  if (f === 'amrap') return `${rounds} tour${rounds > 1 ? 's' : ''} complet${rounds > 1 ? 's' : ''} en ${work[0] && !work[0].done ? `${mmss(work[0].secs)}, arrêté avant la fin` : `${cfg.minutes} min`}`;
   if (f === 'fortime') return capped ? `Limite de ${cfg.cap} min atteinte` : `Fait en ${mmss(secs)}`;
   if (f === 'stopwatch') return `${mmss(secs)}${laps.length ? ` · ${laps.length} tour${laps.length > 1 ? 's' : ''} : ${laps.map((l) => mmss(Math.round(l / 1000))).join(', ')}` : ''}`;
-  if (f === 'emom') return `${Math.round((cfg.minutes * 60) / cfg.every)} intervalle${Math.round((cfg.minutes * 60) / cfg.every) > 1 ? 's' : ''} de ${cfg.every} s`;
+  if (f === 'emom') { const e = emomPlan(cfg); return log ? `${n} intervalle${n > 1 ? 's' : ''} sur ${e.n} de ${e.every} s${tail}` : `${e.n} intervalle${e.n > 1 ? 's' : ''} de ${e.every} s`; }
+  if (f === 'intervals' && log) return `${mmss(secs)} · ${n} effort${n > 1 ? 's' : ''} sur ${work.length}${tail}`;
   return mmss(secs);
 }
-function done() {
-  // Pour le temps / chronomètre : le temps de l'effort (pauses retirées) ; autres formats : la durée totale.
-  const cfg = T.cfg, onDone = T.onDone, up = T.phases.some((p) => p.up);
-  const run = { secs: up ? Math.round(elapsed() / 1000) : Math.round((Date.now() - T.startedAt) / 1000), rounds: T.rounds, laps: [...T.laps], capped: T.capped };
+/**
+ * Ce qui va dans l'historique (pure, testée) : ce qui a été fait. Un effort ou un intervalle passé reste visible mais
+ * « non fait » (done: false, avec le temps réellement tenu) : il ne compte ni dans les statistiques ni dans le volume.
+ */
+export function timerExercises(cfg, run = {}) {
+  const f = cfg?.format || 'intervals', work = (run.log || []).filter((e) => e.k === 'work'), ex = cfg.exercises || [];
+  const set = (seconds, done) => ({ reps: 0, seconds: Math.max(0, Math.round(seconds || 0)), load: 0, done: !!done });
+  if (!work.length) return [];
+  if (f === 'emom') {
+    const names = ex.length ? ex : [cfg.name];
+    return names.map((name, k) => ({ name, group: '', sets: work.filter((_, i) => i % names.length === k).map((e) => set(ex.length ? 0 : e.done ? e.planned : e.secs, e.done)) })).filter((x) => x.sets.length);
+  }
+  if (f === 'intervals') return [{ name: cfg.name, group: /suspens/i.test(cfg.name) ? 'doigts' : '', sets: work.map((e) => set(e.done ? e.planned : e.secs, e.done)) }];
+  const w = work[0];
+  if (f === 'amrap') return ex.length ? ex.map((name) => ({ name, group: '', sets: run.rounds > 0 ? Array.from({ length: run.rounds }, () => set(0, true)) : [set(0, false)] })) : [{ name: cfg.name, group: '', sets: [set(w.secs, w.done || run.rounds > 0)] }];
+  if (f === 'fortime') return ex.length ? ex.map((name) => ({ name, group: '', sets: [set(0, !run.capped)] })) : [{ name: cfg.name, group: '', sets: [set(w.secs, !run.capped)] }];
+  return [{ name: cfg.name, group: '', sets: [set(w.secs, f === 'stopwatch' || w.done)] }];
+}
+function done(at = Date.now()) {
+  // Pour le temps / chronomètre : le temps de l'effort (pauses retirées) ; autres formats : la durée totale, jusqu'à la
+  // vraie fin (même si l'écran était éteint à ce moment-là).
+  const cfg = T.cfg, onDone = T.onDone, up = T.phases.some((p) => p.up), work = T.log.filter((e) => e.k === 'work');
+  const run = { secs: up ? work.at(-1)?.secs ?? Math.round(elapsed() / 1000) : Math.round((at - T.startedAt) / 1000), rounds: T.rounds, laps: [...T.laps], capped: T.capped, log: [...T.log] };
   beep(1040, 400); buzz([200, 100, 200]); say('Terminé. Bien joué.');
   stop();
   if (onDone) { onDone(cfg, run.secs); return; }
-  T.last = { cfg, run, total: Math.round((Date.now() - T.startedAt) / 1000) };
+  T.last = { cfg, run, total: Math.round((at - T.startedAt) / 1000) };
   openSheet(h`<div class="center stack"><div style="font-size:3rem">🎉</div><h2 style="margin:0">Terminé !</h2><p class="small"><b>${timerResult(cfg, run)}</b></p><p class="small muted">${cfg.name} · ${mmss(T.last.total)} en tout</p>
     ${S.user ? h`<button class="btn pri" data-act="timerSave">Ajouter à mon historique</button>` : ''}<button class="btn" data-act="closeSheet">Fermer</button></div>`);
 }
 ACT.timerSave = () => {
   const last = T.last; if (!last) return closeSheet();
   const { cfg, run, total } = last, f = cfg.format || 'intervals', result = timerResult(cfg, run);
-  const exercises = (cfg.exercises || []).length ? cfg.exercises.map((name) => ({ name, group: '', sets: [{ reps: 0, seconds: 0, load: 0, done: true }] }))
-    : f === 'intervals' ? [{ name: cfg.name, group: /suspens/i.test(cfg.name) ? 'doigts' : '', sets: Array.from({ length: cfg.sets * cfg.reps }, () => ({ reps: 0, seconds: cfg.work, load: 0, done: true })) }]
-    : [{ name: cfg.name, group: '', sets: [{ reps: 0, seconds: run.secs, load: 0, done: true }] }];
-  addHistory({ id: uid(), sessionId: '', sessionName: `Chrono : ${cfg.name}`, startedAt: Date.now() - total * 1000, durationSeconds: total, data: { rpe: 0, note: `${FMT[f]?.[2] || 'Minuteur'} — ${result}`, exercises } });
-  closeSheet(); buzzOk(); toast('Ajouté à ton historique'); render();
+  addHistory({ id: uid(), sessionId: '', sessionName: `Chrono : ${cfg.name}`, startedAt: Date.now() - total * 1000, durationSeconds: total, data: { rpe: 0, note: `${FMT[f]?.[2] || 'Minuteur'} — ${result}`, exercises: timerExercises(cfg, run) } });
+  T.last = null; closeSheet(); buzzOk(); toast('Ajouté à ton historique'); render();
 };
 ACT.timerStop = () => { stop(); toast('Chrono arrêté'); };
-ACT.timerSkip = () => enter(T.i + 1);
+ACT.timerSkip = () => {
+  if (!T.cfg) return;
+  const wasPaused = !!T.paused; closePhase(false); T.paused = 0; enter(T.i + 1);
+  if (wasPaused && T.cfg) { T.paused = Date.now(); draw(); } // la pause continue sur la phase suivante
+};
 ACT.timerRound = () => { if (!T.cfg || T.paused) return; T.rounds++; beep(880, 90); buzz(40); draw(); };
 ACT.timerLap = () => { if (!T.cfg || T.paused) return; T.laps.push(elapsed()); beep(880, 90); draw(); };
-ACT.timerFinish = () => { if (!T.cfg) return; if (T.paused) { T.start += Date.now() - T.paused; T.end += Date.now() - T.paused; T.paused = 0; } done(); };
+ACT.timerFinish = () => { if (!T.cfg) return; if (T.paused) { T.start += Date.now() - T.paused; T.end += Date.now() - T.paused; T.paused = 0; } closePhase(true); done(); };
 ACT.timerPause = () => {
   if (!T.cfg) return;
   if (T.paused) { const d = Date.now() - T.paused; T.end += d; T.start += d; T.paused = 0; } else T.paused = Date.now();

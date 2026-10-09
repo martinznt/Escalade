@@ -58,6 +58,15 @@ try {
     assert.equal(await page.locator('textarea[data-change=sNotes]').inputValue(), 'Bien boire entre les blocs');
     assert.deepEqual(await names(), ['Corde à sauter', 'Tractions', '400 m', 'Gainage', 'Étirements doux']);
   });
+  await step('« Footing 1,5 h » : 90 minutes, rien de reste dans le nom ; gardé après rechargement', async () => {
+    await page.click('#main [data-act=exWrite]'); await sheet.waitFor();
+    await sheet.locator('textarea[name=text]').fill('Footing 1,5 h'); await page.waitForFunction(() => /1 exercice prêt à ajouter/.test(document.querySelector('#exWritePrev')?.textContent || ''));
+    await sheet.locator('button[type=submit]').click(); await page.waitForFunction(() => [...document.querySelectorAll('#main .item.ex b')].some((b) => b.textContent === 'Footing'));
+    await page.waitForTimeout(600); await page.reload(); await page.waitForSelector('#main .item.ex');
+    const f = (await session()).exercises.find((e) => /footing/i.test(e.name));
+    assert.equal(f.name, 'Footing', 'pas de « 1, » dans le nom'); assert.deepEqual([f.mode, f.secMin, f.secMax], ['time', 5400, 5400], '90 min, pas 5 h');
+    assert.match(await page.locator('#main .item.ex:has-text("Footing")').innerText(), /1 h 30|90 min/);
+  });
   await step('réglages facultatifs : ouverts à la demande, restent ouverts ; un sport peut être choisi', async () => {
     await page.click('#main [data-act=sMore]'); assert.equal(await moreOpen(), true);
     await page.locator('#main select[data-change=sActivity] + .pickbtn').click(); await page.locator('#picker .setrow[data-v=climbing_boulder]').first().click();

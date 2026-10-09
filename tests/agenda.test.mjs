@@ -42,6 +42,7 @@ await ok('voie et bloc : journal idempotent, prévu conservé, charge réelle pr
 await ok('commandes : récurrence, interface et récit structurés sans sauvegarde implicite',()=>{
   const d=parseAgendaText('Tous les mardis et vendredis, escalade voie à Nicole Abar');assert.deepEqual(d.days,[2,5]);assert.equal(d.place,'Nicole Abar');assert.equal(d.activityId,'climbing_route');
   assert.equal(parseInterfaceRequest('Je veux une interface plus compliquée'),'advanced');assert.equal(parseInterfaceRequest('Je veux une séance simple'),null);
+  assert.equal(parseQuickActivities('1,5 h de voie')[0].minutes,90,'1,5 h = 90 min, pas 5 h');assert.equal(parseQuickActivities('2 heures de bloc')[0].minutes,120);
   const p=parseQuickActivities('1 h 30 de voie, 6c max, puis 20 min de bloc');assert.equal(p.length,2);assert.equal(p[0].minutes,90);assert.equal(p[1].minutes,20);
   const before=parseQuickActivities('20 min de bloc avant 90 min de voie puis 10 min de course');assert.deepEqual(before.map(x=>x.order),['before','main','after']);
   assert.deepEqual(parseQuickActivities('J’ai fait 20 min de bloc avant, puis ma séance de voie').map(x=>x.order),['before','main']);

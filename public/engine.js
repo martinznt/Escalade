@@ -291,7 +291,8 @@ const Q_REST = new RegExp(`(?:^|[\\s,;(—–-])(?:repos|r[ée]cup(?:[ée]ration
 const Q_SIDE = /\s*(?:\(?\s*(?:par|chaque|\/)\s*(?:jambe|c[oô]t[ée]|bras|main|pied)s?\s*\)?)/i;
 const Q_LOAD = new RegExp(`(?:^|\\s)(?:avec|à|a|@|lest[ée]?(?:\\s+de)?)?\\s*(\\+?\\s*\\d+(?:[.,]\\d+)?\\s*kg)${Q_NOT}|(?:^|\\s)(poids du corps|sans charge)${Q_NOT}`, 'i');
 const Q_SETS = new RegExp(`(\\d+)\\s*(?:[x×*]|s[ée]ries?\\s*(?:de|x|×)?)\\s*(\\d+(?:[.,]\\d+)?)(?:\\s*(?:-|–|à)\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(km|m(?:[eè]tres?)?|s(?:ec(?:ondes?)?)?|min(?:utes?)?|mn|r[ée]p(?:[ée]titions?|s)?\\.?|reps?|fois)${Q_NOT}(?:\\s*(\\d{1,2})\\s*(?:s(?:ec)?)?${Q_NOT})?)?`, 'i');
-const Q_HOURS = new RegExp(`(\\d+)\\s*h\\s*(\\d{1,2})?(?:\\s*min)?${Q_NOT}`, 'i');
+// Heures : « 1 h 30 », « 2 heures », « 1,5 h » (heures décimales : jamais lues comme « 5 h » au milieu du nombre), « 2 hours ».
+const Q_HOURS = new RegExp(`(?<![\\d.,])(?:(\\d+)[.,](\\d+)\\s*h(?:eures?|ours?|rs?)?|(\\d+)\\s*h(?:eures?|ours?|rs?)?(?:\\s*(\\d{1,2})(?:\\s*(?:min(?:utes?)?|mn))?)?)${Q_NOT}`, 'i');
 const Q_MIN = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(?:min(?:utes?)?|mn)${Q_NOT}(?:\\s*(\\d{1,2})\\s*(?:s(?:ec(?:ondes?)?)?)?${Q_NOT})?`, 'i');
 const Q_SEC = new RegExp(`(\\d+)\\s*(?:s|sec|secondes?)${Q_NOT}`, 'i');
 const Q_DIST = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(km|m(?:[eè]tres?)?)${Q_NOT}`, 'i');
@@ -333,7 +334,7 @@ export function parseExerciseLine(line) {
     } else Object.assign(out, { mode: 'reps', repsMin: Math.round(Math.min(a, b)), repsMax: Math.round(Math.max(a, b)) });
     t = t.replace(m[0], ' ');
   } else if ((m = t.match(Q_HOURS))) {
-    const s = Number(m[1]) * 3600 + (m[2] ? Number(m[2]) * 60 : 0); Object.assign(out, { sets: 1, mode: 'time', secMin: s, secMax: s }); t = t.replace(m[0], ' ');
+    const s = m[1] != null ? Math.round(Number(`${m[1]}.${m[2]}`) * 3600) : Number(m[3]) * 3600 + (m[4] ? Number(m[4]) * 60 : 0); Object.assign(out, { sets: 1, mode: 'time', secMin: s, secMax: s }); t = t.replace(m[0], ' ');
   } else if ((m = t.match(Q_MIN))) {
     const s = Math.round(qNum(m[1]) * 60 + (m[2] ? Number(m[2]) : 0)); Object.assign(out, { sets: 1, mode: 'time', secMin: s, secMax: s }); t = t.replace(m[0], ' ');
   } else if ((m = t.match(Q_SEC))) {
