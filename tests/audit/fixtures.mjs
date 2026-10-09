@@ -22,6 +22,8 @@ const COVERAGE_SCRIPT = `(() => {
   const hit = (kind, name) => { try { window.__auditHit && window.__auditHit(kind, String(name), location.hash.split('/').slice(1, 3).join('/')); } catch (e) {} };
   const on = (ev, attr) => document.addEventListener(ev, (e) => { const el = e.target && e.target.closest && e.target.closest('[data-' + attr + ']'); if (el) hit(attr, el.dataset[attr]); }, true);
   on('click', 'act'); on('submit', 'submit'); on('change', 'change'); on('input', 'input');
+  window.__toasts = [];
+  addEventListener('DOMContentLoaded', () => { const t = document.getElementById('toast'); if (t) new MutationObserver(() => { if (t.textContent) window.__toasts.push(t.textContent); }).observe(t, { childList: true, characterData: true, subtree: true }); });
   const route = () => hit('route', location.hash.split('/').slice(1, 3).join('/') || 'home/dash');
   addEventListener('hashchange', route); addEventListener('load', route);
 })();`;
@@ -96,6 +98,8 @@ export async function synced(p) {
 export async function confirm(p) { await p.locator('#dialog.open [data-dlg="1"]').click(); }
 export async function cancel(p) { await p.locator('#dialog.open [data-dlg="0"]').click(); }
 export async function toast(p, re) { await expect(p.locator('#toast')).toContainText(re); }
+/** Le message a été affiché à un moment (même s'il a été remplacé ensuite par un autre). */
+export async function toastSeen(p, re) { await expect.poll(() => p.evaluate(() => (window.__toasts || []).join('\n')), { timeout: 7000 }).toMatch(re); }
 export async function login(p, name, password = PASSWORD) {
   if (await p.locator('[data-act=authPick][data-id=login]').count()) await p.click('[data-act=authPick][data-id=login]');
   await p.fill('form[data-submit=login] [name=username]', name); await p.fill('form[data-submit=login] [name=password]', password);

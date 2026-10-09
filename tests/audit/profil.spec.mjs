@@ -6,15 +6,17 @@ const perfs = (page) => page.evaluate(async () => (await import('/state.js')).it
 
 test('P01 pesée complète 72,5 kg et 15 % de gras, taille 178 cm : IMC 22,9, masse maigre 61,6 kg, gras 10,9 kg, FFMI 19,4', async ({ page, audit }) => {
   await setInterface(page, 'advanced');
-  await go(page, 'profile/body', '[data-act=measureAll]'); await page.click('[data-act=measureAll]'); await page.fill('#sheet [name=taille_corps]', '178'); await page.click('#sheet form[data-submit=bodySaveMany] button');
-  await page.click('[data-act=weighFull]'); await page.fill('#sheet [name=body_weight]', '72,5'); await page.fill('#sheet [name=masse_grasse]', '15'); await page.click('#sheet form[data-submit=bodySaveMany] button');
+  // Saisie au clavier, virgule française comprise (« 72,5 », « 32,5 ») : c'est ce que tape une personne.
+  const type = async (sel, text) => { await page.click(sel); await page.keyboard.type(text); };
+  await go(page, 'profile/body', '[data-act=measureAll]'); await page.click('[data-act=measureAll]'); await type('#sheet [name=taille_corps]', '178'); await type('#sheet [name=tour_bras]', '32,5'); await page.click('#sheet form[data-submit=bodySaveMany] button');
+  await page.click('[data-act=weighFull]'); await type('#sheet [name=body_weight]', '72,5'); await type('#sheet [name=masse_grasse]', '15'); await page.click('#sheet form[data-submit=bodySaveMany] button');
   await expect(page.locator('#toast')).toContainText('2 mesures enregistrées'); await synced(page); await page.reload(); await loaded(page);
   await go(page, 'profile/body', '#main');
   // 72,5 / 1,78² = 22,88 ; 72,5 × 0,85 = 61,625 ; 72,5 − 61,625 = 10,875 ; 61,625 / 1,78² = 19,449…
   const text = await page.locator('#main').innerText();
   for (const expected of ['IMC (indice de masse corporelle) : 22,9 (entre 18,5 et 25)', 'Masse maigre (calculée) : 61,6 kg', 'Masse grasse en kilos : 10,9 kg', 'Indice de masse maigre (FFMI) : 19,4']) expect.soft(text, expected).toContain(expected);
   const server = (await audit.users.AuditAlice.get('/api/items')).data.items.filter((i) => i.c === 'perf' && !i.del).map((i) => [i.d.metricId, i.d.value]).sort();
-  expect(server).toEqual([['body_weight', 72.5], ['masse_grasse', 15], ['taille_corps', 178]]);
+  expect(server).toEqual([['body_weight', 72.5], ['masse_grasse', 15], ['taille_corps', 178], ['tour_bras', 32.5]]);
   expect(await pageAnomalies(page)).toEqual([]);
 });
 

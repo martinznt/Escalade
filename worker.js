@@ -75,8 +75,11 @@ export default {
     if (!(url.pathname === '/api/version' && url.searchParams.has('expected'))) announceSoon(env, ctx);
     try {
       const res = url.pathname.startsWith('/api/') ? await handleApi(request, env, url) : url.pathname.startsWith('/app-icons-custom/') ? await serveCustomAppIcon(request,env) : url.pathname.startsWith('/ical/') ? await icalFeed(request, env, url) : await serveAsset(request, env, url);
-      if (url.protocol === 'https:') { const h = new Headers(res.headers); h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h }); }
-      return res;
+      // En-têtes de sécurité sur toutes les réponses (API, icônes, abonnement agenda…), sans remplacer ceux déjà choisis.
+      const h = new Headers(res.headers);
+      for (const [k, v] of Object.entries(SECURITY_HEADERS)) if (!h.has(k)) h.set(k, v);
+      if (url.protocol === 'https:') h.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
     } catch (err) {
       console.error('Erreur non gérée', err && err.stack || err);
       return json({ ok: false, error: 'Erreur serveur. Réessaie dans un instant.' }, 500);
@@ -1139,7 +1142,8 @@ function cleanHistoryData(d) {
   const idList = (a, n) => (Array.isArray(a) ? [...new Set(a.map((x) => String(x ?? '')).filter((x) => /^[\w:.-]{1,80}$/.test(x)))].slice(0, n) : []);
   const caps = (o) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).slice(0, 10).map(([k, v]) => [k, clamp(v, 0, 1, 0)]).filter(([k, v]) => /^[\w:.-]{1,80}$/.test(k) && v > 0));
   return {
-    rpe: clamp(d.rpe, 1, 5, 0), focus: str(d.focus, 20), note: str(d.note, 600), activity: /^[\w:.-]{1,80}$/.test(String(d.activity || '')) ? String(d.activity) : '',
+    // 0 ou absent = ressenti non donné (chrono, natation, import…) : jamais transformé en 1 (« très facile »).
+    rpe: Number(d.rpe) > 0 ? clamp(d.rpe, 1, 5, 0) : 0, focus: str(d.focus, 20), note: str(d.note, 600), activity: /^[\w:.-]{1,80}$/.test(String(d.activity || '')) ? String(d.activity) : '',
     ...(cleanExternal(d.external) ? { external: cleanExternal(d.external) } : {}),
     aborted: !!d.aborted, activeSeconds: clamp(d.activeSeconds, 0, 86400, 0), pausedSeconds: clamp(d.pausedSeconds, 0, 86400, 0), plannedMin: clamp(d.plannedMin, 0, 600, 0),
     context: normalizeContext(d.context),

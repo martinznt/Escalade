@@ -109,7 +109,9 @@ export function calendarIcsEvents(events) {
     let until=base.recurrence?.until || '';
     if(base.meta?.stopFrom && (!until || base.meta.stopFrom<=until))until=shiftDay(base.meta.stopFrom,-1);
     const exceptions=events.filter((e)=>e.meta?.seriesId===base.id);
-    out.push({uid:'ev-'+base.id,title:(base.meta?.kind === 'race' ? '🏁 ' : '🏋️ ')+(base.title || 'Activité'),date,time:base.time || '',timeZone:base.recurrence?.timeZone,minutes:base.meta?.minutes || 60,allDay:!base.time,weekly:base.recurrence?.freq==='weekly',days:base.recurrence?.days,until,
+    // Rendez-vous unique modifié ou annulé : sa version modifiée le remplace (pas d'EXDATE sans répétition, que des agendas ignorent).
+    const replaced=!base.recurrence && exceptions.some((e)=>e.meta?.occurrenceDate===date);
+    if(!replaced)out.push({uid:'ev-'+base.id,title:(base.meta?.kind === 'race' ? '🏁 ' : '🏋️ ')+(base.title || 'Activité'),date,time:base.time || '',timeZone:base.recurrence?.timeZone,minutes:base.meta?.minutes || 60,allDay:!base.time,weekly:base.recurrence?.freq==='weekly',days:base.recurrence?.days,until,
       exDates:exceptions.map((e)=>e.meta.occurrenceDate),desc:base.meta?.place || base.meta?.note || '',done:!base.recurrence && !!base.completed});
     for(const e of exceptions)if(!['cancelled','missed'].includes(e.meta?.status) && occursOn(base,e.meta.occurrenceDate))out.push({uid:'ev-'+e.id,title:e.title || base.title,date:e.date,time:e.time || '',timeZone:base.recurrence?.timeZone,minutes:e.meta?.minutes || base.meta?.minutes || 60,allDay:!e.time,desc:e.meta?.place || '',done:!!e.completed});
   }

@@ -64,7 +64,7 @@ function vSummary() {
       ${s.undertrained.length ? h`<p class="small">🧩 Peu travaillé : ${s.undertrained.join(', ')}</p>` : ''}
       <button class="btn" data-act="recapOpen">📸 Mon bilan du mois en image</button></details>`;
   const kpisView = () => h`<div class="kpiwrap"><div class="row between">${seg('benchDays', String(days), [['7', '7 jours'], ['30', '30 jours'], ['90', '90 jours']])}</div>
-    <div class="kpis">${kpi('🏋️', 'Séances', b.cur.sessions, b.deltas.sessions)}${kpi('⏱', 'Minutes', b.cur.minutes, b.deltas.minutes)}${kpi('🔁', 'Séries', b.cur.sets, b.deltas.sets)}${kpi('😮‍💨', 'Ressenti', b.cur.rpe ?? '—', null)}</div>
+    <div class="kpis">${kpi('🏋️', 'Séances', b.cur.sessions, b.deltas.sessions)}${kpi('⏱', 'Minutes', b.cur.minutes, b.deltas.minutes)}${kpi('🔁', 'Séries', b.cur.sets, b.deltas.sets)}${kpi('😮‍💨', 'Ressenti', b.cur.rpe == null ? '—' : String(b.cur.rpe).replace('.', ','), null)}</div>
     <p class="tiny muted center">Comparé aux ${days} jours d’avant · uniquement toi</p></div>`;
   return composePage('progress', {
     streak: () => streakCard(),

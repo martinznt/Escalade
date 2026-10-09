@@ -23,7 +23,7 @@ test('API01 chaque route d’administration : 401 sans compte, 403 pour un membr
   expect((await u.ApiSuper.post('/api/admin/activate', { password: ADMIN_PASSWORD })).status).toBe(200);
   expect((await u.ApiContenu.post('/api/admin/activate', { password: ADMIN_PASSWORD })).status).toBe(200);
   expect((await u.ApiSuper.post(`/api/admin/users/${u.ApiContenu.userId}/roles`, { roles: ['content'] })).status).toBe(200);
-  const admin = ROUTES.filter(([, p]) => p.startsWith('/api/admin/') && p !== '/api/admin/activate');
+  const admin = ROUTES.filter(([, p]) => p.startsWith('/api/admin/') && !['/api/admin/activate', '/api/admin/deactivate'].includes(p));
   expect(admin.length, 'routes d’administration trouvées dans worker.js').toBeGreaterThan(20);
   // Chemins inventés : la garde est un préfixe, elle doit aussi les couvrir.
   for (const [m, p] of [...admin, ['GET', '/api/admin/route-inventee'], ['POST', '/api/admin/users/inconnu/roles'], ['DELETE', '/api/admin/bugs/x']]) {
@@ -34,6 +34,9 @@ test('API01 chaque route d’administration : 401 sans compte, 403 pour un membr
   }
   for (const [m, p] of [['GET', '/api/admin/users'], ['GET', '/api/admin/bugs'], ['POST', '/api/admin/maintenance'], ['POST', `/api/admin/users/${u.ApiMembre.userId}/roles`]]) expect.soft((await u.ApiContenu.call(m, p, m === 'GET' ? undefined : {})).status, `${m} ${p} avec le seul rôle Contenu`).toBe(403);
   expect((await u.ApiContenu.get('/api/admin/studio')).status, 'rôle Contenu : le Studio reste ouvert').toBe(200);
+  // « Quitter l'administration » : sans effet pour un membre, retire bien le rôle à un administrateur.
+  expect((await u.ApiMembre.post('/api/admin/deactivate', {})).status).toBeLessThan(500); expect((await u.ApiMembre.get('/api/admin/users')).status).toBe(403);
+  expect((await u.ApiSuper.post('/api/admin/deactivate', {})).status).toBe(200); expect((await u.ApiSuper.get('/api/admin/users')).status).toBe(403);
 });
 
 test('API02 chaque route privée refuse un visiteur sans compte (401) ; les routes publiques sont celles prévues', async () => {

@@ -292,6 +292,15 @@ const watchFile = (input) => {
 };
 let fileScan = false;
 new MutationObserver(() => { if (fileScan) return; fileScan = true; queueMicrotask(() => { fileScan = false; for (const el of document.querySelectorAll('input[type=file][data-change]')) watchFile(el); }); }).observe(document.body, { childList: true, subtree: true });
+// Virgule décimale (clavier français) : dans un champ numérique, le navigateur l'efface sans rien dire (« 72,5 » devenait
+// 725). Elle est remplacée par un point au moment de la frappe ou du collage ; le champ reste numérique (clavier, contrôles).
+document.addEventListener('beforeinput', (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement) || el.type !== 'number') return;
+  const text = e.data ?? e.dataTransfer?.getData('text/plain') ?? '';
+  if (!text.includes(',')) return;
+  e.preventDefault(); document.execCommand('insertText', false, text.trim().replace(/\s/g, '').replace(',', '.'));
+}, true);
 document.addEventListener('input', (e) => { const el = e.target.closest('[data-input]'); if (!el) return; const fn = INPUT[el.dataset.input]; if (fn) fn(el); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) closeSheet(); });
 window.addEventListener('hashchange', () => {

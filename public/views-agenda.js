@@ -149,6 +149,8 @@ ACT.agendaStop = async() => {const e=S.agendaEdit,base=S.events.find((x) => x.id
 ACT.agendaDelete = async () => {
   const e=S.agendaEdit,base=e && S.events.find((x) => x.id===e.sourceId);if(!base)return;
   if(!(await ask(base.recurrence ? `Supprimer toute la série « ${base.title || 'Activité'} » du planning ?` : `Supprimer « ${base.title || 'Activité'} » du planning ?`,{ok:'Supprimer',danger:true,detail:'Les bilans déjà enregistrés restent dans ton historique.'})))return;
+  // Les occurrences modifiées ou annulées de la série partent avec elle (sinon elles restent stockées pour rien).
+  for(const x of S.events.filter((e) => e.meta?.seriesId===base.id)) deleteEvent(x.id);
   deleteEvent(base.id);closeSheet();render();toast('Supprimé du planning');
 };
 ACT.agendaCancel = () => {const e=S.agendaEdit,base=S.events.find((x) => x.id===e.sourceId);saveEvent(occurrenceChange(base,e.occurrenceDate,{date:e.on,completed:false,meta:{...e.meta,status:'cancelled'}}));closeSheet();render();};

@@ -74,7 +74,7 @@ test('S06 données inhabituelles : nom vide, nom très long, texte piégé, sér
   await page.fill('input[data-change=sName]', '   '); await page.press('input[data-change=sName]', 'Tab'); expect((await seances(page))[0].name).toBe('Séance');
   await page.fill('input[data-change=sName]', 'N'.repeat(300)); await page.press('input[data-change=sName]', 'Tab'); expect((await seances(page))[0].name.length).toBeLessThanOrEqual(100);
   await page.fill('input[data-change=sName]', '<img src=x onerror="window.__pirate=1">Séance <b>grasse</b>'); await page.press('input[data-change=sName]', 'Tab'); await synced(page);
-  await go(page, 'library/seances', '#main'); await expect(page.locator('#main')).toContainText('<img src=x'); expect(await page.evaluate(() => window.__pirate)).toBeUndefined(); expect(await page.locator('#main b:text("grasse")').count()).toBe(0);
+  await go(page, 'library/seances', '#main'); await expect(page.locator('#main')).toContainText('<img src=x'); expect(await page.evaluate(() => window.__pirate)).toBeUndefined(); expect(await page.evaluate(() => [...document.querySelectorAll('#main b, #main img')].filter((e) => e.textContent === 'grasse' || e.getAttribute('src') === 'x').length), 'aucune balise venue du nom').toBe(0);
   await go(page, `library/seance/${s.id}`, `[data-act=exEdit][data-id="${s.exercises[0].id}"]`); await page.click(`#main [data-act=exEdit][data-id="${s.exercises[0].id}"]`);
   await page.evaluate(() => { const f = document.querySelector('#sheet form[data-submit=exSave]'); f.noValidate = true; f.elements.sets.value = '500'; f.elements.repsMin.value = '-4'; });
   await page.click('#sheet form[data-submit=exSave] button[type=submit]'); await synced(page);

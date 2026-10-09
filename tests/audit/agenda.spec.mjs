@@ -1,7 +1,8 @@
 // tests/audit/agenda.spec.mjs — calendrier : rendez-vous simple (créer, déplacer, supprimer avec annulation),
 // série répétée (annuler une occurrence, arrêter la répétition, supprimer la série), export .ics, abonnement iCal.
 // Les dates sont calculées dans le fuseau de Paris (celui du navigateur de test et de l'app).
-import { test, expect, go, loaded, synced, confirm, cancel, seedRealistic, day } from './fixtures.mjs';
+import { test, expect, go, loaded, synced, confirm, cancel, seedRealistic, day, toastSeen } from './fixtures.mjs';
+import { agendaEvents } from '../../public/agenda.js';
 
 const events = (page) => page.evaluate(async () => JSON.parse(JSON.stringify((await import('/state.js')).S.events)));
 const onServer = async (audit) => (await audit.users.AuditAlice.get('/api/calendar')).data.events;
@@ -27,9 +28,10 @@ test('C01 rendez-vous simple : créer, déplacer à 19 h 15, « Annuler » la su
   let ev = await events(page); expect(ev).toHaveLength(1); expect(ev[0]).toMatchObject({ date: d, time: '18:30', recurrence: null }); expect(ev[0].title).toContain('Salle Audit');
   expect((await onServer(audit)).map((e) => [e.date, e.time])).toEqual([[d, '18:30']]);
   await openDay(page, d); await page.click('#sheet [data-act=agendaEdit]'); await page.fill('#sheet [name=time]', '19:15'); await page.click('#sheet form[data-submit=agendaEditSave] button[type=submit]'); await synced(page);
-  await page.reload(); await loaded(page); expect((await occurrences(page, d)).map((o) => o.time)).toEqual(['19:15']); expect((await onServer(audit)).map((e) => e.time)).toEqual(['19:15']);
+  // Le serveur garde la ligne d'origine et la modification ; ce qui compte : une seule occurrence, à 19 h 15, partout.
+  await page.reload(); await loaded(page); expect((await occurrences(page, d)).map((o) => o.time)).toEqual(['19:15']); expect(agendaEvents(await onServer(audit), d).map((e) => e.time)).toEqual(['19:15']);
   await openDay(page, d); await page.click('#sheet [data-act=agendaEdit]'); await page.click('#sheet [data-act=agendaDelete]'); await expect(page.locator('#dialog.open')).toContainText('Supprimer'); await cancel(page); await synced(page);
-  expect(await onServer(audit)).toHaveLength(1);
+  expect(agendaEvents(await onServer(audit), d)).toHaveLength(1);
   await page.click('#sheet [data-act=agendaDelete]'); await confirm(page); await expect(page.locator('#toast')).toContainText('Supprimé du planning'); await synced(page);
   expect(await onServer(audit)).toHaveLength(0); await page.reload(); await loaded(page); expect(await occurrences(page, d)).toEqual([]);
 });
@@ -59,7 +61,7 @@ test('C03 export .ics : fichier valide, rendez-vous à 18 h 30, série hebdomada
   const vevents = ics.split('BEGIN:VEVENT').length - 1; expect(vevents).toBeGreaterThan(10); // un rendez-vous + ~2 par semaine sur 90 jours
   expect(ics).toContain(`DTSTART:${day(1).replaceAll('-', '')}T183000`); expect(ics).toMatch(/SUMMARY:Bloc · Salle de bloc/);
   for (const line of ics.split('\r\n')) expect(Buffer.byteLength(line, 'utf8'), 'lignes de 75 octets au plus (RFC 5545)').toBeLessThanOrEqual(75);
-  await expect(page.locator('#toast')).toContainText('exportée');
+  await toastSeen(page, /exportée/);
 });
 
 test('C04 abonnement iCal : lien secret lisible sans compte, remplacé puis coupé', async ({ page, audit }) => {
@@ -69,8 +71,18 @@ test('C04 abonnement iCal : lien secret lisible sans compte, remplacé puis coup
   const path = new URL(url).pathname, anon = new (await import('../helpers.mjs')).Client(audit.env);
   const r = await anon.get(path), feed = await r.res.text(); expect(r.status).toBe(200); expect(r.res.headers.get('content-type')).toMatch(/text\/calendar/);
   expect(feed).toContain('BEGIN:VCALENDAR'); expect(feed).toContain('Bloc · Salle de bloc'); expect(feed).not.toMatch(/AuditAlice|motdepasse/);
-  await page.click('#sheet [data-act=icalNew]'); const url2 = await page.locator('#sheet input[aria-label="Ton lien d’abonnement"]').inputValue(); expect(url2).not.toBe(url);
+  // Le nouveau lien arrive après la réponse du serveur : on attend qu'il s'affiche (sinon le test lit l'ancien).
+  await page.click('#sheet [data-act=icalNew]'); await expect(page.locator('#sheet input[aria-label="Ton lien d’abonnement"]')).not.toHaveValue(url); const url2 = await page.locator('#sheet input[aria-label="Ton lien d’abonnement"]').inputValue();
   expect((await anon.get(path)).status, 'l’ancien lien ne marche plus').not.toBe(200); expect((await anon.get(new URL(url2).pathname)).status).toBe(200);
   await page.click('#sheet [data-act=icalOff]'); await confirm(page); await expect(page.locator('#toast')).toContainText('Abonnement coupé');
   expect((await anon.get(new URL(url2).pathname)).status, 'lien coupé').not.toBe(200);
+});
+
+test('C05 abonnement iCal : un rendez-vous simple déplacé n’y figure qu’une fois, à sa nouvelle heure', async ({ page, audit }) => {
+  const d = day(4); await planSingle(page, d, '18:30');
+  await openDay(page, d); await page.click('#sheet [data-act=agendaEdit]'); await page.fill('#sheet [name=time]', '19:15'); await page.click('#sheet form[data-submit=agendaEditSave] button[type=submit]'); await synced(page);
+  const r = await audit.users.AuditAlice.post('/api/ical', {}); const feed = await (await audit.users.AuditAlice.get(new URL(r.data.url).pathname)).res.text();
+  const stamp = d.replaceAll('-', ''), events = feed.split('BEGIN:VEVENT').slice(1);
+  expect(events.filter((e) => e.includes('Salle Audit') || e.includes('Escalade')).length, 'un seul événement pour ce rendez-vous').toBe(1);
+  expect(feed).toContain(`${stamp}T191500`); expect(feed).not.toContain(`DTSTART:${stamp}T183000`);
 });
