@@ -30,7 +30,7 @@ const COVERAGE_SCRIPT = `(() => {
 async function makeAccounts(env, names) {
   const users = {};
   for (const name of names) {
-    const c = users[name] = new Client(env); await c.register(name, PASSWORD);
+    const c = users[name] = new Client(env); c.userId = (await c.register(name, PASSWORD)).data.user.id;
     await c.post('/api/items', { changes: [{ c: 'config', id: 'main', u: Date.now(), d: CONFIG }] });
   }
   return users;
@@ -144,3 +144,67 @@ export async function seed(client, { history = [], events = [], items = [], sean
   if (seances) { const r = await client.post('/api/sync', seances); if (r.status !== 200) throw new Error('séances ' + r.status); }
 }
 export const day = (offset = 0, base = new Date()) => { const d = new Date(base); d.setDate(d.getDate() + offset); return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }); };
+
+/**
+ * Données réalistes pour qu'aucune page ne soit vide : l'exemple de la démo (18 séances faites sur 6 semaines,
+ * blocs, projet, mesures, forme du jour), plus trois séances enregistrées et deux rendez-vous (dont un répété).
+ * Tout passe par les fonctions de l'app puis par la synchronisation, comme pour une vraie personne.
+ */
+export async function seedRealistic(p) {
+  await p.evaluate(async () => {
+    const st = await import('/state.js'), demo = await import('/demo.js');
+    const day = (o) => new Date(Date.now() + o * 86400000).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+    demo.seedDemo();
+    st.saveSeance({ id: 's-bloc', name: 'Bloc technique', activity: 'climbing_boulder', exercises: [{ id: 'eb1', name: 'Échauffement mobilité', mode: 'time', sets: 1, secMin: 600, rest: 0 }, { id: 'eb2', name: 'Blocs variés', mode: 'reps', sets: 6, repsMin: 4, repsMax: 4, rest: 180 }] });
+    st.saveSeance({ id: 's-renfo', name: 'Renfo haut du corps', activity: 'conditioning', exercises: [{ id: 'er1', name: 'Tractions', mode: 'reps', sets: 4, repsMin: 6, repsMax: 8, rest: 120 }, { id: 'er2', name: 'Pompes', mode: 'reps', sets: 3, repsMin: 12, repsMax: 15, rest: 90 }, { id: 'er3', name: 'Gainage', mode: 'time', sets: 3, secMin: 45, rest: 60 }] });
+    st.saveSeance({ id: 's-course', name: 'Footing 30 min', activity: 'running', exercises: [{ id: 'ec1', name: 'Footing', mode: 'time', sets: 1, secMin: 1800, rest: 0 }] });
+    st.saveEvent({ id: 'ev-seul', date: day(1), time: '18:30', title: 'Bloc · Salle de bloc', sessionId: 's-bloc', completed: false, recurrence: null, meta: { kind: 'activity', activityId: 'climbing_boulder', reminderMin: 30 } });
+    st.saveEvent({ id: 'ev-repete', date: day(-14), time: '', title: 'Renfo', sessionId: 's-renfo', completed: false, recurrence: { freq: 'weekly', days: [2, 5], until: null, timeZone: 'Europe/Paris' }, meta: { kind: 'activity', activityId: 'conditioning', reminderMin: 0 } });
+  });
+  await synced(p);
+}
+/** Interface simple ou avancée, choisie comme une personne le fait (Paramètres). */
+export async function setInterface(p, mode) {
+  await go(p, 'settings/main', `[data-act=interfaceSet][data-v=${mode}]`); await p.click(`[data-act=interfaceSet][data-v=${mode}]`);
+  await expect(p.locator('html')).toHaveAttribute('data-interface', mode); await synced(p);
+}
+/**
+ * Défauts visibles d'une page déjà affichée : écran d'erreur, texte cassé, défilement de côté, éléments qui sortent de
+ * l'écran, contrôles recouverts (hors barres fixes qu'un défilement écarte), états ARIA vides, jauges, listes, champs
+ * et boutons sans nom, identifiants en double.
+ */
+export async function pageAnomalies(p) {
+  const out = await p.evaluate(() => {
+    const W = document.documentElement.clientWidth, H = innerHeight, out = [], main = document.getElementById('main') || document.querySelector('main');
+    if (!main) return ['aucune zone principale'];
+    const text = main.innerText;
+    if (/n’a pas pu s’afficher/.test(text)) out.push('écran « Cet écran n’a pas pu s’afficher »');
+    if (document.documentElement.scrollWidth > W + 1) out.push(`défilement horizontal (${document.documentElement.scrollWidth} px pour ${W} px)`);
+    // Une rubrique repliée (<details> fermé) garde la taille de son contenu dans Chromium, mais ne l'affiche pas.
+    const folded = (el) => { for (let d = el.closest('details:not([open])'); d; d = d.parentElement?.closest('details:not([open])')) if (!d.querySelector(':scope > summary')?.contains(el)) return true; return false; };
+    const visible = (el) => { const r = el.getBoundingClientRect(), st = getComputedStyle(el); return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none' && !el.closest('[hidden],.hidden') && !folded(el); };
+    let wide = 0;
+    for (const el of main.querySelectorAll('*')) {
+      if (wide > 3 || el instanceof SVGElement || el.closest('svg,.hscroll,[data-scroll-x],pre,code,.qr,canvas')) continue;
+      const r = el.getBoundingClientRect(); if (r.width && r.right > W + 1 && visible(el)) { wide++; out.push(`sort de l’écran : ${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]} (${Math.round(r.right)} px)`); }
+    }
+    const nameOf = (el) => (el.getAttribute('aria-label') || '').trim() || (el.getAttribute('aria-labelledby') ? 'x' : '') || (el.title || '').trim() || (el.labels && [...el.labels].map((l) => l.innerText).join(' ').trim()) || (el.closest('label')?.innerText || '').trim();
+    for (const el of document.querySelectorAll('[aria-checked],[aria-pressed],[aria-expanded],[aria-selected]')) for (const a of ['aria-checked', 'aria-pressed', 'aria-expanded', 'aria-selected']) if (el.hasAttribute(a) && !['true', 'false', 'mixed'].includes(el.getAttribute(a))) out.push(`${a}="${el.getAttribute(a)}" sur ${el.tagName.toLowerCase()}[${el.dataset.act || ''}]`);
+    for (const el of document.querySelectorAll('[role=progressbar]')) if (!nameOf(el)) out.push('jauge sans nom');
+    for (const el of main.querySelectorAll('select, textarea, input:not([type=hidden]):not([type=file])')) if (visible(el) && !nameOf(el) && !(el.placeholder || '').trim()) out.push(`champ sans nom : ${el.tagName.toLowerCase()}[name=${el.name || ''}][${el.dataset.change || el.dataset.input || ''}]`);
+    for (const el of document.querySelectorAll('#app button, #app [role=button], #app a[href]')) if (visible(el) && !(el.innerText || '').trim() && !nameOf(el) && !el.querySelector('img[alt]:not([alt=""])')) out.push(`bouton sans nom : ${el.tagName.toLowerCase()}[${el.dataset.act || el.getAttribute('href') || ''}]`);
+    for (const img of main.querySelectorAll('img')) if (!img.hasAttribute('alt')) out.push(`image sans alt : ${img.src.slice(-40)}`);
+    const ids = {}; for (const el of document.querySelectorAll('[id]')) ids[el.id] = (ids[el.id] || 0) + 1;
+    for (const [id, n] of Object.entries(ids)) if (n > 1) out.push(`identifiant en double : #${id} (${n})`);
+    for (const el of main.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [role=button]')) {
+      if (!visible(el)) continue; const r = el.getBoundingClientRect(); if (r.bottom <= 0 || r.top >= H || r.right <= 0 || r.left >= W) continue;
+      const x = Math.min(W - 1, Math.max(0, r.left + r.width / 2)), y = Math.min(H - 1, Math.max(0, r.top + r.height / 2)), top = document.elementFromPoint(x, y);
+      if (!top || el.contains(top) || top.contains(el) || (el.labels && [...el.labels].some((l) => l.contains(top))) || el.closest('label')?.contains(top)) continue;
+      if (top.closest('nav.tabs, header.top')) continue; // un défilement l'écarte
+      out.push(`recouvert : ${el.tagName.toLowerCase()}[${el.dataset.act || el.name || el.innerText.trim().slice(0, 25)}] sous ${top.tagName.toLowerCase()}${top.id ? '#' + top.id : ''}.${String(top.className || '').split(' ')[0]}`);
+    }
+    for (const m of text.matchAll(/undefined|\bNaN\b|\[object Object\]|Invalid Date|null null/g)) out.push(`texte cassé : « ${text.slice(Math.max(0, m.index - 30), m.index + 25).replace(/\s+/g, ' ')} »`);
+    return out;
+  });
+  return [...new Set(out)];
+}
