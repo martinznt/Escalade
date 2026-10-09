@@ -5,7 +5,7 @@ import { returnBar, hintsBar } from './nav.js';
 import './picker.js';
 import { linkPaths } from './pathlinks.js';
 import { restoreUserDetails, onSheetRender, h, raw, icon, $, toast, openSheet, closeSheet, sheetOpen, ask, tag, skeleton, fmtDay } from './ui.js';
-import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, moveLocal, GUEST, putItem } from './state.js';
+import { S, ACT, SUBMIT, CHG, INPUT, APP_VERSION, api, ls, saveSeance, loadLocal, persistNow, writePending, syncAll, setRenderer, setOnExpired, setSyncListener, render, go, parseHash, pendingCount, ctx, clearLocal, moveLocal, GUEST, putItem, safeDecode } from './state.js';
 import { installCard, maybeTour, openSetup, mainConfig } from './views-setup.js';
 import { normalizeSession, uid } from './shared.js';
 import { maybeMove, maybeClaim } from './move.js';
@@ -65,11 +65,11 @@ function doRender() {
   if (route && !same && lastRoute) backTo = { route: lastRoute, y: window.scrollY, at: Date.now() };
   const pub = (location.hash || '').match(/^#\/profile\/public\/([^/]+)$/);
   const pl = pendingLink();
-  if (!S.user) { app.innerHTML = (pub ? vPublicVisitor(decodeURIComponent(pub[1])) : pl && !S.authMode ? h`<main class="wrap">${vLanding(pl)}</main>` : vAuth()).s; return; }
+  if (!S.user) { app.innerHTML = (pub ? vPublicVisitor(safeDecode(pub[1])) : pl && !S.authMode ? h`<main class="wrap">${vLanding(pl)}</main>` : vAuth()).s; return; }
   if (!S.loaded) { app.innerHTML = h`<main class="wrap">${skeleton(4)}</main>`.s; return; }
   document.documentElement.dataset.interface = S.settings.interfaceMode === 'advanced' ? 'advanced' : 'simple';
   let body;
-  try { body = layoutEditing() ? layoutEditor() : pl ? vLanding(pl) : pub && decodeURIComponent(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(decodeURIComponent(pub[1])) : VIEWS[S.tab](); }
+  try { body = layoutEditing() ? layoutEditor() : pl ? vLanding(pl) : pub && safeDecode(pub[1]).toLowerCase() !== S.user.username.toLowerCase() ? vPublicVisitor(safeDecode(pub[1])) : VIEWS[S.tab](); }
   catch (e) {
     console.error(e);
     const where = String(e?.stack || '').split('\n').slice(1, 4).map((l) => l.trim().replace(/https?:\/\/[^/]+\//, '')).join(' · ');
@@ -271,10 +271,15 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   Promise.resolve().then(() => fn(el, e)).catch((err) => { console.error(err); toast('Action impossible : ' + (err?.message || 'erreur inattendue'), 4500, 'bad'); });
 });
+// Un même formulaire n'est jamais traité deux fois en même temps (double toucher, Entrée répétée, deux clics
+// synchrones) : le second envoi est ignoré tant que le premier n'est pas fini.
+const sending = new WeakSet();
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-submit]'); if (!f) return;
   e.preventDefault();
-  const fn = SUBMIT[f.dataset.submit]; if (fn) Promise.resolve().then(() => fn(f, e)).catch((err) => { console.error(err); toast('Enregistrement impossible : ' + (err?.message || 'erreur'), 4500, 'bad'); });
+  const fn = SUBMIT[f.dataset.submit]; if (!fn || sending.has(f)) return;
+  sending.add(f);
+  Promise.resolve().then(() => fn(f, e)).catch((err) => { console.error(err); toast('Enregistrement impossible : ' + (err?.message || 'erreur'), 4500, 'bad'); }).finally(() => sending.delete(f));
 });
 document.addEventListener('change', (e) => { const el = e.target.closest('[data-change]'); if (!el) return; const fn = CHG[el.dataset.change]; if (fn) try { fn(el); } catch (err) { console.error(err); toast(err.message, 4000, 'bad'); } });
 document.addEventListener('input', (e) => { const el = e.target.closest('[data-input]'); if (!el) return; const fn = INPUT[el.dataset.input]; if (fn) fn(el); });
@@ -304,7 +309,7 @@ const writeSeen = (build) => { try { localStorage.setItem(SEEN_KEY, JSON.stringi
 function showUpdate() { UPD.available = true; renderUpdateBar(); }
 function renderUpdateBar() {
   let bar = document.getElementById('updbar');
-  const hidden = !(UPD.available || UPD.fresh) || S.player || Date.now() < UPD.later || document.body.classList.contains('touring');
+  const hidden = !(UPD.available || UPD.fresh) || S.player || S.lay || document.getElementById('player')?.classList.contains('open') || Date.now() < UPD.later || document.body.classList.contains('touring');
   if (hidden) { bar?.remove(); return; }
   if (!bar) { bar = document.createElement('div'); bar.id = 'updbar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
   const tour = pendingNews().length > 0, missed = missedNews().length;

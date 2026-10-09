@@ -446,9 +446,11 @@ export function go(tab, sub, param = '') {
   if (location.hash === hash) { S.tab = tab; S.param = param; render(); }
   else location.hash = hash;
 }
+/** Un lien mal encodé (« % » seul…) ne bloque jamais le démarrage : le paramètre illisible est ignoré. */
+export const safeDecode = (v) => { try { return decodeURIComponent(v); } catch { return ''; } };
 export function parseHash() {
   const [, tab, sub, param] = (location.hash || '').split('/');
-  if (['home', 'progress', 'library', 'profile', 'settings'].includes(tab)) { S.tab = tab; if (sub) S.sub[tab] = sub; S.param = param ? decodeURIComponent(param) : ''; }
+  if (['home', 'progress', 'library', 'profile', 'settings'].includes(tab)) { S.tab = tab; if (sub) S.sub[tab] = sub; S.param = param ? safeDecode(param) : ''; }
 }
 export const newId = () => uid();
 export const GUEST = Object.freeze({ id: 'guest', username: 'Invité', guest: true });

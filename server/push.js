@@ -297,7 +297,7 @@ async function notificationMessage(env, endpoint, userId, tz, now = Date.now()) 
     const [sourceId, occurrenceDate] = pending.slice(9).split('/');
     const event = await calendarOccurrence(env, userId, sourceId, occurrenceDate);
     if (event && !event.completed && !['done', 'missed', 'cancelled'].includes(event.meta?.status)) return {
-      title: 'Rendez-vous à venir', body: `${String(event.title || 'Ta séance').slice(0, 100)} à ${event.time}${event.meta?.place ? ` · ${String(event.meta.place).slice(0, 70)}` : ''}.`, url: '/#/home/agenda', silent,
+      title: 'Rendez-vous à venir', body: `${String(event.title || 'Ta séance').slice(0, 100)} à ${event.time}${event.meta?.place ? ` · ${String(event.meta.place).slice(0, 70)}` : ''}.`, url: '/#/home/cal', silent,
     };
   }
   if (pending === 'announce' || pending.startsWith('announce:')) {

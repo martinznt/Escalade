@@ -183,7 +183,7 @@ const BLOCK_VIEWS = {
   },
   goals() {
     const gs = activeGoals(ctx());
-    return card('🎯 Objectifs', gs.length ? gs.slice(0, 5).map((g) => { const pr = goalProgress(g, ctx()); return h`<button class="goal item pick" data-act="goalOpen" data-id="${g.id}"><div class="grow"><div class="row between small"><b>${goalLabel(g)}</b><span>${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></div></button>`; }) : h`<p class="muted small">Aucun objectif actif.</p>`, h`<button class="btn sm" data-act="goProfile" data-id="goals">＋ Objectif</button>`);
+    return card('🎯 Objectifs', gs.length ? gs.slice(0, 5).map((g) => { const pr = goalProgress(g, ctx()); return h`<button class="goal item pick" data-act="goalOpen" data-id="${g.id}"><div class="grow"><div class="row between small"><b>${goalLabel(g)}</b><span>${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0, '', `Progression : ${goalLabel(g)}`)}<div class="tiny muted">${pr.text}</div></div></button>`; }) : h`<p class="muted small">Aucun objectif actif.</p>`, h`<button class="btn sm" data-act="goProfile" data-id="goals">＋ Objectif</button>`);
   },
   records() {
     const r = records(ctx()).slice(0, 5);

@@ -68,7 +68,7 @@ function completeCard(c, acts, goals, climbing) {
     [!item('config', 'body')?.age && !item('config', 'body')?.weight, '🫀', 'Ton corps (âge, forme)', 'profile/body'],
   ], left = items.filter((x) => x[0]), done = items.length - left.length;
   if (!left.length) return '';
-  return h`<section class="card"><div class="row between"><h3>🧩 Pour des séances plus justes</h3><span class="tiny muted">${done}/${items.length}</span></div>${meter((done / items.length) * 100)}
+  return h`<section class="card"><div class="row between"><h3>🧩 Pour des séances plus justes</h3><span class="tiny muted">${done}/${items.length}</span></div>${meter((done / items.length) * 100, '', 'Profil rempli')}
     <div class="setmenu">${left.map(([, ic, t, to]) => h`<button class="setrow" data-act="allGo" data-to="${to}"><span class="sic">${ic}</span><span class="grow"><b>${t}</b></span><span class="chev">›</span></button>`)}</div></section>`;
 }
 function vHub() {
@@ -131,7 +131,7 @@ function vMap() {
       ${Object.entries(groups).map(([fam, list]) => h`<div class="capgroup"><b class="small">${CAP_FAMILIES[fam] || 'Autres'}</b><div class="capmap">${list.map((s) => h`<button class="cap ${s.status}" data-act="capOpen" data-id="${s.capId}" style="--rel:${Math.round(40 + s.relevance * 60)}%"><span>${s.label}</span><small>${STATUS_WORD[s.status]}${s.level != null ? ' · confiance ' + confWord(s.confidence) : ''}</small></button>`)}</div></div>`)}
       ${!m.capacities.length ? h`<p class="muted small">Choisis une activité ou un objectif pour faire apparaître tes capacités.</p>` : ''}</div>
     <div class="card"><h3>Muscles travaillés (30 jours)</h3>${raw(anatomySvg({ heat: muscleVolume(c, 30) }))}<p class="tiny muted center">Plus la zone est marquée, plus elle a été sollicitée (exercices réalisés + ressenti du questionnaire).</p></div>
-    <div class="card"><h3>Objectifs</h3>${m.goals.length ? m.goals.map((g) => h`<button class="item pick" data-act="goalOpen" data-id="${g.goal.id}"><div class="grow"><b>${g.label}</b>${meter(g.progress.pct || 0)}<div class="tiny muted">${g.progress.text}</div></div></button>`) : h`<p class="muted small">Aucun objectif actif.</p>`}</div>
+    <div class="card"><h3>Objectifs</h3>${m.goals.length ? m.goals.map((g) => h`<button class="item pick" data-act="goalOpen" data-id="${g.goal.id}"><div class="grow"><b>${g.label}</b>${meter(g.progress.pct || 0, '', `Progression : ${g.label}`)}<div class="tiny muted">${g.progress.text}</div></div></button>`) : h`<p class="muted small">Aucun objectif actif.</p>`}</div>
     <details class="card fold"><summary><span>🔁 Habitudes</span><em>${m.habits.length}</em></summary>${m.habits.length ? h`<ul class="clean">${m.habits.map((x) => h`<li>${x.text}</li>`)}</ul>` : h`<p class="muted small">Pas encore assez de séances.</p>`}</details>
     <details class="card fold"><summary><span>🧰 Matériel</span><em>${m.equipment.length}</em></summary><div class="chips">${m.envs.map((e) => h`<span class="chip static">📍 ${e}</span>`)}${m.equipment.map((e) => h`<span class="chip static">${e}</span>`)}</div></details>
     <details class="card fold"><summary><span>🏆 Progression récente</span><em>${m.progression.length}</em></summary>${m.progression.length ? h`<ul class="clean">${m.progression.map((r) => h`<li><b>${r.label}</b> · ${r.text} <span class="muted">(${fmtDay(r.date)})</span></li>`)}</ul>` : h`<p class="muted small">Aucun record encore.</p>`}</details>`;
@@ -345,10 +345,10 @@ function vGoals() {
   // Réussis ou archivés : une sous-liste avec son retour (jamais une rangée d'onglets).
   if (f === 'done') return h`<button class="btn sm ghost" data-act="goalFilter" data-id="active">‹ Objectifs en cours</button>${doneList(c.goals)}`;
   if (f !== 'active') return h`<button class="btn sm ghost" data-act="goalFilter" data-id="active">‹ Objectifs en cours</button><h2>${f === 'done' ? '🏆 Objectifs réussis' : '🗄️ Objectifs archivés'}</h2>
-    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : itemsOf('project').some((p) => p.status === f) ? '' : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}${f === 'archived' ? projectsSection('archived') : ''}${f === 'done' && doneProjects().length ? doneList(c.goals) : ''}`;
+    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0, '', `Progression : ${goalLabel(g)}`)}<div class="tiny muted">${pr.text}</div></button>`; }) : itemsOf('project').some((p) => p.status === f) ? '' : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}${f === 'archived' ? projectsSection('archived') : ''}${f === 'done' && doneProjects().length ? doneList(c.goals) : ''}`;
   return h`${goalsPicker()}<div class="row wrapf"><button class="btn pri" data-act="goalNew">＋ Objectif précis</button></div>
     <span class="kicker">En cours</span>
-    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}
+    ${list.length ? list.map((g) => { const pr = goalProgress(g, c); return h`<button class="card pick goalcard" data-act="goalOpen" data-id="${g.id}"><div class="row between"><b>${g.type === 'skill' ? SKILLS[g.skillId]?.emoji + ' ' : ''}${goalLabel(g)}</b><span class="small">${pr.pct == null ? '—' : pr.pct + ' %'}</span></div>${meter(pr.pct || 0, '', `Progression : ${goalLabel(g)}`)}<div class="tiny muted">${pr.text}</div></button>`; }) : empty('Aucun objectif ici. Exemples : front lever, drapeau, traction à un bras, 20 tractions, 7A en bloc, 3 séances par semaine…', h`<button class="btn pri" data-act="goalNew">＋ Ajouter un objectif</button>`)}
     ${projectsSection('active')}
     ${doneGoals(c.goals).length || doneProjects().length ? doneList(c.goals, 5) : ''}
     ${nArch ? menuList([['goalFilter', 'archived', '🗄️', `Objectifs archivés (${nArch})`, 'Mis de côté, gardés dans l’historique']]) : ''}
@@ -435,7 +435,7 @@ export function silhouetteCard(b = item('config', 'body') || {}, goals = item('c
     ${tr.ratioText ? h`<p class="tiny">${tr.ratioText}</p>` : ''}
     <p class="tiny muted">Mesure toujours dans les mêmes conditions (le matin, même mètre ruban) : l’évolution compte plus que le chiffre.</p>
     <b class="small">📊 Séries cette semaine (7 jours)</b>
-    <div class="stack tight">${sets.map((x) => h`<div class="small"><div class="row between"><span>${x.label}</span><span class="tiny ${x.state === 'ok' ? 'ok-t' : x.state === 'high' ? 'warn-t' : 'muted'}">${x.text}</span></div>${meter(Math.min(100, (x.sets / SETS_RANGE[1]) * 100), x.state === 'ok' ? 'ok' : '')}</div>`)}</div>
+    <div class="stack tight">${sets.map((x) => h`<div class="small"><div class="row between"><span>${x.label}</span><span class="tiny ${x.state === 'ok' ? 'ok-t' : x.state === 'high' ? 'warn-t' : 'muted'}">${x.text}</span></div>${meter(Math.min(100, (x.sets / SETS_RANGE[1]) * 100), x.state === 'ok' ? 'ok' : '', `Séries de la semaine : ${x.label}`)}</div>`)}</div>
     <p class="tiny muted">Repère tiré des études : environ ${SETS_RANGE[0]} à ${SETS_RANGE[1]} séries difficiles par muscle et par semaine pour prendre du muscle. L’alimentation, le sommeil et la génétique comptent aussi : rien n’est garanti.</p>
     ${sourcesLine(PHYSIQUE_SOURCES)}</section>`;
 }
@@ -599,7 +599,7 @@ function vGoalDetail(g) {
   const c = ctx(), pr = goalProgress(g, c), tab = S.goalTab || 'overview', sk = SKILLS[g.skillId];
   const secs = [['blockers', '🧱', 'Ce qui bloque', 'Les capacités qui te freinent le plus'], ...(sk ? [['tree', '🪜', 'Progression', 'Les étapes jusqu’à l’objectif'], ['paths', '🛤️', 'Chemins', 'Les façons d’y arriver']] : []), ['strats', '🧭', 'Plusieurs chemins', 'Spécifique, mixte ou préparation physique : compare'], ['graph', '🕸️', 'Graphe', 'Ce qui compte pour cet objectif, en image'], ['whatif', '🔮', 'Et si… ?', 'Ce que ça change si tu progresses sur un point'], ['why', '🤔', 'Pourquoi je stagne ?', 'Les raisons possibles, d’après tes données']];
   return h`<button class="btn sm ghost" data-act="goalBack">‹ Objectifs</button><h2 style="margin:.2em 0">${sk?.emoji || '🎯'} ${goalLabel(g)}</h2>
-    <div class="card hero ghero stack"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0)}<p class="small">${pr.text}</p>
+    <div class="card hero ghero stack"><div class="row between"><b class="big-pct">${pr.pct == null ? '—' : pr.pct + ' %'}</b>${g.deadline ? h`<span class="chip static">📅 ${g.deadline}</span>` : ''}</div>${meter(pr.pct || 0, '', `Progression : ${goalLabel(g)}`)}<p class="small">${pr.text}</p>
       ${sk ? h`<details class="how mini"><summary>C’est quoi, ${sk.label} ?</summary><p class="small">${sk.desc}</p></details>` : ''}
       ${g.status === 'done' ? h`<p class="small ok-t">🏆 Réussi le ${g.doneAt ? new Date(g.doneAt).toLocaleDateString('fr-FR') : '—'}</p>`
         : (pr.pct ?? 0) >= 100 ? h`<div class="card flat ok-b row"><span class="grow small">🎉 Tu es à 100 % : tu l’as réussi ?</span><button class="btn sm pri" data-act="goalDone" data-id="${g.id}">🏆 Oui !</button></div>` : ''}
@@ -936,7 +936,7 @@ const STATE_TXT = (r) => (r.state === 'known' ? `${r.value} · ${r.source}${r.ag
 function bilanCard(a) {
   if (!a.total) return h`<section class="card flat row"><span class="grow small">🩺 Choisis ce que tu veux (progresser, être plus fort, plus endurant…) : l’app te dira quoi mesurer.</span><button class="btn sm pri" data-act="profSub" data-id="goals">Choisir</button></section>`;
   if (a.known === a.total) return '';
-  return h`<button class="card pick" data-act="profSub" data-id="bilan"><div class="row between"><b>🩺 Mon bilan physique</b><span class="tiny muted">${a.known}/${a.total}</span></div>${meter(a.coverage)}
+  return h`<button class="card pick" data-act="profSub" data-id="bilan"><div class="row between"><b>🩺 Mon bilan physique</b><span class="tiny muted">${a.known}/${a.total}</span></div>${meter(a.coverage, '', 'Bilan physique : mesures connues')}
     <small class="tiny muted" style="display:block">L’app connaît ${a.known} des ${a.total} repères utiles pour tes objectifs. ${a.todo.length} test${a.todo.length > 1 ? 's' : ''} simple${a.todo.length > 1 ? 's' : ''} pour des séances plus justes ›</small></button>`;
 }
 function vBilan() {
@@ -949,7 +949,7 @@ function vBilan() {
       <div class="tiny muted">Pour savoir : ${r.why}</div>
       ${r.test ? h`<details class="how mini"><summary>Comment faire le test ?</summary><p class="tiny">${r.test}</p></details>` : ''}</div>
     <button class="btn sm ${r.state === 'known' ? '' : 'pri'}" data-act="perfAdd" data-id="${r.metricId}">${r.state === 'known' ? 'Mettre à jour' : 'Saisir'}</button></div>`;
-  return h`<section class="card stack"><h3 style="margin:0">Ce que l’app sait de toi</h3><p class="small">${f.text}</p>${meter(a.coverage)}
+  return h`<section class="card stack"><h3 style="margin:0">Ce que l’app sait de toi</h3><p class="small">${f.text}</p>${meter(a.coverage, '', 'Bilan physique : mesures connues')}
       ${a.zones.length ? h`<p class="tiny muted">🛡️ ${a.zones.map((z) => ZONE_WORD[z]).join(', ')} à ménager : les tests qui les sollicitent fortement sont remplacés ou retirés.</p>` : ''}
       ${guided.length ? h`<button class="btn pri" data-act="bilanRun">▶ Faire les tests guidés (${guided.length})</button><p class="tiny muted">Un test à la fois : comment le faire, puis ta valeur. Tu peux passer ou répondre « je ne sais pas ».</p>` : ''}</section>
     ${Object.entries(a.byEnvie).map(([e, rows]) => h`<section class="card"><h3>${ENVIES[e]?.emoji || '🎯'} ${ENVIES[e]?.label || e}</h3><p class="tiny muted">Pour connaître ${ENVIES[e]?.know || 'ton point de départ'}.</p>${rows.map(row)}</section>`)}

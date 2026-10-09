@@ -6,7 +6,8 @@ export class Raw { constructor(s) { this.s = s; } toString() { return this.s; } 
 export const raw = (s) => new Raw(String(s));
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const val = (v) => (v instanceof Raw ? v.s : Array.isArray(v) ? v.map(val).join('') : v === false || v == null ? '' : esc(v));
-export const h = (strings, ...vals) => new Raw(strings.reduce((out, s, i) => out + s + (i < vals.length ? val(vals[i]) : ''), ''));
+const ARIA_ATTR = /\saria-[a-z]+="$/;
+export const h = (strings, ...vals) => new Raw(strings.reduce((out, s, i) => out + s + (i < vals.length ? (typeof vals[i] === 'boolean' && ARIA_ATTR.test(s) ? String(vals[i]) : val(vals[i])) : ''), ''));
 const ICONS = {
   home: 'M3 10l9-7 9 7M5 9v12h5v-7h4v7h5V9',
   progress: 'M4 4v16h16M7 14l4-5 4 3 5-7',
@@ -153,7 +154,8 @@ export const menuList = (rows) => h`<div class="setmenu">${rows.map(menuRow)}</d
 /** En-tête d'une sous-page : retour vers la liste, puis le titre. */
 export const subHead = (act, id, backLabel, title) => h`<div class="row subhead"><button class="btn sm ghost" data-act="${act}" data-id="${id}">‹ ${backLabel}</button></div><h1>${title}</h1>`;
 export const chip = (on, label, attrs) => h`<button type="button" class="chip ${on ? 'on' : ''}" aria-pressed="${!!on}" ${raw(attrs)}>${label}</button>`;
-export const meter = (pct, cls = '') => h`<div class="meter ${cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct || 0)}"><i style="width:${Math.max(0, Math.min(100, Math.round(pct || 0)))}%"></i></div>`;
+/** Jauge : label = ce qu'elle mesure (nom lu par les lecteurs d'écran, avec le pourcentage). */
+export const meter = (pct, cls = '', label = 'Progression') => h`<div class="meter ${cls}" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct || 0)}"><i style="width:${Math.max(0, Math.min(100, Math.round(pct || 0)))}%"></i></div>`;
 export const empty = (text, action = '') => h`<div class="card flat center empty"><p class="muted">${text}</p>${action}</div>`;
 export const tag = (text, cls = '') => h`<span class="tag ${cls}">${text}</span>`;
 export const SOURCE_TAG = { mesuré: 'ok', déclaré: '', calculé: 'info', estimé: 'warn', recommandé: 'acc', importé: '', 'relevé en séance': 'ok' };

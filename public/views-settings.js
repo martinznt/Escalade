@@ -193,7 +193,7 @@ function vNotifs() {
   return h`${remindersCard()}
     <button type="button" class="card spotlink" data-act="goSpot" data-to="settings/display" data-spot="#notification-icons"><span class="sic">🖼️</span><span class="grow"><b>Icône et image des notifications</b><small>Elles se changent dans Paramètres › Affichage et accessibilité, avec l’icône de l’app : touche ici pour y aller.</small></span><span class="chev">›</span></button>
     <div class="card"><h3>🎵 Son dans l’app</h3><p class="small muted">Joué quand de nouvelles notifications arrivent pendant que l’app est ouverte. Le son des notifications du téléphone, lui, se règle dans les réglages du téléphone.</p>
-      <div class="row"><select data-change="pref" name="notifSound" class="grow">${[['aucun', 'Aucun'], ...SOUND_STYLES].map(([v, l]) => h`<option value="${v}" ${(st.notifSound || 'doux') === v ? 'selected' : ''}>${l}</option>`)}</select><button class="btn sm" data-act="notifSoundTest">Écouter</button></div></div>
+      <div class="row"><select data-change="pref" name="notifSound" class="grow" aria-label="Son des notifications dans l’app">${[['aucun', 'Aucun'], ...SOUND_STYLES].map(([v, l]) => h`<option value="${v}" ${(st.notifSound || 'doux') === v ? 'selected' : ''}>${l}</option>`)}</select><button class="btn sm" data-act="notifSoundTest">Écouter</button></div></div>
     <button class="btn" data-act="notifOpen">🔔 Ouvrir mes notifications</button>`;
 }
 ACT.notifSoundTest = () => { const v = S.settings.notifSound || 'doux'; if (v !== 'aucun') { beep(880, 160, v); setTimeout(() => beep(1175, 220, v), 220); } };

@@ -235,7 +235,8 @@ await ok('rendez-vous : délai avant l’heure, fuseau de la série et rappel un
   assert.equal(await runCalendarReminders(env, t - 1000, f), 0); assert.equal(await runCalendarReminders(env, t, f), 1);
   assert.equal(await runCalendarReminders(env, t + 60000, f), 0); assert.equal(calls.length, 1);
   const uid = (await u.get('/api/auth/me')).data.user.id;
-  assert.match((await messageFor(env, EP + 'cal', uid, 'America/New_York', t)).body, /Voie · Nicole Abar à 18:00/);
+  const reminder = await messageFor(env, EP + 'cal', uid, 'America/New_York', t);
+  assert.match(reminder.body, /Voie · Nicole Abar à 18:00/); assert.equal(reminder.url, '/#/home/cal', 'le rappel ouvre le calendrier (vue home/cal)');
   assert.equal(await runCalendarReminders(env, Date.parse('2026-09-08T15:30:00Z'), f), 1, 'la semaine suivante a son propre rappel');
 });
 await ok('rendez-vous : déplacement, annulation, occurrence sans rappel et séance faite respectent la règle de série', async () => {
