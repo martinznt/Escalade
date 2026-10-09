@@ -39,9 +39,11 @@ async function makeAccounts(env, names) {
 }
 
 export const test = base.extend({
+  /** Réglages en plus du serveur de test (ex. une IA simulée : { AI: { run } }). */
+  envExtra: [{}, { option: true }],
   /** Serveur isolé, comptes, journal des événements du navigateur, couverture. Connecté en Alice par défaut. */
-  audit: [async ({ page, context }, use, testInfo) => {
-    const env = makeEnv(), users = await makeAccounts(env, ['AuditAlice', 'AuditBob']);
+  audit: [async ({ page, context, envExtra }, use, testInfo) => {
+    const env = makeEnv(envExtra), users = await makeAccounts(env, ['AuditAlice', 'AuditBob']);
     const srv = await startServer(env), hits = [];
     const events = { console: [], pageerrors: [], failedRequests: [], httpErrors: [] };
     page.on('console', (m) => { if (m.type() === 'error') events.console.push(m.text().slice(0, 300)); });
@@ -60,8 +62,11 @@ export const test = base.extend({
       },
       /** Ouvre la session d'un compte dans le navigateur (cookie du serveur local), puis charge l'app. */
       async loginAs(name, hash = '') {
+        // Comme une vraie connexion : le compte gardé sur l'appareil est oublié, puis la page est vraiment rechargée
+        // (aller d'une adresse « #… » à une autre ne recharge pas la page).
+        await page.evaluate(() => { try { localStorage.removeItem('sea:user'); } catch { /* page vide */ } }).catch(() => {});
         await context.clearCookies(); await context.addCookies([{ name: 'session', value: users[name].jar.session, url: srv.base, httpOnly: true, sameSite: 'Lax' }]);
-        await page.goto(srv.base + '/' + hash); await loaded(page);
+        await page.goto('about:blank'); await page.goto(srv.base + '/' + hash); await loaded(page);
       },
       /** Interdit les erreurs JavaScript non prévues (une exception non rattrapée est toujours un défaut). */
       allowPageErrors: false,

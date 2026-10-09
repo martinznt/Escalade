@@ -9,6 +9,7 @@
     "test:audit": "playwright test -c tests/audit/playwright.config.mjs"
   },
   "devDependencies": {
+    "axe-core": "4.10.3",
     "jsqr": "1.4.0",
     "playwright": "1.63.0"
   },

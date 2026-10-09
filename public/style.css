@@ -349,7 +349,9 @@ canvas.confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:n
 .streak.hot{background:linear-gradient(135deg,color-mix(in srgb,#ff7a18 22%,var(--card)),var(--card));border-color:color-mix(in srgb,#ff7a18 40%,var(--line))}
 .wkdots{display:flex;gap:5px}.wkdots i{width:12px;height:12px;border-radius:50%;background:var(--line)}.wkdots i.on{background:#ff8a3d}
 .badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:8px;margin-top:8px}
-.badge{display:grid;justify-items:center;text-align:center;gap:3px;padding:10px 6px;border-radius:16px;background:var(--card2);opacity:.55;filter:grayscale(.8)}
+.badge{display:grid;justify-items:center;text-align:center;gap:3px;padding:10px 6px;border-radius:16px;background:var(--card2)}
+/* Badge pas encore gagné : seule l'icône est atténuée, le texte reste lisible (contraste). */
+.badge:not(.got) .bi{opacity:.45;filter:grayscale(.9)}
 .badge.got{opacity:1;filter:none;background:color-mix(in srgb,var(--accent) 16%,var(--card2))}
 .badge .bi{font-size:1.8rem}.badge b{font-size:.8rem;line-height:1.2}.badge small{font-size:.68rem;color:var(--muted);line-height:1.2}
 .bprog{width:80%;height:4px;border-radius:9px;background:var(--line);overflow:hidden}.bprog i{display:block;height:100%;background:var(--accent)}
@@ -578,7 +580,7 @@ body.textedit #main :is(h1,h2,h3,b,p,small,span,summary,button,label,li){cursor:
 .selbox{flex:none;width:30px;height:30px;border-radius:9px;border:2px solid var(--line);background:none;color:var(--bg);font-weight:800;cursor:pointer;display:grid;place-items:center}.selbox.on{background:var(--accent);border-color:var(--accent)}.card.on-b{border-color:var(--accent)}.selbar .row.wrapf{gap:6px}
 .brief{display:grid;gap:10px}.brief .w3{display:flex;gap:10px;align-items:flex-start}.brief .w3i{font-size:1.15rem;width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:9px;background:var(--card2)}
 .brief .w3 b{font-size:.82rem;color:var(--accent)}.brief .w3 p{margin:2px 0 0;font-size:.92rem;line-height:1.4}
-.linkish{appearance:none;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.linkish{appearance:none;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-height:24px}
 .cpart{padding:10px 0;border-bottom:1px solid var(--line);display:grid;gap:6px}.cpart:last-of-type{border-bottom:0}.cpart .cpbtns{justify-content:flex-end}
 .setrow.dim{opacity:.6}
 .editdock.top{position:sticky;top:calc(60px + env(safe-area-inset-top));bottom:auto;margin-bottom:12px;align-items:center}
@@ -780,3 +782,4 @@ button.item.rowpick:last-child{border-bottom:0}
 /* 8.34 — chrono : circuit affiché (AMRAP, pour le temps), boutons d'action sur deux colonnes. */
 #itimer .it-list{margin:0;padding-left:1.4em;text-align:left;font-size:1.05rem;line-height:1.5;max-width:min(420px,86vw)}
 #itimer .it-bot{gap:10px}#itimer .it-bot .grid2 .btn{min-height:64px}
+#sheet .panel:focus{outline:none}

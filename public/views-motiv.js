@@ -18,7 +18,7 @@ export function streakCard() {
   return h`<section class="card streak ${st.streak ? 'hot' : ''}"><div class="row"><div class="flame">${st.streak ? '🔥' : '🌱'}</div>
       <div class="grow"><b class="big">${st.streak ? `${st.streak} semaine${st.streak > 1 ? 's' : ''} d’affilée` : 'Lance ta série'}</b>
       <div class="small">${st.done ? 'Objectif de la semaine atteint 👏' : `Cette semaine : encore ${st.left} séance${st.left > 1 ? 's' : ''}${st.streak ? ' pour continuer' : ''}`}</div></div>
-      <div class="wkdots" aria-label="${st.thisWeek} sur ${st.goal} cette semaine">${dots}</div></div>
+      <div class="wkdots" role="img" aria-label="${st.thisWeek} sur ${st.goal} cette semaine">${dots}</div></div>
     ${st.best > st.streak ? h`<p class="tiny muted">Ta meilleure série : ${st.best} semaines.</p>` : ''}</section>`;
 }
 

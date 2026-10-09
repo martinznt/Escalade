@@ -98,20 +98,31 @@ const sheetTitle = (el) => (el?.querySelector('h2,h3')?.textContent || '').repla
 let sheetHook = null;
 /** Appelé après chaque ouverture de fenêtre (ex. liens des indications de chemin). */
 export const onSheetRender = (fn) => { sheetHook = fn; };
+// Clavier et lecteurs d'écran : le focus entre dans la fenêtre, y reste tant qu'elle est ouverte, puis revient au bouton
+// qui l'a ouverte (ou au même bouton redessiné), sans faire défiler la page.
+let returnFocus = null;
+const focusKey = (el) => (el?.dataset?.act ? `[data-act="${CSS.escape(el.dataset.act)}"]${el.dataset.id ? `[data-id="${CSS.escape(el.dataset.id)}"]` : ''}` : '');
+const rememberFocus = (box) => { const a = document.activeElement; return a && a !== document.body && !box.contains(a) ? { el: a, key: focusKey(a) } : null; };
+const giveBackFocus = (r) => { if (!r) return; const target = r.el.isConnected ? r.el : r.key ? document.querySelector('#app ' + r.key) : null; if (target) setTimeout(() => { if (!document.querySelector('#sheet.open, #dialog.open, #player.open')) target.focus?.({ preventScroll: true }); }, 0); };
+if (typeof document !== 'undefined') document.addEventListener('focusin', (e) => {
+  const s = document.getElementById('sheet'); if (!s?.classList.contains('open') || e.target.closest?.('#sheet, #dialog, #toast, #player, #itimer, #grp, #tour')) return;
+  s.querySelector('.panel')?.focus({ preventScroll: true });
+});
 export function openSheet(content, { wide = false } = {}) {
   const s = $('#sheet');
+  if (!s.classList.contains('open')) returnFocus = rememberFocus(s);
   const body = val(content), close = body.includes('data-act="closeSheet"') ? '' : '<button type="button" class="btn sm ghost" data-act="closeSheet" aria-label="Fermer la fenêtre">Fermer</button>';
   // La même fenêtre redessinée (même titre) garde sa position et ses rubriques ouvertes.
   const old = s.classList.contains('open') ? s.querySelector('.panel') : null, oldTitle = sheetTitle(old), keep = old ? { top: old.scrollTop } : null;
-  s.innerHTML = `<div class="back" data-act="closeSheet"></div><div class="panel${wide ? ' wide' : ''}" role="dialog" aria-modal="true"><div class="sheet-tools"><div class="grab" aria-hidden="true"></div>${close}</div>${body}</div>`;
+  s.innerHTML = `<div class="back" data-act="closeSheet"></div><div class="panel${wide ? ' wide' : ''}" role="dialog" aria-modal="true" tabindex="-1"><div class="sheet-tools"><div class="grab" aria-hidden="true"></div>${close}</div>${body}</div>`;
   const panel = s.querySelector('.panel');
   try { sheetHook?.(panel); } catch { /* un lien de moins, jamais une fenêtre cassée */ }
   restoreUserDetails(panel);
   if (keep && oldTitle && sheetTitle(panel) === oldTitle) panel.scrollTop = keep.top;
   s.classList.add('open'); sheetStack++;
-  setTimeout(() => { const f = s.querySelector('[autofocus]'); if (f) f.focus(); }, 30);
+  setTimeout(() => { if (!s.classList.contains('open')) return; const f = s.querySelector('[autofocus]'); if (f) f.focus(); else if (!s.contains(document.activeElement)) s.querySelector('.panel')?.focus({ preventScroll: true }); }, 30);
 }
-export function closeSheet() { const s = $('#sheet'); s.classList.remove('open'); s.innerHTML = ''; sheetStack = 0; for (const k of [...userOpen.keys()]) if (k.startsWith('sheet:')) userOpen.delete(k); }
+export function closeSheet() { const s = $('#sheet'), wasOpen = s.classList.contains('open'); s.classList.remove('open'); s.innerHTML = ''; if (wasOpen) { giveBackFocus(returnFocus); returnFocus = null; } sheetStack = 0; for (const k of [...userOpen.keys()]) if (k.startsWith('sheet:')) userOpen.delete(k); }
 export const sheetOpen = () => $('#sheet')?.classList.contains('open');
 
 /** Confirmation dans une feuille (testable, accessible). Résout true / false. */
@@ -133,11 +144,11 @@ export function askText(message, { value = '', placeholder = '', ok = 'Valider',
 }
 export function ask(message, { ok = 'Confirmer', cancel = 'Annuler', danger = false, detail = '' } = {}) {
   return new Promise((resolve) => {
-    const d = $('#dialog');
+    const d = $('#dialog'), back = rememberFocus(d);
     d.innerHTML = h`<div class="back"></div><div class="panel" role="alertdialog" aria-modal="true" aria-labelledby="dlg-t"><h2 id="dlg-t" style="margin:0">${message}</h2>${detail ? h`<p class="muted small">${detail}</p>` : ''}
       <div class="row wrapf end"><button class="btn" data-dlg="0">${cancel}</button><button class="btn ${danger ? 'danger' : 'pri'}" data-dlg="1" autofocus>${ok}</button></div></div>`.s;
     d.classList.add('open');
-    const done = (v) => { d.classList.remove('open'); d.innerHTML = ''; d.removeEventListener('click', onClick); resolve(v); };
+    const done = (v) => { d.classList.remove('open'); d.innerHTML = ''; d.removeEventListener('click', onClick); resolve(v); if (back && back.el.isConnected) setTimeout(() => { if (!document.querySelector('#dialog.open')) back.el.focus?.({ preventScroll: true }); }, 0); };
     const onClick = (e) => { const b = e.target.closest('[data-dlg]'); if (b) done(b.dataset.dlg === '1'); else if (e.target.classList.contains('back')) done(false); };
     d.addEventListener('click', onClick);
     setTimeout(() => d.querySelector('[autofocus]')?.focus(), 20);
