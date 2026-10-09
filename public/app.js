@@ -282,6 +282,16 @@ document.addEventListener('submit', (e) => {
   Promise.resolve().then(() => fn(f, e)).catch((err) => { console.error(err); toast('Enregistrement impossible : ' + (err?.message || 'erreur'), 4500, 'bad'); }).finally(() => sending.delete(f));
 });
 document.addEventListener('change', (e) => { const el = e.target.closest('[data-change]'); if (!el) return; const fn = CHG[el.dataset.change]; if (fn) try { fn(el); } catch (err) { console.error(err); toast(err.message, 4000, 'bad'); } });
+// Un champ « fichier » peut être redessiné pendant que la personne choisit son fichier (synchronisation au retour au
+// premier plan, mise à jour…) : le choix arrive alors sur l'ancien champ, sorti de la page, que l'écoute ci-dessus ne
+// voit plus, et le fichier était perdu sans message. Chaque champ fichier est donc aussi écouté directement ; ce relais
+// n'agit que si le champ n'est plus dans la page (sinon l'écoute ci-dessus s'en charge, une seule fois).
+const watchFile = (input) => {
+  if (input.__seaWatch) return; input.__seaWatch = true;
+  input.addEventListener('change', () => { if (input.isConnected) return; const fn = CHG[input.dataset.change]; if (fn) try { fn(input); } catch (err) { console.error(err); toast(err.message, 4000, 'bad'); } });
+};
+let fileScan = false;
+new MutationObserver(() => { if (fileScan) return; fileScan = true; queueMicrotask(() => { fileScan = false; for (const el of document.querySelectorAll('input[type=file][data-change]')) watchFile(el); }); }).observe(document.body, { childList: true, subtree: true });
 document.addEventListener('input', (e) => { const el = e.target.closest('[data-input]'); if (!el) return; const fn = INPUT[el.dataset.input]; if (fn) fn(el); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) closeSheet(); });
 window.addEventListener('hashchange', () => {

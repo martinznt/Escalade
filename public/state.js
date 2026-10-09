@@ -448,8 +448,10 @@ export function go(tab, sub, param = '') {
 }
 /** Un lien mal encodé (« % » seul…) ne bloque jamais le démarrage : le paramètre illisible est ignoré. */
 export const safeDecode = (v) => { try { return decodeURIComponent(v); } catch { return ''; } };
+/** Anciennes adresses encore présentes dans des notifications déjà reçues (avant la 8.34.1). */
+const ROUTE_ALIAS = { 'home/agenda': 'cal' };
 export function parseHash() {
-  const [, tab, sub, param] = (location.hash || '').split('/');
+  const [, tab, raw, param] = (location.hash || '').split('/'), sub = ROUTE_ALIAS[`${tab}/${raw}`] || raw;
   if (['home', 'progress', 'library', 'profile', 'settings'].includes(tab)) { S.tab = tab; if (sub) S.sub[tab] = sub; S.param = param ? safeDecode(param) : ''; }
 }
 export const newId = () => uid();
