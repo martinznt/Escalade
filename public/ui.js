@@ -21,6 +21,9 @@ const ICONS = {
   help: 'M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4M12 17h.01',
   admin: 'M12 2l8 3v6c0 5-8 11-8 11S4 16 4 11V5zM8 11l3 3 5-5',
   search: 'M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 1 0 0-15M16 16l5 5',
+  cal: 'M4 6h16v14H4zM4 10h16M8 3v5M16 3v5M8 14h2m4 0h2M8 17h2', // dessiné : l'émoji 📅 affichait « 17 juillet », en anglais
+  program: 'M4 6h16v14H4zM4 10h16M8 3v5M16 3v5M8 15l2 2 4-4',
+  timer: 'M12 9v4l3 2M12 5a8 8 0 1 0 0 16 8 8 0 1 0 0-16M9 2h6',
   all: 'M4 6h16M4 12h16M4 18h16',
   edit: 'M14 4l6 6M4 16 16 4l4 4L8 20H4z',
   easy: 'M6 3h12v18H6zM9 7h6M9 11h6M9 15h4',

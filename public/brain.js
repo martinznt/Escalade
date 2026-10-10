@@ -448,7 +448,7 @@ export function regularity(ctx, weeksN = 12) {
   return {
     weeks, mean: round(mean, 1), cv: cv == null ? null : round(cv, 2), constancy, gaps: gaps.slice(-5), change, last4: round(last4, 1), prev4: round(prev4, 1), streakWeeks, periods,
     tracked,
-    text: mean === 0 ? `Aucune séance sur les ${wk(weeksN)} dernières.` : `En moyenne ${fr(mean)} séance${round(mean, 1) >= 2 ? 's' : ''} par semaine ${tracked < weeksN ? `depuis ta première séance (${wk(tracked)})` : `sur ${wk(weeksN)}`} (${constancy}). ${change === 'debut' ? 'Suivi commencé récemment : la tendance viendra avec quelques semaines de plus.' : change === 'hausse' ? 'Rythme en hausse ces 4 dernières semaines.' : change === 'baisse' ? 'Rythme en baisse ces 4 dernières semaines.' : change === 'reprise' ? 'Reprise après une période sans séance.' : change === 'stable' ? 'Rythme stable.' : ''}`,
+    text: mean === 0 ? `Aucune séance sur les ${wk(weeksN)} dernières.` : `En moyenne ${fr(mean)} séance${round(mean, 1) >= 2 ? 's' : ''} par semaine ${tracked < weeksN ? `depuis ta première séance (${wk(tracked)})` : `sur ${wk(weeksN)}`}${tracked < 3 ? ` (${constancy})` : ` : pratique ${constancy}`}. ${change === 'debut' ? 'Suivi commencé récemment : la tendance viendra avec quelques semaines de plus.' : change === 'hausse' ? 'Rythme en hausse ces 4 dernières semaines.' : change === 'baisse' ? 'Rythme en baisse ces 4 dernières semaines.' : change === 'reprise' ? 'Reprise après une période sans séance.' : change === 'stable' ? 'Rythme stable.' : ''}`,
   };
 }
 

@@ -302,7 +302,8 @@ function vEditor(s, mode) {
   const meta = [s.activity ? sportName(s.activity) : '', s.context.envName ? `📍 ${s.context.envName}` : ''].filter(Boolean).join(' · ');
   const intents = new Map((s.intentions || []).map((x) => [x.id, x.p]));
   const empty = !s.exercises.length;
-  return h`<h1 class="sr-only">${s.emoji || ''} ${s.name}</h1><div class="row wrapf"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : empty ? '' : h`${adaptButton(s.id, 'seance', 'btn')}${groupButton(s.id, 'seance', 'btn')}<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
+  return h`<div class="row wrapf"><button class="btn sm" data-act="${shared ? 'sharedCancel' : 'backSeances'}" aria-label="Retour">‹</button><div class="grow"></div>${shared ? h`<button class="btn pri" data-act="sharedSave">💾 Enregistrer la contribution</button>` : empty ? '' : h`${adaptButton(s.id, 'seance', 'btn')}${groupButton(s.id, 'seance', 'btn')}<button class="btn pri" data-act="play" data-id="${s.id}">▶ Lancer</button>`}</div>
+    <h1 style="margin:.3em 0 0">${s.emoji || ''} ${s.name || 'Séance sans nom'}</h1>
     ${shared || !s.exercises.length ? '' : h`<p class="tiny muted">🔁 « Adapter » fait une version pour cette fois (durée, matériel, douleur, échauffement, intensité) sans toucher à cette séance. Pour la changer pour de bon, modifie-la ci-dessous.</p>`}
     ${shared ? h`<div class="card flat warn-b small">Tu modifies une contribution de la bibliothèque commune${S.sharedDraft.admin ? ' en tant qu’administrateur' : ''}. Les copies déjà faites par d’autres ne changeront pas.</div>` : ''}
     ${s.origin ? h`<p class="tiny muted">Copie indépendante de « ${s.origin.author || 'bibliothèque'} » (${s.origin.kind === 'common' ? 'commune' : s.origin.kind === 'link' ? 'lien partagé' : 'publique'}) du ${fmtDay(s.origin.copiedAt)} : modifiable librement, l’original n’est jamais modifié.</p>` : ''}
@@ -504,7 +505,7 @@ ACT.exSwap = (el) => {
   const c = ctx(), alts = alternatives(ex, c, { session: e.s, level: levelFor(e.s.activity || 'conditioning', c).level + 1 });
   S.swapFor = ex.id;
   openSheet(h`<h2 style="margin:0">Remplacer « ${ex.name} »</h2><p class="muted small">Alternatives classées selon plusieurs logiques ; chaque raison est indiquée.</p>
-    ${alts.length ? alts.map((a) => h`<div class="item"><div class="ico">${a.lib.emoji}</div><div class="grow"><b>${a.lib.name}</b> ${a.pref === 'aime' ? tag('tu aimes', 'ok') : ''} ${a.available ? '' : tag('matériel manquant', 'warn')}<ul class="tiny why">${a.reasons.map((r) => h`<li>${r}</li>`)}</ul></div><button class="btn sm pri" data-act="exSwapDo" data-id="${a.lib.id}" data-reason="${a.reasons[0]}" ${a.available ? '' : 'disabled'}>Choisir</button></div>`) : h`<p class="muted">Aucune alternative connue pour cet exercice (exercice personnel ou très spécifique).</p>`}
+    ${alts.length ? alts.map((a) => h`<div class="item"><div class="ico">${a.lib.emoji}</div><div class="grow"><b>${a.lib.name}</b> ${a.pref === 'aime' ? tag('tu aimes', 'ok') : ''} ${a.available ? '' : tag('matériel manquant', 'warn')}<ul class="tiny why">${a.reasons.map((r) => h`<li>${r}</li>`)}</ul></div><button class="btn sm ${a.available ? 'pri' : ''}" data-act="exSwapDo" data-id="${a.lib.id}" data-reason="${a.reasons[0]}">${a.available ? 'Choisir' : 'Choisir quand même'}</button></div>`) : h`<p class="muted">Aucune alternative connue pour cet exercice (exercice personnel ou très spécifique).</p>`}
     <button class="btn" data-act="closeSheet">Annuler</button>`, { wide: true });
 };
 ACT.exSwapDo = (el) => {

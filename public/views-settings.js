@@ -16,7 +16,7 @@ import { installCard, openSetup, showTour } from './views-setup.js';
 import { isInstalled } from './install.js';
 import { SOUND_STYLES, beep } from './sound.js';
 import { remindersCard } from './reminders.js';
-import { NEWS } from './news.js';
+import { NEWS, newsDates } from './news.js';
 import { filterBugs } from './adminlist.js';
 import { vStudio, vStudioSet, vAudit, vLab, vHealth, vMaint, vCode, vCodeItem, canRole, ROLE_L } from './views-studio.js';
 import { FAQ } from './help.js';
@@ -113,10 +113,10 @@ function prefs() {
 /* ═════════ Toutes les mises à jour, de la plus récente à la première ═════════ */
 function vUpdates() {
   const notes = announcements().filter((a) => a.update);
-  const list = NEWS.slice().reverse();
+  const list = NEWS.slice().reverse(), at = newsDates();
   return h`<p class="small muted">Chaque mise à jour a sa visite : elle montre, à l’écran, ce qui a changé. Idéal pour voir comment l’app a évolué.</p>
     ${notes.map((a) => h`<div class="card upd"><div class="row between"><span class="kicker">${a.emoji} Note de l’équipe</span><span class="tiny muted">${new Date(a.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div><h3 style="margin:.2em 0">${a.title}</h3>${a.body ? h`<p class="small">${a.body}</p>` : ''}</div>`)}
-    ${list.map((n, i) => h`<div class="card upd ${i === 0 ? 'acc-b' : ''}"><div class="row between"><span class="kicker">Version ${n.v}${i === 0 ? ' · la plus récente' : ''}</span><span class="tiny muted">${new Date(n.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
+    ${list.map((n, i) => h`<div class="card upd ${i === 0 ? 'acc-b' : ''}"><div class="row between"><span class="kicker">Version ${n.v}${i === 0 ? ' · la plus récente' : ''}</span><span class="tiny muted">${new Date(at[n.v]).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
       <h3 style="margin:.2em 0">${n.title}</h3><p class="small">${n.why}</p>
       <div class="row wrapf"><button class="btn sm ${i === 0 ? 'pri' : ''}" data-act="notifTour" data-v="${n.v}">🧭 Lancer la visite (${n.steps.length} étape${n.steps.length > 1 ? 's' : ''})</button></div>
       <details class="how mini"><summary>Ce qui a changé</summary><ul class="small">${n.steps.map((st) => h`<li><b>${st[3]}</b> : ${st[4]}</li>`)}</ul></details></div>`)}`;

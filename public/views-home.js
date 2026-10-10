@@ -165,7 +165,7 @@ const BLOCK_VIEWS = {
     };
     return card('☀️ Que faire aujourd’hui ?', h`<button class="btn sm" data-act="nothingPlanned">⚡ Je n’ai rien prévu : 3 questions</button>${t.options.map((o) => h`<div class="item"><div class="grow"><b>${o.title}</b><div class="tiny muted">${o.reason}</div>
       <details class="how mini"><summary>Comment le sais-tu ?</summary><ul class="tiny">${(o.how || []).map((x) => h`<li>${x}</li>`)}</ul></details></div>
-      ${o.kind === 'event' ? eventActions(o) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}" aria-label="Préparer cette séance">▶</button>`}</div>`)}`);
+      ${o.kind === 'event' ? eventActions(o) : o.kind === 'rest' ? h`<button class="btn sm" data-act="todayDo" data-id="${o.id}">Léger</button>` : h`<button class="btn pri sm" data-act="todayDo" data-id="${o.id}" aria-label="Préparer cette séance">Préparer ›</button>`}</div>`)}`);
   },
   command() {
     return card('🗣️ Dis-le simplement', h`<button class="btn coachbtn" data-act="coachOpen">💬 Poser une question au coach</button><form data-submit="command" class="row"><input name="text" maxlength="200" class="grow" placeholder="« Séance de 20 min pour les jambes »" aria-label="Commande"><button class="btn pri" type="submit">OK</button></form>

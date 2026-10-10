@@ -1,7 +1,7 @@
 // help.js — questions fréquentes de l'aide. Les administrateurs peuvent les modifier et en ajouter depuis l'app
 // (contenu « pour tout le monde », appliqué par global.js). [question, réponse, id]
 export const FAQ = [
-  ['Comment faire ma première séance ?', 'Sur l’Accueil, touche « Créer une séance » : le sport, le lieu et la durée sont déjà remplis d’après ton profil. Choisis tes objectifs, regarde la structure, puis « ✅ Générer la séance ». Pour tout écrire toi-même : « ✍️ À ma façon ». Pressé : « Express » (une phrase et une durée). Touche ensuite ▶ pour commencer : l’écran te guide exercice par exercice.'],
+  ['Comment faire ma première séance ?', 'Sur l’Accueil, touche « Créer une séance » : le sport, le lieu et la durée sont déjà remplis d’après ton profil. Choisis tes objectifs, regarde la structure, puis « ✅ Générer la séance ». Pour tout écrire toi-même : « ✍️ À ma façon ». Pressé : « 💬 Décrire mon envie » (une phrase et une durée). Touche ensuite ▶ pour commencer : l’écran te guide exercice par exercice.'],
   ['Comment l’app choisit mes exercices ?', 'Elle utilise ce que tu lui as dit (sports, niveau, matériel, zones à ménager), tes séances passées et tes mesures. Chaque séance générée a un encadré « Pourquoi cette séance ? » qui explique ses choix.'],
   ['Je ne connais pas mon niveau, c’est grave ?', 'Non. Réponds « Je ne sais pas » : l’app reste prudente et apprend avec tes séances. Tu peux faire des petits tests plus tard (Profil › Records et mesures).'],
   ['Où sont mes séances enregistrées ?', 'Dans l’onglet 📚 Bibliothèque. L’historique de ce que tu as fait est dans 📈 Progrès › Journal.'],

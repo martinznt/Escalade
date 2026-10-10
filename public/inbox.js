@@ -2,16 +2,15 @@
 // les réponses à tes propositions, et (administrateurs) les propositions à traiter. Pastille = non lus.
 import { h, openSheet, closeSheet, fmtDay } from './ui.js';
 import { S, ACT, api, ls, go, item, putItem, accountToken, accountMatches } from './state.js';
-import { NEWS } from './news.js';
+import { NEWS, newsDates } from './news.js';
 import { announcements } from './global.js';
 import { startTour } from './tour.js';
 import { beep } from './sound.js';
 
 const SEEN = 'sea:inbox-seen';
 const PROP_WHAT = { grading: 'Système de cotation', style: 'Style', exercise: 'Exercice', catalog: 'Séance prête', format: 'Format de séance', intent: 'Intention', category: 'Catégorie', idea: 'Idée' };
-const t = (d) => new Date(d + 'T12:00:00').getTime();
 function entries() {
-  const out = NEWS.slice().reverse().map((n) => ({ id: 'v' + n.v, kind: 'update', at: t(n.date || '2026-09-27'), icon: '🆕', title: n.title || `Version ${n.v}`, text: n.why || '', v: n.v, steps: n.steps }));
+  const at = newsDates(), out = NEWS.slice().reverse().map((n) => ({ id: 'v' + n.v, kind: 'update', at: at[n.v], icon: '🆕', title: n.title || `Version ${n.v}`, text: n.why || '', v: n.v, steps: n.steps }));
   for (const p of S.inbox?.mine || []) if (p.status === 'done') out.push({ id: 'p' + p.id, kind: 'reply', at: p.reviewed_at || p.created_at, icon: /Accept/.test(p.reply) ? '✅' : '💬', title: `Ta proposition « ${p.label} »`, text: p.reply });
   // Annonces écrites par un administrateur, pour tout le monde
   for (const a of announcements()) out.push({ id: 'a' + a.id, kind: 'announce', at: a.at, icon: a.emoji || '📣', title: a.title, text: a.body || '' });
@@ -42,7 +41,7 @@ export async function refreshInbox({ sound = false } = {}) {
     S.inbox = { mine: mine?.proposals || S.inbox?.mine || [], adminList: S.user.isAdmin ? adm?.proposals || S.inbox?.adminList || [] : [] };
   } catch { /* hors ligne */ }
   if (!accountMatches(token) || request !== inboxRequest) return false;
-  if (!ls.get(SEEN, null)) ls.set(SEEN, Math.min(Date.now(), Math.max(...NEWS.map((n) => t(n.date || '2026-09-27')))) - 1); // premier passage : seulement la dernière version
+  if (!ls.get(SEEN, null)) ls.set(SEEN, Math.min(Date.now(), Math.max(...Object.values(newsDates()))) - 1); // premier passage : seulement la dernière version
   S.notifUnread = unreadCount();
   if (sound && S.notifUnread > before && (S.settings.notifSound || 'doux') !== 'aucun') beep(880, 160, S.settings.notifSound || 'doux');
   paintBadge();

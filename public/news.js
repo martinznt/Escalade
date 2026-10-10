@@ -219,6 +219,13 @@ const KEY = 'sea:news-toured';
 const num = (v) => String(v || '0').split('.').map((x) => Number(x) || 0).reduce((t, x) => t * 1000 + x, 0);
 
 /** Étapes de rattrapage : toutes les versions pas encore visitées depuis la dernière visite, en une seule visite. */
+/** Moment de chaque version (midi, heure locale), jamais plus tardif que celui de la version suivante : les 8.15 à 8.26
+ *  portaient des dates postérieures à la 8.27, et passaient « nouvelles » pour un nouveau compte, en tête de liste. */
+export function newsDates() {
+  const at = {}; let next = Infinity;
+  for (const n of NEWS.slice().reverse()) { next = Math.min(new Date((n.date || '2026-09-27') + 'T12:00:00').getTime(), next - 1); at[n.v] = next; }
+  return at;
+}
 export function pendingNews() { return catchUpSteps(NEWS, ls.get(KEY, '0'), APP_VERSION, { since: ls.get(KEY + '-at', 0) }); }
 /** Versions ratées depuis la dernière visite (la plus ancienne d'abord). */
 export const missedNews = () => missedVersions(NEWS, ls.get(KEY, '0'), APP_VERSION);
