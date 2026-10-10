@@ -1,10 +1,12 @@
-# Séances entraînement — v8.34.1
+# Séances entraînement — v8.34.2
 
 Application web installable (PWA) pour planifier, générer, exécuter et analyser ses séances d'entraînement :
 escalade (bloc, voie), renforcement / préparation physique, musculation, course à pied, natation, et toute
 activité personnalisée. Les recommandations distinguent faits, estimations et données manquantes ; les réponses IA sont contrôlées avant de proposer des changements.
 
-La [version 8.34.1](DELIVERY_8_34_1.md) (préparée sur la branche `claude/new-session-wi9olv`, non fusionnée) corrige les 21 constats de l’audit du 9 octobre : sauvegarde importée sur un autre compte et séance supprimée récupérable, comptes séparés sur un même appareil, chrono juste (EMOM long, écran éteint, efforts passés), « 1,5 h », accessibilité, aide alignée sur l’interface simple.
+La [version 8.34.2](DELIVERY_8_34_2.md) (préparée sur la branche `claude/new-session-wi9olv`, non fusionnée, non déployée) suit un audit Playwright complet du site ([rapport](docs/AUDIT_PLAYWRIGHT_2026-10-09.md)) : ressenti non donné qui n’est plus compté « 1 », virgule décimale comprise, fichier choisi pendant un redessin plus jamais perdu, calendrier et agenda du téléphone justes, en-têtes de sécurité partout, clavier dans les fenêtres, et une série de petites gênes en moins. La suite d’audit se lance avec `npm run test:audit` (voir `tests/audit/`).
+
+La [version 8.34.1](DELIVERY_8_34_1.md) (fusionnée dans `main` par la PR #25) corrige les 21 constats de l’audit du 9 octobre : sauvegarde importée sur un autre compte et séance supprimée récupérable, comptes séparés sur un même appareil, chrono juste (EMOM long, écran éteint, efforts passés), « 1,5 h », accessibilité, aide alignée sur l’interface simple.
 
 La [version 8.34.0](DELIVERY_8_34.md) (fusionnée dans `main` le 8 octobre par la PR #24 ; version servie en ligne non vérifiée par moi) apporte : séance écrite à sa façon, ses propres choix dans les listes (« ＋ Autre… », Profil › Mes ajouts), chrono en six formats avec « Mes chronos », exercices expliqués (départ, charge, variantes), installation guidée sur chaque appareil, annonce envoyée seulement aux appareils autorisés.
 
@@ -79,7 +81,10 @@ npm run check      # syntaxe de tous les fichiers JS + validation JSON
 npm test           # unitaires, intégration Worker-D1, sécurité, migrations, moteurs, agenda, IA, synchronisation
 npx playwright install --with-deps chromium
 npm run test:e2e   # navigateur réel : parcours existants avancés puis interface simple, agenda et hors ligne
+npm run test:audit # audit Playwright : chaque page, chaque bouton, chaque formulaire, scénarios par domaine, accessibilité
 ```
+
+L’audit (`tests/audit/`) tourne sur 6 profils Chromium (320, 360, 390 px, Android, tablette, ordinateur) et un profil API ; Firefox et WebKit sont déclarés pour être relancés là où ils sont installés. Les rapports vont dans `tests/audit/results/` (ou `AUDIT_OUT`). `node tests/audit/couverture.mjs` dit quelles actions de l’app ont réellement été touchées. Exemple sans téléchargement : `PW_EXEC=/usr/bin/chromium npm run test:audit -- --project=chromium-phone390`.
 
 Les tests Worker utilisent une base D1 simulée par `node:sqlite` (Node 22+). Le test E2E démarre un serveur local
 (`tests/server.mjs`) qui exécute le vrai `worker.js` et sert `public/` comme le ferait Cloudflare.

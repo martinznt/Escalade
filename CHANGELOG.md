@@ -1,8 +1,23 @@
 # CHANGELOG — Séances entraînement
 
+## 8.34.2 — Audit Playwright complet : défauts corrigés et petites gênes en moins
+
+Rapport complet (scénarios, résultats, défauts par gravité, limites) : [docs/AUDIT_PLAYWRIGHT_2026-10-09.md](docs/AUDIT_PLAYWRIGHT_2026-10-09.md) ; livraison : [DELIVERY_8_34_2.md](DELIVERY_8_34_2.md). Préparée sur la branche `claude/new-session-wi9olv`, **non fusionnée, non déployée**.
+
+- Données : un ressenti non donné (0) était enregistré « 1 » par le serveur, ce qui faussait la moyenne et la charge ; il reste « non donné ».
+- Saisie : la virgule décimale (« 72,5 » kg, « 32,5 » cm) était effacée sans prévenir par les champs numériques (725, 325) ; elle est comprise.
+- Fichiers : un fichier choisi pendant que la page se redessinait était perdu sans message ; l'import démarre quand même.
+- Calendrier : supprimer un rendez-vous répété supprime aussi ses exceptions ; un rendez-vous unique déplacé n'apparaît plus deux fois dans l'agenda du téléphone ; un ancien lien de rappel ouvre le calendrier.
+- Sécurité : en-têtes de sécurité sur toutes les réponses (version, changements, contenu global, icônes, agenda).
+- Accessibilité : le clavier entre dans une fenêtre ouverte et revient au bouton qui l'a ouverte ; badges non obtenus lisibles (contraste) ; petites cibles agrandies ; jours de la semaine annoncés.
+- Messages : un message reste au moins 1,8 s avant d'être remplacé (les erreurs passent tout de suite).
+- Visite guidée : plus d'erreur quand la page défile avant que la bulle soit dessinée.
+- Petites gênes : icône du calendrier dessinée (l'émoji affichait « 17 juillet ») ; une seule notification pour un nouveau compte ; « Préparer › » au lieu de « ▶ » sur une suggestion ; « ▶ Lancer maintenant » en haut d'une séance générée ; raccourcis « Décrire mon envie » et « Sport et durée » ; le menu se ferme sur la page courante ; « − » grisé à la valeur minimale ; nom de la séance en titre ; « Choisir quand même » si le matériel manque ; ressenti écrit « 3,4 ».
+- Tests : suite d'audit Playwright (`npm run test:audit`, dossier `tests/audit/`), explorateurs automatiques de chaque bouton et de chaque formulaire, mesure de couverture, et `tests/audit-fixes-2.test.mjs`.
+
 ## 8.34.1 — Corrections de l’audit du 9 octobre : sauvegardes, comptes séparés, chrono juste, accessibilité
 
-Détails, constat par constat, vérifications et limites : [DELIVERY_8_34_1.md](DELIVERY_8_34_1.md). Préparée sur la branche `claude/new-session-wi9olv`, **non fusionnée, non déployée** (ZIP remis pour relecture).
+Détails, constat par constat, vérifications et limites : [DELIVERY_8_34_1.md](DELIVERY_8_34_1.md). Préparée sur la branche `claude/new-session-wi9olv`, puis fusionnée dans `main` par la PR #25.
 
 - Sauvegarde : importée sur un autre compte, l’historique et les rendez-vous reçoivent de nouveaux identifiants, avec leurs liens (plus de refus 409) ; importer deux fois n’ajoute rien ; une séance supprimée depuis peut être récupérée, si on le choisit ; un import ne supprime jamais rien.
 - Un appareil pour plusieurs comptes : brouillon du chrono, dernier réglage du générateur, rappels, filtre des séances et sauvegarde rangés par compte ; supprimer son compte efface aussi ses photos de progrès de l’appareil ; un invité qui crée son compte garde ses photos.
