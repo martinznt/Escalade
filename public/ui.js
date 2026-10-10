@@ -57,9 +57,15 @@ const oneEach = (e) => e.mode !== 'time' && e.repsMax === 1 && e.repsMin === 1;
 export const exLine = (e) => `${oneEach(e) && !e.unit && e.sets === 1 ? '1 fois' : oneEach(e) && /^\d/.test(e.unit || '') ? `${e.sets} × ${e.unit}${e.perSide ? ' / côté' : ''}` : oneEach(e) && /^\S+s(?=\s|$)/.test(e.unit || '') ? `${e.sets} ${e.sets > 1 ? e.unit : e.unit.replace(/^(\S+)s(?=\s|$)/, '$1')}` : `${e.sets === 1 && (e.mode === 'time' || e.unit) ? '' : e.sets + ' × '}${e.mode === 'time' ? secTxt(e.secMin, e.secMax) : rng(e.repsMin, e.repsMax) + (e.unit ? ' ' + e.unit : '')}${e.perSide ? ' / côté' : ''}`}${e.rest ? ' · repos ' + fmtDur(e.rest) : ''}${e.load ? ' · ' + e.load : ''}`;
 
 /* ───────── Messages et feuilles ───────── */
+// Un message reste au moins 1,8 s à l'écran avant d'être remplacé (sinon un « Nouveau badge » effaçait aussitôt
+// « Séances exportées… ») ; le suivant attend son tour, seul le plus récent est gardé. Une erreur passe tout de suite.
+let toastAt = 0;
 export function toast(msg, ms = 2800, kind = '') {
   const t = $('#toast'); if (!t) return;
-  t.textContent = msg; t.className = 'show ' + kind;
+  const wait = t.classList.contains('show') && kind !== 'bad' ? toastAt + 1800 - Date.now() : 0;
+  clearTimeout(toast.q);
+  if (wait > 0) { toast.q = setTimeout(() => toast(msg, ms, kind), wait); return; }
+  t.textContent = msg; t.className = 'show ' + kind; toastAt = Date.now();
   clearTimeout(toast.t); toast.t = setTimeout(() => { t.className = ''; }, ms);
 }
 export const buzzOk = () => { try { if (navigator.vibrate && document.documentElement.dataset.haptics !== 'off') navigator.vibrate(12); } catch { /* rien */ } };
@@ -104,7 +110,7 @@ let returnFocus = null;
 const focusKey = (el) => (el?.dataset?.act ? `[data-act="${CSS.escape(el.dataset.act)}"]${el.dataset.id ? `[data-id="${CSS.escape(el.dataset.id)}"]` : ''}` : '');
 const rememberFocus = (box) => { const a = document.activeElement; return a && a !== document.body && !box.contains(a) ? { el: a, key: focusKey(a) } : null; };
 const giveBackFocus = (r) => { if (!r) return; const target = r.el.isConnected ? r.el : r.key ? document.querySelector('#app ' + r.key) : null; if (target) setTimeout(() => { if (!document.querySelector('#sheet.open, #dialog.open, #player.open')) target.focus?.({ preventScroll: true }); }, 0); };
-if (typeof document !== 'undefined') document.addEventListener('focusin', (e) => {
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') document.addEventListener('focusin', (e) => {
   const s = document.getElementById('sheet'); if (!s?.classList.contains('open') || e.target.closest?.('#sheet, #dialog, #toast, #player, #itimer, #grp, #tour')) return;
   s.querySelector('.panel')?.focus({ preventScroll: true });
 });

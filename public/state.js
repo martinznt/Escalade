@@ -17,7 +17,7 @@ import { cleanItem, itemKey } from './items.js';
 import { decideOutboxError, newOpId, describeOp } from './outbox.js';
 import { buildContext } from './brain.js';
 import { registerMine } from './choices.js';
-import { toast, tz, $ } from './ui.js';
+import { toast, tz, $, closeSheet, sheetOpen } from './ui.js';
 
 export const APP_VERSION = '8.34.1';
 export const ACT = {}, SUBMIT = {}, CHG = {}, INPUT = {};
@@ -98,6 +98,7 @@ function ensureAccount() {
   if (typeof document !== 'undefined') {
     document.querySelector('#dialog [data-dlg="0"]')?.click();
     for (const selector of ['#sheet', '#dialog', '#player', '#grp']) { const panel = document.querySelector(selector); if (panel) { panel.classList.remove('open'); panel.replaceChildren(); } }
+    clearTimeout(toast.q); // un message en attente de l'autre compte ne s'affiche pas
     const message = document.querySelector('#toast'); if (message) { message.className = ''; message.replaceChildren(); }
     document.body?.classList.remove('grp-open', 'noscroll');
   }
@@ -443,7 +444,7 @@ export function go(tab, sub, param = '') {
   if (tab === 'settings' && sub === 'bug' && !(S.tab === 'settings' && S.sub.settings === 'bug')) S.bugFrom = { owner: S.user?.id, page: `${S.tab}/${S.sub[S.tab] || ''}` };
   if (sub) S.sub[tab] = sub;
   const hash = `#/${tab}/${sub || S.sub[tab] || ''}${param ? '/' + encodeURIComponent(param) : ''}`;
-  if (location.hash === hash) { S.tab = tab; S.param = param; render(); }
+  if (location.hash === hash) { if (sheetOpen()) closeSheet(); S.tab = tab; S.param = param; render(); } // déjà sur la page : le menu se ferme quand même
   else location.hash = hash;
 }
 /** Un lien mal encodé (« % » seul…) ne bloque jamais le démarrage : le paramètre illisible est ignoré. */

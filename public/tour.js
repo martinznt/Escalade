@@ -63,6 +63,7 @@ function place() {
   T.raf = requestAnimationFrame(() => {
     const root = document.getElementById('tour'); if (!root || T.i < 0) return;
     const spot = root.querySelector('.tour-spot'), bub = root.querySelector('.tour-bubble'), arrow = root.querySelector('.tour-arrow');
+    if (!spot || !bub || !arrow) return; // défilement pendant le changement de page : la bulle n'est pas encore dessinée
     const vw = window.innerWidth, vh = window.innerHeight, pad = 8;
     // La page a pu se redessiner (données arrivées entre-temps) : on retrouve l'élément.
     if ((!T.el || !document.body.contains(T.el)) && T.steps[T.i]?.[2]) { const again = document.querySelector(T.steps[T.i][2]); if (again && again.getBoundingClientRect().height > 0) T.el = again; }

@@ -54,7 +54,7 @@ ACT.wishStart = (el) => { const p = item('project', el.dataset.id); if (!p) retu
 ACT.compOpen = () => { S.comp ||= { n: 5, res: Array.from({ length: 8 }, () => ({ top: 0, zone: 0 })) }; compSheet(); };
 function compSheet() {
   const q = S.comp, list = q.res.slice(0, q.n), sc = compScore(list);
-  const step = (i, k) => h`<div class="stepper sm"><button type="button" data-act="compAdj" data-i="${i}" data-k="${k}" data-d="-1" aria-label="Moins">−</button><b>${list[i][k] || '—'}</b><button type="button" data-act="compAdj" data-i="${i}" data-k="${k}" data-d="1" aria-label="Plus">+</button></div>`;
+  const step = (i, k) => h`<div class="stepper sm"><button type="button" data-act="compAdj" data-i="${i}" data-k="${k}" data-d="-1" aria-label="Moins" ${list[i][k] ? '' : 'disabled'}>−</button><b>${list[i][k] || '—'}</b><button type="button" data-act="compAdj" data-i="${i}" data-k="${k}" data-d="1" aria-label="Plus">+</button></div>`;
   openSheet(h`<div class="stack"><h2 style="margin:0">🏆 Mode compétition</h2>
     <p class="tiny muted">Pour chaque bloc : le nombre d’essais pour faire le top et pour atteindre la zone (vide = pas atteint). Le score se lit « tops T zones Z essais tops essais zones ».</p>
     <div class="chips">${[4, 5, 6, 8].map((n) => chip(q.n === n, `${n} blocs`, `data-act="compN" data-id="${n}"`))}</div>
