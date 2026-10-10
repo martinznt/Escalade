@@ -213,6 +213,11 @@ export const NEWS = [
     ['home','dash','[data-act=timerOpen]','Un chrono plus juste','L’EMOM dit avant de démarrer combien d’intervalles il fera. Si l’écran s’éteint, le chrono reprend au bon endroit. Seuls les efforts faits vont dans ton historique.'],
     ['settings','main','','Un téléphone pour plusieurs','Chaque compte garde ses brouillons et ses photos de progrès. Supprimer son compte les efface aussi de l’appareil.'],
   ] },
+  { v:'8.34.2', date:'2026-10-10', title:'Plus simple au quotidien', why:'Après un audit complet du site, des boutons qui disent ce qu’ils font, la virgule acceptée dans les nombres et une série de petites gênes en moins.', steps:[
+    ['home','dash','','Des boutons plus clairs','Une suggestion se « Prépare › » ; une séance générée se lance tout de suite avec « ▶ Lancer maintenant », en haut. Les raccourcis s’appellent « Décrire mon envie » et « Sport et durée ».'],
+    ['profile','body','','La virgule est comprise','« 72,5 » kg ou « 32,5 » cm sont bien enregistrés : avant, la virgule était effacée sans prévenir.'],
+    ['home','dash','','Moins de petites gênes','Le menu se ferme quand on touche la page où l’on est, un message ne s’efface plus aussitôt, un ressenti non donné ne compte plus comme « 1 », et l’icône du calendrier n’affiche plus « 17 juillet ».'],
+  ] },
 ];
 
 const KEY = 'sea:news-toured';

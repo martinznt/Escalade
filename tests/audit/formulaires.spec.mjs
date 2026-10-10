@@ -78,10 +78,12 @@ for (const plan of plans) {
     const attempt = async (t) => {
       const loc = await open(t); if (!loc) return { outcome: 'absent après redessin' };
       const before = await page.evaluate(SIGNATURE).catch(() => null), errs = audit.events.pageerrors.length, toasts = await page.evaluate(() => (window.__toasts || []).length).catch(() => 0);
-      let detail = '';
+      let detail = '', invalid = [];
       try {
         if (t.kind === 'formulaire') {
           detail = 'rempli : ' + ((await loc.evaluate(FILL)).join(', ') || 'rien (déjà rempli)');
+          // Contrôlé avant l'envoi : un formulaire réussi se vide ensuite, ses champs obligatoires paraîtraient invalides.
+          invalid = await loc.evaluate((f) => [...f.querySelectorAll(':invalid')].filter((x) => x.matches('input, select, textarea')).map((x) => `${x.name || x.type} (${x.validationMessage})`));
           const submit = loc.locator('button[type=submit], button:not([type]), input[type=submit]').filter({ visible: true }).first();
           if (await submit.count()) await submit.click({ timeout: 2500 }); else await loc.evaluate((f) => f.requestSubmit());
         } else {
@@ -103,7 +105,6 @@ for (const plan of plans) {
       if (newErr.length) return { outcome: 'erreur JavaScript', detail: detail + ' — ' + newErr.join(' | ').slice(0, 300) };
       if (await page.locator('#main').innerText().then((x) => /n’a pas pu s’afficher/.test(x)).catch(() => false)) return { outcome: 'écran d’erreur', detail };
       const msgs = await page.evaluate((n) => (window.__toasts || []).slice(n), toasts).catch(() => []);
-      const invalid = t.kind === 'formulaire' && (await loc.count()) ? await loc.evaluate((f) => [...f.querySelectorAll(':invalid')].filter((x) => x.matches('input, select, textarea')).map((x) => `${x.name || x.type} (${x.validationMessage})`)).catch(() => []) : [];
       const after = await page.evaluate(SIGNATURE).catch(() => null);
       const changed = before && after ? Object.keys(after).filter((k) => k !== 'counts' && JSON.stringify(after[k]) !== JSON.stringify(before[k])) : ['page rechargée'];
       const res = { detail };

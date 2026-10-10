@@ -35,7 +35,7 @@ import { searchAdmin } from './server/admin-search.js';
 import { cleanExternal, externalOf } from './public/external.js';
 import { stravaRoute } from './server/strava.js';
 
-const APP_VERSION = '8.34.1';
+const APP_VERSION = '8.34.2';
 const SESSION_DAYS = 365;           // on reste connecté 1 an (renouvelé à l'usage)
 const PBKDF2_ITERATIONS = 100000;   // maximum autorisé sur Workers
 const DAY = 86400000;
